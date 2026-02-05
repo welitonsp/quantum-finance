@@ -1,0 +1,11 @@
+Sempre que sentar pra trabalhar:
+
+git pull
+npm run dev
+
+
+Sempre que terminar:
+
+git add .
+git commit -m "descrição clara"
+git push
