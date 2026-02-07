@@ -10,30 +10,33 @@ import {
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-export default function CategoryPieChart({ data }) {
-  const labels = Object.keys(data);
-  const values = Object.values(data);
-
-  if (labels.length === 0) {
+export default function CategoryPieChart({ transactions }) {
+  if (!transactions || transactions.length === 0) {
     return (
-      <div className="text-zinc-400 text-sm">
-        Nenhum dado para exibir no gráfico.
+      <div className="text-center text-zinc-400 text-sm">
+        Sem dados para gráfico
       </div>
     );
   }
 
-  const chartData = {
-    labels,
+  const categoryTotals = {};
+
+  transactions.forEach((t) => {
+    const category = t.category || "Sem categoria";
+    categoryTotals[category] =
+      (categoryTotals[category] || 0) + (t.value || 0);
+  });
+
+  const data = {
+    labels: Object.keys(categoryTotals),
     datasets: [
       {
-        data: values,
+        data: Object.values(categoryTotals),
         backgroundColor: [
-          "#ef4444",
-          "#f97316",
+          "#6366f1",
           "#22c55e",
-          "#3b82f6",
-          "#a855f7",
-          "#ec4899",
+          "#f97316",
+          "#ef4444",
           "#14b8a6",
           "#eab308",
         ],
@@ -41,5 +44,12 @@ export default function CategoryPieChart({ data }) {
     ],
   };
 
-  return <Pie data={chartData} />;
+  return (
+    <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-4">
+      <h2 className="text-lg font-semibold mb-4 text-center">
+        Distribuição por Categoria
+      </h2>
+      <Pie data={data} />
+    </div>
+  );
 }
