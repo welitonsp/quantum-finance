@@ -1,15 +1,6 @@
 // src/services/FirestoreService.js
-
-import {
-  collection,
-  doc,
-  addDoc,
-  getDocs,
-  deleteDoc,
-  serverTimestamp,
-  writeBatch,
-} from "firebase/firestore";
-import { db } from "../firebase/index";
+import { collection, doc, addDoc, getDocs, deleteDoc, updateDoc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { db } from "../firebase";
 
 export class FirestoreService {
   static getTransactionsCollection(uid) {
@@ -17,35 +8,52 @@ export class FirestoreService {
   }
 
   static async addTransaction(uid, data) {
+    if (!uid) return;
+    const dataTransacao = data.date ? new Date(`${data.date}T12:00:00`) : new Date();
     return await addDoc(this.getTransactionsCollection(uid), {
       value: data.value,
-      categoryId: data.categoryId || null,
-      categoryName: data.categoryName || null,
-      createdAt: serverTimestamp(),
+      type: data.type || "entrada",
+      category: data.category || "Diversos",
+      createdAt: dataTransacao,
+      registadoEm: serverTimestamp() 
     });
-  }
-
-  static async loadTransactions(uid) {
-    const snap = await getDocs(this.getTransactionsCollection(uid));
-    return snap.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-    }));
   }
 
   static async deleteTransaction(uid, id) {
     await deleteDoc(doc(db, "users", uid, "transactions", id));
   }
 
-  static async saveAllTransactions(uid, transactions) {
-    const batch = writeBatch(db);
-    const col = this.getTransactionsCollection(uid);
-
-    transactions.forEach((tx) => {
-      const ref = tx.id ? doc(col, tx.id) : doc(col);
-      batch.set(ref, tx, { merge: true });
+  static async updateTransaction(uid, id, data) {
+    const docRef = doc(db, "users", uid, "transactions", id);
+    const dataTransacao = data.date ? new Date(`${data.date}T12:00:00`) : new Date();
+    return await updateDoc(docRef, {
+      value: data.value,
+      type: data.type,
+      category: data.category,
+      createdAt: dataTransacao,
+      atualizadoEm: serverTimestamp()
     });
+  }
 
-    await batch.commit();
+  static getRulesCollection(uid) {
+    return collection(db, "users", uid, "categoryRules");
+  }
+
+  static async getCategoryRules(uid) {
+    if (!uid) return [];
+    const snap = await getDocs(this.getRulesCollection(uid));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+
+  static async addCategoryRule(uid, ruleData) {
+    return await addDoc(this.getRulesCollection(uid), {
+      category: ruleData.category,
+      keywords: ruleData.keywords,
+      criadoEm: serverTimestamp()
+    });
+  }
+
+  static async deleteCategoryRule(uid, ruleId) {
+    await deleteDoc(doc(db, "users", uid, "categoryRules", ruleId));
   }
 }

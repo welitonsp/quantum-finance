@@ -1,9 +1,10 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 /* Quantum Finance Theme Overrides */
 body {
   background-color: #09090b;
   color: #f4f4f5;
+  margin: 0;
+  font-family: sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
