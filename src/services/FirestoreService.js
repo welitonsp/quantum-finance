@@ -14,9 +14,34 @@ export class FirestoreService {
       value: data.value,
       type: data.type || "entrada",
       category: data.category || "Diversos",
+      account: data.account || "conta_corrente", // NOVO: Módulo da transação
       createdAt: dataTransacao,
       registadoEm: serverTimestamp() 
     });
+  }
+
+  // NOVO: Método de Alta Performance (Gravação em Lote) com Suporte a Módulos
+  static async saveAllTransactions(uid, transactions) {
+    if (!uid || transactions.length === 0) return;
+    
+    const batch = writeBatch(db);
+    const colRef = this.getTransactionsCollection(uid);
+
+    transactions.forEach((tx) => {
+      const newDocRef = doc(colRef);
+      const dataTransacao = tx.date ? new Date(`${tx.date}T12:00:00`) : new Date();
+      
+      batch.set(newDocRef, {
+        value: tx.value,
+        type: tx.type || "entrada",
+        category: tx.category || "Diversos",
+        account: tx.account || "conta_corrente", // NOVO: Etiqueta de Conta ou Cartão
+        createdAt: dataTransacao,
+        registadoEm: serverTimestamp()
+      });
+    });
+
+    return await batch.commit(); 
   }
 
   static async deleteTransaction(uid, id) {
@@ -26,13 +51,21 @@ export class FirestoreService {
   static async updateTransaction(uid, id, data) {
     const docRef = doc(db, "users", uid, "transactions", id);
     const dataTransacao = data.date ? new Date(`${data.date}T12:00:00`) : new Date();
-    return await updateDoc(docRef, {
+    
+    const updateData = {
       value: data.value,
       type: data.type,
       category: data.category,
       createdAt: dataTransacao,
       atualizadoEm: serverTimestamp()
-    });
+    };
+
+    // Só atualiza a conta se ela for enviada na edição
+    if (data.account) {
+      updateData.account = data.account;
+    }
+
+    return await updateDoc(docRef, updateData);
   }
 
   static getRulesCollection(uid) {
