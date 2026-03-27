@@ -1,76 +1,99 @@
 // src/hooks/useTransactions.js
-import { useEffect, useState, useMemo, useCallback } from "react";
-import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore";
-import { db } from "../firebase";
-import { FirestoreService } from "../services/FirestoreService";
+import { useState, useEffect } from 'react';
+import { collection, query, where, orderBy, onSnapshot, doc, deleteDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase';
+import { generateTransactionHash } from '../utils/hashGenerator';
 
 export function useTransactions(uid, month, year) {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // BLINDAGEM: Só executa se todos os dados de busca existirem
-    if (!uid || month === undefined || year === undefined) {
+    if (!uid) {
       setTransactions([]);
       setLoading(false);
       return;
     }
 
     setLoading(true);
-    
-    // Criamos as datas de início e fim do mês com segurança
-    const startOfMonth = new Date(year, month - 1, 1);
-    const endOfMonth = new Date(year, month, 0, 23, 59, 59);
+
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
     const q = query(
-      collection(db, "users", uid, "transactions"),
-      where("createdAt", ">=", startOfMonth),
-      where("createdAt", "<=", endOfMonth),
-      orderBy("createdAt", "desc")
+      collection(db, 'users', uid, 'transactions'),
+      where('createdAt', '>=', startDate),
+      where('createdAt', '<=', endDate),
+      orderBy('createdAt', 'desc')
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date(),
-      }));
-      setTransactions(data);
+      const txs = snapshot.docs.map(doc => {
+        const data = doc.data();
+        const dataNativa = data.createdAt && typeof data.createdAt.toDate === 'function' 
+          ? data.createdAt.toDate() 
+          : new Date(data.createdAt || Date.now());
+
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: dataNativa 
+        };
+      });
+      
+      setTransactions(txs);
       setLoading(false);
     }, (error) => {
-      console.error("Erro no Snapshot:", error);
+      console.error("Erro ao buscar transações:", error);
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, [uid, month, year]);
 
-  const saldos = useMemo(() => {
-    let entradas = 0;
-    let saidas = 0;
-    transactions.forEach((t) => {
-      if (t.type === "entrada") entradas += t.value;
-      else saidas += t.value;
-    });
-    const saldoAtual = entradas - saidas;
-    return { entradas, saidas, saldoAtual, saldoPrevisto: saldoAtual };
-  }, [transactions]);
+  const add = async (data) => {
+    const dataTransacao = data.date ? new Date(`${data.date}T12:00:00`) : new Date();
+    const hashUnico = generateTransactionHash(data);
 
-  const add = useCallback(async (data) => {
-    if (!uid) return;
-    return await FirestoreService.addTransaction(uid, data);
-  }, [uid]);
+    await setDoc(doc(db, 'users', uid, 'transactions', hashUnico), {
+      ...data,
+      uniqueHash: hashUnico,
+      createdAt: dataTransacao,
+      registadoEm: serverTimestamp()
+    }, { merge: true });
+  };
 
-  const remove = useCallback(async (id) => {
-    if (!uid) return;
-    if (!window.confirm("Apagar esta transação?")) return;
-    await FirestoreService.deleteTransaction(uid, id);
-  }, [uid]);
+  const remove = async (id) => {
+    await deleteDoc(doc(db, 'users', uid, 'transactions', id));
+  };
 
-  const update = useCallback(async (id, data) => {
-    if (!uid) return;
-    await FirestoreService.updateTransaction(uid, id, data);
-  }, [uid]);
+  const update = async (id, data) => {
+    const dataTransacao = data.date ? new Date(`${data.date}T12:00:00`) : new Date();
+    
+    // 🧠 A MÁGICA DA EDIÇÃO INTELIGENTE
+    // Recalculamos o Hash para ver se o utilizador alterou campos sensíveis
+    const novoHash = generateTransactionHash(data);
 
-  return { transactions, loading, saldos, add, remove, update };
+    if (novoHash !== id) {
+      // 1. O Hash mudou! Criamos um NOVO documento com o novo Hash
+      await setDoc(doc(db, 'users', uid, 'transactions', novoHash), {
+        ...data,
+        uniqueHash: novoHash,
+        createdAt: dataTransacao,
+        atualizadoEm: serverTimestamp()
+      }, { merge: true });
+
+      // 2. Apagamos o documento antigo silenciosamente
+      await deleteDoc(doc(db, 'users', uid, 'transactions', id));
+    } else {
+      // O Hash é o mesmo (alterou apenas a categoria). Atualizamos normalmente.
+      await updateDoc(doc(db, 'users', uid, 'transactions', id), {
+        ...data,
+        createdAt: dataTransacao,
+        atualizadoEm: serverTimestamp()
+      });
+    }
+  };
+
+  return { transactions, loading, add, remove, update };
 }

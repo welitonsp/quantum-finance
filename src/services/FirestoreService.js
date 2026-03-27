@@ -1,10 +1,40 @@
 // src/services/FirestoreService.js
-import { collection, doc, addDoc, getDocs, deleteDoc, updateDoc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { collection, doc, addDoc, getDocs, deleteDoc, updateDoc, serverTimestamp, writeBatch, query, where } from "firebase/firestore";
 import { db } from "../firebase";
 
 export class FirestoreService {
   static getTransactionsCollection(uid) {
     return collection(db, "users", uid, "transactions");
+  }
+
+  // 📡 NOVO: O Radar Global (Faltava esta função!)
+  // Busca transações num intervalo de datas para bloquear duplicados fantasma
+  static async getTransactionsByPeriod(uid, startDate, endDate) {
+    try {
+      const start = new Date(startDate);
+      start.setDate(start.getDate() - 5); // Margem de 5 dias
+      const end = new Date(endDate);
+      end.setDate(end.getDate() + 5);
+
+      const q = query(
+        this.getTransactionsCollection(uid),
+        where('createdAt', '>=', start),
+        where('createdAt', '<=', end)
+      );
+
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())
+        };
+      });
+    } catch (error) {
+      console.error("Erro no Radar Global do Firestore:", error);
+      return [];
+    }
   }
 
   static async addTransaction(uid, data) {
@@ -14,13 +44,13 @@ export class FirestoreService {
       value: data.value,
       type: data.type || "entrada",
       category: data.category || "Diversos",
-      account: data.account || "conta_corrente", // NOVO: Módulo da transação
+      account: data.account || "conta_corrente",
       createdAt: dataTransacao,
       registadoEm: serverTimestamp() 
     });
   }
 
-  // NOVO: Método de Alta Performance (Gravação em Lote) com Suporte a Módulos
+  // 🛡️ ATUALIZADO: A Trava Absoluta! Agora usa o uniqueHash para impedir duplicados
   static async saveAllTransactions(uid, transactions) {
     if (!uid || transactions.length === 0) return;
     
@@ -28,17 +58,18 @@ export class FirestoreService {
     const colRef = this.getTransactionsCollection(uid);
 
     transactions.forEach((tx) => {
-      const newDocRef = doc(colRef);
+      // MAGIA: Se a transação trouxer um Hash, usa-o como ID oficial. Se não, gera um aleatório.
+      const docId = tx.uniqueHash || crypto.randomUUID();
+      const newDocRef = doc(colRef, docId);
+      
       const dataTransacao = tx.date ? new Date(`${tx.date}T12:00:00`) : new Date();
       
       batch.set(newDocRef, {
-        value: tx.value,
-        type: tx.type || "entrada",
-        category: tx.category || "Diversos",
-        account: tx.account || "conta_corrente", // NOVO: Etiqueta de Conta ou Cartão
+        ...tx,
+        uniqueHash: docId, // Guarda o Hash no documento
         createdAt: dataTransacao,
         registadoEm: serverTimestamp()
-      });
+      }, { merge: true }); // O merge protege dados existentes!
     });
 
     return await batch.commit(); 
@@ -60,7 +91,6 @@ export class FirestoreService {
       atualizadoEm: serverTimestamp()
     };
 
-    // Só atualiza a conta se ela for enviada na edição
     if (data.account) {
       updateData.account = data.account;
     }
