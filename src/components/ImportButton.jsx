@@ -12,10 +12,13 @@ export default function ImportButton({ onImportTransactions, uid }) {
 
   const handleFileChange = async (event) => {
     const file = event.target.files[0];
+    
+    // Proteção: Garante que o sistema está conectado à base de dados
     if (!uid) {
-      alert("Aguarde a conexão com o banco de dados...");
+      alert("Aguarde a conexão com a base de dados...");
       return;
     }
+    
     if (!file) return;
 
     try {
@@ -23,55 +26,76 @@ export default function ImportButton({ onImportTransactions, uid }) {
       const ext = file.name.split('.').pop().toLowerCase();
       let extractedData = [];
       
-      // NOVA INTELIGÊNCIA: Identificamos a origem pelo tipo de arquivo
+      // Inteligência de Roteamento: Define a origem baseada no tipo de ficheiro
       let accountType = "conta_corrente"; 
 
       if (ext === 'ofx') {
         extractedData = await parseOFX(file);
-        accountType = "conta_corrente"; // OFX = Extrato do Banco
+        accountType = "conta_corrente"; // OFX = Extrato da Conta Corrente (Itaú)
       }
       else if (ext === 'csv') {
         extractedData = await parseCSV(file);
-        accountType = "cartao_credito"; // CSV = Fatura do Cartão (C6 Bank)
+        accountType = "cartao_credito"; // CSV = Fatura do Cartão (C6/Itaú)
       }
       else if (ext === 'pdf') {
         extractedData = await parsePDF(file);
-        accountType = "cartao_credito";
+        accountType = "cartao_credito"; 
       }
       
       if (!extractedData || extractedData.length === 0) {
         throw new Error("Não foram encontrados dados válidos no ficheiro.");
       }
 
+      // 1. Vai buscar as regras personalizadas que o utilizador criou no Firebase
       const customRules = await FirestoreService.getCategoryRules(uid);
       
+      // 2. O Motor de IA entra em ação: Mapeia as transações e categoriza automaticamente
       const smartData = extractedData.map(tx => ({
         ...tx,
-        category: autoCategorize(tx.category, customRules),
-        account: accountType // INJETAMOS A ORIGEM AQUI ANTES DE SALVAR!
+        // O motor lê a descrição crua (tx.description) e aplica a regra correta
+        category: autoCategorize(tx.description, customRules), 
+        account: accountType // Injeta a etiqueta da conta correta
       }));
       
+      // 3. Envia o lote processado para o App.jsx gravar no Firebase
       await onImportTransactions(smartData);
-      alert(`Importação concluída: ${smartData.length} itens salvos no módulo: ${accountType === 'cartao_credito' ? 'Cartão de Crédito' : 'Conta Corrente'}.`);
+      
+      // Alerta de sucesso formatado
+      const nomeModulo = accountType === 'cartao_credito' ? 'Cartão de Crédito' : 'Conta Corrente';
+      alert(`Importação concluída com sucesso!\n\n${smartData.length} transações foram categorizadas pela IA e salvas no módulo: ${nomeModulo}.`);
 
     } catch (err) {
       console.error(err);
       alert("Erro na importação: " + err.message);
     } finally {
       setIsProcessing(false);
+      // Limpa o input para permitir importar o mesmo ficheiro duas vezes seguidas, se necessário
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
   return (
     <div>
-      <input type="file" accept=".ofx,.pdf,.csv" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
+      <input 
+        type="file" 
+        accept=".ofx,.pdf,.csv" 
+        ref={fileInputRef} 
+        onChange={handleFileChange} 
+        className="hidden" 
+      />
       <button 
         onClick={() => fileInputRef.current.click()} 
         disabled={isProcessing} 
-        className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-3 font-bold text-indigo-400 hover:bg-indigo-500/20 disabled:opacity-50 transition-all shadow-lg"
+        className="flex items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-3 font-bold text-indigo-400 hover:bg-indigo-500/20 disabled:opacity-50 transition-all shadow-lg"
       >
-        {isProcessing ? "A processar..." : "📄 Importar Extrato ou Fatura"}
+        {isProcessing ? (
+          <>
+            <span className="animate-spin text-xl">⏳</span>
+            A processar com IA...
+          </>
+        ) : (
+          "📄 Importar Extrato ou Fatura"
+        )}
       </button>
     </div>
   );
