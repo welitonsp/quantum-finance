@@ -7,12 +7,38 @@ export class FirestoreService {
     return collection(db, "users", uid, "transactions");
   }
 
-  // 📡 NOVO: O Radar Global (Faltava esta função!)
-  // Busca transações num intervalo de datas para bloquear duplicados fantasma
+  // ============================================================
+  // NOVA FUNÇÃO: Gera uma chave única para cada transação
+  // Base: data + descrição + valor + tipo (entrada/saída)
+  // ============================================================
+  static generateTransactionKey(transaction) {
+    const date = transaction.date || transaction.createdAt || "";
+    const description = (transaction.description || "").trim().toLowerCase();
+    const value = Math.abs(Number(transaction.value)).toFixed(2);
+    const type = transaction.type === "entrada" ? "entrada" : "saida";
+    return `${date}|${description}|${value}|${type}`;
+  }
+
+  // ============================================================
+  // NOVA FUNÇÃO: Verifica se uma transação já existe no Firestore
+  // ============================================================
+  static async transactionExists(uid, transaction) {
+    const key = this.generateTransactionKey(transaction);
+    const q = query(
+      this.getTransactionsCollection(uid),
+      where("uniqueKey", "==", key)
+    );
+    const snapshot = await getDocs(q);
+    return !snapshot.empty;
+  }
+
+  // ============================================================
+  // FUNÇÃO EXISTENTE: Busca por período (Radar Global)
+  // ============================================================
   static async getTransactionsByPeriod(uid, startDate, endDate) {
     try {
       const start = new Date(startDate);
-      start.setDate(start.getDate() - 5); // Margem de 5 dias
+      start.setDate(start.getDate() - 5);
       const end = new Date(endDate);
       end.setDate(end.getDate() + 5);
 
@@ -37,28 +63,47 @@ export class FirestoreService {
     }
   }
 
+  // ============================================================
+  // FUNÇÃO EXISTENTE: Adicionar transação individual
+  // ============================================================
   static async addTransaction(uid, data) {
     if (!uid) return;
     const dataTransacao = data.date ? new Date(`${data.date}T12:00:00`) : new Date();
+    const key = this.generateTransactionKey(data);
     return await addDoc(this.getTransactionsCollection(uid), {
       value: data.value,
       type: data.type || "entrada",
       category: data.category || "Diversos",
       account: data.account || "conta_corrente",
       createdAt: dataTransacao,
+      uniqueKey: key,
       registadoEm: serverTimestamp() 
     });
   }
 
-  // 🛡️ ATUALIZADO: A Trava Absoluta! Agora usa o uniqueHash para impedir duplicados
+  // ============================================================
+  // FUNÇÃO CORAÇÃO: saveAllTransactions com anti‑duplicação
+  // Agora retorna { added: number, duplicates: number }
+  // ============================================================
   static async saveAllTransactions(uid, transactions) {
-    if (!uid || transactions.length === 0) return;
+    if (!uid || transactions.length === 0) return { added: 0, duplicates: 0 };
     
     const batch = writeBatch(db);
     const colRef = this.getTransactionsCollection(uid);
+    let addedCount = 0;
+    let duplicateCount = 0;
 
-    transactions.forEach((tx) => {
-      // MAGIA: Se a transação trouxer um Hash, usa-o como ID oficial. Se não, gera um aleatório.
+    for (const tx of transactions) {
+      const key = this.generateTransactionKey(tx);
+      
+      // Verifica se já existe uma transação com a mesma chave
+      const exists = await this.transactionExists(uid, { ...tx, uniqueKey: key });
+      
+      if (exists) {
+        duplicateCount++;
+        continue; // pula a duplicada
+      }
+
       const docId = tx.uniqueHash || crypto.randomUUID();
       const newDocRef = doc(colRef, docId);
       
@@ -66,15 +111,25 @@ export class FirestoreService {
       
       batch.set(newDocRef, {
         ...tx,
-        uniqueHash: docId, // Guarda o Hash no documento
+        uniqueHash: docId,
+        uniqueKey: key,
         createdAt: dataTransacao,
         registadoEm: serverTimestamp()
-      }, { merge: true }); // O merge protege dados existentes!
-    });
+      }, { merge: true });
+      
+      addedCount++;
+    }
 
-    return await batch.commit(); 
+    if (addedCount > 0) {
+      await batch.commit();
+    }
+    
+    return { added: addedCount, duplicates: duplicateCount };
   }
 
+  // ============================================================
+  // FUNÇÕES EXISTENTES: delete, update, regras
+  // ============================================================
   static async deleteTransaction(uid, id) {
     await deleteDoc(doc(db, "users", uid, "transactions", id));
   }

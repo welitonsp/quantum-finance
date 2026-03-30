@@ -14,7 +14,7 @@
     "chart.js": "^4.5.1",
     "firebase": "^12.8.0",
     "lucide-react": "^0.563.0",
-    "pdfjs-dist": "^5.5.207",
+    "pdfjs-dist": "^5.6.205",
     "react": "^19.2.0",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.2.0",

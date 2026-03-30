@@ -1,13 +1,16 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App'
-import { ThemeProvider } from './contexts/ThemeContext'
+import App from './App.jsx'
+import { ThemeProvider } from './contexts/ThemeContext.jsx'
+import { PrivacyProvider } from './contexts/PrivacyContext.jsx'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ThemeProvider>
-      <App />
+      <PrivacyProvider>
+        <App />
+      </PrivacyProvider>
     </ThemeProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 )
