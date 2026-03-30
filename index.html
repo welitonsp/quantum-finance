@@ -5,75 +5,10 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Quantum Finance | Elite Financial Panel</title>
-
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
-
-    <script src="https://cdn.tailwindcss.com"></script>
-
-    <script>
-      tailwind.config = {
-        darkMode: 'class', 
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['Inter', 'sans-serif'],
-            },
-            animation: {
-              'float': 'float 6s ease-in-out infinite',
-            },
-            keyframes: {
-              float: {
-                '0%, 100%': { transform: 'translateY(0)' },
-                '50%': { transform: 'translateY(-20px)' },
-              }
-            }
-          }
-        },
-        // INJETANDO AS CLASSES DIRETAMENTE NO PLUGIN DO CDN
-        // Isso resolve o erro "Cannot apply unknown utility class bg-white/90"
-        plugins: [
-          function({ addUtilities }) {
-            addUtilities({
-              '.glass-card-quantum': {
-                '@apply bg-white/90 dark:bg-slate-900/60 backdrop-blur-md border border-slate-200 dark:border-white/5 rounded-3xl shadow-xl transition-all duration-500': {},
-              },
-              '.glass-card-quantum:hover': {
-                '@apply border-indigo-200 dark:border-white/20 -translate-y-1 shadow-2xl': {},
-              },
-              '.text-gradient-quantum': {
-                '@apply bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 via-cyan-500 to-purple-500': {},
-              }
-            })
-          }
-        ]
-      }
-    </script>
-
-    <style type="text/tailwindcss">
-      @layer utilities {
-        /* Scrollbar Inteligente */
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { 
-          background: rgba(148, 163, 184, 0.3); 
-          border-radius: 10px; 
-        }
-        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(71, 85, 105, 0.5);
-        }
-
-        /* Animação da Barra de Progresso */
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-        .animate-shimmer {
-          animation: shimmer 2s infinite;
-        }
-      }
-    </style>
   </head>
   <body class="bg-slate-50 dark:bg-slate-950 transition-colors duration-500">
     <div id="root"></div>
