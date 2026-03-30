@@ -1,104 +1,101 @@
-import { Target, AlertTriangle, CheckCircle2, BrainCircuit } from "lucide-react";
+// src/components/BudgetProgress.jsx
+import { useEffect, useState } from "react";
+import { Target, AlertTriangle, CheckCircle2, TrendingUp, Sparkles } from "lucide-react";
+import toast from "react-hot-toast";
 
 export default function BudgetProgress({ totalExpenses, monthlyGoal, onSetGoal }) {
-  // Se não houver meta, mostramos o convite para criar uma
-  if (!monthlyGoal || monthlyGoal <= 0) {
-    return (
-      <div className="glass-card-dark p-6 mb-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-dashed border-2 border-indigo-500/30">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-indigo-500/10 text-indigo-400 rounded-xl">
-            <Target className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 className="text-white font-bold tracking-wide uppercase text-sm">Meta de Gastos Indefinida</h3>
-            <p className="text-slate-400 text-xs">Defina um limite mensal para ativar o Conselheiro de Risco IA.</p>
-          </div>
-        </div>
-        <button onClick={onSetGoal} className="glass-btn-secondary text-xs px-6">
-          Definir Teto Mensal
-        </button>
-      </div>
-    );
-  }
+  const [alertLevel, setAlertLevel] = useState(0);
+  const percentage = monthlyGoal > 0 ? (totalExpenses / monthlyGoal) * 100 : 0;
+  const cappedPercentage = Math.min(percentage, 100);
 
-  // A Matemática do Radar
-  const percentage = Math.min((totalExpenses / monthlyGoal) * 100, 100);
-  const remaining = Math.max(monthlyGoal - totalExpenses, 0);
-  
-  // A Inteligência do Risk Advisor
-  let statusColor = "bg-emerald-500";
-  let textColor = "text-emerald-400";
-  let StatusIcon = CheckCircle2;
-  let advisorMessage = "Ritmo excelente! Mantenha esta cadência para garantir a sua margem no fim do mês.";
+  useEffect(() => {
+    if (monthlyGoal === 0) return;
+    if (percentage >= 100 && alertLevel < 2) {
+      toast.error("Alerta Vermelho: Teto de gastos ultrapassado! Consulte a IA para otimizar.", { 
+        duration: 6000, style: { background: '#ef4444', color: '#fff', fontWeight: 'bold' }
+      });
+      setAlertLevel(2);
+    } else if (percentage >= 80 && percentage < 100 && alertLevel < 1) {
+      toast("Atenção: Atingiu 80% do seu orçamento mensal.", {
+        icon: '⚠️', duration: 5000, style: { background: '#f59e0b', color: '#fff', fontWeight: 'bold' }
+      });
+      setAlertLevel(1);
+    } else if (percentage < 80 && alertLevel > 0) {
+      setAlertLevel(0);
+    }
+  }, [percentage, monthlyGoal, alertLevel]);
 
-  if (percentage >= 90) {
-    statusColor = "bg-red-500";
-    textColor = "text-red-400";
-    StatusIcon = AlertTriangle;
-    advisorMessage = "Alerta Crítico: Está muito próximo do limite. Cancele despesas não essenciais imediatamente.";
-  } else if (percentage >= 70) {
-    statusColor = "bg-amber-500";
-    textColor = "text-amber-400";
-    StatusIcon = AlertTriangle;
-    advisorMessage = "Atenção: Já consumiu grande parte da meta. Otimize os seus gastos nos próximos dias.";
+  let progressColor = "from-emerald-400 to-emerald-500";
+  let bgGlow = "shadow-emerald-500/50";
+  let textColor = "text-emerald-600 dark:text-emerald-400";
+  let Icon = CheckCircle2;
+
+  if (percentage >= 100) {
+    progressColor = "from-red-500 to-red-600";
+    bgGlow = "shadow-red-500/50";
+    textColor = "text-red-600 dark:text-red-400";
+    Icon = AlertTriangle;
+  } else if (percentage >= 80) {
+    progressColor = "from-orange-400 to-orange-500";
+    bgGlow = "shadow-orange-500/50";
+    textColor = "text-orange-600 dark:text-orange-400";
+    Icon = TrendingUp;
   }
 
   return (
-    <div className="glass-card-dark p-6 mb-8 relative overflow-hidden group">
-      {/* Aura de Risco (Brilho condicional no fundo) */}
-      <div className={`absolute -right-20 -top-20 w-40 h-40 ${statusColor} opacity-5 blur-[80px] rounded-full transition-colors duration-1000`}></div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-10">
-        
-        {/* Lado Esquerdo: A Barra Física (2/3 da tela) */}
-        <div className="lg:col-span-2 flex flex-col justify-center">
-          <div className="flex justify-between items-end mb-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <StatusIcon className={`w-4 h-4 ${textColor}`} />
-                <h2 className="text-sm font-bold uppercase tracking-widest text-slate-300">Radar de Consumo</h2>
-              </div>
-              <button onClick={onSetGoal} className="text-[10px] text-slate-500 hover:text-indigo-400 uppercase tracking-wider underline transition-colors">
-                Alterar Meta (R$ {monthlyGoal})
-              </button>
+    <div className="glass-card-quantum p-6 relative overflow-hidden transition-all duration-300">
+      <div className={`absolute -right-10 -top-10 w-32 h-32 blur-3xl rounded-full opacity-10 dark:opacity-20 ${percentage >= 80 ? (percentage >= 100 ? 'bg-red-500' : 'bg-orange-500') : 'bg-emerald-500'}`}></div>
+
+      <div className="relative z-10">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-4 gap-4">
+          <div className="flex items-center gap-3">
+            <div className={`p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/5 shadow-sm dark:shadow-none ${textColor} transition-colors`}>
+              <Icon className="w-5 h-5" />
             </div>
-            <div className="text-right">
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">Margem Livre</p>
-              <p className={`text-2xl font-black font-mono ${textColor} transition-colors duration-500`}>
-                R$ {remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            <div>
+              <h3 className="text-lg font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2 transition-colors">
+                Teto de Gastos
+                {monthlyGoal === 0 && <Sparkles className="w-4 h-4 text-cyan-500 dark:text-cyan-400 animate-pulse" />}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {monthlyGoal > 0 ? "Monitorização ativa do seu orçamento." : "Defina uma meta para ativar a IA."}
               </p>
             </div>
           </div>
+          
+          <button onClick={onSetGoal} className="px-4 py-2 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-white text-xs font-bold uppercase tracking-widest rounded-xl transition-all border border-slate-200 dark:border-white/10 hover:border-cyan-500/50 shadow-sm dark:shadow-none whitespace-nowrap">
+            {monthlyGoal > 0 ? "Ajustar Limite" : "Definir Limite"}
+          </button>
+        </div>
 
-          <div className="relative">
-            <div className="flex justify-between text-[10px] text-slate-400 font-mono mb-2 uppercase tracking-wider">
-              <span>Usado: R$ {totalExpenses.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
-              <span>{percentage.toFixed(1)}%</span>
-            </div>
-            {/* A calha da barra */}
-            <div className="h-3 w-full bg-slate-900/80 rounded-full overflow-hidden border border-white/5">
-              {/* O preenchimento com a física que extraímos do CSS */}
-              <div 
-                className={`h-full ${statusColor} relative`}
-                style={{ width: `${percentage}%`, transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.5s ease' }}
-              >
-                <div className="absolute top-0 right-0 bottom-0 w-10 bg-gradient-to-r from-transparent to-white/30"></div>
+        {monthlyGoal > 0 ? (
+          <div className="mt-6">
+            <div className="flex justify-between items-end mb-2">
+              <span className={`text-2xl font-black tracking-tight ${textColor} transition-colors`}>{percentage.toFixed(1)}%</span>
+              <div className="text-right">
+                <span className="text-slate-800 dark:text-white font-black block transition-colors">R$ {totalExpenses.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                <span className="text-slate-500 text-xs font-bold">de R$ {monthlyGoal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
               </div>
             </div>
-          </div>
-        </div>
+            
+            <div className="h-4 w-full bg-slate-200 dark:bg-slate-900/80 rounded-full overflow-hidden border border-slate-300 dark:border-white/5 shadow-inner transition-colors">
+              <div className={`h-full rounded-full bg-gradient-to-r ${progressColor} shadow-[0_0_10px_rgba(0,0,0,0.2)] dark:shadow-[0_0_10px_rgba(0,0,0,0.5)] ${bgGlow} transition-all duration-1000 ease-out relative`} style={{ width: `${cappedPercentage}%` }}>
+                <div className="absolute top-0 left-0 bottom-0 w-full bg-gradient-to-r from-transparent via-white/40 dark:via-white/20 to-transparent -translate-x-full animate-[shimmer_2s_infinite]"></div>
+              </div>
+            </div>
 
-        {/* Lado Direito: Conselheiro de Risco (1/3 da tela) */}
-        <div className="bg-slate-900/40 rounded-xl p-4 border border-white/5 flex flex-col justify-center transition-all hover:bg-slate-900/60">
-          <div className="flex items-center gap-2 mb-2">
-            <BrainCircuit className={`w-4 h-4 ${textColor} animate-pulse`} />
-            <span className={`text-xs font-bold uppercase tracking-widest ${textColor}`}>Risk Advisor</span>
+            {percentage >= 100 && (
+              <p className="text-xs text-red-600 dark:text-red-400 font-bold mt-3 flex items-center gap-1.5 bg-red-50 dark:bg-red-500/10 p-2 rounded-lg border border-red-200 dark:border-red-500/20 transition-colors">
+                <AlertTriangle className="w-4 h-4" /> Atenção: Limite mensal excedido!
+              </p>
+            )}
           </div>
-          <p className="text-xs text-slate-300 leading-relaxed italic">
-            "{advisorMessage}"
-          </p>
-        </div>
-
+        ) : (
+          <div className="mt-4 p-4 border border-dashed border-slate-300 dark:border-white/10 rounded-2xl text-center bg-slate-50 dark:bg-slate-900/30 transition-colors">
+            <Target className="w-8 h-8 text-slate-400 dark:text-slate-600 mx-auto mb-2" />
+            <p className="text-sm font-bold text-slate-500 dark:text-slate-400">Nenhum orçamento definido para este mês.</p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,64 +1,41 @@
-/* src/index.css - Base Quântica Revisada */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* src/index.css - CSS Puro e Seguro */
 
-/* Reset e Base */
-:root {
-  --quantum-indigo: #4f46e5;
-  --quantum-cyan: #06b6d4;
-  --quantum-purple: #a855f7;
-  /* MUDANÇA: Superfície ligeiramente mais opaca para melhor efeito de desfoque */
-  --quantum-surface: rgba(15, 23, 42, 0.85); 
-}
-
+/* Reset Base */
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #09090b; /* Fundo base escuro */
+  /* Removido o background chumbado. Agora ele é controlado pelo App.jsx (bg-slate-50 dark:bg-slate-950) */
 }
 
-/* Efeitos de Design - Glassmorphism Quantum */
-.glass-card-quantum {
-  background: var(--quantum-surface);
-  backdrop-filter: blur(20px); /* Aumentamos o desfoque de 12px para 20px */
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px; /* Cantos mais suaves */
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+/* Scrollbar Inteligente (Claro/Escuro) */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { 
+  background: rgba(148, 163, 184, 0.4); 
+  border-radius: 10px; 
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { 
+  background: rgba(148, 163, 184, 0.7); 
 }
 
-.glass-card-quantum:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-  transform: translateY(-4px);
-  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.45);
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.5);
 }
 
-/* Bordas Sólidas e Robustas */
-.gradient-border-indigo { border-top: 4px solid var(--quantum-indigo); }
-.gradient-border-emerald { border-top: 4px solid #10b981; }
-.gradient-border-red { border-top: 4px solid #ef4444; }
-
-/* Texto Gradiente */
-.text-gradient-quantum {
-  background: linear-gradient(to right, var(--quantum-indigo), var(--quantum-cyan), var(--quantum-purple));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* Utilitário para o fundo animado (Bolhas) */
-.animate-float {
-  animation: float 6s ease-in-out infinite;
+/* Animações Globais */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 
 @keyframes float {
   0% { transform: translateY(0px); }
   50% { transform: translateY(-20px); }
   100% { transform: translateY(0px); }
+}
+
+/* Classe de animação para as bolhas do fundo (Referenciada no App.jsx) */
+.animate-float {
+  animation: float 6s ease-in-out infinite;
 }
