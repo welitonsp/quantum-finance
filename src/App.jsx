@@ -1,5 +1,5 @@
 // src/App.jsx
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { auth } from "./firebase";
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
 import { BrainCircuit, AlertTriangle } from "lucide-react";
@@ -35,7 +35,8 @@ import QuantumAIPage from "./components/QuantumAIPage";
 import HistoryPage from "./components/HistoryPage";
 
 // Componente Interno que consome o Contexto de Navegação
-const AuthenticatedApp = () => {
+// ✅ MELHORIA 1: Recebe o 'user' por prop, eliminando o listener de autenticação duplicado.
+const AuthenticatedApp = ({ user }) => {
   const { theme, toggleTheme } = useTheme();
   const { togglePrivacy } = usePrivacy();
   
@@ -44,7 +45,6 @@ const AuthenticatedApp = () => {
     activeModule, setActiveModule, handlePrevMonth, handleNextMonth 
   } = useNavigation();
 
-  const [user, setUser] = useState(null);
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -58,12 +58,6 @@ const AuthenticatedApp = () => {
 
   useEffect(() => localStorage.setItem('quantum_sidebar_collapsed', JSON.stringify(isSidebarCollapsed)), [isSidebarCollapsed]);
   useEffect(() => localStorage.setItem('quantum_monthly_goal', monthlyGoal), [monthlyGoal]);
-
-  // Auth Observer
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => setUser(u));
-    return () => unsub();
-  }, []);
 
   // Atalhos de Teclado
   useEffect(() => {
@@ -101,7 +95,8 @@ const AuthenticatedApp = () => {
     });
   }, [displayedTransactions]);
 
-  const handleImport = async (transacoesImportadas) => {
+  // ✅ MELHORIA 2: Funções pesadas envoltas em useCallback para otimizar re-renders.
+  const handleImport = useCallback(async (transacoesImportadas) => {
     if (!user?.uid || !transacoesImportadas?.length) return { added: 0, duplicates: 0 };
     const result = await FirestoreService.saveAllTransactions(user.uid, transacoesImportadas);
     
@@ -121,9 +116,9 @@ const AuthenticatedApp = () => {
     }
     if (transacoesImportadas[0]?.account) setActiveModule(transacoesImportadas[0].account);
     return result;
-  };
+  }, [user, setCurrentMonth, setCurrentYear, setActiveModule]);
 
-  const handleSaveTransaction = async (data) => {
+  const handleSaveTransaction = useCallback(async (data) => {
     const finalData = { ...data, account: activeModule === 'geral' ? 'conta_corrente' : activeModule };
     try {
       if (transactionToEdit) {
@@ -139,9 +134,9 @@ const AuthenticatedApp = () => {
       setIsFormOpen(false); 
       setTransactionToEdit(null);
     }
-  };
+  }, [activeModule, transactionToEdit, update, add]);
 
-  const confirmDelete = async () => {
+  const confirmDelete = useCallback(async () => {
     if (transactionToDelete) {
       try {
         await remove(transactionToDelete.id);
@@ -152,9 +147,9 @@ const AuthenticatedApp = () => {
         setTransactionToDelete(null);
       }
     }
-  };
+  }, [transactionToDelete, remove]);
 
-  const handleBatchDelete = async (ids) => {
+  const handleBatchDelete = useCallback(async (ids) => {
     if (!ids || ids.length === 0) return;
     try {
       await removeBatch(ids);
@@ -162,7 +157,7 @@ const AuthenticatedApp = () => {
     } catch (error) {
       toast.error("Erro na exclusão em lote.");
     }
-  };
+  }, [removeBatch]);
 
   return (
     <div className="flex h-screen overflow-hidden font-sans transition-colors duration-500 relative">
@@ -212,8 +207,6 @@ const AuthenticatedApp = () => {
           <main className="flex-1 overflow-y-auto custom-scrollbar relative">
             <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-12 transition-all duration-300">
               
-              {/* ROTEAMENTO DAS PÁGINAS SPA */}
-              
               {currentPage === 'dashboard' && (
                 <DashboardContent
                   transactions={displayedTransactions}
@@ -235,7 +228,6 @@ const AuthenticatedApp = () => {
                 />
               )}
 
-              {/* ✅ MÓDULOS DE WEALTH MANAGEMENT INTEGRADOS */}
               {currentPage === 'accounts' && <AccountsManager uid={user?.uid} />}
               {currentPage === 'recurring' && <RecurringManager uid={user?.uid} />}
 
@@ -304,7 +296,7 @@ export default function App() {
 
   return (
     <NavigationProvider>
-      <AuthenticatedApp />
+      <AuthenticatedApp user={user} />
     </NavigationProvider>
   );
 }
