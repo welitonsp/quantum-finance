@@ -8,6 +8,9 @@ import BudgetProgress from './BudgetProgress';
 import TransactionsManager from './TransactionsManager';
 import TransactionForm from './TransactionForm';
 
+// ✅ IMPORTANDO O NOSSO RADAR QUÂNTICO
+import ForecastWidget from './ForecastWidget';
+
 export default function DashboardContent({
   transactions,
   loading,
@@ -26,7 +29,8 @@ export default function DashboardContent({
   transactionToEdit,
   setTransactionToEdit,
 }) {
-  const { activeModule, setActiveModule } = useNavigation();
+  // ✅ Puxando o mês e ano do Contexto para alimentar o Forecast
+  const { activeModule, setActiveModule, currentMonth, currentYear } = useNavigation();
   const [activeDashboardTab, setActiveDashboardTab] = useState('overview');
 
   return (
@@ -97,6 +101,7 @@ export default function DashboardContent({
       {activeDashboardTab === 'overview' ? (
         <div className="space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4">
           <DashboardCards balances={moduleBalances} />
+          
           <BudgetProgress
             totalExpenses={moduleBalances.saidas}
             monthlyGoal={monthlyGoal}
@@ -105,6 +110,16 @@ export default function DashboardContent({
               if (newGoal && !isNaN(newGoal)) setMonthlyGoal(Number(newGoal));
             }}
           />
+
+          {/* ✅ WIDGET DE PREVISÃO ADICIONADO AQUI */}
+          <div className="w-full">
+            <ForecastWidget 
+              transactions={transactions} 
+              currentMonth={currentMonth} 
+              currentYear={currentYear} 
+            />
+          </div>
+
           <DashboardCharts categoryData={categoryData} topExpensesData={topExpensesData} />
         </div>
       ) : (

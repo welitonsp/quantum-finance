@@ -1,66 +1,70 @@
 // src/utils/forecastEngine.js
 
-export function generateForecastData(transactions, currentMonth, currentYear) {
-  // 1. Descobrir quantos dias tem o mês selecionado
-  const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
-  const today = new Date();
+export function calculateForecast(transactions, currentMonth, currentYear) {
+  const hoje = new Date();
+  const isCurrentMonth = hoje.getMonth() + 1 === currentMonth && hoje.getFullYear() === currentYear;
   
-  // Verifica se estamos a olhar para o mês atual ou para o passado
-  const isCurrentMonth = today.getMonth() + 1 === currentMonth && today.getFullYear() === currentYear;
-  const currentDay = isCurrentMonth ? today.getDate() : daysInMonth;
+  const diasNoMes = new Date(currentYear, currentMonth, 0).getDate();
+  const diaAtual = isCurrentMonth ? hoje.getDate() : diasNoMes;
 
-  // 2. Ordenar as transações do mês cronologicamente
-  const sortedTx = [...transactions].sort((a, b) => a.createdAt - b.createdAt);
+  // 1. Isolar apenas as Saídas (Gastos)
+  const despesas = transactions.filter(t => t.type === 'saida');
 
-  // 3. Agrupar entradas e saídas por dia
-  const txByDay = {};
-  sortedTx.forEach(tx => {
-    const day = tx.createdAt.getDate();
-    if (!txByDay[day]) txByDay[day] = { entradas: 0, saidas: 0 };
-    if (tx.type === 'entrada') txByDay[day].entradas += Number(tx.value);
-    if (tx.type === 'saida') txByDay[day].saidas += Number(tx.value);
+  // 2. Agrupar gastos por dia
+  const gastosPorDia = Array(diasNoMes).fill(0);
+  despesas.forEach(tx => {
+    const dataTx = new Date(tx.date || tx.createdAt);
+    const dia = dataTx.getDate();
+    // Garante que o dia é válido para o array
+    if (dia >= 1 && dia <= diasNoMes) {
+      gastosPorDia[dia - 1] += Number(tx.value);
+    }
   });
 
-  let dailyData = [];
-  let cumulativeBalance = 0;
-  let totalExpensesToDate = 0;
+  // 3. Calcular o Acumulado Real (até ao dia de hoje)
+  let acumuladoReal = 0;
+  const chartData = [];
 
-  // 4. Construir a linha do "Passado" (Realidade)
-  for (let i = 1; i <= daysInMonth; i++) {
-    const dayData = txByDay[i] || { entradas: 0, saidas: 0 };
-    cumulativeBalance += (dayData.entradas - dayData.saidas);
-
-    if (i <= currentDay) {
-      totalExpensesToDate += dayData.saidas;
-      dailyData.push({
-        day: i.toString().padStart(2, '0'),
-        real: cumulativeBalance, // Linha sólida
-        projected: i === currentDay ? cumulativeBalance : null // O ponto de ancoragem
+  for (let i = 0; i < diasNoMes; i++) {
+    const dia = i + 1;
+    
+    if (dia <= diaAtual) {
+      acumuladoReal += gastosPorDia[i];
+      chartData.push({
+        dia: dia.toString(),
+        real: Number(acumuladoReal.toFixed(2)),
+        projetado: null // O passado não tem projeção, é real
       });
     } else {
-      dailyData.push({
-        day: i.toString().padStart(2, '0'),
+      // Dias futuros ficam vazios no array real
+      chartData.push({
+        dia: dia.toString(),
         real: null,
-        projected: null 
+        projetado: null 
       });
     }
   }
 
-  // 5. O Algoritmo Preditivo: Calcular a "Velocidade de Gasto" diária (Burn Rate)
-  // Ignoramos dias futuros na média.
-  const burnRate = currentDay > 0 ? totalExpensesToDate / currentDay : 0;
-  let projectedBalance = cumulativeBalance;
+  // 4. Calcular o Burn Rate Diário e a Projeção Futura
+  const burnRateDiario = diaAtual > 0 ? acumuladoReal / diaAtual : 0;
+  const projecaoFinal = burnRateDiario * diasNoMes;
 
-  // 6. Construir a linha do "Futuro" (Projeção)
-  for (let i = currentDay + 1; i <= daysInMonth; i++) {
-    projectedBalance -= burnRate; // Subtrai a média de gastos diária
-    dailyData[i - 1].projected = projectedBalance;
+  // 5. Preencher a linha de Projeção (Tracejada) a partir de hoje até ao fim do mês
+  let acumuladoProjetado = acumuladoReal;
+  if (isCurrentMonth && diaAtual < diasNoMes) {
+    // Liga o último ponto real ao primeiro ponto projetado
+    chartData[diaAtual - 1].projetado = Number(acumuladoReal.toFixed(2));
+    
+    for (let i = diaAtual; i < diasNoMes; i++) {
+      acumuladoProjetado += burnRateDiario;
+      chartData[i].projetado = Number(acumuladoProjetado.toFixed(2));
+    }
   }
 
-  return { 
-    chartData: dailyData, 
-    burnRate, 
-    projectedEndBalance: projectedBalance,
-    currentBalance: cumulativeBalance
+  return {
+    dadosGrafico: chartData,
+    gastoAtual: acumuladoReal,
+    projecaoFinal: projecaoFinal,
+    ritmoDiario: burnRateDiario
   };
 }
