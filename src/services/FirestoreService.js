@@ -8,7 +8,7 @@ export class FirestoreService {
   }
 
   // ============================================================
-  // NOVA FUNÇÃO: Gera uma chave única para cada transação
+  // FUNÇÃO: Gera uma chave única para cada transação
   // Base: data + descrição + valor + tipo (entrada/saída)
   // ============================================================
   static generateTransactionKey(transaction) {
@@ -20,20 +20,7 @@ export class FirestoreService {
   }
 
   // ============================================================
-  // NOVA FUNÇÃO: Verifica se uma transação já existe no Firestore
-  // ============================================================
-  static async transactionExists(uid, transaction) {
-    const key = this.generateTransactionKey(transaction);
-    const q = query(
-      this.getTransactionsCollection(uid),
-      where("uniqueKey", "==", key)
-    );
-    const snapshot = await getDocs(q);
-    return !snapshot.empty;
-  }
-
-  // ============================================================
-  // FUNÇÃO EXISTENTE: Busca por período (Radar Global)
+  // FUNÇÃO: Busca por período (Radar Global)
   // ============================================================
   static async getTransactionsByPeriod(uid, startDate, endDate) {
     try {
@@ -64,7 +51,7 @@ export class FirestoreService {
   }
 
   // ============================================================
-  // FUNÇÃO EXISTENTE: Adicionar transação individual
+  // FUNÇÃO: Adicionar transação individual
   // ============================================================
   static async addTransaction(uid, data) {
     if (!uid) return;
@@ -82,31 +69,58 @@ export class FirestoreService {
   }
 
   // ============================================================
-  // FUNÇÃO CORAÇÃO: saveAllTransactions com anti‑duplicação
-  // Agora retorna { added: number, duplicates: number }
+  // OTIMIZAÇÃO CRÍTICA: saveAllTransactions (Resolve o Problema N+1)
+  // Faz apenas 1 leitura ao banco de dados e salva em lotes seguros.
   // ============================================================
   static async saveAllTransactions(uid, transactions) {
     if (!uid || transactions.length === 0) return { added: 0, duplicates: 0 };
     
-    const batch = writeBatch(db);
+    // 1. Descobrir o intervalo de datas do lote que está a ser importado
+    const dates = transactions.map(tx => new Date(tx.date ? `${tx.date}T12:00:00` : Date.now()));
+    const minDate = new Date(Math.min(...dates));
+    const maxDate = new Date(Math.max(...dates));
+    
+    // Alargar a margem por causa de fusos horários
+    minDate.setDate(minDate.getDate() - 2);
+    maxDate.setDate(maxDate.getDate() + 2);
+
+    // 2. FAZER APENAS 1 QUERY PARA DESCOBRIR DUPLICADOS!
+    const q = query(
+      this.getTransactionsCollection(uid),
+      where('createdAt', '>=', minDate),
+      where('createdAt', '<=', maxDate)
+    );
+    const snapshot = await getDocs(q);
+
+    // 3. Colocar as chaves existentes num "Set" na memória RAM (Super Rápido)
+    const existingKeys = new Set();
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.uniqueKey) existingKeys.add(data.uniqueKey);
+    });
+
+    // 4. Preparar o envio em lotes (Evitar o limite de 500 do Firebase)
+    let batch = writeBatch(db);
     const colRef = this.getTransactionsCollection(uid);
+    
     let addedCount = 0;
     let duplicateCount = 0;
+    let currentBatchOperations = 0;
 
     for (const tx of transactions) {
       const key = this.generateTransactionKey(tx);
       
-      // Verifica se já existe uma transação com a mesma chave
-      const exists = await this.transactionExists(uid, { ...tx, uniqueKey: key });
-      
-      if (exists) {
+      // Verifica no Set na RAM se existe (não faz chamada ao banco!)
+      if (existingKeys.has(key)) {
         duplicateCount++;
         continue; // pula a duplicada
       }
 
+      // Adiciona ao Set para não importar duplicados dentro do próprio ficheiro
+      existingKeys.add(key);
+
       const docId = tx.uniqueHash || crypto.randomUUID();
       const newDocRef = doc(colRef, docId);
-      
       const dataTransacao = tx.date ? new Date(`${tx.date}T12:00:00`) : new Date();
       
       batch.set(newDocRef, {
@@ -118,9 +132,18 @@ export class FirestoreService {
       }, { merge: true });
       
       addedCount++;
+      currentBatchOperations++;
+
+      // Proteção de limite do Firebase (máx 500 operações por batch)
+      if (currentBatchOperations >= 450) {
+        await batch.commit();
+        batch = writeBatch(db); // Cria um novo batch
+        currentBatchOperations = 0;
+      }
     }
 
-    if (addedCount > 0) {
+    // Envia o que sobrou no último batch
+    if (currentBatchOperations > 0) {
       await batch.commit();
     }
     
