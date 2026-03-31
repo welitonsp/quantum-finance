@@ -1,5 +1,32 @@
-import { Wallet, ArrowUpCircle, ArrowDownCircle, Sparkles } from "lucide-react";
+import { Wallet, ArrowUpRight, ArrowDownRight, Atom, TrendingUp } from "lucide-react";
 import { usePrivacy } from "../contexts/PrivacyContext";
+
+// Componente interno para gerar as "Sparklines" (Mini-gráficos) com SVG puro
+// Isto é muito mais leve do que usar bibliotecas de gráficos completas para pequenos detalhes!
+const Sparkline = ({ data, color, gradientId }) => {
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+  
+  // Calcula os pontos da linha baseados nos dados
+  const points = data.map((d, i) => `${(i / (data.length - 1)) * 100},${100 - ((d - min) / range) * 100}`).join(' ');
+  const fillPoints = `0,100 ${points} 100,100`;
+
+  return (
+    <div className="h-10 mt-3 w-full opacity-80">
+      <svg viewBox="0 0 100 100" className="w-full h-full" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <polygon points={fillPoints} fill={`url(#${gradientId})`} />
+        <polyline points={points} fill="none" stroke={color} strokeWidth="3" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </div>
+  );
+};
 
 export default function DashboardCards({ balances }) {
   const { isPrivacyMode } = usePrivacy();
@@ -8,71 +35,134 @@ export default function DashboardCards({ balances }) {
   const entradas = Number(balances?.entradas) || 0;
   const saidas = Number(balances?.saidas) || 0;
 
+  // Dados fictícios para dar vida aos mini-gráficos (No futuro podemos ligar ao histórico real)
+  const sparkDataSaldo = [30, 40, 35, 50, 49, 60, 75, 90];
+  const sparkDataEntradas = [10, 20, 15, 40, 35, 50, 65, 80];
+  const sparkDataSaidas = [60, 50, 55, 40, 45, 30, 25, 10]; // Tendência de queda é bom para saídas
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-      <div className="lg:col-span-3 xl:col-span-1 p-8 relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-cyan-600 border-none shadow-2xl shadow-indigo-500/30 group transition-all duration-500 hover:shadow-indigo-500/50">
-        <div className="absolute -right-10 -top-10 w-48 h-48 bg-white/10 blur-3xl rounded-full pointer-events-none group-hover:bg-white/20 transition-all duration-700"></div>
-        <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-black/20 to-transparent pointer-events-none"></div>
-
-        <div className="relative z-10 flex flex-col h-full justify-between">
-          <div className="flex justify-between items-start mb-6">
-            <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/20 backdrop-blur-md">
-              <Sparkles className="w-4 h-4 text-cyan-300" />
-              <span className="text-xs font-bold text-cyan-50 uppercase tracking-widest">Saldo Disponível</span>
-            </div>
-          </div>
-
-          <div>
-            <h3 className={`text-5xl font-black tracking-tighter mb-2 ${saldo >= 0 ? 'text-white' : 'text-red-200'}`}>
-              {!isPrivacyMode ? (
-                <>
-                  <span className="text-2xl opacity-70 mr-1 font-normal">R$</span>
-                  {saldo.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                </>
-              ) : (
-                <span className="text-white opacity-80 mt-2 block tracking-widest">••••••••</span>
-              )}
-            </h3>
-            <p className="text-xs text-indigo-200 uppercase tracking-widest font-bold flex items-center gap-1">
-              <Wallet className="w-3.5 h-3.5" /> Atualizado neste instante
-            </p>
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+      
+      {/* 1. CARTÃO DE SALDO TOTAL */}
+      <div className="glass-card-quantum p-6 flex flex-col justify-between group">
+        <div className="flex justify-between items-start mb-2">
+          <span className="text-sm font-semibold text-quantum-fgMuted tracking-wide">Saldo Total</span>
+          <div className="w-10 h-10 rounded-xl bg-quantum-accentDim text-quantum-accent flex items-center justify-center">
+            <Wallet className="w-5 h-5" />
           </div>
         </div>
-      </div>
-
-      <div className="glass-card-quantum p-7 flex flex-col justify-between group border-t-4 border-t-emerald-500 hover:bg-slate-50 dark:hover:bg-slate-800/80 xl:col-span-1">
-        <div className="flex items-center justify-between mb-4">
-          <div className="p-3 rounded-2xl bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
-            <ArrowUpCircle className="w-6 h-6" />
-          </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest">Entradas</p>
-        </div>
+        
         <div>
-          <h3 className="text-3xl font-black tracking-tighter text-slate-800 dark:text-white transition-colors">
+          <h3 className={`text-3xl font-mono font-bold tracking-tight ${saldo >= 0 ? 'text-quantum-fg' : 'text-quantum-red'}`}>
             {!isPrivacyMode ? (
-              <><span className="text-emerald-600 dark:text-emerald-400 mr-1">+</span>R$ {entradas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</>
-            ) : (<span className="text-slate-400 dark:text-slate-500 tracking-widest">••••••</span>)}
+              <>
+                <span className="text-lg opacity-60 mr-1 font-sans">R$</span>
+                {saldo.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </>
+            ) : (
+              <span className="text-quantum-fgMuted tracking-widest block mt-1">••••••••</span>
+            )}
           </h3>
-          <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-tight mt-2 border-t border-slate-200 dark:border-white/5 pt-3 transition-colors">Fluxo de Rendimentos</p>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="bg-quantum-accentDim text-quantum-accent text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+              <TrendingUp className="w-3 h-3" /> 12.4%
+            </span>
+            <span className="text-xs text-quantum-fgMuted">vs mês anterior</span>
+          </div>
+          <Sparkline data={sparkDataSaldo} color="#00E68A" gradientId="gradSaldo" />
         </div>
       </div>
 
-      <div className="glass-card-quantum p-7 flex flex-col justify-between group border-t-4 border-t-red-500 hover:bg-slate-50 dark:hover:bg-slate-800/80 xl:col-span-1">
-        <div className="flex items-center justify-between mb-4">
-          <div className="p-3 rounded-2xl bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/20">
-            <ArrowDownCircle className="w-6 h-6" />
+      {/* 2. CARTÃO DE ENTRADAS */}
+      <div className="glass-card-quantum p-6 flex flex-col justify-between group">
+        <div className="flex justify-between items-start mb-2">
+          <span className="text-sm font-semibold text-quantum-fgMuted tracking-wide">Entradas</span>
+          <div className="w-10 h-10 rounded-xl bg-quantum-goldDim text-quantum-gold flex items-center justify-center">
+            <ArrowUpRight className="w-5 h-5" />
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest">Saídas</p>
         </div>
+        
         <div>
-          <h3 className="text-3xl font-black tracking-tighter text-slate-800 dark:text-white transition-colors">
+          <h3 className="text-3xl font-mono font-bold tracking-tight text-quantum-fg">
             {!isPrivacyMode ? (
-              <><span className="text-red-600 dark:text-red-400 mr-1">-</span>R$ {saidas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</>
-            ) : (<span className="text-slate-400 dark:text-slate-500 tracking-widest">••••••</span>)}
+              <>
+                <span className="text-quantum-gold text-2xl mr-1">+</span>
+                {entradas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </>
+            ) : (
+              <span className="text-quantum-fgMuted tracking-widest block mt-1">••••••••</span>
+            )}
           </h3>
-          <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-tight mt-2 border-t border-slate-200 dark:border-white/5 pt-3 transition-colors">Controlo de Consumo</p>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="bg-quantum-goldDim text-quantum-gold text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+              <TrendingUp className="w-3 h-3" /> 8.7%
+            </span>
+            <span className="text-xs text-quantum-fgMuted">rendimento</span>
+          </div>
+          <Sparkline data={sparkDataEntradas} color="#FFB800" gradientId="gradEntradas" />
         </div>
       </div>
+
+      {/* 3. CARTÃO DE SAÍDAS */}
+      <div className="glass-card-quantum p-6 flex flex-col justify-between group">
+        <div className="flex justify-between items-start mb-2">
+          <span className="text-sm font-semibold text-quantum-fgMuted tracking-wide">Saídas</span>
+          <div className="w-10 h-10 rounded-xl bg-quantum-redDim text-quantum-red flex items-center justify-center">
+            <ArrowDownRight className="w-5 h-5" />
+          </div>
+        </div>
+        
+        <div>
+          <h3 className="text-3xl font-mono font-bold tracking-tight text-quantum-fg">
+            {!isPrivacyMode ? (
+              <>
+                <span className="text-quantum-red text-2xl mr-1">-</span>
+                {saidas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </>
+            ) : (
+              <span className="text-quantum-fgMuted tracking-widest block mt-1">••••••••</span>
+            )}
+          </h3>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="bg-quantum-accentDim text-quantum-accent text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+              <TrendingUp className="w-3 h-3" /> 4.2%
+            </span>
+            <span className="text-xs text-quantum-fgMuted">economia</span>
+          </div>
+          <Sparkline data={sparkDataSaidas} color="#FF4757" gradientId="gradSaidas" />
+        </div>
+      </div>
+
+      {/* 4. CARTÃO QUANTUM SCORE (Novo!) */}
+      <div className="glass-card-quantum p-6 flex flex-col justify-between group">
+        <div className="flex justify-between items-start mb-2">
+          <span className="text-sm font-semibold text-quantum-fgMuted tracking-wide">Quantum Score</span>
+          <div className="w-10 h-10 rounded-xl bg-quantum-purpleDim text-quantum-purple flex items-center justify-center animate-quantumPulse">
+            <Atom className="w-5 h-5" />
+          </div>
+        </div>
+        
+        <div>
+          <h3 className="text-3xl font-mono font-bold tracking-tight text-quantum-purple mt-2">
+            94.7
+          </h3>
+          <div className="flex items-center gap-2 mt-2 mb-4">
+            <span className="bg-quantum-purpleDim text-quantum-purple text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+              <TrendingUp className="w-3 h-3" /> 2.1
+            </span>
+            <span className="text-xs text-quantum-fgMuted">precisão da IA</span>
+          </div>
+          
+          {/* Barra de Progresso do Score */}
+          <div className="w-full h-1.5 bg-quantum-bg rounded-full overflow-hidden mt-6">
+            <div 
+              className="h-full rounded-full transition-all duration-1000 ease-out"
+              style={{ width: '94.7%', background: 'linear-gradient(90deg, #A855F7, #00E68A)' }}
+            ></div>
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }

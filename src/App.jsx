@@ -10,10 +10,10 @@ import { useTheme } from "./contexts/ThemeContext";
 import { usePrivacy } from "./contexts/PrivacyContext";
 import { NavigationProvider, useNavigation } from "./contexts/NavigationContext";
 import { useTransactions } from "./hooks/useTransactions";
-import { useFinancialData } from "./hooks/useFinancialData"; // 🧠 O nosso Cérebro Matemático
+import { useFinancialData } from "./hooks/useFinancialData";
 import { FirestoreService } from "./services/FirestoreService";
 
-// Componentes
+// Componentes Originais
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import LoginScreen from "./components/LoginScreen";
@@ -21,6 +21,14 @@ import DashboardContent from "./components/DashboardContent";
 import ReportsContent from "./components/ReportsContent";
 import AIAssistantChat from "./components/AIAssistantChat";
 import CategorySettings from "./components/CategorySettings";
+import QuantumBackground from "./components/QuantumBackground";
+import MarketTicker from "./components/MarketTicker";
+
+// ✨ NOVOS COMPONENTES DA FASE 8 (Páginas da SPA) ✨
+import PortfolioPage from "./components/PortfolioPage";
+import MarketsPage from "./components/MarketsPage";
+import QuantumAIPage from "./components/QuantumAIPage";
+import HistoryPage from "./components/HistoryPage";
 
 // Componente Interno que consome o Contexto de Navegação
 const AuthenticatedApp = () => {
@@ -65,16 +73,9 @@ const AuthenticatedApp = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [togglePrivacy]);
 
-  // ✅ 1. DADOS DO FIREBASE
+  // DADOS DO FIREBASE E CÁLCULOS
   const { transactions, loading, add, remove, removeBatch, update } = useTransactions(user?.uid);
-
-  // ✅ 2. CÁLCULOS E FILTRAGEM (Delegados para o Hook useFinancialData)
-  const { 
-    displayedTransactions, 
-    moduleBalances, 
-    categoryData, 
-    topExpensesData 
-  } = useFinancialData(transactions, activeModule, currentMonth, currentYear);
+  const { displayedTransactions, moduleBalances, categoryData, topExpensesData } = useFinancialData(transactions, activeModule, currentMonth, currentYear);
 
   // Alerta de Gastos Atípicos
   const notifiedLargeTxRef = useRef(new Set());
@@ -83,27 +84,23 @@ const AuthenticatedApp = () => {
     const largeExpenses = displayedTransactions.filter(tx => tx.type === 'saida' && Math.abs(Number(tx.value)) > 1000 && !notifiedLargeTxRef.current.has(tx.id));
     largeExpenses.forEach(tx => {
       toast.custom((t) => (
-        <div className={`${t.visible ? 'animate-in fade-in slide-in-from-top-2' : 'animate-out fade-out slide-out-to-top-2'} max-w-md w-full bg-white dark:bg-slate-800 shadow-2xl rounded-2xl flex ring-1 ring-orange-500/50 p-4 pointer-events-auto`}>
-          <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center mr-3"><span className="text-lg">💸</span></div>
+        <div className={`${t.visible ? 'animate-in fade-in slide-in-from-top-2' : 'animate-out fade-out slide-out-to-top-2'} max-w-md w-full bg-quantum-card shadow-2xl rounded-2xl flex ring-1 ring-orange-500/50 p-4 pointer-events-auto`}>
+          <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center mr-3"><span className="text-lg">💸</span></div>
           <div className="flex-1">
-            <p className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">Gasto Atípico</p>
-            <p className="text-xs text-slate-500 mt-1">{tx.description}</p>
+            <p className="text-sm font-bold text-white uppercase tracking-wider">Gasto Atípico</p>
+            <p className="text-xs text-quantum-fgMuted mt-1">{tx.description}</p>
           </div>
-          <button onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-400 hover:text-slate-800 ml-4 border-l border-slate-200 dark:border-white/10 pl-4 transition-colors">Fechar</button>
+          <button onClick={() => toast.dismiss(t.id)} className="text-xs text-quantum-fgMuted hover:text-white ml-4 border-l border-white/10 pl-4 transition-colors">Fechar</button>
         </div>
       ), { duration: 8000 });
       notifiedLargeTxRef.current.add(tx.id);
     });
   }, [displayedTransactions]);
 
-  // ==========================================
-  // HANDLERS ROBUSTOS
-  // ==========================================
   const handleImport = async (transacoesImportadas) => {
     if (!user?.uid || !transacoesImportadas?.length) return { added: 0, duplicates: 0 };
     const result = await FirestoreService.saveAllTransactions(user.uid, transacoesImportadas);
     
-    // Auto-navegação para o mês da importação
     const monthCounts = {};
     let bestDate = null, maxCount = 0;
     transacoesImportadas.forEach(tx => {
@@ -146,8 +143,7 @@ const AuthenticatedApp = () => {
         await remove(transactionToDelete.id);
         toast.success("Registo apagado.");
       } catch (error) {
-        console.error("Erro ao apagar:", error);
-        toast.error("Erro ao apagar. Olhe o Console.");
+        toast.error("Erro ao apagar.");
       } finally {
         setTransactionToDelete(null);
       }
@@ -160,84 +156,125 @@ const AuthenticatedApp = () => {
       await removeBatch(ids);
       toast.success(`${ids.length} transações apagadas.`);
     } catch (error) {
-      console.error("Erro ao apagar lote:", error);
       toast.error("Erro na exclusão em lote.");
     }
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-500">
-      <Toaster position="bottom-right" toastOptions={{ style: { background: theme === 'dark' ? '#1e293b' : '#fff', color: theme === 'dark' ? '#fff' : '#0f172a', borderRadius: '12px' } }} />
+    <div className="flex h-screen overflow-hidden font-sans transition-colors duration-500 relative">
+      {/* NOVO TOASTER COM PALETA QUÂNTICA */}
+      <Toaster position="bottom-right" toastOptions={{ 
+        style: { background: '#131A2A', color: '#E8ECF4', border: '1px solid #1E2A3F', borderRadius: '12px' },
+        success: { iconTheme: { primary: '#00E68A', secondary: '#131A2A' } },
+        error: { iconTheme: { primary: '#FF4757', secondary: '#131A2A' } }
+      }} />
 
       {/* Modal de Exclusão Individual */}
       {transactionToDelete && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl border dark:border-white/10 zoom-in-95">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-quantum-card w-full max-w-md rounded-3xl p-6 shadow-2xl border border-quantum-border zoom-in-95">
             <div className="flex items-center gap-4 mb-4">
-              <div className="p-3 bg-red-100 dark:bg-red-500/20 text-red-600 rounded-2xl"><AlertTriangle /></div>
-              <div><h3 className="text-lg font-bold">Apagar Registo?</h3><p className="text-sm text-slate-500">Esta ação não pode ser desfeita.</p></div>
+              <div className="p-3 bg-red-500/20 text-quantum-red rounded-2xl"><AlertTriangle /></div>
+              <div><h3 className="text-lg font-bold text-white">Apagar Registo?</h3><p className="text-sm text-quantum-fgMuted">Esta ação não pode ser desfeita.</p></div>
             </div>
-            <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl mb-6 border dark:border-white/5">
-              <p className="text-sm font-bold truncate">"{transactionToDelete.description}"</p>
+            <div className="bg-quantum-bgSecondary p-3 rounded-xl mb-6 border border-quantum-border">
+              <p className="text-sm font-bold truncate text-quantum-fg">"{transactionToDelete.description}"</p>
             </div>
             <div className="flex justify-end gap-3">
-              <button onClick={() => setTransactionToDelete(null)} className="px-5 py-2.5 rounded-xl font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Cancelar</button>
-              <button onClick={confirmDelete} className="px-5 py-2.5 rounded-xl font-bold bg-red-600 text-white hover:bg-red-700 transition-colors">Apagar</button>
+              <button onClick={() => setTransactionToDelete(null)} className="px-5 py-2.5 rounded-xl font-bold text-quantum-fgMuted hover:bg-quantum-border transition-colors">Cancelar</button>
+              <button onClick={confirmDelete} className="px-5 py-2.5 rounded-xl font-bold bg-quantum-red text-white hover:bg-red-700 transition-colors">Apagar</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Background futurista */}
-      <div className="fixed inset-0 opacity-10 dark:opacity-30 pointer-events-none z-0">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl animate-float"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-cyan-500/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '1s' }}></div>
-      </div>
+      {/* Fundo Quântico Animado e Isolado (Fica na camada zero) */}
+      <QuantumBackground />
 
-      <Sidebar user={user} isMobileMenuOpen={isMobileMenuOpen} setIsMobileMenuOpen={setIsMobileMenuOpen} isSidebarCollapsed={isSidebarCollapsed} setIsSettingsOpen={setIsSettingsOpen} handleLogout={() => signOut(auth)} />
+      {/* Toda a aplicação passa a ficar por cima do canvas graças ao z-10 relativo */}
+      <div className="relative z-10 flex w-full h-full pointer-events-none">
+        
+        {/* A Sidebar precisa voltar a ter pointer-events-auto para ser clicável */}
+        <div className="pointer-events-auto">
+          <Sidebar user={user} isMobileMenuOpen={isMobileMenuOpen} setIsMobileMenuOpen={setIsMobileMenuOpen} isSidebarCollapsed={isSidebarCollapsed} setIsSettingsOpen={setIsSettingsOpen} handleLogout={() => signOut(auth)} />
+        </div>
 
-      <div className="flex-1 flex flex-col relative z-10 w-full overflow-hidden transition-all duration-300">
-        <Header 
-          currentPage={currentPage}
-          currentMonth={currentMonth}
-          currentYear={currentYear}
-          handlePrevMonth={handlePrevMonth}
-          handleNextMonth={handleNextMonth}
-          nomeMeses={["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]} 
-          theme={theme} toggleTheme={toggleTheme} isSidebarCollapsed={isSidebarCollapsed} setIsSidebarCollapsed={setIsSidebarCollapsed} setIsMobileMenuOpen={setIsMobileMenuOpen} isFormOpen={isFormOpen} setIsFormOpen={setIsFormOpen} user={user} transactions={transactions} handleImport={handleImport} 
-        />
+        <div className="flex-1 flex flex-col w-full overflow-hidden pointer-events-auto bg-quantum-bg/80 backdrop-blur-sm">
+          
+          <Header 
+            currentPage={currentPage} currentMonth={currentMonth} currentYear={currentYear}
+            handlePrevMonth={handlePrevMonth} handleNextMonth={handleNextMonth}
+            nomeMeses={["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]} 
+            theme={theme} toggleTheme={toggleTheme} isSidebarCollapsed={isSidebarCollapsed} setIsSidebarCollapsed={setIsSidebarCollapsed} setIsMobileMenuOpen={setIsMobileMenuOpen} isFormOpen={isFormOpen} setIsFormOpen={setIsFormOpen} user={user} transactions={transactions} handleImport={handleImport} 
+          />
+          
+          {/* Letreiro Animado de Mercado */}
+          <MarketTicker />
 
-        <main className="flex-1 overflow-y-auto custom-scrollbar">
-          <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-12 transition-all duration-300">
-            {currentPage === 'dashboard' ? (
-              <DashboardContent
-                transactions={displayedTransactions}
-                loading={loading}
-                moduleBalances={moduleBalances}
-                categoryData={categoryData}
-                topExpensesData={topExpensesData}
-                monthlyGoal={monthlyGoal}
-                setMonthlyGoal={setMonthlyGoal}
-                onSaveTransaction={handleSaveTransaction}
-                onEditTransaction={(tx) => { setTransactionToEdit(tx); setIsFormOpen(true); }}
-                onDeleteRequest={setTransactionToDelete}
-                onBatchDelete={handleBatchDelete}
-                onDeleteAll={handleBatchDelete}
-                isFormOpen={isFormOpen}
-                setIsFormOpen={setIsFormOpen}
-                transactionToEdit={transactionToEdit}
-                setTransactionToEdit={setTransactionToEdit}
-              />
-            ) : (
-              <ReportsContent transactions={displayedTransactions} balances={moduleBalances} />
-            )}
-          </div>
-        </main>
+          <main className="flex-1 overflow-y-auto custom-scrollbar relative">
+            <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-12 transition-all duration-300">
+              
+              {/* ROTEAMENTO DAS PÁGINAS SPA */}
+              
+              {currentPage === 'dashboard' && (
+                <DashboardContent
+                  transactions={displayedTransactions}
+                  loading={loading}
+                  moduleBalances={moduleBalances}
+                  categoryData={categoryData}
+                  topExpensesData={topExpensesData}
+                  monthlyGoal={monthlyGoal}
+                  setMonthlyGoal={setMonthlyGoal}
+                  onSaveTransaction={handleSaveTransaction}
+                  onEditTransaction={(tx) => { setTransactionToEdit(tx); setIsFormOpen(true); }}
+                  onDeleteRequest={setTransactionToDelete}
+                  onBatchDelete={handleBatchDelete}
+                  onDeleteAll={handleBatchDelete}
+                  isFormOpen={isFormOpen}
+                  setIsFormOpen={setIsFormOpen}
+                  transactionToEdit={transactionToEdit}
+                  setTransactionToEdit={setTransactionToEdit}
+                />
+              )}
+
+              {currentPage === 'portfolio' && (
+                <PortfolioPage moduleBalances={moduleBalances} />
+              )}
+
+              {currentPage === 'markets' && (
+                <MarketsPage onTradeClick={(symbol) => {
+                  alert(`A abrir operação para: ${symbol}`);
+                }} />
+              )}
+
+              {currentPage === 'quantum' && (
+                <QuantumAIPage />
+              )}
+
+              {(currentPage === 'history' || currentPage === 'wallet') && (
+                <HistoryPage
+                  transactions={displayedTransactions}
+                  loading={loading}
+                  onEdit={(tx) => { setTransactionToEdit(tx); setIsFormOpen(true); }}
+                  onDeleteRequest={setTransactionToDelete}
+                  onBatchDelete={handleBatchDelete}
+                  onDeleteAll={handleBatchDelete}
+                />
+              )}
+
+              {/* Caso de uso antigo, mantido para evitar erros se ainda for chamado */}
+              {currentPage === 'reports' && (
+                <ReportsContent transactions={displayedTransactions} balances={moduleBalances} />
+              )}
+
+            </div>
+          </main>
+        </div>
       </div>
 
       {isSettingsOpen && <CategorySettings uid={user?.uid} onClose={() => setIsSettingsOpen(false)} />}
 
-      <button onClick={() => setIsAIChatOpen(true)} className="fixed bottom-6 right-6 md:bottom-8 md:right-8 w-14 h-14 md:w-16 md:h-16 bg-gradient-to-br from-indigo-500 to-cyan-500 rounded-2xl flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all z-50 group border border-white/20">
+      <button onClick={() => setIsAIChatOpen(true)} className="fixed bottom-6 right-6 md:bottom-8 md:right-8 w-14 h-14 md:w-16 md:h-16 bg-quantum-purple hover:bg-purple-600 rounded-2xl flex items-center justify-center shadow-[0_0_30px_rgba(168,85,247,0.3)] hover:scale-110 active:scale-95 transition-all z-50 group border border-white/20">
         <BrainCircuit className="w-7 h-7 text-white group-hover:animate-pulse" />
       </button>
 
@@ -265,7 +302,7 @@ export default function App() {
     } catch (error) { toast.error("Falha ao autenticar."); }
   };
 
-  if (!authReady) return <div className="flex min-h-screen items-center justify-center bg-slate-950 text-indigo-500 font-bold uppercase animate-pulse">A ligar Motor Quântico...</div>;
+  if (!authReady) return <div className="flex min-h-screen items-center justify-center bg-quantum-bg text-quantum-accent font-bold uppercase animate-pulse">A ligar Motor Quântico...</div>;
   if (!user) return <LoginScreen onLogin={handleLogin} />;
 
   return (

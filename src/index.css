@@ -1,54 +1,56 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@layer components {
-  /* Classe Mestra Adaptável - Glassmorphism */
-  .glass-card-quantum {
-    background-color: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid #e2e8f0;
-    border-radius: 1.5rem;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
-    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+@layer base {
+  body {
+    /* Aplica o novo fundo escuro e cor de texto a toda a aplicação */
+    @apply bg-quantum-bg text-quantum-fg font-sans overflow-x-hidden antialiased;
   }
   
-  .dark .glass-card-quantum {
-    background-color: rgba(15, 23, 42, 0.8);
-    border-color: rgba(255, 255, 255, 0.1);
+  /* Scrollbar Customizada */
+  ::-webkit-scrollbar {
+    width: 6px;
   }
-  
-  .glass-card-quantum:hover {
-    border-color: rgba(99, 102, 241, 0.3);
-    transform: translateY(-4px);
+  ::-webkit-scrollbar-track {
+    background: #0A0E17;
   }
-  
-  .text-gradient-quantum {
-    background-clip: text;
-    -webkit-background-clip: text;
-    color: transparent;
-    background-image: linear-gradient(to right, #6366f1, #06b6d4, #a855f7);
+  ::-webkit-scrollbar-thumb {
+    background: #1E2A3F;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #00E68A;
   }
 }
 
-@layer utilities {
-  /* Scrollbar Inteligente */
+@layer components {
+  /* Efeito de brilho animado para o texto "Weliton" */
+  .shimmer-text {
+    background: linear-gradient(90deg, #E8ECF4 0%, #00E68A 50%, #E8ECF4 100%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    @apply animate-shimmer;
+  }
+  
+  /* Classe base para os nossos novos cartões */
+  .glass-card-quantum {
+    @apply bg-quantum-card border border-quantum-border rounded-2xl relative overflow-hidden transition-all duration-300 shadow-lg;
+  }
+  .glass-card-quantum:hover {
+    @apply border-quantum-accent/40;
+  }
+  
+  /* Esconde scrollbars onde precisamos de scroll limpo (ex: Ticker) */
   .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    display: none;
   }
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.3);
-    border-radius: 10px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(148, 163, 184, 0.5);
-  }
-  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(71, 85, 105, 0.5);
+  .custom-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
