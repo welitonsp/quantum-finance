@@ -24,7 +24,11 @@ import CategorySettings from "./components/CategorySettings";
 import QuantumBackground from "./components/QuantumBackground";
 import MarketTicker from "./components/MarketTicker";
 
-// ✨ NOVOS COMPONENTES DA FASE 8 (Páginas da SPA) ✨
+// ✨ NOVOS COMPONENTES WEALTH MANAGEMENT (Sprints 10 e 11) ✨
+import AccountsManager from "./components/AccountsManager";
+import RecurringManager from "./components/RecurringManager";
+
+// ✨ COMPONENTES DA FASE 8 (Páginas da SPA) ✨
 import PortfolioPage from "./components/PortfolioPage";
 import MarketsPage from "./components/MarketsPage";
 import QuantumAIPage from "./components/QuantumAIPage";
@@ -162,14 +166,12 @@ const AuthenticatedApp = () => {
 
   return (
     <div className="flex h-screen overflow-hidden font-sans transition-colors duration-500 relative">
-      {/* NOVO TOASTER COM PALETA QUÂNTICA */}
       <Toaster position="bottom-right" toastOptions={{ 
         style: { background: '#131A2A', color: '#E8ECF4', border: '1px solid #1E2A3F', borderRadius: '12px' },
         success: { iconTheme: { primary: '#00E68A', secondary: '#131A2A' } },
         error: { iconTheme: { primary: '#FF4757', secondary: '#131A2A' } }
       }} />
 
-      {/* Modal de Exclusão Individual */}
       {transactionToDelete && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-quantum-card w-full max-w-md rounded-3xl p-6 shadow-2xl border border-quantum-border zoom-in-95">
@@ -188,13 +190,10 @@ const AuthenticatedApp = () => {
         </div>
       )}
 
-      {/* Fundo Quântico Animado e Isolado (Fica na camada zero) */}
       <QuantumBackground />
 
-      {/* Toda a aplicação passa a ficar por cima do canvas graças ao z-10 relativo */}
       <div className="relative z-10 flex w-full h-full pointer-events-none">
         
-        {/* A Sidebar precisa voltar a ter pointer-events-auto para ser clicável */}
         <div className="pointer-events-auto">
           <Sidebar user={user} isMobileMenuOpen={isMobileMenuOpen} setIsMobileMenuOpen={setIsMobileMenuOpen} isSidebarCollapsed={isSidebarCollapsed} setIsSettingsOpen={setIsSettingsOpen} handleLogout={() => signOut(auth)} />
         </div>
@@ -208,7 +207,6 @@ const AuthenticatedApp = () => {
             theme={theme} toggleTheme={toggleTheme} isSidebarCollapsed={isSidebarCollapsed} setIsSidebarCollapsed={setIsSidebarCollapsed} setIsMobileMenuOpen={setIsMobileMenuOpen} isFormOpen={isFormOpen} setIsFormOpen={setIsFormOpen} user={user} transactions={transactions} handleImport={handleImport} 
           />
           
-          {/* Letreiro Animado de Mercado */}
           <MarketTicker />
 
           <main className="flex-1 overflow-y-auto custom-scrollbar relative">
@@ -237,9 +235,11 @@ const AuthenticatedApp = () => {
                 />
               )}
 
-              {currentPage === 'portfolio' && (
-                <PortfolioPage moduleBalances={moduleBalances} />
-              )}
+              {/* ✅ MÓDULOS DE WEALTH MANAGEMENT INTEGRADOS */}
+              {currentPage === 'accounts' && <AccountsManager uid={user?.uid} />}
+              {currentPage === 'recurring' && <RecurringManager uid={user?.uid} />}
+
+              {currentPage === 'portfolio' && <PortfolioPage moduleBalances={moduleBalances} />}
 
               {currentPage === 'markets' && (
                 <MarketsPage onTradeClick={(symbol) => {
@@ -247,9 +247,7 @@ const AuthenticatedApp = () => {
                 }} />
               )}
 
-              {currentPage === 'quantum' && (
-                <QuantumAIPage />
-              )}
+              {currentPage === 'quantum' && <QuantumAIPage />}
 
               {(currentPage === 'history' || currentPage === 'wallet') && (
                 <HistoryPage
@@ -262,7 +260,6 @@ const AuthenticatedApp = () => {
                 />
               )}
 
-              {/* Caso de uso antigo, mantido para evitar erros se ainda for chamado */}
               {currentPage === 'reports' && (
                 <ReportsContent transactions={displayedTransactions} balances={moduleBalances} />
               )}
