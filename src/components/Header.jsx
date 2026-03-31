@@ -1,3 +1,4 @@
+// src/components/Header.jsx
 import { Menu, ChevronLeft, ChevronRight, Sun, Moon, Plus, Eye, EyeOff } from "lucide-react";
 import ImportButton from "./ImportButton";
 import { usePrivacy } from "../contexts/PrivacyContext";
@@ -43,12 +44,23 @@ export default function Header({
       </div>
 
       <div className="flex items-center gap-1 md:gap-2 bg-white dark:bg-slate-900/80 p-1.5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm dark:shadow-inner">
-         <button onClick={handlePrevMonth} className="p-2 hover:bg-slate-50 dark:hover:bg-white/10 rounded-xl text-slate-500 dark:text-slate-300 transition-colors"><ChevronLeft className="w-4 md:w-5 h-4 md:h-5" /></button>
+         <button onClick={handlePrevMonth} className="p-2 hover:bg-slate-50 dark:hover:bg-white/10 rounded-xl text-slate-500 dark:text-slate-300 transition-colors">
+           <ChevronLeft className="w-4 md:w-5 h-4 md:h-5" />
+         </button>
+         
          <div className="flex flex-col items-center justify-center w-28 md:w-40">
-           <span className="text-xs md:text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">{nomeMeses[currentMonth - 1]}</span>
-           <span className="text-[10px] md:text-xs font-mono text-indigo-600 dark:text-cyan-400">{currentYear}</span>
+           {/* ✅ CORREÇÃO AQUI: Programação Defensiva */}
+           <span className="text-xs md:text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">
+             {nomeMeses && currentMonth ? nomeMeses[currentMonth - 1] : 'MÊS'}
+           </span>
+           <span className="text-[10px] md:text-xs font-mono text-indigo-600 dark:text-cyan-400">
+             {currentYear || new Date().getFullYear()}
+           </span>
          </div>
-         <button onClick={handleNextMonth} className="p-2 hover:bg-slate-50 dark:hover:bg-white/10 rounded-xl text-slate-500 dark:text-slate-300 transition-colors"><ChevronRight className="w-4 md:w-5 h-4 md:h-5" /></button>
+         
+         <button onClick={handleNextMonth} className="p-2 hover:bg-slate-50 dark:hover:bg-white/10 rounded-xl text-slate-500 dark:text-slate-300 transition-colors">
+           <ChevronRight className="w-4 md:w-5 h-4 md:h-5" />
+         </button>
       </div>
 
       <div className="flex items-center gap-2 md:gap-4">

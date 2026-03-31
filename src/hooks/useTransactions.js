@@ -1,87 +1,108 @@
 // src/hooks/useTransactions.js
-import { useState, useEffect } from "react";
-import { collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc, orderBy, writeBatch } from "firebase/firestore";
+import { useState, useEffect, useCallback } from "react";
+import { 
+  collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc, orderBy, writeBatch, serverTimestamp 
+} from "firebase/firestore";
 import { db } from "../firebase"; 
 
 export function useTransactions(uid) {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
+  // 1. O MOTOR DE LEITURA (Tempo Real)
   useEffect(() => {
-    if (!uid) return;
+    if (!uid) {
+      setTransactions([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
 
     const transactionsRef = collection(db, "users", uid, "transactions");
     const q = query(transactionsRef, orderBy("createdAt", "desc"));
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setTransactions(data);
-      setLoading(false);
-    }, (error) => {
-      console.error("Erro ao carregar transações:", error);
-      setLoading(false);
-    });
+    const unsubscribe = onSnapshot(q, 
+      (snapshot) => {
+        const data = snapshot.docs.map(doc => ({
+          ...doc.data(), // 1. Primeiro trazemos os dados do PDF/CSV
+          id: doc.id     // ✅ 2. O ID DO FIREBASE VEM POR ÚLTIMO (Assim nunca é sobrescrito!)
+        }));
+        setTransactions(data);
+        setLoading(false);
+      }, 
+      (err) => {
+        console.error("❌ Erro no listener:", err);
+        setError(err.message);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, [uid]);
 
-  const add = async (transaction) => {
-    if (!uid) return;
-    const transactionsRef = collection(db, "users", uid, "transactions");
-    await addDoc(transactionsRef, {
-      ...transaction,
-      createdAt: transaction.createdAt || new Date().toISOString()
-    });
-  };
-
-  const remove = async (id) => {
-    if (!uid) return;
-    const docRef = doc(db, "users", uid, "transactions", id);
-    await deleteDoc(docRef);
-  };
-
-  // ============================================================
-  // EXCLUSÃO EM LOTE (CORRIGIDA COM LOGS E TRATAMENTO DE ERROS)
-  // ============================================================
-  const removeBatch = async (ids) => {
-    // Validações iniciais
-    if (!uid) {
-      console.error("❌ removeBatch: uid não fornecido");
-      throw new Error("Utilizador não autenticado.");
+  // 2. FUNÇÕES DE ESCRITA 
+  const add = useCallback(async (transactionData) => {
+    if (!uid) throw new Error("Utilizador não autenticado.");
+    try {
+      const transactionsRef = collection(db, "users", uid, "transactions");
+      const docRef = await addDoc(transactionsRef, {
+        ...transactionData,
+        createdAt: transactionData.createdAt || new Date().toISOString(),
+        atualizadoEm: serverTimestamp() 
+      });
+      return docRef.id;
+    } catch (err) {
+      console.error("❌ Falha ao adicionar:", err);
+      throw err;
     }
-    if (!ids || ids.length === 0) {
-      console.warn("⚠️ removeBatch: lista de IDs vazia");
-      return;
-    }
+  }, [uid]);
 
-    console.log(`🗑️ removeBatch: a apagar ${ids.length} documento(s)...`);
-    console.log("📋 IDs recebidos:", ids);
-    console.log("👤 UID:", uid);
+  const remove = useCallback(async (id) => {
+    if (!uid || !id) return;
+    try {
+      const docRef = doc(db, "users", uid, "transactions", id);
+      await deleteDoc(docRef);
+    } catch (err) {
+      console.error(`❌ Falha ao remover transação:`, err);
+      throw err;
+    }
+  }, [uid]);
+
+  const removeBatch = useCallback(async (ids) => {
+    if (!uid) throw new Error("Utilizador não autenticado.");
+    if (!Array.isArray(ids) || ids.length === 0) return;
 
     const batch = writeBatch(db);
     ids.forEach(id => {
       const docRef = doc(db, "users", uid, "transactions", id);
-      console.log(`📍 Documento a apagar: ${docRef.path}`);
       batch.delete(docRef);
     });
 
     try {
       await batch.commit();
-      console.log("✅ removeBatch: commit realizado com sucesso!");
-    } catch (error) {
-      console.error("❌ removeBatch: erro ao apagar:", error);
-      throw new Error(`Falha no batch delete: ${error.message}`);
+      console.log("✅ removeBatch: Operação concluída com sucesso!");
+    } catch (err) {
+      console.error("❌ Falha crítica no batch delete:", err);
+      throw err;
     }
-  };
+  }, [uid]);
 
-  const update = async (id, data) => {
-    if (!uid) return;
-    const docRef = doc(db, "users", uid, "transactions", id);
-    await updateDoc(docRef, data);
-  };
+  const update = useCallback(async (id, data) => {
+    if (!uid || !id) return;
+    try {
+      const docRef = doc(db, "users", uid, "transactions", id);
+      await updateDoc(docRef, {
+        ...data,
+        atualizadoEm: serverTimestamp() 
+      });
+    } catch (err) {
+      console.error(`❌ Falha ao atualizar:`, err);
+      throw err;
+    }
+  }, [uid]);
 
-  return { transactions, loading, add, remove, removeBatch, update };
+  return { transactions, loading, error, add, remove, removeBatch, update };
 }

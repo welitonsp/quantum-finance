@@ -59,7 +59,7 @@ export default function DashboardCharts({ categoryData }) {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
       {/* Donut Chart */}
-      <div className="glass-card-quantum p-6 transition-all hover:border-cyan-500/30">
+      <div className="glass-card-quantum p-6 transition-all hover:border-cyan-500/30 flex flex-col">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2 transition-colors">
             <TrendingDown className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
@@ -67,15 +67,18 @@ export default function DashboardCharts({ categoryData }) {
           </h3>
           <p className="text-xs text-slate-500">Clique na legenda para filtrar</p>
         </div>
-        <div className="h-80 w-full">
-          <ResponsiveContainer>
+        
+        {/* ✅ CORREÇÃO: relative, h-80, min-h-0 para o Recharts funcionar perfeitamente */}
+        <div className="relative h-80 w-full min-h-0 flex-1">
+          {/* ✅ CORREÇÃO: width e height em 100% */}
+          <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={visibleData}
                 cx="50%"
                 cy="50%"
-                innerRadius={60}
-                outerRadius={90}
+                innerRadius={70}
+                outerRadius={100}
                 paddingAngle={2}
                 dataKey="value"
                 activeIndex={activeIndex}
@@ -92,19 +95,21 @@ export default function DashboardCharts({ categoryData }) {
               <Tooltip content={<CustomTooltip />} />
             </PieChart>
           </ResponsiveContainer>
-          <div className="relative -mt-56 flex justify-center">
+          
+          {/* ✅ CORREÇÃO: Posicionamento Absoluto em vez de margem negativa */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <DonutCenter totalExpenses={totalExpenses} />
           </div>
         </div>
       </div>
 
       {/* Legenda Interativa */}
-      <div className="glass-card-quantum p-6 transition-all hover:border-indigo-500/30">
+      <div className="glass-card-quantum p-6 transition-all hover:border-indigo-500/30 flex flex-col">
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
           <h3 className="text-lg font-bold text-slate-800 dark:text-white uppercase tracking-wider transition-colors">Categorias</h3>
         </div>
-        <div className="space-y-3 max-h-80 overflow-y-auto custom-scrollbar pr-2">
+        <div className="space-y-3 max-h-80 overflow-y-auto custom-scrollbar pr-2 flex-1">
           {categoryData.map((item) => (
             <button
               key={item.name}
@@ -127,7 +132,7 @@ export default function DashboardCharts({ categoryData }) {
           ))}
         </div>
         {Object.keys(hiddenCategories).some((k) => hiddenCategories[k]) && (
-          <button onClick={() => setHiddenCategories({})} className="mt-4 text-xs font-bold text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 transition-colors w-full text-center py-2">
+          <button onClick={() => setHiddenCategories({})} className="mt-4 text-xs font-bold text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 transition-colors w-full text-center py-2 border-t border-slate-200 dark:border-white/10 pt-4">
             Resetar filtros
           </button>
         )}
