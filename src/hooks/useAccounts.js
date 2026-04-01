@@ -3,13 +3,13 @@ import { useState, useEffect, useCallback } from "react";
 import { 
   collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc, serverTimestamp 
 } from "firebase/firestore";
-import { db } from "../firebase"; 
+// ✅ CORREÇÃO: Apontando para a nova morada do Firebase
+import { db } from "../shared/api/firebase/index.js"; 
 
 export function useAccounts(uid) {
   const [accounts, setAccounts] = useState([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
 
-  // 1. LER CONTAS EM TEMPO REAL
   useEffect(() => {
     if (!uid) {
       setAccounts([]);
@@ -19,7 +19,6 @@ export function useAccounts(uid) {
 
     setLoadingAccounts(true);
     const accountsRef = collection(db, "users", uid, "accounts");
-    // Aqui não precisamos de ordenar por data, a ordem padrão ou por nome serve
     const q = query(accountsRef);
 
     const unsubscribe = onSnapshot(q, 
@@ -29,7 +28,6 @@ export function useAccounts(uid) {
           id: doc.id 
         }));
         
-        // Ordenar alfabeticamente pelo nome da conta
         data.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
         
         setAccounts(data);
@@ -44,14 +42,12 @@ export function useAccounts(uid) {
     return () => unsubscribe();
   }, [uid]);
 
-  // 2. ADICIONAR NOVA CONTA
   const addAccount = useCallback(async (accountData) => {
     if (!uid) throw new Error("Utilizador não autenticado.");
     try {
       const accountsRef = collection(db, "users", uid, "accounts");
       const docRef = await addDoc(accountsRef, {
         ...accountData,
-        // Tipos possíveis: 'corrente', 'poupanca', 'investimento', 'cartao', 'divida'
         balance: Number(accountData.balance) || 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp() 
@@ -63,7 +59,6 @@ export function useAccounts(uid) {
     }
   }, [uid]);
 
-  // 3. ATUALIZAR CONTA (Ex: Mudar o saldo manualmente)
   const updateAccount = useCallback(async (id, data) => {
     if (!uid || !id) return;
     try {
@@ -78,7 +73,6 @@ export function useAccounts(uid) {
     }
   }, [uid]);
 
-  // 4. APAGAR CONTA
   const removeAccount = useCallback(async (id) => {
     if (!uid || !id) return;
     try {

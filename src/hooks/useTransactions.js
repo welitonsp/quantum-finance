@@ -3,7 +3,8 @@ import { useState, useEffect, useCallback } from "react";
 import { 
   collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc, orderBy, writeBatch, serverTimestamp 
 } from "firebase/firestore";
-import { db } from "../firebase"; 
+// ✅ CORREÇÃO: Adicionado o /index
+import { db } from "../shared/api/firebase/index"; 
 
 export function useTransactions(uid) {
   const [transactions, setTransactions] = useState([]);

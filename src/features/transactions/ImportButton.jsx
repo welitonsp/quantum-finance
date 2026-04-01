@@ -1,14 +1,15 @@
-// src/components/ImportButton.jsx
+// src/features/transactions/ImportButton.jsx
 import { useState, useRef } from "react";
 import { UploadCloud, FileType, Loader2, AlertCircle, CheckCircle2, X, Download, Lock } from "lucide-react";
 import toast from 'react-hot-toast';
 
-import { parseOFX } from "../utils/ofxParser";
-import { parsePDF } from "../utils/pdfParser";
-import { parseCSV } from "../utils/csvParser";
+// ✅ CORREÇÕES: Apontando para o novo cofre de utilitários no shared
+import { parseOFX } from "../../shared/lib/ofxParser";
+import { parsePDF } from "../../shared/lib/pdfParser";
+import { parseCSV } from "../../shared/lib/csvParser";
 
 // ✅ 1. IMPORTAÇÃO DO MOTOR DE INTELIGÊNCIA ARTIFICIAL
-import { classifyWithAI } from "../utils/aiCategorize";
+import { classifyWithAI } from "../../utils/aiCategorize";
 
 export default function ImportButton({ onImportTransactions, uid, existingTransactions }) {
   const [isOpen, setIsOpen] = useState(false);

@@ -1,8 +1,10 @@
 // src/App.jsx
-import { useEffect, useState, useRef, useCallback } from "react";
-import { auth } from "./firebase";
+// ✅ INJEÇÃO DE PERFORMANCE: Importação do 'lazy', 'Suspense' e 'React'
+import React, { useEffect, useState, useRef, useCallback, lazy, Suspense } from "react";
+// ✅ CORREÇÃO: Adicionado o /index para o Vite encontrar o ficheiro exato
+import { auth } from "./shared/api/firebase/index";
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
-import { BrainCircuit, AlertTriangle } from "lucide-react";
+import { BrainCircuit, AlertTriangle, Loader2 } from "lucide-react";
 import toast, { Toaster } from 'react-hot-toast';
 
 // Contextos e Hooks
@@ -11,31 +13,66 @@ import { usePrivacy } from "./contexts/PrivacyContext";
 import { NavigationProvider, useNavigation } from "./contexts/NavigationContext";
 import { useTransactions } from "./hooks/useTransactions";
 import { useFinancialData } from "./hooks/useFinancialData";
-import { FirestoreService } from "./services/FirestoreService";
+import { FirestoreService } from "./shared/services/FirestoreService";
 
-// Componentes Originais
+// ==========================================
+// 🛡️ O ESCUDO DE CONTENÇÃO (Error Boundary)
+// Impede que um erro num gráfico destrua a aplicação inteira
+// ==========================================
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, errorInfo) { console.error("Interferência Quântica:", error, errorInfo); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 m-4 bg-slate-900/80 border border-red-500/30 rounded-3xl flex flex-col items-center justify-center text-center backdrop-blur-md">
+          <AlertTriangle className="w-16 h-16 text-red-500 mb-4 animate-pulse" />
+          <h2 className="text-xl font-bold text-white mb-2">Interferência no Módulo</h2>
+          <p className="text-sm text-slate-400 mb-6">Ocorreu uma anomalia isolada nesta secção. O resto do sistema está operacional.</p>
+          <button onClick={() => this.setState({ hasError: false })} className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-red-500/20">
+            Tentar Reiniciar Módulo
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// ⚡ O INDICADOR DE CARREGAMENTO DINÂMICO
+const PageLoader = () => (
+  <div className="flex flex-col items-center justify-center h-full min-h-[400px] w-full">
+    <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mb-4" />
+    <p className="text-sm font-bold tracking-widest text-slate-400 uppercase animate-pulse">A Ligar Módulo Quântico...</p>
+  </div>
+);
+
+// ==========================================
+// COMPONENTES LEVES (Carregamento Imediato)
+// ==========================================
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import LoginScreen from "./components/LoginScreen";
-import DashboardContent from "./components/DashboardContent";
-import ReportsContent from "./components/ReportsContent";
-import AIAssistantChat from "./components/AIAssistantChat";
-import CategorySettings from "./components/CategorySettings";
 import QuantumBackground from "./components/QuantumBackground";
 import MarketTicker from "./components/MarketTicker";
 
-// ✨ NOVOS COMPONENTES WEALTH MANAGEMENT (Sprints 10 e 11) ✨
-import AccountsManager from "./components/AccountsManager";
-import RecurringManager from "./components/RecurringManager";
-
-// ✨ COMPONENTES DA FASE 8 (Páginas da SPA) ✨
-import PortfolioPage from "./components/PortfolioPage";
-import MarketsPage from "./components/MarketsPage";
-import QuantumAIPage from "./components/QuantumAIPage";
-import HistoryPage from "./components/HistoryPage";
+// ==========================================
+// ⚡ COMPONENTES PESADOS (Lazy Loading)
+// Só carregam quando o utilizador clica na página correspondente!
+// ==========================================
+const DashboardContent = lazy(() => import("./components/DashboardContent"));
+const CategorySettings = lazy(() => import("./components/CategorySettings"));
+const ReportsContent = lazy(() => import("./features/reports/ReportsContent"));
+const AIAssistantChat = lazy(() => import("./features/ai-chat/AIAssistantChat"));
+const AccountsManager = lazy(() => import("./features/transactions/AccountsManager"));
+const RecurringManager = lazy(() => import("./components/RecurringManager"));
+const PortfolioPage = lazy(() => import("./components/PortfolioPage"));
+const MarketsPage = lazy(() => import("./components/MarketsPage"));
+const QuantumAIPage = lazy(() => import("./components/QuantumAIPage"));
+const HistoryPage = lazy(() => import("./components/HistoryPage"));
 
 // Componente Interno que consome o Contexto de Navegação
-// ✅ MELHORIA 1: Recebe o 'user' por prop, eliminando o listener de autenticação duplicado.
 const AuthenticatedApp = ({ user }) => {
   const { theme, toggleTheme } = useTheme();
   const { togglePrivacy } = usePrivacy();
@@ -95,7 +132,6 @@ const AuthenticatedApp = ({ user }) => {
     });
   }, [displayedTransactions]);
 
-  // ✅ MELHORIA 2: Funções pesadas envoltas em useCallback para otimizar re-renders.
   const handleImport = useCallback(async (transacoesImportadas) => {
     if (!user?.uid || !transacoesImportadas?.length) return { added: 0, duplicates: 0 };
     const result = await FirestoreService.saveAllTransactions(user.uid, transacoesImportadas);
@@ -207,67 +243,78 @@ const AuthenticatedApp = ({ user }) => {
           <main className="flex-1 overflow-y-auto custom-scrollbar relative">
             <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-12 transition-all duration-300">
               
-              {currentPage === 'dashboard' && (
-                <DashboardContent
-                  transactions={displayedTransactions}
-                  loading={loading}
-                  moduleBalances={moduleBalances}
-                  categoryData={categoryData}
-                  topExpensesData={topExpensesData}
-                  monthlyGoal={monthlyGoal}
-                  setMonthlyGoal={setMonthlyGoal}
-                  onSaveTransaction={handleSaveTransaction}
-                  onEditTransaction={(tx) => { setTransactionToEdit(tx); setIsFormOpen(true); }}
-                  onDeleteRequest={setTransactionToDelete}
-                  onBatchDelete={handleBatchDelete}
-                  onDeleteAll={handleBatchDelete}
-                  isFormOpen={isFormOpen}
-                  setIsFormOpen={setIsFormOpen}
-                  transactionToEdit={transactionToEdit}
-                  setTransactionToEdit={setTransactionToEdit}
-                />
-              )}
+              {/* 🛡️ ESCUDO E CARREGAMENTO NAS PÁGINAS */}
+              <ErrorBoundary>
+                <Suspense fallback={<PageLoader />}>
+                  {currentPage === 'dashboard' && (
+                    <DashboardContent
+                      transactions={displayedTransactions}
+                      loading={loading}
+                      moduleBalances={moduleBalances}
+                      categoryData={categoryData}
+                      topExpensesData={topExpensesData}
+                      monthlyGoal={monthlyGoal}
+                      setMonthlyGoal={setMonthlyGoal}
+                      onSaveTransaction={handleSaveTransaction}
+                      onEditTransaction={(tx) => { setTransactionToEdit(tx); setIsFormOpen(true); }}
+                      onDeleteRequest={setTransactionToDelete}
+                      onBatchDelete={handleBatchDelete}
+                      onDeleteAll={handleBatchDelete}
+                      isFormOpen={isFormOpen}
+                      setIsFormOpen={setIsFormOpen}
+                      transactionToEdit={transactionToEdit}
+                      setTransactionToEdit={setTransactionToEdit}
+                    />
+                  )}
 
-              {currentPage === 'accounts' && <AccountsManager uid={user?.uid} />}
-              {currentPage === 'recurring' && <RecurringManager uid={user?.uid} />}
-
-              {currentPage === 'portfolio' && <PortfolioPage moduleBalances={moduleBalances} />}
-
-              {currentPage === 'markets' && (
-                <MarketsPage onTradeClick={(symbol) => {
-                  alert(`A abrir operação para: ${symbol}`);
-                }} />
-              )}
-
-              {currentPage === 'quantum' && <QuantumAIPage />}
-
-              {(currentPage === 'history' || currentPage === 'wallet') && (
-                <HistoryPage
-                  transactions={displayedTransactions}
-                  loading={loading}
-                  onEdit={(tx) => { setTransactionToEdit(tx); setIsFormOpen(true); }}
-                  onDeleteRequest={setTransactionToDelete}
-                  onBatchDelete={handleBatchDelete}
-                  onDeleteAll={handleBatchDelete}
-                />
-              )}
-
-              {currentPage === 'reports' && (
-                <ReportsContent transactions={displayedTransactions} balances={moduleBalances} />
-              )}
+                  {currentPage === 'accounts' && <AccountsManager uid={user?.uid} />}
+                  {currentPage === 'recurring' && <RecurringManager uid={user?.uid} />}
+                  {currentPage === 'portfolio' && <PortfolioPage moduleBalances={moduleBalances} />}
+                  {currentPage === 'markets' && (
+                    <MarketsPage onTradeClick={(symbol) => {
+                      alert(`A abrir operação para: ${symbol}`);
+                    }} />
+                  )}
+                  {currentPage === 'quantum' && <QuantumAIPage />}
+                  {(currentPage === 'history' || currentPage === 'wallet') && (
+                    <HistoryPage
+                      transactions={displayedTransactions}
+                      loading={loading}
+                      onEdit={(tx) => { setTransactionToEdit(tx); setIsFormOpen(true); }}
+                      onDeleteRequest={setTransactionToDelete}
+                      onBatchDelete={handleBatchDelete}
+                      onDeleteAll={handleBatchDelete}
+                    />
+                  )}
+                  {currentPage === 'reports' && (
+                    <ReportsContent transactions={displayedTransactions} balances={moduleBalances} />
+                  )}
+                </Suspense>
+              </ErrorBoundary>
 
             </div>
           </main>
         </div>
       </div>
 
-      {isSettingsOpen && <CategorySettings uid={user?.uid} onClose={() => setIsSettingsOpen(false)} />}
+      {/* 🛡️ ESCUDO NOS MODAIS E CHAT */}
+      {isSettingsOpen && (
+        <ErrorBoundary>
+          <Suspense fallback={null}>
+            <CategorySettings uid={user?.uid} onClose={() => setIsSettingsOpen(false)} />
+          </Suspense>
+        </ErrorBoundary>
+      )}
 
       <button onClick={() => setIsAIChatOpen(true)} className="fixed bottom-6 right-6 md:bottom-8 md:right-8 w-14 h-14 md:w-16 md:h-16 bg-quantum-purple hover:bg-purple-600 rounded-2xl flex items-center justify-center shadow-[0_0_30px_rgba(168,85,247,0.3)] hover:scale-110 active:scale-95 transition-all z-50 group border border-white/20">
         <BrainCircuit className="w-7 h-7 text-white group-hover:animate-pulse" />
       </button>
 
-      <AIAssistantChat transactions={displayedTransactions} balances={moduleBalances} isOpen={isAIChatOpen} onClose={() => setIsAIChatOpen(false)} />
+      <ErrorBoundary>
+        <Suspense fallback={null}>
+          <AIAssistantChat transactions={displayedTransactions} balances={moduleBalances} isOpen={isAIChatOpen} onClose={() => setIsAIChatOpen(false)} />
+        </Suspense>
+      </ErrorBoundary>
     </div>
   );
 };

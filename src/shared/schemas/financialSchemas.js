@@ -1,4 +1,4 @@
-// src/schemas/financialSchemas.js
+// src/shared/schemas/financialSchemas.js
 import { z } from 'zod';
 
 // Lista exata das categorias permitidas (Sincronizada com a IA)

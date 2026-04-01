@@ -1,6 +1,8 @@
+// src/features/transactions/TransactionsManager.jsx
 import { useState, useMemo } from "react";
 import { Search, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Frown, Loader2, Trash, CheckSquare, Square } from "lucide-react";
-import { usePrivacy } from "../contexts/PrivacyContext";
+// ✅ CORREÇÃO: Voltando duas pastas para achar o contexto
+import { usePrivacy } from "../../contexts/PrivacyContext";
 
 export default function TransactionsManager({ 
   transactions, 

@@ -1,7 +1,8 @@
-// src/components/AccountsManager.jsx
+// src/features/transactions/AccountsManager.jsx
 import { useState, useMemo } from 'react';
 import { Plus, Building2, PiggyBank, TrendingUp, CreditCard, Landmark, Trash2, Wallet } from 'lucide-react';
-import { useAccounts } from '../hooks/useAccounts';
+// ✅ CORREÇÃO: Voltando duas pastas para achar os hooks
+import { useAccounts } from '../../hooks/useAccounts';
 
 export default function AccountsManager({ uid }) {
   const { accounts, loadingAccounts, addAccount, removeAccount } = useAccounts(uid);

@@ -3,13 +3,13 @@ import { useState, useEffect, useCallback } from "react";
 import { 
   collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc, serverTimestamp 
 } from "firebase/firestore";
-import { db } from "../firebase"; 
+// ✅ CORREÇÃO: Apontando para a nova morada do Firebase
+import { db } from "../shared/api/firebase/index.js"; 
 
 export function useRecurring(uid) {
   const [recurring, setRecurring] = useState([]);
   const [loadingRecurring, setLoadingRecurring] = useState(true);
 
-  // 1. LER DESPESAS RECORRENTES EM TEMPO REAL
   useEffect(() => {
     if (!uid) {
       setRecurring([]);
@@ -28,7 +28,6 @@ export function useRecurring(uid) {
           id: doc.id 
         }));
         
-        // Ordenar as despesas ativas primeiro, depois por valor (maior para menor)
         data.sort((a, b) => {
           if (a.active === b.active) {
             return Number(b.value) - Number(a.value);
@@ -48,7 +47,6 @@ export function useRecurring(uid) {
     return () => unsubscribe();
   }, [uid]);
 
-  // 2. ADICIONAR NOVA DESPESA FIXA
   const addRecurring = useCallback(async (data) => {
     if (!uid) throw new Error("Utilizador não autenticado.");
     try {
@@ -56,7 +54,7 @@ export function useRecurring(uid) {
       const docRef = await addDoc(recurringRef, {
         ...data,
         value: Number(data.value) || 0,
-        active: true, // Por padrão, uma nova despesa fixa está ativa
+        active: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp() 
       });
@@ -67,7 +65,6 @@ export function useRecurring(uid) {
     }
   }, [uid]);
 
-  // 3. ATUALIZAR (Ex: Ligar/Desligar uma assinatura)
   const updateRecurring = useCallback(async (id, data) => {
     if (!uid || !id) return;
     try {
@@ -82,7 +79,6 @@ export function useRecurring(uid) {
     }
   }, [uid]);
 
-  // 4. APAGAR DESPESA FIXA
   const removeRecurring = useCallback(async (id) => {
     if (!uid || !id) return;
     try {

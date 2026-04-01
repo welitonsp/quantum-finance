@@ -1,6 +1,7 @@
 // src/components/Header.jsx
 import { Menu, ChevronLeft, ChevronRight, Sun, Moon, Plus, Eye, EyeOff } from "lucide-react";
-import ImportButton from "./ImportButton";
+// ✅ CORREÇÃO: Apontando para a nova morada do ImportButton na Arquitetura FSD
+import ImportButton from "../features/transactions/ImportButton";
 import { usePrivacy } from "../contexts/PrivacyContext";
 
 export default function Header({

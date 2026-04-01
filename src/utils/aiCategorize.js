@@ -1,6 +1,7 @@
 // src/utils/aiCategorize.js
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { app } from '../firebase'; 
+// ✅ CORREÇÃO: Apontando para a nova arquitetura FSD com /index
+import { app } from '../shared/api/firebase/index'; 
 
 export async function classifyWithAI(transactions) {
   if (!transactions || transactions.length === 0) return [];

@@ -1,9 +1,10 @@
-// src/components/AIAssistantChat.jsx
+// src/features/ai-chat/AIAssistantChat.jsx
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { Send, Bot, User, Loader2, Sparkles, ShieldCheck } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { app } from '../firebase';
-import ReactMarkdown from 'react-markdown'; // Certifique-se de ter instalado: npm install react-markdown
+// ✅ CORREÇÃO: Coordenada atualizada para o cofre do Firebase no shared
+import { app } from '../../shared/api/firebase/index.js'; 
+import ReactMarkdown from 'react-markdown'; 
 
 export default function AIAssistantChat({ transactions }) {
   const [messages, setMessages] = useState([
@@ -13,7 +14,6 @@ export default function AIAssistantChat({ transactions }) {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
-  // 🧠 Calcula o contexto financeiro em tempo real para enviar à IA
   const financialContext = useMemo(() => {
     if (!transactions) return { entradas: 0, saidas: 0, saldo: 0, totalTransacoes: 0 };
     
@@ -52,12 +52,11 @@ export default function AIAssistantChat({ transactions }) {
 
     try {
       const functions = getFunctions(app);
-      // Chama a nova função de Chat que acabámos de criar no Backend
       const quantumChatAdvisor = httpsCallable(functions, 'quantumChatAdvisor');
       
       const result = await quantumChatAdvisor({ 
         message: userMsg,
-        financialContext: financialContext // 💉 Injeção Quântica de Dados!
+        financialContext: financialContext 
       });
 
       setMessages(prev => [...prev, { role: 'ai', content: result.data.reply }]);
@@ -74,10 +73,8 @@ export default function AIAssistantChat({ transactions }) {
 
   return (
     <div className="flex flex-col h-[600px] bg-quantum-card border border-quantum-border rounded-3xl overflow-hidden shadow-2xl relative">
-      {/* Background Glow */}
       <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none"></div>
 
-      {/* Header */}
       <div className="p-4 md:p-6 border-b border-quantum-border bg-quantum-bgSecondary/50 flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-cyan-500/20 text-cyan-400 rounded-xl">
@@ -93,7 +90,6 @@ export default function AIAssistantChat({ transactions }) {
         </div>
       </div>
 
-      {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar z-10">
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex gap-4 max-w-[85%] ${msg.role === 'user' ? 'ml-auto flex-row-reverse' : ''}`}>
@@ -128,7 +124,6 @@ export default function AIAssistantChat({ transactions }) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
       <div className="p-4 border-t border-quantum-border bg-quantum-bgSecondary/30 z-10">
         <form onSubmit={handleSend} className="flex items-center gap-2">
           <input

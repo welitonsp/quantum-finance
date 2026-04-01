@@ -1,12 +1,12 @@
-// src/services/CategoryService.js
-
+// src/features/ai-chat/CategoryService.js
 import {
   collection,
   addDoc,
   deleteDoc,
   serverTimestamp,
 } from "firebase/firestore";
-import { db } from "../firebase/index";
+// ✅ CORREÇÃO: Coordenada atualizada para o cofre do Firebase no shared
+import { db } from "../../shared/api/firebase/index.js"; 
 
 export class CategoryService {
   static getCollection(uid) {

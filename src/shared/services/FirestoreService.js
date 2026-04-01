@@ -1,7 +1,9 @@
-// src/services/FirestoreService.js
+// src/shared/services/FirestoreService.js
 import { collection, doc, addDoc, getDocs, deleteDoc, updateDoc, serverTimestamp, writeBatch, query, where } from "firebase/firestore";
-import { db } from "../firebase";
-import { validateTransaction } from "../schemas/financialSchemas"; // 🛡️ INJEÇÃO DO ZOD
+// ✅ CORREÇÃO 1: Coordenada exata para o novo cofre do Firebase
+import { db } from "../api/firebase/index";
+// ✅ CORREÇÃO 2: Coordenada para os Schemas de validação no shared
+import { validateTransaction } from "../schemas/financialSchemas"; 
 
 export class FirestoreService {
   static getTransactionsCollection(uid) {
@@ -57,30 +59,27 @@ export class FirestoreService {
     if (!uid) return;
 
     // --- 🛡️ CAMPO DE FORÇAS ZOD ---
-    // Mapeamos os dados para garantir que os tipos batem certo com o Schema
     const validation = validateTransaction({
       description: data.description || "Transação sem nome",
       value: Number(data.value),
       type: data.type || "saida",
       category: data.category || "Diversos",
-      date: data.date, // Formato YYYY-MM-DD
+      date: data.date, 
       accountId: data.account || "conta_corrente",
       isRecurring: Boolean(data.isRecurring)
     });
 
     if (!validation.success) {
-      console.error("❌ Bloqueio Quântico! Tentativa de injetar dados inválidos:", validation.error.format());
+      console.error("❌ Bloqueio Quântico! Dados inválidos:", validation.error.format());
       throw new Error("Falha na validação de dados. Operação abortada pelo Zod.");
     }
     
-    const cleanData = validation.data; // Dados 100% puros e tipados
-    // ------------------------------
-
+    const cleanData = validation.data;
     const dataTransacao = cleanData.date ? new Date(`${cleanData.date}T12:00:00`) : new Date();
     const key = this.generateTransactionKey(cleanData);
     
     return await addDoc(this.getTransactionsCollection(uid), {
-      ...cleanData, // Usa os dados limpos em vez dos dados crus
+      ...cleanData,
       createdAt: dataTransacao,
       uniqueKey: key,
       registadoEm: serverTimestamp() 
@@ -118,7 +117,7 @@ export class FirestoreService {
     
     let addedCount = 0;
     let duplicateCount = 0;
-    let invalidCount = 0; // Novo contador
+    let invalidCount = 0;
     let currentBatchOperations = 0;
 
     for (const tx of transactions) {
@@ -134,14 +133,12 @@ export class FirestoreService {
       });
 
       if (!validation.success) {
-        console.warn(`⚠️ Linha ignorada por erro de formato: ${tx.description}`, validation.error.format());
+        console.warn(`⚠️ Linha ignorada: ${tx.description}`, validation.error.format());
         invalidCount++;
-        continue; // Se a linha estiver corrupta, ignora esta linha, mas salva o resto da fatura!
+        continue;
       }
 
       const cleanData = validation.data;
-      // --------------------------------------
-
       const key = this.generateTransactionKey(cleanData);
       
       if (existingKeys.has(key)) {
@@ -177,13 +174,9 @@ export class FirestoreService {
       await batch.commit();
     }
     
-    // Retornamos também os inválidos para no futuro podermos mostrar um alerta ao utilizador
     return { added: addedCount, duplicates: duplicateCount, invalid: invalidCount };
   }
 
-  // ============================================================
-  // FUNÇÕES EXISTENTES
-  // ============================================================
   static async deleteTransaction(uid, id) {
     await deleteDoc(doc(db, "users", uid, "transactions", id));
   }

@@ -1,5 +1,7 @@
+// src/components/HistoryPage.jsx
 import React from 'react';
-import TransactionsManager from './TransactionsManager';
+// ✅ CORREÇÃO: Apontando para a feature de transações
+import TransactionsManager from '../features/transactions/TransactionsManager';
 
 export default function HistoryPage({ 
   transactions, loading, onEdit, onDeleteRequest, onBatchDelete, onDeleteAll 
