@@ -1,6 +1,7 @@
 // src/services/FirestoreService.js
 import { collection, doc, addDoc, getDocs, deleteDoc, updateDoc, serverTimestamp, writeBatch, query, where } from "firebase/firestore";
 import { db } from "../firebase";
+import { validateTransaction } from "../schemas/financialSchemas"; // 🛡️ INJEÇÃO DO ZOD
 
 export class FirestoreService {
   static getTransactionsCollection(uid) {
@@ -9,7 +10,6 @@ export class FirestoreService {
 
   // ============================================================
   // FUNÇÃO: Gera uma chave única para cada transação
-  // Base: data + descrição + valor + tipo (entrada/saída)
   // ============================================================
   static generateTransactionKey(transaction) {
     const date = transaction.date || transaction.createdAt || "";
@@ -51,17 +51,36 @@ export class FirestoreService {
   }
 
   // ============================================================
-  // FUNÇÃO: Adicionar transação individual
+  // FUNÇÃO: Adicionar transação individual BLINDADA
   // ============================================================
   static async addTransaction(uid, data) {
     if (!uid) return;
-    const dataTransacao = data.date ? new Date(`${data.date}T12:00:00`) : new Date();
-    const key = this.generateTransactionKey(data);
-    return await addDoc(this.getTransactionsCollection(uid), {
-      value: data.value,
-      type: data.type || "entrada",
+
+    // --- 🛡️ CAMPO DE FORÇAS ZOD ---
+    // Mapeamos os dados para garantir que os tipos batem certo com o Schema
+    const validation = validateTransaction({
+      description: data.description || "Transação sem nome",
+      value: Number(data.value),
+      type: data.type || "saida",
       category: data.category || "Diversos",
-      account: data.account || "conta_corrente",
+      date: data.date, // Formato YYYY-MM-DD
+      accountId: data.account || "conta_corrente",
+      isRecurring: Boolean(data.isRecurring)
+    });
+
+    if (!validation.success) {
+      console.error("❌ Bloqueio Quântico! Tentativa de injetar dados inválidos:", validation.error.format());
+      throw new Error("Falha na validação de dados. Operação abortada pelo Zod.");
+    }
+    
+    const cleanData = validation.data; // Dados 100% puros e tipados
+    // ------------------------------
+
+    const dataTransacao = cleanData.date ? new Date(`${cleanData.date}T12:00:00`) : new Date();
+    const key = this.generateTransactionKey(cleanData);
+    
+    return await addDoc(this.getTransactionsCollection(uid), {
+      ...cleanData, // Usa os dados limpos em vez dos dados crus
       createdAt: dataTransacao,
       uniqueKey: key,
       registadoEm: serverTimestamp() 
@@ -69,22 +88,18 @@ export class FirestoreService {
   }
 
   // ============================================================
-  // OTIMIZAÇÃO CRÍTICA: saveAllTransactions (Resolve o Problema N+1)
-  // Faz apenas 1 leitura ao banco de dados e salva em lotes seguros.
+  // FUNÇÃO: Importação em Lotes BLINDADA
   // ============================================================
   static async saveAllTransactions(uid, transactions) {
-    if (!uid || transactions.length === 0) return { added: 0, duplicates: 0 };
+    if (!uid || transactions.length === 0) return { added: 0, duplicates: 0, invalid: 0 };
     
-    // 1. Descobrir o intervalo de datas do lote que está a ser importado
     const dates = transactions.map(tx => new Date(tx.date ? `${tx.date}T12:00:00` : Date.now()));
     const minDate = new Date(Math.min(...dates));
     const maxDate = new Date(Math.max(...dates));
     
-    // Alargar a margem por causa de fusos horários
     minDate.setDate(minDate.getDate() - 2);
     maxDate.setDate(maxDate.getDate() + 2);
 
-    // 2. FAZER APENAS 1 QUERY PARA DESCOBRIR DUPLICADOS!
     const q = query(
       this.getTransactionsCollection(uid),
       where('createdAt', '>=', minDate),
@@ -92,39 +107,56 @@ export class FirestoreService {
     );
     const snapshot = await getDocs(q);
 
-    // 3. Colocar as chaves existentes num "Set" na memória RAM (Super Rápido)
     const existingKeys = new Set();
     snapshot.forEach(doc => {
       const data = doc.data();
       if (data.uniqueKey) existingKeys.add(data.uniqueKey);
     });
 
-    // 4. Preparar o envio em lotes (Evitar o limite de 500 do Firebase)
     let batch = writeBatch(db);
     const colRef = this.getTransactionsCollection(uid);
     
     let addedCount = 0;
     let duplicateCount = 0;
+    let invalidCount = 0; // Novo contador
     let currentBatchOperations = 0;
 
     for (const tx of transactions) {
-      const key = this.generateTransactionKey(tx);
-      
-      // Verifica no Set na RAM se existe (não faz chamada ao banco!)
-      if (existingKeys.has(key)) {
-        duplicateCount++;
-        continue; // pula a duplicada
+      // --- 🛡️ CAMPO DE FORÇAS ZOD EM LOTE ---
+      const validation = validateTransaction({
+        description: tx.description || "Transação Importada",
+        value: Number(tx.value),
+        type: tx.type === "entrada" ? "entrada" : "saida",
+        category: tx.category || "Diversos",
+        date: tx.date,
+        accountId: tx.account || "conta_corrente",
+        isRecurring: Boolean(tx.isRecurring)
+      });
+
+      if (!validation.success) {
+        console.warn(`⚠️ Linha ignorada por erro de formato: ${tx.description}`, validation.error.format());
+        invalidCount++;
+        continue; // Se a linha estiver corrupta, ignora esta linha, mas salva o resto da fatura!
       }
 
-      // Adiciona ao Set para não importar duplicados dentro do próprio ficheiro
+      const cleanData = validation.data;
+      // --------------------------------------
+
+      const key = this.generateTransactionKey(cleanData);
+      
+      if (existingKeys.has(key)) {
+        duplicateCount++;
+        continue; 
+      }
+
       existingKeys.add(key);
 
       const docId = tx.uniqueHash || crypto.randomUUID();
       const newDocRef = doc(colRef, docId);
-      const dataTransacao = tx.date ? new Date(`${tx.date}T12:00:00`) : new Date();
+      const dataTransacao = cleanData.date ? new Date(`${cleanData.date}T12:00:00`) : new Date();
       
       batch.set(newDocRef, {
-        ...tx,
+        ...cleanData,
         uniqueHash: docId,
         uniqueKey: key,
         createdAt: dataTransacao,
@@ -134,24 +166,23 @@ export class FirestoreService {
       addedCount++;
       currentBatchOperations++;
 
-      // Proteção de limite do Firebase (máx 500 operações por batch)
       if (currentBatchOperations >= 450) {
         await batch.commit();
-        batch = writeBatch(db); // Cria um novo batch
+        batch = writeBatch(db); 
         currentBatchOperations = 0;
       }
     }
 
-    // Envia o que sobrou no último batch
     if (currentBatchOperations > 0) {
       await batch.commit();
     }
     
-    return { added: addedCount, duplicates: duplicateCount };
+    // Retornamos também os inválidos para no futuro podermos mostrar um alerta ao utilizador
+    return { added: addedCount, duplicates: duplicateCount, invalid: invalidCount };
   }
 
   // ============================================================
-  // FUNÇÕES EXISTENTES: delete, update, regras
+  // FUNÇÕES EXISTENTES
   // ============================================================
   static async deleteTransaction(uid, id) {
     await deleteDoc(doc(db, "users", uid, "transactions", id));
