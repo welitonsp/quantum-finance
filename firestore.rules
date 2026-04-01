@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Regra base: Negar tudo por padrão
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Isolamento estrito de dados do utilizador
+    match /users/{userId} {
+      // O utilizador só pode ler/escrever no seu próprio documento base
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // O utilizador só pode ler/escrever nas suas próprias subcoleções (Contas, Transações, Recorrentes)
+      match /{subcollection}/{documentId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}

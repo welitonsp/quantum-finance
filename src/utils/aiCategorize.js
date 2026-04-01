@@ -1,37 +1,36 @@
 // src/utils/aiCategorize.js
-import toast from "react-hot-toast";
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { app } from '../firebase/index'; // Confirma se o caminho para inicializar a app Firebase está correto
-
-const functions = getFunctions(app);
+import { app } from '../firebase'; 
 
 export async function classifyWithAI(transactions) {
-  if (!transactions || transactions.length === 0) return transactions;
+  if (!transactions || transactions.length === 0) return [];
 
   try {
-    // 1. Apontamos para a nossa Cloud Function segura em vez da API direta do Google
-    const categorizeBatchFn = httpsCallable(functions, 'categorizeTransactionsBatch');
+    console.log(`🚀 A enviar ${transactions.length} transações para o Motor Quântico na Nuvem...`);
     
-    // 2. Enviamos o array de transações para o nosso servidor
-    const response = await categorizeBatchFn({ transactions });
-    
-    // 3. O servidor devolve o Array JSON processado pelo Gemini
-    const aiResults = response.data; 
+    const functions = getFunctions(app);
+    // Chama EXATAMENTE o nome da função que você exportou no seu functions/index.js
+    const categorizeTransactionsBatch = httpsCallable(functions, 'categorizeTransactionsBatch');
 
-    if (!Array.isArray(aiResults)) {
-      throw new Error("Formato de resposta inválido do servidor.");
-    }
+    const result = await categorizeTransactionsBatch({ transactions });
 
-    // 4. Mapeamos os resultados de volta para as transações originais (Tua lógica mantida)
-    return transactions.map(tx => {
-      const result = aiResults.find(r => r.id === tx.id);
-      return result ? { ...tx, category: result.category } : tx;
+    // A sua função já devolve o JSON parseado, por isso basta ler result.data
+    const categorizedResult = result.data;
+
+    console.log("✅ Resposta da Nuvem recebida com sucesso!");
+
+    const updatedTransactions = transactions.map(tx => {
+      const aiMatch = categorizedResult.find(c => c.id === tx.id);
+      return {
+        ...tx,
+        category: (aiMatch && aiMatch.category) ? aiMatch.category : (tx.category || 'Diversos')
+      };
     });
 
-  } catch (err) {
-    console.error("Falha Quântica (Cloud Function):", err);
-    toast.error("A rede neural falhou ou está indisponível.");
-    // Retorna o array original intacto em caso de erro para não bloquear a importação
-    return transactions; 
+    return updatedTransactions;
+
+  } catch (error) {
+    console.error("❌ Falha na comunicação com a Cloud Function:", error);
+    return transactions;
   }
 }

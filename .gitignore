@@ -1,16 +1,29 @@
-# Node
-node_modules/
+# Dependências
+node_modules
+.pnp
+.pnp.js
 
-# Env
-.env
+# Faturas, Extratos e Dados Sensíveis (CRÍTICO P0)
+FATURA - CARTAO/
+*.pdf
+*.ofx
+*.csv
+/data/
+/uploads/
 
-# Build
-dist/
-
-# Logs
+# Builds e Logs
+dist
+dist-ssr
+*.local
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# OS
-.DS_Store
+# Firebase e Chaves
+.env
+.env.*
+!.env.example
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+*ui-debug.log
