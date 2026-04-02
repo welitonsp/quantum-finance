@@ -2,24 +2,17 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Regra base: Rejeita tudo por padrão
-    match /{document=**} {
-      allow read, write: if false;
+    // 1. Regras para os dados normais do utilizador (Ele pode ler e escrever tudo o que é dele)
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Regra específica para o usuário: Ele só acessa os próprios dados
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      
-      // Subcoleção de transações
-      match /transactions/{transactionId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-      
-      // Subcoleção de regras de categorias
-      match /categoryRules/{ruleId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
+    // 2. 🔒 COFRE DE AUDITORIA BLINDADO (Apenas Inserção)
+    match /audit_logs/{logId} {
+      // Só permite criar se estiver logado e se o campo userId do log for igual ao UID de quem está a enviar
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      // BLOQUEIO TOTAL: Ninguém apaga ou edita o rastro!
+      allow read, update, delete: if false; 
     }
   }
 }

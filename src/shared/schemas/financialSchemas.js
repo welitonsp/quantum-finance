@@ -1,231 +1,35 @@
-// src/shared/services/FirestoreService.js
-import { collection, doc, addDoc, getDocs, deleteDoc, updateDoc, serverTimestamp, writeBatch, query, where } from "firebase/firestore";
-// Coordenada exata para o novo cofre do Firebase
-import { db } from "../api/firebase/index";
-// ✅ INJEÇÃO DA BLINDAGEM MATEMÁTICA: Importando o Zod e o conversor toCentavos
-import { validateTransaction, toCentavos } from "../schemas/financialSchemas"; 
+// src/shared/schemas/financialSchemas.js
+import { z } from 'zod';
 
-export class FirestoreService {
-  static getTransactionsCollection(uid) {
-    return collection(db, "users", uid, "transactions");
-  }
+export const ALLOWED_CATEGORIES = [
+  'Alimentação', 'Transporte', 'Assinaturas', 'Educação', 'Saúde', 
+  'Moradia', 'Impostos/Taxas', 'Lazer', 'Vestuário', 'Salário', 
+  'Freelance', 'Investimento', 'Diversos', 'Outros'
+];
 
-  // ============================================================
-  // FUNÇÃO: Gera uma chave única para cada transação
-  // ============================================================
-  static generateTransactionKey(transaction) {
-    const date = transaction.date || transaction.createdAt || "";
-    const description = (transaction.description || "").trim().toLowerCase();
-    // ✅ Agora o valor já vem limpo e em centavos (Inteiro)
-    const value = Math.abs(Number(transaction.value)).toString();
-    const type = transaction.type === "entrada" ? "entrada" : "saida";
-    return `${date}|${description}|${value}|${type}`;
-  }
+export const transactionSchema = z.object({
+  description: z.string().min(2, "A descrição deve ter pelo menos 2 caracteres"),
+  value: z.number().int("O valor deve ser em centavos").positive("O valor deve ser positivo"),
+  type: z.enum(['entrada', 'saida'], { errorMap: () => ({ message: "O tipo tem de ser 'entrada' ou 'saida'" }) }),
+  category: z.enum(ALLOWED_CATEGORIES, { errorMap: () => ({ message: "Categoria inválida" }) }),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "A data deve estar no formato YYYY-MM-DD"),
+  accountId: z.string().optional(),
+  isRecurring: z.boolean().default(false)
+});
 
-  // ============================================================
-  // FUNÇÃO: Busca por período (Radar Global)
-  // ============================================================
-  static async getTransactionsByPeriod(uid, startDate, endDate) {
-    try {
-      const start = new Date(startDate);
-      start.setDate(start.getDate() - 5);
-      const end = new Date(endDate);
-      end.setDate(end.getDate() + 5);
+// Para as Despesas Recorrentes
+export const recurringSchema = z.object({
+  description: z.string().min(2),
+  value: z.number().int("Valor em centavos exigido").positive(),
+  category: z.enum(ALLOWED_CATEGORIES),
+  dueDay: z.number().min(1).max(31, "O dia de vencimento tem de ser entre 1 e 31"),
+  active: z.boolean().default(true)
+});
 
-      const q = query(
-        this.getTransactionsCollection(uid),
-        where('createdAt', '>=', start),
-        where('createdAt', '<=', end)
-      );
-
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())
-        };
-      });
-    } catch (error) {
-      console.error("Erro no Radar Global do Firestore:", error);
-      return [];
-    }
-  }
-
-  // ============================================================
-  // FUNÇÃO: Adicionar transação individual BLINDADA
-  // ============================================================
-  static async addTransaction(uid, data) {
-    if (!uid) return;
-
-    // --- 🛡️ CAMPO DE FORÇAS ZOD COM CENTAVOS ---
-    const validation = validateTransaction({
-      description: data.description || "Transação sem nome",
-      value: toCentavos(data.value), // ✅ Conversão de precisão bancária (Float -> Inteiro)
-      type: data.type || "saida",
-      category: data.category || "Diversos",
-      date: data.date, 
-      accountId: data.account || "conta_corrente",
-      isRecurring: Boolean(data.isRecurring)
-    });
-
-    if (!validation.success) {
-      console.error("❌ Bloqueio Quântico! Dados inválidos:", validation.error.format());
-      throw new Error("Falha na validação de dados. Operação abortada pelo Zod.");
-    }
-    
-    const cleanData = validation.data;
-    const dataTransacao = cleanData.date ? new Date(`${cleanData.date}T12:00:00`) : new Date();
-    const key = this.generateTransactionKey(cleanData);
-    
-    return await addDoc(this.getTransactionsCollection(uid), {
-      ...cleanData,
-      createdAt: dataTransacao,
-      uniqueKey: key,
-      registadoEm: serverTimestamp() 
-    });
-  }
-
-  // ============================================================
-  // FUNÇÃO: Importação em Lotes BLINDADA
-  // ============================================================
-  static async saveAllTransactions(uid, transactions) {
-    if (!uid || transactions.length === 0) return { added: 0, duplicates: 0, invalid: 0 };
-    
-    const dates = transactions.map(tx => new Date(tx.date ? `${tx.date}T12:00:00` : Date.now()));
-    const minDate = new Date(Math.min(...dates));
-    const maxDate = new Date(Math.max(...dates));
-    
-    minDate.setDate(minDate.getDate() - 2);
-    maxDate.setDate(maxDate.getDate() + 2);
-
-    const q = query(
-      this.getTransactionsCollection(uid),
-      where('createdAt', '>=', minDate),
-      where('createdAt', '<=', maxDate)
-    );
-    const snapshot = await getDocs(q);
-
-    const existingKeys = new Set();
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      if (data.uniqueKey) existingKeys.add(data.uniqueKey);
-    });
-
-    let batch = writeBatch(db);
-    const colRef = this.getTransactionsCollection(uid);
-    
-    let addedCount = 0;
-    let duplicateCount = 0;
-    let invalidCount = 0;
-    let currentBatchOperations = 0;
-
-    for (const tx of transactions) {
-      // --- 🛡️ CAMPO DE FORÇAS ZOD EM LOTE COM CENTAVOS ---
-      const validation = validateTransaction({
-        description: tx.description || "Transação Importada",
-        value: toCentavos(tx.value), // ✅ Conversão para centavos
-        type: tx.type === "entrada" ? "entrada" : "saida",
-        category: tx.category || "Diversos",
-        date: tx.date,
-        accountId: tx.account || "conta_corrente",
-        isRecurring: Boolean(tx.isRecurring)
-      });
-
-      if (!validation.success) {
-        console.warn(`⚠️ Linha ignorada: ${tx.description}`, validation.error.format());
-        invalidCount++;
-        continue;
-      }
-
-      const cleanData = validation.data;
-      const key = this.generateTransactionKey(cleanData);
-      
-      if (existingKeys.has(key)) {
-        duplicateCount++;
-        continue; 
-      }
-
-      existingKeys.add(key);
-
-      const docId = tx.uniqueHash || crypto.randomUUID();
-      const newDocRef = doc(colRef, docId);
-      const dataTransacao = cleanData.date ? new Date(`${cleanData.date}T12:00:00`) : new Date();
-      
-      batch.set(newDocRef, {
-        ...cleanData,
-        uniqueHash: docId,
-        uniqueKey: key,
-        createdAt: dataTransacao,
-        registadoEm: serverTimestamp()
-      }, { merge: true });
-      
-      addedCount++;
-      currentBatchOperations++;
-
-      if (currentBatchOperations >= 450) {
-        await batch.commit();
-        batch = writeBatch(db); 
-        currentBatchOperations = 0;
-      }
-    }
-
-    if (currentBatchOperations > 0) {
-      await batch.commit();
-    }
-    
-    return { added: addedCount, duplicates: duplicateCount, invalid: invalidCount };
-  }
-
-  static async deleteTransaction(uid, id) {
-    await deleteDoc(doc(db, "users", uid, "transactions", id));
-  }
-
-  static async updateTransaction(uid, id, data) {
-    const docRef = doc(db, "users", uid, "transactions", id);
-    const dataTransacao = data.date ? new Date(`${data.date}T12:00:00`) : new Date();
-    
-    const updateData = {
-      value: data.value !== undefined ? toCentavos(data.value) : undefined, // ✅ Conversão
-      type: data.type,
-      category: data.category,
-      createdAt: dataTransacao,
-      atualizadoEm: serverTimestamp()
-    };
-
-    if (data.account) {
-      updateData.account = data.account;
-    }
-    if (data.description !== undefined) {
-      updateData.description = data.description;
-    }
-
-    // Limpa chaves undefined
-    Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
-
-    return await updateDoc(docRef, updateData);
-  }
-
-  static getRulesCollection(uid) {
-    return collection(db, "users", uid, "categoryRules");
-  }
-
-  static async getCategoryRules(uid) {
-    if (!uid) return [];
-    const snap = await getDocs(this.getRulesCollection(uid));
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  }
-
-  static async addCategoryRule(uid, ruleData) {
-    return await addDoc(this.getRulesCollection(uid), {
-      category: ruleData.category,
-      keywords: ruleData.keywords,
-      criadoEm: serverTimestamp()
-    });
-  }
-
-  static async deleteCategoryRule(uid, ruleId) {
-    await deleteDoc(doc(db, "users", uid, "categoryRules", ruleId));
-  }
+export function validateTransaction(data) {
+  return transactionSchema.safeParse(data);
 }
+
+// ✅ AQUI ESTÃO AS FUNÇÕES MATEMÁTICAS QUE O SISTEMA PROCURA!
+export const toCentavos = (val) => Math.round(Number(val) * 100);
+export const fromCentavos = (val) => Number(val) / 100;

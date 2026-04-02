@@ -119,3 +119,47 @@ PERGUNTA DO UTILIZADOR: "${message}"`;
     throw new functions.https.HttpsError('internal', 'O Gestor Quântico está temporariamente indisponível devido a anomalias de rede.');
   }
 });
+
+
+// ============================================================================
+// 🛡️ MOTOR DE AUDITORIA: REGISTO IMUTÁVEL (AUDIT TRAIL)
+// ============================================================================
+exports.auditTransactionChanges = functions.firestore
+  .document('users/{userId}/transactions/{transactionId}')
+  .onWrite(async (change, context) => {
+    const { userId, transactionId } = context.params;
+
+    // 1. Determina o tipo de operação financeira
+    let operation = 'UPDATE';
+    if (!change.before.exists) {
+      operation = 'CREATE';
+    } else if (!change.after.exists) {
+      operation = 'DELETE';
+    }
+
+    // 2. Prepara o registo de auditoria com metadados cruciais
+    const auditRecord = {
+      userId,
+      transactionId,
+      operation,
+      // O serverTimestamp do admin garante a hora exata atômica do Google
+      timestamp: admin.firestore.FieldValue.serverTimestamp(), 
+      eventId: context.eventId, // Previne duplicação do mesmo log
+    };
+
+    // 3. Guarda as "provas" do crime (Dados antigos vs Dados novos)
+    if (operation === 'CREATE' || operation === 'UPDATE') {
+      auditRecord.newData = change.after.data();
+    }
+    if (operation === 'DELETE' || operation === 'UPDATE') {
+      auditRecord.oldData = change.before.data();
+    }
+
+    try {
+      // 4. Grava num cofre separado de "Append-Only" (Apenas Adição)
+      await admin.firestore().collection('audit_logs').add(auditRecord);
+      console.log(`[AUDIT] Operação ${operation} registada com sucesso (TX: ${transactionId} | UID: ${userId})`);
+    } catch (error) {
+      console.error('[AUDIT ERROR] Falha crítica ao gravar registo de auditoria:', error);
+    }
+  });

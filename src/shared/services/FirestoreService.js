@@ -1,9 +1,7 @@
 // src/shared/services/FirestoreService.js
 import { collection, doc, addDoc, getDocs, deleteDoc, updateDoc, serverTimestamp, writeBatch, query, where } from "firebase/firestore";
-// ✅ CORREÇÃO 1: Coordenada exata para o novo cofre do Firebase
 import { db } from "../api/firebase/index";
-// ✅ CORREÇÃO 2: Coordenada para os Schemas de validação no shared
-import { validateTransaction } from "../schemas/financialSchemas"; 
+import { validateTransaction, toCentavos } from "../schemas/financialSchemas"; 
 
 export class FirestoreService {
   static getTransactionsCollection(uid) {
@@ -16,7 +14,7 @@ export class FirestoreService {
   static generateTransactionKey(transaction) {
     const date = transaction.date || transaction.createdAt || "";
     const description = (transaction.description || "").trim().toLowerCase();
-    const value = Math.abs(Number(transaction.value)).toFixed(2);
+    const value = Math.abs(Number(transaction.value)).toString();
     const type = transaction.type === "entrada" ? "entrada" : "saida";
     return `${date}|${description}|${value}|${type}`;
   }
@@ -53,15 +51,15 @@ export class FirestoreService {
   }
 
   // ============================================================
-  // FUNÇÃO: Adicionar transação individual BLINDADA
+  // FUNÇÃO: Adicionar transação individual (COM AUDITORIA)
   // ============================================================
   static async addTransaction(uid, data) {
     if (!uid) return;
 
-    // --- 🛡️ CAMPO DE FORÇAS ZOD ---
+    // --- 🛡️ CAMPO DE FORÇAS ZOD COM CENTAVOS ---
     const validation = validateTransaction({
       description: data.description || "Transação sem nome",
-      value: Number(data.value),
+      value: toCentavos(data.value), // Conversão de precisão
       type: data.type || "saida",
       category: data.category || "Diversos",
       date: data.date, 
@@ -76,18 +74,36 @@ export class FirestoreService {
     
     const cleanData = validation.data;
     const dataTransacao = cleanData.date ? new Date(`${cleanData.date}T12:00:00`) : new Date();
-    const key = this.generateTransactionKey(cleanData);
     
-    return await addDoc(this.getTransactionsCollection(uid), {
+    // 🛡️ INICIA OPERAÇÃO EM LOTE (BATCH)
+    const batch = writeBatch(db);
+    
+    // 1. Grava a Transação
+    const txRef = doc(this.getTransactionsCollection(uid));
+    batch.set(txRef, {
       ...cleanData,
       createdAt: dataTransacao,
-      uniqueKey: key,
+      uniqueKey: this.generateTransactionKey(cleanData),
       registadoEm: serverTimestamp() 
     });
+
+    // 2. Grava a Auditoria
+    const auditRef = doc(collection(db, "audit_logs"));
+    batch.set(auditRef, {
+      userId: uid,
+      transactionId: txRef.id,
+      operation: 'CREATE',
+      newData: cleanData,
+      timestamp: serverTimestamp()
+    });
+
+    // Executa ambas atomicamente
+    await batch.commit();
+    return txRef.id;
   }
 
   // ============================================================
-  // FUNÇÃO: Importação em Lotes BLINDADA
+  // FUNÇÃO: Importação em Lotes (Mass Import)
   // ============================================================
   static async saveAllTransactions(uid, transactions) {
     if (!uid || transactions.length === 0) return { added: 0, duplicates: 0, invalid: 0 };
@@ -121,10 +137,9 @@ export class FirestoreService {
     let currentBatchOperations = 0;
 
     for (const tx of transactions) {
-      // --- 🛡️ CAMPO DE FORÇAS ZOD EM LOTE ---
       const validation = validateTransaction({
         description: tx.description || "Transação Importada",
-        value: Number(tx.value),
+        value: toCentavos(tx.value),
         type: tx.type === "entrada" ? "entrada" : "saida",
         category: tx.category || "Diversos",
         date: tx.date,
@@ -177,16 +192,38 @@ export class FirestoreService {
     return { added: addedCount, duplicates: duplicateCount, invalid: invalidCount };
   }
 
+  // ============================================================
+  // FUNÇÃO: Deletar Transação (COM AUDITORIA)
+  // ============================================================
   static async deleteTransaction(uid, id) {
-    await deleteDoc(doc(db, "users", uid, "transactions", id));
+    const docRef = doc(db, "users", uid, "transactions", id);
+    
+    const batch = writeBatch(db);
+    
+    // 1. Apaga a transação
+    batch.delete(docRef);
+
+    // 2. Regista quem apagou e quando
+    const auditRef = doc(collection(db, "audit_logs"));
+    batch.set(auditRef, {
+      userId: uid,
+      transactionId: id,
+      operation: 'DELETE',
+      timestamp: serverTimestamp()
+    });
+
+    await batch.commit();
   }
 
+  // ============================================================
+  // FUNÇÃO: Atualizar Transação (COM AUDITORIA)
+  // ============================================================
   static async updateTransaction(uid, id, data) {
     const docRef = doc(db, "users", uid, "transactions", id);
     const dataTransacao = data.date ? new Date(`${data.date}T12:00:00`) : new Date();
     
     const updateData = {
-      value: data.value,
+      value: data.value !== undefined ? toCentavos(data.value) : undefined,
       type: data.type,
       category: data.category,
       createdAt: dataTransacao,
@@ -196,10 +233,34 @@ export class FirestoreService {
     if (data.account) {
       updateData.account = data.account;
     }
+    if (data.description !== undefined) {
+      updateData.description = data.description;
+    }
 
-    return await updateDoc(docRef, updateData);
+    // Limpa chaves undefined
+    Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+
+    const batch = writeBatch(db);
+    
+    // 1. Atualiza a transação
+    batch.update(docRef, updateData);
+
+    // 2. Regista a alteração
+    const auditRef = doc(collection(db, "audit_logs"));
+    batch.set(auditRef, {
+      userId: uid,
+      transactionId: id,
+      operation: 'UPDATE',
+      changes: updateData,
+      timestamp: serverTimestamp()
+    });
+
+    await batch.commit();
   }
 
+  // ============================================================
+  // OUTRAS REGRAS
+  // ============================================================
   static getRulesCollection(uid) {
     return collection(db, "users", uid, "categoryRules");
   }
