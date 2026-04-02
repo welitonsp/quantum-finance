@@ -1,17 +1,17 @@
 // src/hooks/useTransactions.js
 import { useState, useEffect, useCallback } from "react";
-import { 
-  collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc, orderBy, writeBatch, serverTimestamp 
-} from "firebase/firestore";
-// ✅ CORREÇÃO: Adicionado o /index
-import { db } from "../shared/api/firebase/index"; 
+import { collection, query, onSnapshot, orderBy, writeBatch, doc } from "firebase/firestore";
+import { db } from "../shared/api/firebase/index";
+// ✅ INJEÇÃO: Serviços blindados e conversor de leitura
+import { FirestoreService } from "../shared/services/FirestoreService";
+import { fromCentavos } from "../shared/schemas/financialSchemas";
 
 export function useTransactions(uid) {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // 1. O MOTOR DE LEITURA (Tempo Real)
+  // 1. LEITURA COM DESCODIFICAÇÃO DE CENTAVOS
   useEffect(() => {
     if (!uid) {
       setTransactions([]);
@@ -25,15 +25,20 @@ export function useTransactions(uid) {
     const transactionsRef = collection(db, "users", uid, "transactions");
     const q = query(transactionsRef, orderBy("createdAt", "desc"));
 
-    const unsubscribe = onSnapshot(q, 
+    const unsubscribe = onSnapshot(q,
       (snapshot) => {
-        const data = snapshot.docs.map(doc => ({
-          ...doc.data(), // 1. Primeiro trazemos os dados do PDF/CSV
-          id: doc.id     // ✅ 2. O ID DO FIREBASE VEM POR ÚLTIMO (Assim nunca é sobrescrito!)
-        }));
+        const data = snapshot.docs.map(docSnap => {
+          const docData = docSnap.data();
+          return {
+            ...docData,
+            // ✅ CONVERSÃO INVERSA: Centavos -> Float para a Interface UI
+            value: docData.value !== undefined ? fromCentavos(docData.value) : 0,
+            id: docSnap.id
+          };
+        });
         setTransactions(data);
         setLoading(false);
-      }, 
+      },
       (err) => {
         console.error("❌ Erro no listener:", err);
         setError(err.message);
@@ -44,32 +49,21 @@ export function useTransactions(uid) {
     return () => unsubscribe();
   }, [uid]);
 
-  // 2. FUNÇÕES DE ESCRITA 
+  // 2. ESCRITA ROTEADA PARA O SERVIÇO BLINDADO (COM ZOD)
   const add = useCallback(async (transactionData) => {
     if (!uid) throw new Error("Utilizador não autenticado.");
-    try {
-      const transactionsRef = collection(db, "users", uid, "transactions");
-      const docRef = await addDoc(transactionsRef, {
-        ...transactionData,
-        createdAt: transactionData.createdAt || new Date().toISOString(),
-        atualizadoEm: serverTimestamp() 
-      });
-      return docRef.id;
-    } catch (err) {
-      console.error("❌ Falha ao adicionar:", err);
-      throw err;
-    }
+    // Agora passa pelo Zod e toCentavos automaticamente!
+    return await FirestoreService.addTransaction(uid, transactionData);
+  }, [uid]);
+
+  const update = useCallback(async (id, data) => {
+    if (!uid || !id) return;
+    return await FirestoreService.updateTransaction(uid, id, data);
   }, [uid]);
 
   const remove = useCallback(async (id) => {
     if (!uid || !id) return;
-    try {
-      const docRef = doc(db, "users", uid, "transactions", id);
-      await deleteDoc(docRef);
-    } catch (err) {
-      console.error(`❌ Falha ao remover transação:`, err);
-      throw err;
-    }
+    return await FirestoreService.deleteTransaction(uid, id);
   }, [uid]);
 
   const removeBatch = useCallback(async (ids) => {
@@ -84,23 +78,8 @@ export function useTransactions(uid) {
 
     try {
       await batch.commit();
-      console.log("✅ removeBatch: Operação concluída com sucesso!");
     } catch (err) {
-      console.error("❌ Falha crítica no batch delete:", err);
-      throw err;
-    }
-  }, [uid]);
-
-  const update = useCallback(async (id, data) => {
-    if (!uid || !id) return;
-    try {
-      const docRef = doc(db, "users", uid, "transactions", id);
-      await updateDoc(docRef, {
-        ...data,
-        atualizadoEm: serverTimestamp() 
-      });
-    } catch (err) {
-      console.error(`❌ Falha ao atualizar:`, err);
+      console.error("❌ Falha no batch delete:", err);
       throw err;
     }
   }, [uid]);
