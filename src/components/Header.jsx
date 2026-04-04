@@ -3,7 +3,6 @@ import { Menu, ChevronLeft, ChevronRight, Sun, Moon, Plus, Eye, EyeOff } from "l
 import ImportButton from "../features/transactions/ImportButton";
 import { usePrivacy } from "../contexts/PrivacyContext";
 
-// ✅ CORREÇÃO: Mapa Dinâmico de Títulos
 const PAGE_TITLES = {
   dashboard:  'Painel Central',
   reports:    'Relatórios Analíticos',
@@ -40,7 +39,12 @@ export default function Header({
   return (
     <header className="h-24 border-b border-slate-200 dark:border-white/5 bg-white/50 dark:bg-slate-950/30 backdrop-blur-md flex items-center justify-between px-4 lg:px-8 flex-shrink-0 transition-all z-40 relative">
       <div className="flex items-center gap-4">
-        <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-2 bg-slate-100 dark:bg-white/5 rounded-xl text-slate-800 dark:text-white">
+        {/* ✅ CORREÇÃO: aria-label em botões de Menu */}
+        <button 
+          onClick={() => setIsMobileMenuOpen(true)} 
+          className="lg:hidden p-2 bg-slate-100 dark:bg-white/5 rounded-xl text-slate-800 dark:text-white"
+          aria-label="Abrir menu mobile"
+        >
           <Menu className="w-6 h-6" />
         </button>
         
@@ -48,6 +52,7 @@ export default function Header({
           onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} 
           className="hidden lg:flex p-2 bg-white dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white border border-slate-200 dark:border-white/5 transition-colors shadow-sm dark:shadow-none"
           title={isSidebarCollapsed ? "Expandir Menu" : "Recolher Menu"}
+          aria-label={isSidebarCollapsed ? "Expandir Menu" : "Recolher Menu"}
         >
           <Menu className="w-5 h-5" />
         </button>
@@ -58,11 +63,15 @@ export default function Header({
       </div>
 
       <div className="flex items-center gap-1 md:gap-2 bg-white dark:bg-slate-900/80 p-1.5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm dark:shadow-inner">
-         <button onClick={handlePrevMonth} className="p-2 hover:bg-slate-50 dark:hover:bg-white/10 rounded-xl text-slate-500 dark:text-slate-300 transition-colors">
+         <button 
+           onClick={handlePrevMonth} 
+           className="p-2 hover:bg-slate-50 dark:hover:bg-white/10 rounded-xl text-slate-500 dark:text-slate-300 transition-colors"
+           aria-label="Mês anterior"
+         >
            <ChevronLeft className="w-4 md:w-5 h-4 md:h-5" />
          </button>
          
-         <div className="flex flex-col items-center justify-center w-28 md:w-40">
+         <div className="flex flex-col items-center justify-center w-28 md:w-40" aria-live="polite">
            <span className="text-xs md:text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">
              {nomeMeses && currentMonth ? nomeMeses[currentMonth - 1] : 'MÊS'}
            </span>
@@ -71,16 +80,22 @@ export default function Header({
            </span>
          </div>
          
-         <button onClick={handleNextMonth} className="p-2 hover:bg-slate-50 dark:hover:bg-white/10 rounded-xl text-slate-500 dark:text-slate-300 transition-colors">
+         <button 
+           onClick={handleNextMonth} 
+           className="p-2 hover:bg-slate-50 dark:hover:bg-white/10 rounded-xl text-slate-500 dark:text-slate-300 transition-colors"
+           aria-label="Próximo mês"
+         >
            <ChevronRight className="w-4 md:w-5 h-4 md:h-5" />
          </button>
       </div>
 
       <div className="flex items-center gap-2 md:gap-4">
+        {/* ✅ CORREÇÃO: aria-label em botões de contexto */}
         <button 
           onClick={togglePrivacy} 
           className={`p-3 rounded-xl border transition-all shadow-sm dark:shadow-none ${isPrivacyMode ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-500/30' : 'bg-white dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-white/5'}`}
           title="Modo Privacidade (Alt + P)"
+          aria-label={isPrivacyMode ? "Desativar modo privacidade" : "Ativar modo privacidade"}
         >
           {isPrivacyMode ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
         </button>
@@ -89,6 +104,7 @@ export default function Header({
           onClick={toggleTheme} 
           className="p-3 bg-white dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-cyan-400 border border-slate-200 dark:border-white/5 transition-all shadow-sm dark:shadow-none"
           title={theme === 'dark' ? 'Ativar Modo Claro' : 'Ativar Modo Escuro'}
+          aria-label={theme === 'dark' ? 'Ativar Modo Claro' : 'Ativar Modo Escuro'}
         >
           {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
         </button>
@@ -102,6 +118,7 @@ export default function Header({
               onClick={() => setIsFormOpen(!isFormOpen)} 
               className="px-4 py-2.5 md:px-6 md:py-3.5 bg-gradient-to-r from-indigo-600 to-cyan-500 text-white rounded-2xl flex items-center text-xs md:text-sm font-bold shadow-lg shadow-indigo-500/25 hover:shadow-cyan-500/40 hover:scale-105 active:scale-95 transition-all"
               title="Nova Transação (Alt + N)"
+              aria-label="Adicionar nova transação"
             >
               <Plus className="w-4 h-4 md:w-5 md:h-5 md:mr-2" /> <span className="hidden md:inline">Nova Transação</span>
             </button>

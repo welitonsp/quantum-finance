@@ -2,9 +2,9 @@
 import { useState } from "react";
 import { Wallet } from "lucide-react";
 import { Toaster } from 'react-hot-toast';
+import toast from "react-hot-toast";
 
 export default function LoginScreen({ onLogin }) {
-  // ✅ CORREÇÃO: Estado para bloquear a interface durante a autenticação
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
@@ -12,6 +12,10 @@ export default function LoginScreen({ onLogin }) {
     setIsLoading(true);
     try {
       await onLogin();
+    } catch (error) {
+      // ✅ CORREÇÃO: Tratamento de erros se o popup falhar
+      console.error("Erro na autenticação:", error);
+      toast.error("Falha ao iniciar sessão. Verifique se tem os pop-ups bloqueados.");
     } finally {
       setIsLoading(false);
     }

@@ -1,29 +1,38 @@
 // src/components/BudgetProgress.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Target, AlertTriangle, CheckCircle2, TrendingUp, Sparkles } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function BudgetProgress({ totalExpenses, monthlyGoal, onSetGoal }) {
-  const [alertLevel, setAlertLevel] = useState(0);
+  // ✅ CORREÇÃO: Usar useRef em vez de useState para evitar re-renderizações (loops)
+  const prevLevelRef = useRef(0); 
+  
   const percentage = monthlyGoal > 0 ? (totalExpenses / monthlyGoal) * 100 : 0;
   const cappedPercentage = Math.min(percentage, 100);
 
   useEffect(() => {
-    if (monthlyGoal === 0) return;
-    if (percentage >= 100 && alertLevel < 2) {
+    if (monthlyGoal === 0) {
+      prevLevelRef.current = 0;
+      return;
+    }
+    
+    let currentLevel = 0;
+    if (percentage >= 100) currentLevel = 2;
+    else if (percentage >= 80) currentLevel = 1;
+
+    // Dispara o toast apenas se subiu de nível
+    if (currentLevel === 2 && prevLevelRef.current < 2) {
       toast.error("Alerta Vermelho: Teto de gastos ultrapassado! Consulte a IA para otimizar.", { 
         duration: 6000, style: { background: '#ef4444', color: '#fff', fontWeight: 'bold' }
       });
-      setAlertLevel(2);
-    } else if (percentage >= 80 && percentage < 100 && alertLevel < 1) {
+    } else if (currentLevel === 1 && prevLevelRef.current < 1) {
       toast("Atenção: Atingiu 80% do seu orçamento mensal.", {
         icon: '⚠️', duration: 5000, style: { background: '#f59e0b', color: '#fff', fontWeight: 'bold' }
       });
-      setAlertLevel(1);
-    } else if (percentage < 80 && alertLevel > 0) {
-      setAlertLevel(0);
     }
-  }, [percentage, monthlyGoal, alertLevel]);
+    
+    prevLevelRef.current = currentLevel;
+  }, [percentage, monthlyGoal]);
 
   let progressColor = "from-emerald-400 to-emerald-500";
   let bgGlow = "shadow-emerald-500/50";

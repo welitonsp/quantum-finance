@@ -16,7 +16,6 @@ export default function CategorySettings({ uid, onClose }) {
   useEffect(() => {
     if (!uid) return;
 
-    // ✅ CORREÇÃO: Coleção isolada por usuário (Segurança Máxima)
     const q = query(collection(db, "users", uid, "categoryRules"));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -34,6 +33,9 @@ export default function CategorySettings({ uid, onClose }) {
     return () => unsubscribe();
   }, [uid]);
 
+  // ✅ CORREÇÃO: Early return para garantir que o componente não renderiza sem o UID validado
+  if (!uid) return null;
+
   const handleSaveRule = async (e) => {
     e.preventDefault();
     if (!keyword.trim() || !category) {
@@ -43,7 +45,6 @@ export default function CategorySettings({ uid, onClose }) {
 
     setIsSaving(true);
     try {
-      // ✅ CORREÇÃO: Gravação na subcoleção do usuário
       const rulesRef = collection(db, "users", uid, "categoryRules");
       await addDoc(rulesRef, {
         keyword: keyword.trim().toLowerCase(),
@@ -63,7 +64,6 @@ export default function CategorySettings({ uid, onClose }) {
 
   const handleDeleteRule = async (ruleId) => {
     try {
-      // ✅ CORREÇÃO: Exclusão na subcoleção do usuário
       await deleteDoc(doc(db, "users", uid, "categoryRules", ruleId));
       toast.success("Regra desativada.");
     } catch (error) {

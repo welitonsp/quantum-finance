@@ -13,8 +13,8 @@ export default function QuantumBackground() {
     let particles = [];
     let mouseX = 0;
     let mouseY = 0;
+    let isVisible = !document.hidden; // ✅ CORREÇÃO: Estado de visibilidade da aba
 
-    // ✅ CORREÇÃO: Deteção de mobile para poupar processamento
     const isMobile = window.innerWidth < 768;
     const PARTICLE_COUNT = isMobile ? 30 : 80;
     const CONNECTION_DISTANCE = isMobile ? 80 : 120;
@@ -32,10 +32,20 @@ export default function QuantumBackground() {
       mouseY = e.clientY;
     };
     
-    // ✅ CORREÇÃO: Ignora rato em mobile
     if (!isMobile) {
       window.addEventListener('mousemove', handleMouseMove);
     }
+
+    // ✅ CORREÇÃO: Função que pausa o motor gráfico quando a aba está oculta
+    const handleVisibilityChange = () => {
+      isVisible = !document.hidden;
+      if (isVisible) {
+        animate(); // Retoma a animação
+      } else {
+        cancelAnimationFrame(animationFrameId); // Pausa a animação
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     class Particle {
       constructor() {
@@ -103,6 +113,7 @@ export default function QuantumBackground() {
     };
 
     const animate = () => {
+      if (!isVisible) return; // Trava de segurança extra
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       particles.forEach(p => {
         p.update();
@@ -112,11 +123,12 @@ export default function QuantumBackground() {
       animationFrameId = requestAnimationFrame(animate);
     };
 
-    animate();
+    if (isVisible) animate();
 
     return () => {
       window.removeEventListener('resize', resizeCanvas);
       if (!isMobile) window.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       cancelAnimationFrame(animationFrameId);
     };
   }, []);

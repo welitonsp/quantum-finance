@@ -2,20 +2,19 @@
 import { useState, useMemo } from 'react';
 import { Plus, Building2, PiggyBank, TrendingUp, CreditCard, Landmark, Trash2, Wallet } from 'lucide-react';
 import { useAccounts } from '../../hooks/useAccounts';
-import Decimal from 'decimal.js'; // ✅ Adicionado Precisão Bancária
+import Decimal from 'decimal.js'; 
+// ✅ CORREÇÃO: Importando a função centralizada do nosso novo utilitário
+import { formatCurrency } from '../../utils/formatters';
 
 export default function AccountsManager({ uid }) {
   const { accounts, loadingAccounts, addAccount, removeAccount } = useAccounts(uid);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
-  // ✅ Estado do Modal de Apagar
   const [accountToDelete, setAccountToDelete] = useState(null);
 
   const [name, setName] = useState('');
   const [type, setType] = useState('corrente');
   const [balance, setBalance] = useState('');
 
-  // ✅ CORREÇÃO: Cálculos com Decimal.js para evitar falhas de ponto flutuante
   const { totalAtivos, totalPassivos, patrimonioLiquido } = useMemo(() => {
     let ativos = new Decimal(0);
     let passivos = new Decimal(0);
@@ -67,12 +66,9 @@ export default function AccountsManager({ uid }) {
     }
   };
 
-  const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       
-      {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO */}
       {accountToDelete && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl border dark:border-white/10 animate-in zoom-in-95">
@@ -150,7 +146,6 @@ export default function AccountsManager({ uid }) {
                      <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mt-0.5">{acc.type}</p>
                    </div>
                  </div>
-                 {/* ✅ CORREÇÃO: Abre o modal de Delete */}
                  <button 
                    onClick={() => setAccountToDelete(acc)}
                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
