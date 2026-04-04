@@ -1,6 +1,5 @@
 // src/App.jsx
 import React, { useEffect, useState, useRef, useCallback, lazy, Suspense } from "react";
-// ✅ CORREÇÃO: Adicionada a extensão .js para evitar erros no build ESM do Vite
 import { auth } from "./shared/api/firebase/index.js";
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
 import { BrainCircuit, AlertTriangle, Loader2 } from "lucide-react";
@@ -92,7 +91,6 @@ const AuthenticatedApp = ({ user }) => {
   useEffect(() => localStorage.setItem('quantum_sidebar_collapsed', JSON.stringify(isSidebarCollapsed)), [isSidebarCollapsed]);
   useEffect(() => localStorage.setItem('quantum_monthly_goal', monthlyGoal), [monthlyGoal]);
 
-  // ✅ CORREÇÃO: Tratamento seguro para `e.key` (Prevenção de Crash)
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
@@ -141,7 +139,6 @@ const AuthenticatedApp = ({ user }) => {
       }
     });
     
-    // ✅ CORREÇÃO: Prevenção caso bestDate venha num formato inesperado sem hífen
     if (bestDate && bestDate.includes('-')) {
       const [y, m] = bestDate.split('-');
       if (y && m) {
@@ -244,8 +241,11 @@ const AuthenticatedApp = ({ user }) => {
               
               <ErrorBoundary>
                 <Suspense fallback={<PageLoader />}>
+                  
+                  {/* ✅ AQUI ESTÁ A NOSSA CORREÇÃO: user={user} INJETADO! */}
                   {currentPage === 'dashboard' && (
                     <DashboardContent
+                      user={user}
                       transactions={displayedTransactions}
                       loading={loading}
                       moduleBalances={moduleBalances}

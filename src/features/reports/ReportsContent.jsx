@@ -1,21 +1,42 @@
 // src/features/reports/ReportsContent.jsx
 import { useState, useMemo } from 'react';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Target, Filter, TrendingDown, AlertCircle } from 'lucide-react';
+import { Target, Filter, TrendingDown, AlertCircle, Calendar, Scissors } from 'lucide-react';
 import Decimal from 'decimal.js';
+
+// Categorias tipicamente difíceis de cortar a curto prazo (Despesas Fixas)
+const CATEGORIAS_FIXAS = ['Moradia', 'Assinaturas', 'Educação', 'Impostos/Taxas', 'Saúde'];
 
 export default function ReportsContent({ transactions }) {
   const [activeTab, setActiveTab] = useState('pareto');
+  
+  // Filtros de Melhor Prática
+  const [timeFilter, setTimeFilter] = useState('30d'); // '30d', '90d', '180d', 'all'
+  const [expenseFilter, setExpenseFilter] = useState('all'); // 'all', 'variables'
 
   const paretoData = useMemo(() => {
     if (!transactions || transactions.length === 0) return [];
     
     const catTotals = {};
     let totalDespesas = new Decimal(0);
+    const agora = new Date();
 
     transactions.forEach(t => {
       if (t.type === 'saida' || t.type === 'despesa') {
+        
+        // 1. APLICAR FILTRO DE TEMPO
+        const txDate = new Date(t.date || t.createdAt);
+        const diffDias = (agora - txDate) / (1000 * 60 * 60 * 24);
+        
+        if (timeFilter === '30d' && diffDias > 30) return;
+        if (timeFilter === '90d' && diffDias > 90) return;
+        if (timeFilter === '180d' && diffDias > 180) return;
+
+        // 2. APLICAR FILTRO DE TIPO DE DESPESA (Fixa vs Variável)
         const cat = t.category || 'Diversos';
+        if (expenseFilter === 'variables' && CATEGORIAS_FIXAS.includes(cat)) return;
+
+        // 3. SOMAR OS VALORES REAIS COM PRECISÃO QUÂNTICA
         const val = new Decimal(Math.abs(Number(t.value)));
         
         catTotals[cat] = catTotals[cat] 
@@ -39,7 +60,7 @@ export default function ReportsContent({ transactions }) {
         isTop80: totalFloat > 0 && ((acumulado / totalFloat) * 100) <= 80.1
       };
     });
-  }, [transactions]);
+  }, [transactions, timeFilter, expenseFilter]);
 
   const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   const topCategoriesCount = paretoData.filter(d => d.isTop80).length;
@@ -63,15 +84,46 @@ export default function ReportsContent({ transactions }) {
           <div className="bg-quantum-card border border-quantum-border rounded-3xl p-6 md:p-8 shadow-lg relative overflow-hidden">
             <div className="absolute top-0 right-0 w-96 h-96 bg-quantum-accent/5 rounded-full blur-3xl pointer-events-none"></div>
 
-            <div className="flex items-start gap-4 mb-8">
-              <div className="p-3 bg-quantum-accent/10 rounded-2xl">
-                <Filter className="w-6 h-6 text-quantum-accent" />
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 mb-8">
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-quantum-accent/10 rounded-2xl">
+                  <Filter className="w-6 h-6 text-quantum-accent" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Regra 80/20 (Princípio de Pareto)</h3>
+                  <p className="text-sm text-quantum-fgMuted mt-1 max-w-lg">
+                    Identifique os ralos de dinheiro. Filtre por período e isole os gastos variáveis para atacar o que realmente pode ser cortado.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-white">Regra 80/20 (Princípio de Pareto)</h3>
-                <p className="text-sm text-quantum-fgMuted mt-1 max-w-2xl">
-                  Identifique os ralos de dinheiro. O gráfico mostra as despesas ordenadas da maior para a menor.
-                </p>
+
+              {/* BARRAS DE FERRAMENTAS - FILTROS */}
+              <div className="flex flex-wrap items-center gap-3 bg-slate-900/50 p-2 rounded-2xl border border-white/5 backdrop-blur-md">
+                <div className="flex items-center gap-1 bg-slate-950/50 p-1 rounded-xl border border-white/5">
+                  <Calendar className="w-4 h-4 text-slate-500 ml-2" />
+                  <select 
+                    value={timeFilter} 
+                    onChange={(e) => setTimeFilter(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-slate-300 px-2 py-1.5 focus:outline-none cursor-pointer"
+                  >
+                    <option value="30d">Últimos 30 Dias</option>
+                    <option value="90d">Últimos 3 Meses</option>
+                    <option value="180d">Últimos 6 Meses</option>
+                    <option value="all">Todo o Histórico</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1 bg-slate-950/50 p-1 rounded-xl border border-white/5">
+                  <Scissors className="w-4 h-4 text-slate-500 ml-2" />
+                  <select 
+                    value={expenseFilter} 
+                    onChange={(e) => setExpenseFilter(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-slate-300 px-2 py-1.5 focus:outline-none cursor-pointer"
+                  >
+                    <option value="all">Todas as Despesas</option>
+                    <option value="variables">Apenas Variáveis (Cortáveis)</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -111,7 +163,7 @@ export default function ReportsContent({ transactions }) {
                     </div>
                     <p className="text-3xl font-black text-white">{topCategoriesCount}</p>
                     <p className="text-sm text-quantum-fgMuted mt-1 leading-tight">
-                      categorias são responsáveis por <span className="text-white font-bold">80%</span> de todos os seus gastos.
+                      categorias são responsáveis por <span className="text-white font-bold">80%</span> dos gastos neste filtro.
                     </p>
                   </div>
                   <div className="flex-1 bg-quantum-bgSecondary border border-quantum-border p-5 rounded-2xl overflow-y-auto custom-scrollbar max-h-[250px]">
@@ -133,7 +185,8 @@ export default function ReportsContent({ transactions }) {
             ) : (
               <div className="text-center py-12 border-2 border-dashed border-quantum-border rounded-2xl">
                 <AlertCircle className="w-12 h-12 text-quantum-fgMuted mx-auto mb-3" />
-                <h3 className="text-lg font-bold text-white">Sem dados suficientes</h3>
+                <h3 className="text-lg font-bold text-white">Sem dados para este filtro</h3>
+                <p className="text-sm text-slate-500 mt-2">Tente alargar o período ou mudar o tipo de despesa.</p>
               </div>
             )}
           </div>

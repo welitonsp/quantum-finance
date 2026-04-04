@@ -1,120 +1,160 @@
 // src/components/ForecastWidget.jsx
-import { useMemo } from 'react';
-import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { AlertTriangle, Zap } from 'lucide-react';
-import { calculateForecast } from '../utils/forecastEngine';
+import { useState, useMemo } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Zap, Target, TrendingUp, ShieldAlert } from 'lucide-react';
+import Decimal from 'decimal.js';
 
 export default function ForecastWidget({ transactions, currentMonth, currentYear }) {
-  
-  const forecast = useMemo(() => {
-    return calculateForecast(transactions, currentMonth, currentYear);
+  const [activeCollapse, setActiveCollapse] = useState(null);
+
+  const forecastData = useMemo(() => {
+    if (!transactions || transactions.length === 0) return [];
+
+    // 1. MATEMÁTICA REAL: Calcular médias baseadas no histórico
+    let totalReceitas = new Decimal(0);
+    let totalDespesas = new Decimal(0);
+    let saldoAtual = new Decimal(0);
+    const mesesSet = new Set();
+
+    transactions.forEach(t => {
+      const val = new Decimal(Math.abs(Number(t.value || 0)));
+      if (t.type === 'receita' || t.type === 'entrada') {
+        totalReceitas = totalReceitas.plus(val);
+        saldoAtual = saldoAtual.plus(val);
+      } else {
+        totalDespesas = totalDespesas.plus(val);
+        saldoAtual = saldoAtual.minus(val);
+      }
+      if (t.date || t.createdAt) {
+        const d = typeof t.date === 'string' ? t.date : new Date(t.createdAt).toISOString();
+        mesesSet.add(d.substring(0, 7)); // Agrupa por YYYY-MM
+      }
+    });
+
+    const numMeses = Math.max(mesesSet.size, 1);
+    const mediaReceita = totalReceitas.dividedBy(numMeses);
+    const mediaDespesa = totalDespesas.dividedBy(numMeses);
+
+    // 2. DEFINIR AS LINHAS DO TEMPO (Fluxos Líquidos Mensais)
+    const fluxoBase = mediaReceita.minus(mediaDespesa);
+    const fluxoPareto = mediaReceita.minus(mediaDespesa.times(0.8)); // Corte de 20% nos gastos
+    const taxaJurosAgressiva = new Decimal(0.01); // 1% ao mês de rentabilidade
+
+    // 3. PROJETAR O FUTURO (6 Meses)
+    const data = [];
+    let saldoBase = saldoAtual;
+    let saldoPareto = saldoAtual;
+    let saldoAgressivo = saldoAtual;
+
+    const nomeMeses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+    // Ponto de Partida (Hoje)
+    data.push({
+      mes: 'Hoje',
+      Base: saldoBase.toNumber(),
+      Pareto: saldoPareto.toNumber(),
+      Agressivo: saldoAgressivo.toNumber()
+    });
+
+    for (let i = 1; i <= 6; i++) {
+      let mesIndex = (currentMonth - 1 + i) % 12;
+      
+      saldoBase = saldoBase.plus(fluxoBase);
+      saldoPareto = saldoPareto.plus(fluxoPareto);
+      
+      // Cenário Agressivo: Fluxo Otimizado + Juros sobre o montante acumulado
+      const rendimento = saldoAgressivo.greaterThan(0) ? saldoAgressivo.times(taxaJurosAgressiva) : new Decimal(0);
+      saldoAgressivo = saldoAgressivo.plus(fluxoPareto).plus(rendimento);
+
+      data.push({
+        mes: nomeMeses[mesIndex],
+        Base: Number(saldoBase.toFixed(2)),
+        Pareto: Number(saldoPareto.toFixed(2)),
+        Agressivo: Number(saldoAgressivo.toFixed(2))
+      });
+    }
+
+    return data;
   }, [transactions, currentMonth, currentYear]);
 
-  const isCurrentMonth = new Date().getMonth() + 1 === currentMonth && new Date().getFullYear() === currentYear;
+  const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-zinc-900 border border-zinc-700/50 p-3 rounded-xl shadow-xl backdrop-blur-md">
-          <p className="text-zinc-400 text-xs font-bold uppercase tracking-wider mb-2">Dia {label}</p>
-          {payload.map((entry, index) => {
-            if (entry.value === null) return null;
-            return (
-              <div key={index} className="flex items-center gap-2 text-sm font-mono font-bold">
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></span>
-                <span className={entry.dataKey === 'real' ? 'text-zinc-100' : 'text-indigo-400'}>
-                  {entry.dataKey === 'real' ? 'Gasto Real: ' : 'Previsão: '}
-                  R$ {entry.value.toFixed(2)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      );
-    }
-    return null;
+  const handleCollapse = (scenarioName) => {
+    setActiveCollapse(activeCollapse === scenarioName ? null : scenarioName);
   };
 
+  const scenarios = [
+    { name: 'Base', key: 'Base', color: '#ef4444', icon: ShieldAlert, desc: 'Tendência atual sem cortes.' },
+    { name: 'Pareto', key: 'Pareto', color: '#10b981', icon: Target, desc: 'Cortando os 20% piores gastos.' },
+    { name: 'Agressivo', key: 'Agressivo', color: '#3b82f6', icon: TrendingUp, desc: 'Pareto + 1% ao mês (Investimento).' }
+  ];
+
   return (
-    <div className="flex flex-col rounded-[2.5rem] border border-zinc-800/60 bg-zinc-900/40 p-6 xl:p-8 shadow-2xl backdrop-blur-sm relative overflow-hidden h-full min-h-[350px]">
-      <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-500/10 blur-[80px] rounded-full"></div>
-      
-      <div className="flex justify-between items-start mb-6 relative z-10">
+    <div className="h-full flex flex-col p-4 md:p-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
-          <h2 className="text-sm xl:text-base font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
-            <Zap size={18} className="text-amber-400" /> Radar de Despesas
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <Zap className="w-5 h-5 text-amber-400" /> Superposição Quântica
           </h2>
-          <p className="text-xs text-zinc-400 mt-1">
-            {isCurrentMonth ? "Ritmo de gastos vs Fim do Mês" : "Histórico de aceleração de gastos"}
+          <p className="text-xs text-quantum-fgMuted mt-1">
+            Projeção de 6 meses. Clique num cenário para focar.
           </p>
         </div>
-        
-        {isCurrentMonth && (
-          <div className="flex flex-col items-end">
-            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Gasto Total Previsto</span>
-            <span className="text-2xl font-black font-mono text-indigo-400">
-              R$ {forecast.projecaoFinal.toFixed(2)}
-            </span>
-          </div>
-        )}
       </div>
 
-      {isCurrentMonth && forecast.projecaoFinal > 0 && (
-        <div className="mb-6 bg-zinc-950/50 border border-zinc-800 rounded-2xl p-4 flex items-start gap-3 relative z-10">
-          <AlertTriangle size={20} className="text-indigo-400 shrink-0 mt-0.5" />
-          <p className="text-sm text-zinc-300">
-            A sua velocidade de queima atual é de <strong className="text-white">R$ {forecast.ritmoDiario.toFixed(2)}/dia</strong>. 
-            Se não travar, as suas despesas vão chegar a <strong className="text-indigo-400">R$ {forecast.projecaoFinal.toFixed(2)}</strong> no dia 30.
-          </p>
-        </div>
-      )}
-
-      <div className="flex-1 w-full relative z-10 mt-4">
+      <div className="flex-1 min-h-[250px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={forecast.dadosGrafico} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
-              </linearGradient>
-              <linearGradient id="colorProjetado" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-              </linearGradient>
-            </defs>
-            
-            <XAxis 
-              dataKey="dia" 
-              axisLine={false} 
-              tickLine={false} 
-              tick={{ fontSize: 10, fill: '#71717a' }} 
-              dy={10}
+          <LineChart data={forecastData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1E2A3F" vertical={false} />
+            <XAxis dataKey="mes" stroke="#64748B" fontSize={12} tickLine={false} axisLine={false} dy={10} />
+            <YAxis stroke="#64748B" fontSize={10} tickFormatter={(val) => `R$ ${(val/1000).toFixed(0)}k`} tickLine={false} axisLine={false} />
+            <Tooltip 
+              contentStyle={{ backgroundColor: '#131A2A', borderColor: '#1E2A3F', borderRadius: '12px', color: '#fff' }}
+              formatter={(value) => [formatCurrency(value), 'Património Projetado']}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#3f3f46', strokeWidth: 1, strokeDasharray: '5 5' }} />
+            <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }} />
             
-            <Area 
-              type="monotone" 
-              dataKey="real" 
-              stroke="#ef4444" 
-              strokeWidth={3}
-              fillOpacity={1} 
-              fill="url(#colorReal)" 
-              activeDot={{ r: 6, strokeWidth: 0, fill: '#ef4444' }}
-            />
-            
-            {isCurrentMonth && (
-               <Area 
-                 type="monotone" 
-                 dataKey="projetado" 
-                 stroke="#6366f1" 
-                 strokeWidth={3}
-                 strokeDasharray="5 5"
-                 fillOpacity={1} 
-                 fill="url(#colorProjetado)" 
-               />
-            )}
-          </AreaChart>
+            {scenarios.map((scenario) => (
+              <Line
+                key={scenario.key}
+                type="monotone"
+                dataKey={scenario.key}
+                name={scenario.name}
+                stroke={scenario.color}
+                strokeWidth={activeCollapse === scenario.name ? 4 : 2}
+                strokeOpacity={activeCollapse && activeCollapse !== scenario.name ? 0.2 : 1}
+                dot={activeCollapse === scenario.name ? { r: 6, fill: scenario.color, strokeWidth: 2, stroke: '#131A2A' } : false}
+                activeDot={{ r: 8, fill: scenario.color }}
+              />
+            ))}
+          </LineChart>
         </ResponsiveContainer>
+      </div>
+
+      {/* Botões de Colapso (Foco Interativo) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">
+        {scenarios.map((s) => {
+          const Icon = s.icon;
+          const isActive = activeCollapse === s.name;
+          return (
+            <button
+              key={s.name}
+              onClick={() => handleCollapse(s.name)}
+              className={`p-3 rounded-xl border text-left transition-all duration-300 ${
+                isActive 
+                  ? `bg-slate-800 border-${s.color.replace('#', 'bg-[')} shadow-[0_0_15px_rgba(0,0,0,0.3)] scale-[1.02]` 
+                  : 'bg-slate-900/50 border-white/5 hover:bg-slate-800/80 opacity-70 hover:opacity-100'
+              }`}
+              style={{ borderColor: isActive ? s.color : '' }}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Icon className="w-4 h-4" style={{ color: s.color }} />
+                <span className="text-sm font-bold text-white">{s.name}</span>
+              </div>
+              <p className="text-[10px] text-slate-400 leading-tight">{s.desc}</p>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
