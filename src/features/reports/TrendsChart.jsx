@@ -1,32 +1,38 @@
-// src/components/TrendsChart.jsx
+// src/features/reports/TrendsChart.jsx
 import { useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import Decimal from 'decimal.js';
 
 export default function TrendsChart({ transactions }) {
-  // Processa as transações para agrupar entradas e saídas por mês (últimos 6 meses)
   const chartData = useMemo(() => {
     if (!transactions || transactions.length === 0) return [];
 
     const monthlyData = {};
     const today = new Date();
 
-    // Inicializa os últimos 6 meses com zero
     for (let i = 5; i >= 0; i--) {
       const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
       const monthKey = d.toLocaleString('pt-BR', { month: 'short', year: 'numeric' });
       monthlyData[monthKey] = { name: monthKey, receitas: 0, despesas: 0 };
     }
 
-    // Soma os valores
     transactions.forEach(tx => {
-      const txDate = new Date(tx.createdAt || tx.date);
+      // ✅ CORREÇÃO: Prioriza a data exata da transação
+      const rawDate = tx.date || tx.createdAt;
+      const txDate = rawDate?.toDate 
+        ? rawDate.toDate() 
+        : new Date(typeof rawDate === 'string' && !rawDate.includes('T') 
+            ? `${rawDate}T12:00:00` 
+            : rawDate);
+      
       const monthKey = txDate.toLocaleString('pt-BR', { month: 'short', year: 'numeric' });
       
       if (monthlyData[monthKey]) {
+        const val = new Decimal(tx.value || 0);
         if (tx.type === 'entrada') {
-          monthlyData[monthKey].receitas += Number(tx.value);
+          monthlyData[monthKey].receitas = new Decimal(monthlyData[monthKey].receitas).plus(val).toNumber();
         } else {
-          monthlyData[monthKey].despesas += Number(tx.value);
+          monthlyData[monthKey].despesas = new Decimal(monthlyData[monthKey].despesas).plus(val).toNumber();
         }
       }
     });

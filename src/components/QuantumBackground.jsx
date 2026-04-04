@@ -1,3 +1,4 @@
+// src/components/QuantumBackground.jsx
 import { useEffect, useRef } from 'react';
 
 export default function QuantumBackground() {
@@ -13,7 +14,11 @@ export default function QuantumBackground() {
     let mouseX = 0;
     let mouseY = 0;
 
-    // Ajusta o tamanho do ecrã
+    // ✅ CORREÇÃO: Deteção de mobile para poupar processamento
+    const isMobile = window.innerWidth < 768;
+    const PARTICLE_COUNT = isMobile ? 30 : 80;
+    const CONNECTION_DISTANCE = isMobile ? 80 : 120;
+
     const resizeCanvas = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
@@ -22,14 +27,16 @@ export default function QuantumBackground() {
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    // Segue o rato
     const handleMouseMove = (e) => {
       mouseX = e.clientX;
       mouseY = e.clientY;
     };
-    window.addEventListener('mousemove', handleMouseMove);
+    
+    // ✅ CORREÇÃO: Ignora rato em mobile
+    if (!isMobile) {
+      window.addEventListener('mousemove', handleMouseMove);
+    }
 
-    // Classe da Partícula adaptada do teu código
     class Particle {
       constructor() {
         this.reset();
@@ -41,25 +48,25 @@ export default function QuantumBackground() {
         this.speedX = (Math.random() - 0.5) * 0.4;
         this.speedY = (Math.random() - 0.5) * 0.4;
         this.opacity = Math.random() * 0.5 + 0.1;
-        this.hue = Math.random() > 0.7 ? 270 : 155; // Roxo ou Verde Quântico
+        this.hue = Math.random() > 0.7 ? 270 : 155; 
       }
       update() {
         this.x += this.speedX;
         this.y += this.speedY;
 
-        // Atração suave ao mouse
-        const dx = mouseX - this.x;
-        const dy = mouseY - this.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 200) {
-          this.x += dx * 0.0005;
-          this.y += dy * 0.0005;
-          this.opacity = Math.min(0.8, this.opacity + 0.01);
-        } else {
-          this.opacity = Math.max(0.1, this.opacity - 0.005);
+        if (!isMobile) {
+          const dx = mouseX - this.x;
+          const dy = mouseY - this.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 200) {
+            this.x += dx * 0.0005;
+            this.y += dy * 0.0005;
+            this.opacity = Math.min(0.8, this.opacity + 0.01);
+          } else {
+            this.opacity = Math.max(0.1, this.opacity - 0.005);
+          }
         }
 
-        // Reposiciona se sair do ecrã
         if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
           this.reset();
         }
@@ -72,20 +79,18 @@ export default function QuantumBackground() {
       }
     }
 
-    // Inicializar partículas
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
       particles.push(new Particle());
     }
 
-    // Linhas de ligação
     const drawConnections = () => {
       for (let i = 0; i < particles.length; i++) {
         for (let j = i + 1; j < particles.length; j++) {
           const dx = particles[i].x - particles[j].x;
           const dy = particles[i].y - particles[j].y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 120) {
-            const alpha = (1 - dist / 120) * 0.15;
+          if (dist < CONNECTION_DISTANCE) {
+            const alpha = (1 - dist / CONNECTION_DISTANCE) * 0.15;
             ctx.beginPath();
             ctx.moveTo(particles[i].x, particles[i].y);
             ctx.lineTo(particles[j].x, particles[j].y);
@@ -97,7 +102,6 @@ export default function QuantumBackground() {
       }
     };
 
-    // Loop de animação
     const animate = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       particles.forEach(p => {
@@ -110,10 +114,9 @@ export default function QuantumBackground() {
 
     animate();
 
-    // Limpeza crucial no React (Evita memory leaks e "duplicação" de canvas ao navegar)
     return () => {
       window.removeEventListener('resize', resizeCanvas);
-      window.removeEventListener('mousemove', handleMouseMove);
+      if (!isMobile) window.removeEventListener('mousemove', handleMouseMove);
       cancelAnimationFrame(animationFrameId);
     };
   }, []);

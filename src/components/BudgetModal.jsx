@@ -6,7 +6,6 @@ import toast from 'react-hot-toast';
 export default function BudgetModal({ isOpen, onClose, currentGoal, onSave }) {
   const [goal, setGoal] = useState('');
 
-  // Sincroniza o valor atual quando o modal abre
   useEffect(() => {
     if (isOpen) {
       setGoal(currentGoal ? String(currentGoal) : '');
@@ -25,6 +24,13 @@ export default function BudgetModal({ isOpen, onClose, currentGoal, onSave }) {
       return;
     }
 
+    // ✅ CORREÇÃO: Alerta e Confirmação de desativação
+    if (numericGoal === 0) {
+      if (!window.confirm('Definir 0 irá desativar o monitoramento de orçamento. Confirmar?')) {
+        return;
+      }
+    }
+
     onSave(numericGoal);
     toast.success("Teto mensal atualizado com sucesso!");
     onClose();
@@ -34,7 +40,6 @@ export default function BudgetModal({ isOpen, onClose, currentGoal, onSave }) {
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-quantum-card w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-quantum-border animate-in zoom-in-95">
         
-        {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <Target className="w-5 h-5 text-quantum-accent" />

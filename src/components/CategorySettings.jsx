@@ -1,8 +1,7 @@
 // src/components/CategorySettings.jsx
 import { useState, useEffect } from "react";
 import { X, Plus, Trash2, Settings, Tag, Search, Loader2, ArrowRight } from "lucide-react";
-import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc } from "firebase/firestore";
-// ✅ CORREÇÃO: Apontando para o novo cofre do Firebase
+import { collection, query, onSnapshot, addDoc, deleteDoc, doc } from "firebase/firestore";
 import { db } from "../shared/api/firebase"; 
 import toast from "react-hot-toast";
 
@@ -10,19 +9,15 @@ export default function CategorySettings({ uid, onClose }) {
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // Estados do Formulário
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  // Busca as regras em tempo real no Firebase
   useEffect(() => {
     if (!uid) return;
 
-    const q = query(
-      collection(db, "categoryRules"),
-      where("uid", "==", uid)
-    );
+    // ✅ CORREÇÃO: Coleção isolada por usuário (Segurança Máxima)
+    const q = query(collection(db, "users", uid, "categoryRules"));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({
@@ -30,7 +25,6 @@ export default function CategorySettings({ uid, onClose }) {
         ...doc.data()
       }));
       
-      // Ordena por ordem alfabética da palavra-chave
       data.sort((a, b) => a.keyword.localeCompare(b.keyword));
       
       setRules(data);
@@ -49,9 +43,9 @@ export default function CategorySettings({ uid, onClose }) {
 
     setIsSaving(true);
     try {
-      const rulesRef = collection(db, "categoryRules");
+      // ✅ CORREÇÃO: Gravação na subcoleção do usuário
+      const rulesRef = collection(db, "users", uid, "categoryRules");
       await addDoc(rulesRef, {
-        uid,
         keyword: keyword.trim().toLowerCase(),
         category
       });
@@ -69,7 +63,8 @@ export default function CategorySettings({ uid, onClose }) {
 
   const handleDeleteRule = async (ruleId) => {
     try {
-      await deleteDoc(doc(db, "categoryRules", ruleId));
+      // ✅ CORREÇÃO: Exclusão na subcoleção do usuário
+      await deleteDoc(doc(db, "users", uid, "categoryRules", ruleId));
       toast.success("Regra desativada.");
     } catch (error) {
       console.error("Erro ao apagar regra:", error);
@@ -87,7 +82,6 @@ export default function CategorySettings({ uid, onClose }) {
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-quantum-card w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl border border-quantum-border zoom-in-95 flex flex-col max-h-[90vh]">
         
-        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-quantum-border/50 bg-slate-900/50">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-indigo-500/20 text-indigo-400 rounded-2xl border border-indigo-500/20">
@@ -103,10 +97,8 @@ export default function CategorySettings({ uid, onClose }) {
           </button>
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
           
-          {/* Nova Regra Form */}
           <div className="bg-slate-900/30 rounded-2xl p-5 border border-white/5">
             <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider flex items-center gap-2">
               <Plus className="w-4 h-4 text-indigo-400" /> Nova Regra
@@ -151,7 +143,6 @@ export default function CategorySettings({ uid, onClose }) {
             </form>
           </div>
 
-          {/* Lista de Regras */}
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">

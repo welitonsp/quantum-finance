@@ -1,36 +1,38 @@
 // src/features/transactions/AccountsManager.jsx
 import { useState, useMemo } from 'react';
 import { Plus, Building2, PiggyBank, TrendingUp, CreditCard, Landmark, Trash2, Wallet } from 'lucide-react';
-// ✅ CORREÇÃO: Voltando duas pastas para achar os hooks
 import { useAccounts } from '../../hooks/useAccounts';
+import Decimal from 'decimal.js'; // ✅ Adicionado Precisão Bancária
 
 export default function AccountsManager({ uid }) {
   const { accounts, loadingAccounts, addAccount, removeAccount } = useAccounts(uid);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // ✅ Estado do Modal de Apagar
+  const [accountToDelete, setAccountToDelete] = useState(null);
 
-  // Estados do formulário
   const [name, setName] = useState('');
   const [type, setType] = useState('corrente');
   const [balance, setBalance] = useState('');
 
-  // 1. CÁLCULOS DE PATRIMÓNIO
+  // ✅ CORREÇÃO: Cálculos com Decimal.js para evitar falhas de ponto flutuante
   const { totalAtivos, totalPassivos, patrimonioLiquido } = useMemo(() => {
-    let ativos = 0;
-    let passivos = 0;
+    let ativos = new Decimal(0);
+    let passivos = new Decimal(0);
 
     accounts.forEach(acc => {
-      const val = Number(acc.balance);
+      const val = new Decimal(acc.balance || 0);
       if (['corrente', 'poupanca', 'investimento'].includes(acc.type)) {
-        ativos += val;
+        ativos = ativos.plus(val);
       } else if (['cartao', 'divida'].includes(acc.type)) {
-        passivos += Math.abs(val); // Passivos são sempre tratados como valor absoluto para a soma
+        passivos = passivos.plus(val.abs());
       }
     });
 
     return {
-      totalAtivos: ativos,
-      totalPassivos: passivos,
-      patrimonioLiquido: ativos - passivos
+      totalAtivos: ativos.toNumber(),
+      totalPassivos: passivos.toNumber(),
+      patrimonioLiquido: ativos.minus(passivos).toNumber()
     };
   }, [accounts]);
 
@@ -39,7 +41,6 @@ export default function AccountsManager({ uid }) {
     if (!name.trim() || !balance) return;
 
     try {
-      // Ajuste automático: se for cartão ou dívida e o user meter positivo, transformamos em negativo
       let finalBalance = Number(balance);
       if (['cartao', 'divida'].includes(type) && finalBalance > 0) {
          finalBalance = -finalBalance;
@@ -66,13 +67,33 @@ export default function AccountsManager({ uid }) {
     }
   };
 
-  const formatCurrency = (val) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-  };
+  const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      {/* 2. HEADER E BOTÃO DE ADICIONAR */}
+      
+      {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO */}
+      {accountToDelete && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl border dark:border-white/10 animate-in zoom-in-95">
+            <h3 className="text-lg font-bold dark:text-white mb-2">Apagar "{accountToDelete.name}"?</h3>
+            <p className="text-sm text-slate-500 mb-6">
+              Esta ação remove a conta da visão, mas <strong>não apaga</strong> as transações associadas.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setAccountToDelete(null)}
+                className="px-5 py-2.5 rounded-xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                Cancelar
+              </button>
+              <button onClick={() => { removeAccount(accountToDelete.id); setAccountToDelete(null); }}
+                className="px-5 py-2.5 rounded-xl font-bold bg-red-600 text-white hover:bg-red-700 transition-colors">
+                Apagar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-xl font-black text-slate-800 dark:text-white tracking-tight">As Suas Contas</h2>
@@ -86,7 +107,6 @@ export default function AccountsManager({ uid }) {
         </button>
       </div>
 
-      {/* 3. CARDS DE RESUMO (KPIs) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white dark:bg-slate-900/50 p-5 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm">
           <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Património Líquido</p>
@@ -104,7 +124,6 @@ export default function AccountsManager({ uid }) {
         </div>
       </div>
 
-      {/* 4. LISTA DE CONTAS */}
       {loadingAccounts ? (
         <div className="text-center py-10 text-slate-500 animate-pulse font-bold">A carregar os seus cofres...</div>
       ) : accounts.length === 0 ? (
@@ -117,7 +136,6 @@ export default function AccountsManager({ uid }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {accounts.map(acc => (
             <div key={acc.id} className="bg-white dark:bg-slate-900/60 p-5 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm hover:border-indigo-500/30 transition-colors group relative overflow-hidden">
-               {/* Decoração sutil de fundo baseada no tipo */}
                <div className={`absolute -right-6 -bottom-6 w-24 h-24 rounded-full blur-2xl opacity-10 pointer-events-none 
                   ${['cartao', 'divida'].includes(acc.type) ? 'bg-red-500' : 'bg-emerald-500'}`}>
                </div>
@@ -132,8 +150,9 @@ export default function AccountsManager({ uid }) {
                      <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mt-0.5">{acc.type}</p>
                    </div>
                  </div>
+                 {/* ✅ CORREÇÃO: Abre o modal de Delete */}
                  <button 
-                   onClick={() => removeAccount(acc.id)}
+                   onClick={() => setAccountToDelete(acc)}
                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
                    title="Apagar Conta"
                  >
@@ -152,7 +171,6 @@ export default function AccountsManager({ uid }) {
         </div>
       )}
 
-      {/* 5. MODAL DE ADICIONAR CONTA */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>

@@ -1,8 +1,7 @@
 // src/App.jsx
-// ✅ INJEÇÃO DE PERFORMANCE: Importação do 'lazy', 'Suspense' e 'React'
 import React, { useEffect, useState, useRef, useCallback, lazy, Suspense } from "react";
-// ✅ CORREÇÃO: Adicionado o /index para o Vite encontrar o ficheiro exato
-import { auth } from "./shared/api/firebase/index";
+// ✅ CORREÇÃO: Adicionada a extensão .js para evitar erros no build ESM do Vite
+import { auth } from "./shared/api/firebase/index.js";
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
 import { BrainCircuit, AlertTriangle, Loader2 } from "lucide-react";
 import toast, { Toaster } from 'react-hot-toast';
@@ -17,7 +16,6 @@ import { FirestoreService } from "./shared/services/FirestoreService";
 
 // ==========================================
 // 🛡️ O ESCUDO DE CONTENÇÃO (Error Boundary)
-// Impede que um erro num gráfico destrua a aplicação inteira
 // ==========================================
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null }; }
@@ -59,7 +57,6 @@ import MarketTicker from "./components/MarketTicker";
 
 // ==========================================
 // ⚡ COMPONENTES PESADOS (Lazy Loading)
-// Só carregam quando o utilizador clica na página correspondente!
 // ==========================================
 const DashboardContent = lazy(() => import("./components/DashboardContent"));
 const CategorySettings = lazy(() => import("./components/CategorySettings"));
@@ -72,7 +69,6 @@ const MarketsPage = lazy(() => import("./components/MarketsPage"));
 const QuantumAIPage = lazy(() => import("./components/QuantumAIPage"));
 const HistoryPage = lazy(() => import("./components/HistoryPage"));
 
-// Componente Interno que consome o Contexto de Navegação
 const AuthenticatedApp = ({ user }) => {
   const { theme, toggleTheme } = useTheme();
   const { togglePrivacy } = usePrivacy();
@@ -96,23 +92,21 @@ const AuthenticatedApp = ({ user }) => {
   useEffect(() => localStorage.setItem('quantum_sidebar_collapsed', JSON.stringify(isSidebarCollapsed)), [isSidebarCollapsed]);
   useEffect(() => localStorage.setItem('quantum_monthly_goal', monthlyGoal), [monthlyGoal]);
 
-  // Atalhos de Teclado
+  // ✅ CORREÇÃO: Tratamento seguro para `e.key` (Prevenção de Crash)
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
-      if (e.altKey && e.key.toLowerCase() === 'p') { e.preventDefault(); togglePrivacy(); toast.success("Modo Privacidade Alternado!", { icon: '🔒' }); }
-      if (e.altKey && e.key.toLowerCase() === 'n') { e.preventDefault(); setIsFormOpen(true); }
+      if (e.altKey && e.key?.toLowerCase() === 'p') { e.preventDefault(); togglePrivacy(); toast.success("Modo Privacidade Alternado!", { icon: '🔒' }); }
+      if (e.altKey && e.key?.toLowerCase() === 'n') { e.preventDefault(); setIsFormOpen(true); }
       if (e.key === 'Escape') { setIsFormOpen(false); setIsAIChatOpen(false); setTransactionToDelete(null); }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [togglePrivacy]);
 
-  // DADOS DO FIREBASE E CÁLCULOS
   const { transactions, loading, add, remove, removeBatch, update } = useTransactions(user?.uid);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData } = useFinancialData(transactions, activeModule, currentMonth, currentYear);
 
-  // Alerta de Gastos Atípicos
   const notifiedLargeTxRef = useRef(new Set());
   useEffect(() => {
     if (!displayedTransactions.length) return;
@@ -146,10 +140,15 @@ const AuthenticatedApp = ({ user }) => {
         if (monthCounts[monthYear] > maxCount) { maxCount = monthCounts[monthYear]; bestDate = d; }
       }
     });
-    if (bestDate) {
+    
+    // ✅ CORREÇÃO: Prevenção caso bestDate venha num formato inesperado sem hífen
+    if (bestDate && bestDate.includes('-')) {
       const [y, m] = bestDate.split('-');
-      setCurrentMonth(Number(m)); setCurrentYear(Number(y));
+      if (y && m) {
+        setCurrentMonth(Number(m)); setCurrentYear(Number(y));
+      }
     }
+    
     if (transacoesImportadas[0]?.account) setActiveModule(transacoesImportadas[0].account);
     return result;
   }, [user, setCurrentMonth, setCurrentYear, setActiveModule]);
@@ -243,7 +242,6 @@ const AuthenticatedApp = ({ user }) => {
           <main className="flex-1 overflow-y-auto custom-scrollbar relative">
             <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-12 transition-all duration-300">
               
-              {/* 🛡️ ESCUDO E CARREGAMENTO NAS PÁGINAS */}
               <ErrorBoundary>
                 <Suspense fallback={<PageLoader />}>
                   {currentPage === 'dashboard' && (
@@ -297,7 +295,6 @@ const AuthenticatedApp = ({ user }) => {
         </div>
       </div>
 
-      {/* 🛡️ ESCUDO NOS MODAIS E CHAT */}
       {isSettingsOpen && (
         <ErrorBoundary>
           <Suspense fallback={null}>
@@ -319,9 +316,6 @@ const AuthenticatedApp = ({ user }) => {
   );
 };
 
-// ==========================================
-// ORQUESTRADOR PRINCIPAL
-// ==========================================
 export default function App() {
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);

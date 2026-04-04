@@ -1,8 +1,20 @@
 // src/components/Header.jsx
 import { Menu, ChevronLeft, ChevronRight, Sun, Moon, Plus, Eye, EyeOff } from "lucide-react";
-// ✅ CORREÇÃO: Apontando para a nova morada do ImportButton na Arquitetura FSD
 import ImportButton from "../features/transactions/ImportButton";
 import { usePrivacy } from "../contexts/PrivacyContext";
+
+// ✅ CORREÇÃO: Mapa Dinâmico de Títulos
+const PAGE_TITLES = {
+  dashboard:  'Painel Central',
+  reports:    'Relatórios Analíticos',
+  history:    'Livro Razão',
+  wallet:     'Carteira',
+  accounts:   'As Minhas Contas',
+  portfolio:  'Portfólio',
+  markets:    'Mercados',
+  quantum:    'Quantum AI',
+  recurring:  'Despesas Recorrentes',
+};
 
 export default function Header({
   currentPage,
@@ -23,6 +35,7 @@ export default function Header({
   handleImport
 }) {
   const { isPrivacyMode, togglePrivacy } = usePrivacy();
+  const pageTitle = PAGE_TITLES[currentPage] || 'Quantum Finance';
 
   return (
     <header className="h-24 border-b border-slate-200 dark:border-white/5 bg-white/50 dark:bg-slate-950/30 backdrop-blur-md flex items-center justify-between px-4 lg:px-8 flex-shrink-0 transition-all z-40 relative">
@@ -40,7 +53,7 @@ export default function Header({
         </button>
 
         <h2 className="text-xl md:text-2xl font-black text-slate-800 dark:text-white tracking-wide hidden sm:block">
-          {currentPage === 'dashboard' ? 'Painel Central' : 'Relatórios Analíticos'}
+          {pageTitle}
         </h2>
       </div>
 
@@ -50,7 +63,6 @@ export default function Header({
          </button>
          
          <div className="flex flex-col items-center justify-center w-28 md:w-40">
-           {/* ✅ CORREÇÃO AQUI: Programação Defensiva */}
            <span className="text-xs md:text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">
              {nomeMeses && currentMonth ? nomeMeses[currentMonth - 1] : 'MÊS'}
            </span>
@@ -65,7 +77,6 @@ export default function Header({
       </div>
 
       <div className="flex items-center gap-2 md:gap-4">
-        {/* BOTÃO MODO PRIVACIDADE */}
         <button 
           onClick={togglePrivacy} 
           className={`p-3 rounded-xl border transition-all shadow-sm dark:shadow-none ${isPrivacyMode ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-500/30' : 'bg-white dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-white/5'}`}

@@ -1,8 +1,8 @@
 // src/features/transactions/TransactionForm.jsx
 import { useState, useEffect } from "react";
-// ✅ INJEÇÃO: Adicionamos o ícone Loader2 para feedback visual
 import { Save, X, Tag, DollarSign, Calendar, FileText, AlertCircle, Loader2 } from "lucide-react";
-import { transactionSchema } from "../../shared/schemas/financialSchemas";
+// ✅ CORREÇÃO: Adicionada a importação do toCentavos
+import { transactionSchema, toCentavos } from "../../shared/schemas/financialSchemas";
 
 export default function TransactionForm({ onSave, editingTransaction, onCancelEdit }) {
   const [description, setDescription] = useState("");
@@ -12,7 +12,6 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
   const [date, setDate] = useState("");
   
   const [errors, setErrors] = useState({});
-  // ✅ NOVO ESCUDO: Estado para bloquear o botão durante o salvamento
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -31,19 +30,19 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
     }
   }, [editingTransaction]);
 
-  // ✅ Função agora é assíncrona para aguardar a base de dados
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (isSubmitting) return; // Barreira extra contra duplo clique
+    if (isSubmitting) return; 
     
     setErrors({});
-    setIsSubmitting(true); // Bloqueia a interface
+    setIsSubmitting(true); 
 
     try {
       const formData = {
         description,
-        value: Number(value),
+        // ✅ CORREÇÃO CRÍTICA: O valor entra no Zod já convertido para centavos exatos (Inteiro)
+        value: value ? toCentavos(value) : 0, 
         type,
         category: category || "Diversos",
         date
@@ -57,11 +56,10 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
           formattedErrors[issue.path[0]] = issue.message;
         });
         setErrors(formattedErrors);
-        setIsSubmitting(false); // Liberta a interface se houver erro
+        setIsSubmitting(false); 
         return; 
       }
 
-      // Aguarda a promessa do onSave (Firebase) terminar
       await onSave({
         ...result.data,
         createdAt: date ? new Date(`${date}T12:00:00`).toISOString() : new Date().toISOString()
@@ -74,9 +72,8 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
       }
     } catch (error) {
       console.error("Erro ao salvar transação:", error);
-      // Aqui poderíamos adicionar um Toast de erro genérico no futuro
     } finally {
-      setIsSubmitting(false); // Liberta o botão independentemente do resultado
+      setIsSubmitting(false); 
     }
   };
 
@@ -210,7 +207,6 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
           disabled={isSubmitting}
           className="px-6 py-2.5 text-xs font-bold uppercase tracking-widest rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 text-white shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
         >
-          {/* Mostra o ícone de carregamento a girar se estiver a gravar, senão mostra o ícone normal */}
           {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} 
           {isSubmitting ? "A Guardar..." : (editingTransaction ? "Guardar Alterações" : "Registar Transação")}
         </button>

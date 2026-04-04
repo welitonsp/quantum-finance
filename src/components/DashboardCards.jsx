@@ -1,14 +1,12 @@
+// src/components/DashboardCards.jsx
 import { Wallet, ArrowUpRight, ArrowDownRight, Atom, TrendingUp } from "lucide-react";
 import { usePrivacy } from "../contexts/PrivacyContext";
 
-// Componente interno para gerar as "Sparklines" (Mini-gráficos) com SVG puro
-// Isto é muito mais leve do que usar bibliotecas de gráficos completas para pequenos detalhes!
 const Sparkline = ({ data, color, gradientId }) => {
   const max = Math.max(...data);
   const min = Math.min(...data);
   const range = max - min || 1;
   
-  // Calcula os pontos da linha baseados nos dados
   const points = data.map((d, i) => `${(i / (data.length - 1)) * 100},${100 - ((d - min) / range) * 100}`).join(' ');
   const fillPoints = `0,100 ${points} 100,100`;
 
@@ -28,6 +26,13 @@ const Sparkline = ({ data, color, gradientId }) => {
   );
 };
 
+// ✅ CORREÇÃO: Componente de aviso legal para dados simulados
+const SimulationBadge = () => (
+  <span className="inline-flex items-center justify-center px-1.5 py-0.5 bg-amber-500/15 text-amber-400 text-[9px] font-bold rounded border border-amber-500/20 uppercase tracking-widest ml-2 align-middle" title="Dado projetado/simulado">
+    Simulação
+  </span>
+);
+
 export default function DashboardCards({ balances }) {
   const { isPrivacyMode } = usePrivacy();
 
@@ -35,15 +40,13 @@ export default function DashboardCards({ balances }) {
   const entradas = Number(balances?.entradas) || 0;
   const saidas = Number(balances?.saidas) || 0;
 
-  // Dados fictícios para dar vida aos mini-gráficos (No futuro podemos ligar ao histórico real)
   const sparkDataSaldo = [30, 40, 35, 50, 49, 60, 75, 90];
   const sparkDataEntradas = [10, 20, 15, 40, 35, 50, 65, 80];
-  const sparkDataSaidas = [60, 50, 55, 40, 45, 30, 25, 10]; // Tendência de queda é bom para saídas
+  const sparkDataSaidas = [60, 50, 55, 40, 45, 30, 25, 10]; 
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
       
-      {/* 1. CARTÃO DE SALDO TOTAL */}
       <div className="glass-card-quantum p-6 flex flex-col justify-between group">
         <div className="flex justify-between items-start mb-2">
           <span className="text-sm font-semibold text-quantum-fgMuted tracking-wide">Saldo Total</span>
@@ -67,13 +70,12 @@ export default function DashboardCards({ balances }) {
             <span className="bg-quantum-accentDim text-quantum-accent text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
               <TrendingUp className="w-3 h-3" /> 12.4%
             </span>
-            <span className="text-xs text-quantum-fgMuted">vs mês anterior</span>
+            <span className="text-xs text-quantum-fgMuted">vs mês anterior <SimulationBadge /></span>
           </div>
           <Sparkline data={sparkDataSaldo} color="#00E68A" gradientId="gradSaldo" />
         </div>
       </div>
 
-      {/* 2. CARTÃO DE ENTRADAS */}
       <div className="glass-card-quantum p-6 flex flex-col justify-between group">
         <div className="flex justify-between items-start mb-2">
           <span className="text-sm font-semibold text-quantum-fgMuted tracking-wide">Entradas</span>
@@ -97,13 +99,12 @@ export default function DashboardCards({ balances }) {
             <span className="bg-quantum-goldDim text-quantum-gold text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
               <TrendingUp className="w-3 h-3" /> 8.7%
             </span>
-            <span className="text-xs text-quantum-fgMuted">rendimento</span>
+            <span className="text-xs text-quantum-fgMuted">rendimento <SimulationBadge /></span>
           </div>
           <Sparkline data={sparkDataEntradas} color="#FFB800" gradientId="gradEntradas" />
         </div>
       </div>
 
-      {/* 3. CARTÃO DE SAÍDAS */}
       <div className="glass-card-quantum p-6 flex flex-col justify-between group">
         <div className="flex justify-between items-start mb-2">
           <span className="text-sm font-semibold text-quantum-fgMuted tracking-wide">Saídas</span>
@@ -127,13 +128,12 @@ export default function DashboardCards({ balances }) {
             <span className="bg-quantum-accentDim text-quantum-accent text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
               <TrendingUp className="w-3 h-3" /> 4.2%
             </span>
-            <span className="text-xs text-quantum-fgMuted">economia</span>
+            <span className="text-xs text-quantum-fgMuted">economia <SimulationBadge /></span>
           </div>
           <Sparkline data={sparkDataSaidas} color="#FF4757" gradientId="gradSaidas" />
         </div>
       </div>
 
-      {/* 4. CARTÃO QUANTUM SCORE (Novo!) */}
       <div className="glass-card-quantum p-6 flex flex-col justify-between group">
         <div className="flex justify-between items-start mb-2">
           <span className="text-sm font-semibold text-quantum-fgMuted tracking-wide">Quantum Score</span>
@@ -143,8 +143,8 @@ export default function DashboardCards({ balances }) {
         </div>
         
         <div>
-          <h3 className="text-3xl font-mono font-bold tracking-tight text-quantum-purple mt-2">
-            94.7
+          <h3 className="text-3xl font-mono font-bold tracking-tight text-quantum-purple mt-2 flex items-center">
+            94.7 <SimulationBadge />
           </h3>
           <div className="flex items-center gap-2 mt-2 mb-4">
             <span className="bg-quantum-purpleDim text-quantum-purple text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
@@ -153,7 +153,6 @@ export default function DashboardCards({ balances }) {
             <span className="text-xs text-quantum-fgMuted">precisão da IA</span>
           </div>
           
-          {/* Barra de Progresso do Score */}
           <div className="w-full h-1.5 bg-quantum-bg rounded-full overflow-hidden mt-6">
             <div 
               className="h-full rounded-full transition-all duration-1000 ease-out"

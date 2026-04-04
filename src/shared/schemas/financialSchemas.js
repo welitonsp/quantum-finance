@@ -1,5 +1,6 @@
 // src/shared/schemas/financialSchemas.js
 import { z } from 'zod';
+import Decimal from 'decimal.js';
 
 export const ALLOWED_CATEGORIES = [
   'Alimentação', 'Transporte', 'Assinaturas', 'Educação', 'Saúde', 
@@ -12,7 +13,20 @@ export const transactionSchema = z.object({
   value: z.number().int("O valor deve ser em centavos").positive("O valor deve ser positivo"),
   type: z.enum(['entrada', 'saida'], { errorMap: () => ({ message: "O tipo tem de ser 'entrada' ou 'saida'" }) }),
   category: z.enum(ALLOWED_CATEGORIES, { errorMap: () => ({ message: "Categoria inválida" }) }),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "A data deve estar no formato YYYY-MM-DD"),
+  date: z.string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Formato inválido. Use YYYY-MM-DD")
+    .refine(val => {
+      const d = new Date(val);
+      const hoje = new Date();
+      
+      const doisAnosAtras = new Date();
+      doisAnosAtras.setFullYear(hoje.getFullYear() - 2);
+      
+      const trintaDiasFrente = new Date();
+      trintaDiasFrente.setDate(hoje.getDate() + 30);
+      
+      return d >= doisAnosAtras && d <= trintaDiasFrente;
+    }, { message: "Data fora do intervalo (até 2 anos atrás, até 30 dias à frente)" }),
   accountId: z.string().optional(),
   isRecurring: z.boolean().default(false)
 });
@@ -30,6 +44,19 @@ export function validateTransaction(data) {
   return transactionSchema.safeParse(data);
 }
 
-// ✅ AQUI ESTÃO AS FUNÇÕES MATEMÁTICAS QUE O SISTEMA PROCURA!
-export const toCentavos = (val) => Math.round(Number(val) * 100);
-export const fromCentavos = (val) => Number(val) / 100;
+// ✅ CORREÇÃO: Conversores com precisão bancária (Decimal.js)
+export const toCentavos = (val) => {
+  if (val === null || val === undefined || val === '') return 0;
+  return new Decimal(String(val))
+    .times(100)
+    .toDecimalPlaces(0, Decimal.ROUND_HALF_UP)
+    .toNumber();
+};
+
+export const fromCentavos = (val) => {
+  if (val === null || val === undefined) return 0;
+  return new Decimal(String(val))
+    .dividedBy(100)
+    .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+    .toNumber();
+};

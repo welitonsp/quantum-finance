@@ -1,12 +1,7 @@
-// src/components/CategoryPieChart.jsx
-
+// src/features/reports/CategoryPieChart.jsx
 import { Pie } from "react-chartjs-2";
-import {
-  Chart as ChartJS,
-  ArcElement,
-  Tooltip,
-  Legend,
-} from "chart.js";
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
+import Decimal from 'decimal.js';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -23,8 +18,14 @@ export default function CategoryPieChart({ transactions }) {
 
   transactions.forEach((t) => {
     const category = t.category || "Sem categoria";
-    categoryTotals[category] =
-      (categoryTotals[category] || 0) + (t.value || 0);
+    const current = categoryTotals[category] 
+      ? new Decimal(categoryTotals[category]) 
+      : new Decimal(0);
+      
+    // ✅ CORREÇÃO: Acumulação segura de decimais
+    categoryTotals[category] = current
+      .plus(new Decimal(t.value || 0))
+      .toNumber();
   });
 
   const data = {
@@ -33,12 +34,7 @@ export default function CategoryPieChart({ transactions }) {
       {
         data: Object.values(categoryTotals),
         backgroundColor: [
-          "#6366f1",
-          "#22c55e",
-          "#f97316",
-          "#ef4444",
-          "#14b8a6",
-          "#eab308",
+          "#6366f1", "#22c55e", "#f97316", "#ef4444", "#14b8a6", "#eab308"
         ],
       },
     ],

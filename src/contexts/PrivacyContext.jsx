@@ -1,3 +1,4 @@
+// src/contexts/PrivacyContext.jsx
 import { createContext, useContext, useEffect, useState } from 'react';
 
 const PrivacyContext = createContext();
@@ -21,4 +22,11 @@ export function PrivacyProvider({ children }) {
   );
 }
 
-export const usePrivacy = () => useContext(PrivacyContext);
+// ✅ CORREÇÃO: Guard Clause para evitar erros silenciosos
+export const usePrivacy = () => {
+  const context = useContext(PrivacyContext);
+  if (!context) {
+    throw new Error('usePrivacy deve ser usado dentro de um PrivacyProvider');
+  }
+  return context;
+};

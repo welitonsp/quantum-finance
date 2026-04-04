@@ -1,7 +1,8 @@
-// src/components/ReportsDashboard.jsx
+// src/features/reports/ReportsDashboard.jsx
 import { useMemo } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import { TrendingUp, TrendingDown, Target, BrainCircuit, AlertTriangle } from "lucide-react";
+import Decimal from 'decimal.js';
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
@@ -21,21 +22,25 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function ReportsDashboard({ transactions, balances }) {
-  // Cálculos Avançados
-  const receitas = Number(balances.entradas) || 0;
-  const despesas = Number(balances.saidas) || 0;
-  const saldo = receitas - despesas;
+  // ✅ CORREÇÃO: Cálculos rigorosos de Saldo e Poupança
+  const rec = new Decimal(balances.entradas || 0);
+  const desp = new Decimal(balances.saidas || 0);
+  const saldoDecimal = rec.minus(desp);
   
-  // Taxa de Poupança (Savings Rate)
-  const savingsRate = receitas > 0 ? ((saldo / receitas) * 100) : 0;
+  const savingsRate = rec.greaterThan(0) 
+    ? saldoDecimal.dividedBy(rec).times(100).toDecimalPlaces(1).toNumber()
+    : 0;
+    
+  const receitas = rec.toNumber();
+  const despesas = desp.toNumber();
   
-  // Agrupamento por Categoria para o Gráfico
   const categoryMap = useMemo(() => {
     const map = {};
     transactions.forEach(tx => {
       if (tx.type === 'saida') {
         const cat = tx.category || 'Diversos';
-        map[cat] = (map[cat] || 0) + Math.abs(Number(tx.value));
+        const val = new Decimal(Math.abs(Number(tx.value)));
+        map[cat] = map[cat] ? new Decimal(map[cat]).plus(val).toNumber() : val.toNumber();
       }
     });
     return map;
@@ -48,18 +53,14 @@ export default function ReportsDashboard({ transactions, balances }) {
     color: COLORS[index % COLORS.length]
   })).sort((a, b) => b.value - a.value);
 
-  // Dados para o Gráfico de Barras (Receitas vs Despesas)
   const cashflowData = [
     { name: 'Fluxo Mensal', Receitas: receitas, Despesas: despesas }
   ];
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out">
-      
-      {/* Secção 1: Indicadores Chave de Desempenho (KPIs) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         
-        {/* Taxa de Poupança */}
         <div className="glass-card-quantum p-6 gradient-border-indigo flex flex-col justify-center">
           <div className="flex items-center gap-2 mb-2">
             <Target className="w-5 h-5 text-indigo-400" />
@@ -73,7 +74,6 @@ export default function ReportsDashboard({ transactions, balances }) {
           </p>
         </div>
 
-        {/* Custo de Vida */}
         <div className="glass-card-quantum p-6 border-t-4 border-slate-700 flex flex-col justify-center">
           <div className="flex items-center gap-2 mb-2">
             <TrendingDown className="w-5 h-5 text-slate-400" />
@@ -85,7 +85,6 @@ export default function ReportsDashboard({ transactions, balances }) {
           <p className="text-[10px] text-slate-500 uppercase mt-2">Total queimado neste mês</p>
         </div>
 
-        {/* Insight da IA (Hardcoded para este MVP) */}
         <div className="glass-card-quantum p-6 lg:col-span-2 bg-indigo-500/5 border border-indigo-500/20">
           <div className="flex items-center gap-2 mb-3">
             <BrainCircuit className="w-5 h-5 text-indigo-400" />
@@ -108,10 +107,7 @@ export default function ReportsDashboard({ transactions, balances }) {
         </div>
       </div>
 
-      {/* Secção 2: Visualização de Dados (Gráficos) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* Gráfico de Barras: Fluxo de Caixa */}
         <div className="glass-card-quantum p-6 h-[400px] flex flex-col">
           <h2 className="text-sm font-bold uppercase tracking-widest text-slate-300 mb-6">Receitas vs Despesas</h2>
           <div className="flex-1 w-full">
@@ -129,7 +125,6 @@ export default function ReportsDashboard({ transactions, balances }) {
           </div>
         </div>
 
-        {/* Gráfico de Pizza: Distribuição de Despesas */}
         <div className="glass-card-quantum p-6 h-[400px] flex flex-col">
           <h2 className="text-sm font-bold uppercase tracking-widest text-slate-300 mb-6">Distribuição de Gastos</h2>
           {categoryData.length > 0 ? (
@@ -143,7 +138,6 @@ export default function ReportsDashboard({ transactions, balances }) {
                   <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', color: '#94a3b8' }} />
                 </PieChart>
               </ResponsiveContainer>
-              {/* Centro do Gráfico */}
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-10">
                 <span className="text-[10px] text-slate-500 uppercase tracking-widest">Total Gasto</span>
                 <span className="text-xl font-bold font-mono text-white">R$ {despesas.toLocaleString("pt-BR")}</span>
@@ -156,7 +150,6 @@ export default function ReportsDashboard({ transactions, balances }) {
             </div>
           )}
         </div>
-
       </div>
     </div>
   );

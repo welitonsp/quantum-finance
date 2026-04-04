@@ -2,10 +2,7 @@
 import { useState } from 'react';
 import { Activity, Landmark, CreditCard } from 'lucide-react';
 import { useNavigation } from '../contexts/NavigationContext';
-// ✅ CORREÇÃO 1: Apontando para o cofre do Firebase no shared
-import { auth } from '../shared/api/firebase/index.js'; 
 
-// Componentes da Interface que continuam na pasta components
 import DashboardCards from './DashboardCards';
 import PortfolioChart from './PortfolioChart'; 
 import MarketAssets from './MarketAssets';               
@@ -20,14 +17,13 @@ import ForecastWidget from './ForecastWidget';
 import WealthKPIs from './WealthKPIs';
 import QuantumInsights from './QuantumInsights';
 
-// ✅ CORREÇÃO 2: Apontando para as novas Features
 import TransactionsManager from '../features/transactions/TransactionsManager';
 import TransactionForm from '../features/transactions/TransactionForm';
 
-// ✅ CORREÇÃO 3: Importando o Hook da pasta correta
 import { useFinancialMetrics } from '../hooks/useFinancialMetrics';
 
 export default function DashboardContent({
+  user, // ✅ RECEBIDO DO APP.JSX PARA MAIOR CONFIANÇA
   transactions,
   loading,
   moduleBalances,
@@ -52,9 +48,9 @@ export default function DashboardContent({
   const [selectedTradeAsset, setSelectedTradeAsset] = useState('');
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
 
-  // ✅ INJEÇÃO DO CÉREBRO DE KPIs
+  // ✅ CORREÇÃO: Utiliza a prop `user.uid`
   const { metrics, loadingMetrics } = useFinancialMetrics(
-    auth.currentUser?.uid, 
+    user?.uid, 
     transactions, 
     currentMonth, 
     currentYear
