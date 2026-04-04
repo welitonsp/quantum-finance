@@ -1,216 +1,168 @@
-// src/features/transactions/TransactionForm.jsx
-import { useState, useEffect } from "react";
-import { Save, X, Tag, DollarSign, Calendar, FileText, AlertCircle, Loader2 } from "lucide-react";
-// ✅ CORREÇÃO: Adicionada a importação do toCentavos
-import { transactionSchema, toCentavos } from "../../shared/schemas/financialSchemas";
+import React, { useState, useEffect } from 'react';
+import { X, Save, AlertCircle } from 'lucide-react';
+import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
 
 export default function TransactionForm({ onSave, editingTransaction, onCancelEdit }) {
-  const [description, setDescription] = useState("");
-  const [value, setValue] = useState("");
-  const [type, setType] = useState("saida");
-  const [category, setCategory] = useState("");
-  const [date, setDate] = useState("");
+  const [formData, setFormData] = useState({
+    description: '',
+    value: '',
+    type: 'saida',
+    category: ALLOWED_CATEGORIES[0],
+    date: new Date().toISOString().substring(0, 10)
+  });
   
-  const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (editingTransaction) {
-      setDescription(editingTransaction.description || "");
-      setValue(editingTransaction.value || "");
-      setType(editingTransaction.type || "saida");
-      setCategory(editingTransaction.category || "");
-      
-      const d = editingTransaction.createdAt?.toDate 
-        ? editingTransaction.createdAt.toDate() 
-        : new Date(editingTransaction.createdAt || Date.now());
-      setDate(d.toISOString().split('T')[0]);
-    } else {
-      setDate(new Date().toISOString().split('T')[0]);
+      setFormData({
+        description: editingTransaction.description || '',
+        value: editingTransaction.value || '',
+        type: editingTransaction.type || 'saida',
+        category: editingTransaction.category || ALLOWED_CATEGORIES[0],
+        date: editingTransaction.date ? editingTransaction.date.substring(0, 10) : new Date().toISOString().substring(0, 10)
+      });
     }
   }, [editingTransaction]);
 
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (isSubmitting) return; 
-    
-    setErrors({});
-    setIsSubmitting(true); 
+    if (isSubmitting) return;
+
+    if (!formData.description.trim() || !formData.value) {
+      setError('Preencha a descrição e o valor.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
 
     try {
-      const formData = {
-        description,
-        // ✅ CORREÇÃO CRÍTICA: O valor entra no Zod já convertido para centavos exatos (Inteiro)
-        value: value ? toCentavos(value) : 0, 
-        type,
-        category: category || "Diversos",
-        date
-      };
-
-      const result = transactionSchema.safeParse(formData);
-
-      if (!result.success) {
-        const formattedErrors = {};
-        result.error.issues.forEach((issue) => {
-          formattedErrors[issue.path[0]] = issue.message;
-        });
-        setErrors(formattedErrors);
-        setIsSubmitting(false); 
-        return; 
-      }
-
       await onSave({
-        ...result.data,
-        createdAt: date ? new Date(`${date}T12:00:00`).toISOString() : new Date().toISOString()
+        ...formData,
+        value: Number(formData.value)
       });
-      
-      if (!editingTransaction) {
-        setDescription("");
-        setValue("");
-        setCategory("");
-      }
-    } catch (error) {
-      console.error("Erro ao salvar transação:", error);
+    } catch (err) {
+      setError(err.message || 'Erro ao salvar transação.');
     } finally {
-      setIsSubmitting(false); 
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="text-lg font-bold text-white tracking-wide">
-            {editingTransaction ? "Editar Movimentação" : "Nova Movimentação"}
-          </h3>
-          <p className="text-xs text-slate-400">Dados validados via Protocolo Zod.</p>
-        </div>
-        {editingTransaction && (
-          <button 
-            type="button" 
-            onClick={onCancelEdit} 
-            disabled={isSubmitting}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-full transition-colors disabled:opacity-50"
-          >
+    <div className="relative">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-bold text-white">
+          {editingTransaction ? 'Editar Transação' : 'Nova Transação'}
+        </h2>
+        {onCancelEdit && (
+          <button onClick={onCancelEdit} className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-full transition-colors">
             <X className="w-5 h-5" />
           </button>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        
-        {/* Campo: Descrição */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">Descrição</label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <FileText className={`h-4 w-4 ${errors.description ? 'text-red-500' : 'text-slate-500'}`} />
-            </div>
-            <input 
-              type="text" 
-              value={description} 
-              onChange={e => setDescription(e.target.value)} 
-              disabled={isSubmitting}
-              className={`w-full bg-slate-900/50 border ${errors.description ? 'border-red-500/50' : 'border-white/10'} rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-500 transition-all disabled:opacity-50`} 
+      {error && (
+        <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-xl flex items-center gap-2 text-red-400 text-sm">
+          <AlertCircle className="w-4 h-4" />
+          {error}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="md:col-span-2">
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Descrição</label>
+            <input
+              type="text"
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              placeholder="Ex: Supermercado"
+              className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-quantum-accent"
+              autoFocus
             />
           </div>
-          {errors.description && <p className="text-[10px] text-red-500 font-bold flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.description}</p>}
-        </div>
 
-        {/* Campo: Valor */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">Valor (R$)</label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <DollarSign className={`h-4 w-4 ${errors.value ? 'text-red-500' : 'text-slate-500'}`} />
-            </div>
-            <input 
-              type="number" 
-              step="0.01" 
-              value={value} 
-              onChange={e => setValue(e.target.value)} 
-              disabled={isSubmitting}
-              className={`w-full bg-slate-900/50 border ${errors.value ? 'border-red-500/50' : 'border-white/10'} rounded-xl pl-10 pr-4 py-3 text-sm text-white font-mono focus:outline-none focus:border-indigo-500 transition-all disabled:opacity-50`} 
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Valor</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              name="value"
+              value={formData.value}
+              onChange={handleChange}
+              placeholder="0.00"
+              className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-quantum-accent"
             />
           </div>
-          {errors.value && <p className="text-[10px] text-red-500 font-bold flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.value}</p>}
-        </div>
 
-        {/* Campo: Tipo */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">Natureza</label>
-          <div className="flex gap-2 p-1 bg-slate-900/50 border border-white/10 rounded-xl">
-            <button 
-              type="button" 
-              disabled={isSubmitting}
-              onClick={() => setType('entrada')} 
-              className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all disabled:opacity-50 ${type === 'entrada' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400'}`}
-            >
-              Receita
-            </button>
-            <button 
-              type="button" 
-              disabled={isSubmitting}
-              onClick={() => setType('saida')} 
-              className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all disabled:opacity-50 ${type === 'saida' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'text-slate-400'}`}
-            >
-              Despesa
-            </button>
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Data</label>
+            <input
+              type="date"
+              name="date"
+              value={formData.date}
+              onChange={handleChange}
+              className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-quantum-accent"
+            />
           </div>
-        </div>
 
-        {/* Campo: Categoria */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">Categoria</label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Tag className={`h-4 w-4 ${errors.category ? 'text-red-500' : 'text-slate-500'}`} />
-            </div>
-            <select 
-              value={category} 
-              onChange={e => setCategory(e.target.value)}
-              disabled={isSubmitting}
-              className={`w-full bg-slate-900/50 border ${errors.category ? 'border-red-500/50' : 'border-white/10'} rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-500 transition-all appearance-none disabled:opacity-50`}
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Tipo</label>
+            <select
+              name="type"
+              value={formData.type}
+              onChange={handleChange}
+              className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-quantum-accent"
             >
-              <option value="">Selecione...</option>
-              <option value="Alimentação">Alimentação</option>
-              <option value="Transporte">Transporte</option>
-              <option value="Lazer">Lazer</option>
-              <option value="Saúde">Saúde</option>
-              <option value="Moradia">Moradia</option>
-              <option value="Assinaturas">Assinaturas</option>
-              <option value="Educação">Educação</option>
-              <option value="Investimento">Investimento</option>
-              <option value="Salário">Salário</option>
-              <option value="Diversos">Diversos</option>
+              <option value="saida">Despesa (Saída)</option>
+              <option value="entrada">Receita (Entrada)</option>
             </select>
           </div>
-          {errors.category && <p className="text-[10px] text-red-500 font-bold flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.category}</p>}
-        </div>
-        
-        <div className="space-y-2 md:col-span-2">
-          <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">Data</label>
-          <input 
-            type="date" 
-            value={date} 
-            onChange={e => setDate(e.target.value)} 
-            disabled={isSubmitting}
-            className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-500 [color-scheme:dark] disabled:opacity-50" 
-          />
-        </div>
-      </div>
 
-      <div className="pt-6 flex justify-end gap-3 border-t border-white/10">
-        <button 
-          type="submit" 
-          disabled={isSubmitting}
-          className="px-6 py-2.5 text-xs font-bold uppercase tracking-widest rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 text-white shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
-        >
-          {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} 
-          {isSubmitting ? "A Guardar..." : (editingTransaction ? "Guardar Alterações" : "Registar Transação")}
-        </button>
-      </div>
-    </form>
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Categoria</label>
+            <select
+              name="category"
+              value={formData.category}
+              onChange={handleChange}
+              className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-quantum-accent"
+            >
+              {ALLOWED_CATEGORIES.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="pt-4 mt-6 border-t border-white/5 flex justify-end gap-3">
+          {onCancelEdit && (
+            <button
+              type="button"
+              onClick={onCancelEdit}
+              className="px-6 py-3 rounded-xl font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >
+              Cancelar
+            </button>
+          )}
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="flex items-center gap-2 px-6 py-3 bg-quantum-accent text-slate-900 font-bold rounded-xl hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Save className="w-5 h-5" />
+            {isSubmitting ? 'A Guardar...' : 'Guardar Transação'}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }

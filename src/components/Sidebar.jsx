@@ -1,98 +1,127 @@
-import { Wallet, LayoutDashboard, PieChart, Settings, LogOut } from "lucide-react";
+import React from 'react';
+import { useNavigation } from '../contexts/NavigationContext';
+import { 
+  LayoutDashboard, PieChart, Settings, LogOut, 
+  Landmark, TrendingUp, BarChart2, BrainCircuit, Repeat, Clock, X 
+} from "lucide-react";
 
-export default function Sidebar({ 
-  user, 
-  currentPage, 
-  setCurrentPage, 
-  isMobileMenuOpen, 
-  setIsMobileMenuOpen, 
-  isSidebarCollapsed, 
-  setIsSettingsOpen, 
-  handleLogout 
-}) {
+export default function Sidebar({ user, isMobileMenuOpen, setIsMobileMenuOpen, isSidebarCollapsed, setIsSettingsOpen, handleLogout }) {
+  const { currentPage, setCurrentPage } = useNavigation();
+
+  const handleNavClick = (page) => {
+    setCurrentPage(page);
+    setIsMobileMenuOpen(false);
+  };
+
+  const navGroups = [
+    {
+      title: "Visão Principal",
+      items: [
+        { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+        { id: 'reports', icon: PieChart, label: 'BI & Relatórios' },
+      ]
+    },
+    {
+      title: "Cofre Quântico",
+      items: [
+        { id: 'accounts', icon: Landmark, label: 'Minhas Contas' },
+        { id: 'history', icon: Clock, label: 'Livro Razão' },
+        { id: 'recurring', icon: Repeat, label: 'Despesas Fixas' },
+      ]
+    },
+    {
+      title: "Mercados & IA",
+      items: [
+        { id: 'portfolio', icon: TrendingUp, label: 'Portfólio' },
+        { id: 'markets', icon: BarChart2, label: 'Bolsa e Cripto' },
+        { id: 'quantum', icon: BrainCircuit, label: 'Quantum AI' },
+      ]
+    }
+  ];
+
+  const sidebarClasses = `fixed md:static inset-y-0 left-0 z-50 transform ${
+    isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+  } md:translate-x-0 transition-all duration-300 ease-in-out bg-slate-900/95 md:bg-slate-900/50 backdrop-blur-xl border-r border-white/5 flex flex-col ${
+    isSidebarCollapsed ? "w-20" : "w-64"
+  }`;
+
   return (
     <>
-      {/* Backdrop para Mobile */}
       {isMobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-slate-900/40 dark:bg-slate-950/80 backdrop-blur-sm z-40 lg:hidden" 
-          onClick={() => setIsMobileMenuOpen(false)}
-        ></div>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden" onClick={() => setIsMobileMenuOpen(false)} />
       )}
-      
-      <aside className={`fixed lg:static inset-y-0 left-0 z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-2xl border-r border-slate-200 dark:border-white/5 flex flex-col transition-all duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0 w-72' : '-translate-x-full lg:translate-x-0'} ${isSidebarCollapsed ? 'lg:w-20' : 'lg:w-72'}`}>
-        
-        {/* Logo Area */}
-        <div className={`h-24 flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'justify-start px-8'} gap-4 border-b border-slate-200 dark:border-white/5 transition-all duration-300`}>
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 flex-shrink-0">
-            <Wallet className="w-6 h-6 text-white" />
-          </div>
+
+      <aside className={sidebarClasses}>
+        <div className={`p-6 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
           {!isSidebarCollapsed && (
-            <div className="animate-in fade-in duration-300 whitespace-nowrap overflow-hidden">
-              <h1 className="text-xl font-black text-slate-800 dark:text-white tracking-wide uppercase leading-tight">Quantum<br/><span className="text-indigo-600 dark:text-cyan-400">Finance</span></h1>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                <BrainCircuit className="w-5 h-5 text-white" />
+              </div>
+              <span className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400 tracking-tight">
+                Quantum
+              </span>
             </div>
           )}
+          {isSidebarCollapsed && (
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center">
+              <BrainCircuit className="w-5 h-5 text-white" />
+            </div>
+          )}
+          <button className="md:hidden text-slate-400" onClick={() => setIsMobileMenuOpen(false)}>
+            <X className="w-6 h-6" />
+          </button>
         </div>
 
-        {/* Navigation Links */}
-        <nav className="flex-1 py-8 space-y-2 overflow-y-auto custom-scrollbar overflow-x-hidden">
-          <div className="px-4">
-            {!isSidebarCollapsed ? (
-              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 animate-in fade-in">Menu Principal</p>
-            ) : (
-              <div className="w-full h-px bg-slate-200 dark:bg-white/10 my-4"></div>
-            )}
-            
-            <button onClick={() => { setCurrentPage('dashboard'); setIsMobileMenuOpen(false); }} title="Painel Central" className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'justify-start px-4 gap-4'} py-3.5 rounded-xl font-bold transition-all ${currentPage === 'dashboard' ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-500/20 shadow-inner' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'}`}>
-              <LayoutDashboard className="w-5 h-5 flex-shrink-0" />
-              {!isSidebarCollapsed && <span className="animate-in fade-in duration-300 whitespace-nowrap">Painel Central</span>}
-            </button>
-            
-            <button onClick={() => { setCurrentPage('reports'); setIsMobileMenuOpen(false); }} title="Relatórios Analíticos" className={`mt-2 w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'justify-start px-4 gap-4'} py-3.5 rounded-xl font-bold transition-all ${currentPage === 'reports' ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-500/20 shadow-inner' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'}`}>
-              <PieChart className="w-5 h-5 flex-shrink-0" />
-              {!isSidebarCollapsed && <span className="animate-in fade-in duration-300 whitespace-nowrap">Relatórios</span>}
-            </button>
-          </div>
-
-          <div className="px-4 mt-8">
-            {!isSidebarCollapsed ? (
-              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 animate-in fade-in">Inteligência & Regras</p>
-            ) : (
-              <div className="w-full h-px bg-slate-200 dark:bg-white/10 my-6"></div>
-            )}
-            
-            <button onClick={() => { setIsSettingsOpen(true); setIsMobileMenuOpen(false); }} title="Motor de Automação" className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'justify-start px-4 gap-4'} py-3.5 rounded-xl font-bold text-slate-500 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-cyan-500/10 hover:text-indigo-600 dark:hover:text-cyan-400 transition-all`}>
-              <Settings className="w-5 h-5 flex-shrink-0" />
-              {!isSidebarCollapsed && <span className="animate-in fade-in duration-300 whitespace-nowrap">Motor de Automação</span>}
-            </button>
-          </div>
-        </nav>
-
-        {/* User Footer Responsivo */}
-        <div className="p-4 border-t border-slate-200 dark:border-white/5">
-          <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center flex-col gap-3' : 'justify-between'} bg-slate-50 dark:bg-slate-900/50 p-2 rounded-2xl border border-slate-200 dark:border-white/5 transition-all`}>
-            <div className="flex items-center gap-3 overflow-hidden">
-              <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-200 dark:border-indigo-500/30 flex-shrink-0" title={user?.displayName}>
-                {user?.email?.charAt(0).toUpperCase() || 'U'}
-              </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar py-4 space-y-6">
+          {navGroups.map((group, index) => (
+            <div key={index} className="px-4">
               {!isSidebarCollapsed && (
-                <div className="truncate animate-in fade-in duration-300">
-                  <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{user?.displayName || 'Usuário'}</p>
-                  <p className="text-xs text-slate-500 truncate">Sessão Ativa</p>
-                </div>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 ml-2">{group.title}</p>
               )}
+              <div className="space-y-1.5">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = currentPage === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleNavClick(item.id)}
+                      title={isSidebarCollapsed ? item.label : ""}
+                      className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'px-4'} py-3 rounded-xl transition-all duration-200 group ${
+                        isActive 
+                          ? 'bg-gradient-to-r from-indigo-500/10 to-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-sm' 
+                          : 'text-slate-400 hover:bg-white/5 hover:text-white border border-transparent'
+                      }`}
+                    >
+                      <Icon className={`w-5 h-5 ${isSidebarCollapsed ? '' : 'mr-3'} ${isActive ? 'animate-pulse' : 'group-hover:scale-110 transition-transform'}`} />
+                      {!isSidebarCollapsed && <span className="font-bold text-sm tracking-wide">{item.label}</span>}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+          ))}
+        </div>
 
-            {!isSidebarCollapsed ? (
-              <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-all flex-shrink-0" title="Sair do Sistema">
-                <LogOut className="w-5 h-5" />
-              </button>
-            ) : (
-              <button onClick={handleLogout} className="w-full flex justify-center p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-all" title="Sair do Sistema">
-                <LogOut className="w-5 h-5" />
-              </button>
-            )}
-          </div>
+        <div className="p-4 border-t border-white/5 space-y-2">
+          <button 
+            onClick={() => setIsSettingsOpen(true)}
+            title={isSidebarCollapsed ? "Configurações" : ""}
+            className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'px-4'} py-3 text-slate-400 hover:bg-white/5 hover:text-white rounded-xl transition-colors border border-transparent`}
+          >
+            <Settings className={`w-5 h-5 ${isSidebarCollapsed ? '' : 'mr-3'}`} />
+            {!isSidebarCollapsed && <span className="font-bold text-sm">Configurações</span>}
+          </button>
+          
+          <button 
+            onClick={handleLogout}
+            title={isSidebarCollapsed ? "Sair" : ""}
+            className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'px-4'} py-3 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors border border-transparent`}
+          >
+            <LogOut className={`w-5 h-5 ${isSidebarCollapsed ? '' : 'mr-3'}`} />
+            {!isSidebarCollapsed && <span className="font-bold text-sm">Sair do Sistema</span>}
+          </button>
         </div>
       </aside>
     </>

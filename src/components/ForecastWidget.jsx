@@ -1,7 +1,6 @@
-// src/components/ForecastWidget.jsx
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Zap, Target, TrendingUp, ShieldAlert } from 'lucide-react';
+import { Zap, Target, TrendingUp, ShieldAlert, AlertTriangle } from 'lucide-react';
 import Decimal from 'decimal.js';
 
 export default function ForecastWidget({ transactions, currentMonth, currentYear }) {
@@ -10,7 +9,6 @@ export default function ForecastWidget({ transactions, currentMonth, currentYear
   const forecastData = useMemo(() => {
     if (!transactions || transactions.length === 0) return [];
 
-    // 1. MATEMÁTICA REAL: Calcular médias baseadas no histórico
     let totalReceitas = new Decimal(0);
     let totalDespesas = new Decimal(0);
     let saldoAtual = new Decimal(0);
@@ -27,7 +25,7 @@ export default function ForecastWidget({ transactions, currentMonth, currentYear
       }
       if (t.date || t.createdAt) {
         const d = typeof t.date === 'string' ? t.date : new Date(t.createdAt).toISOString();
-        mesesSet.add(d.substring(0, 7)); // Agrupa por YYYY-MM
+        mesesSet.add(d.substring(0, 7)); 
       }
     });
 
@@ -35,12 +33,10 @@ export default function ForecastWidget({ transactions, currentMonth, currentYear
     const mediaReceita = totalReceitas.dividedBy(numMeses);
     const mediaDespesa = totalDespesas.dividedBy(numMeses);
 
-    // 2. DEFINIR AS LINHAS DO TEMPO (Fluxos Líquidos Mensais)
     const fluxoBase = mediaReceita.minus(mediaDespesa);
-    const fluxoPareto = mediaReceita.minus(mediaDespesa.times(0.8)); // Corte de 20% nos gastos
-    const taxaJurosAgressiva = new Decimal(0.01); // 1% ao mês de rentabilidade
+    const fluxoPareto = mediaReceita.minus(mediaDespesa.times(0.8)); 
+    const taxaJurosAgressiva = new Decimal(0.01); 
 
-    // 3. PROJETAR O FUTURO (6 Meses)
     const data = [];
     let saldoBase = saldoAtual;
     let saldoPareto = saldoAtual;
@@ -48,7 +44,6 @@ export default function ForecastWidget({ transactions, currentMonth, currentYear
 
     const nomeMeses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-    // Ponto de Partida (Hoje)
     data.push({
       mes: 'Hoje',
       Base: saldoBase.toNumber(),
@@ -62,7 +57,6 @@ export default function ForecastWidget({ transactions, currentMonth, currentYear
       saldoBase = saldoBase.plus(fluxoBase);
       saldoPareto = saldoPareto.plus(fluxoPareto);
       
-      // Cenário Agressivo: Fluxo Otimizado + Juros sobre o montante acumulado
       const rendimento = saldoAgressivo.greaterThan(0) ? saldoAgressivo.times(taxaJurosAgressiva) : new Decimal(0);
       saldoAgressivo = saldoAgressivo.plus(fluxoPareto).plus(rendimento);
 
@@ -79,15 +73,16 @@ export default function ForecastWidget({ transactions, currentMonth, currentYear
 
   const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-  const handleCollapse = (scenarioName) => {
-    setActiveCollapse(activeCollapse === scenarioName ? null : scenarioName);
-  };
+  const handleCollapse = (scenarioName) => setActiveCollapse(activeCollapse === scenarioName ? null : scenarioName);
 
   const scenarios = [
-    { name: 'Base', key: 'Base', color: '#ef4444', icon: ShieldAlert, desc: 'Tendência atual sem cortes.' },
-    { name: 'Pareto', key: 'Pareto', color: '#10b981', icon: Target, desc: 'Cortando os 20% piores gastos.' },
-    { name: 'Agressivo', key: 'Agressivo', color: '#3b82f6', icon: TrendingUp, desc: 'Pareto + 1% ao mês (Investimento).' }
+    { name: 'Base', key: 'Base', color: '#ef4444', icon: ShieldAlert, desc: 'Tendência atual.' },
+    { name: 'Pareto', key: 'Pareto', color: '#10b981', icon: Target, desc: 'Cortando 20% gastos.' },
+    { name: 'Agressivo', key: 'Agressivo', color: '#3b82f6', icon: TrendingUp, desc: 'Pareto + 1% mês.' }
   ];
+
+  // AVISO DE CENÁRIO NEGATIVO
+  const todosCenarioNegativos = forecastData.length > 0 && forecastData[forecastData.length - 1]?.Agressivo < 0;
 
   return (
     <div className="h-full flex flex-col p-4 md:p-6">
@@ -96,61 +91,39 @@ export default function ForecastWidget({ transactions, currentMonth, currentYear
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <Zap className="w-5 h-5 text-amber-400" /> Superposição Quântica
           </h2>
-          <p className="text-xs text-quantum-fgMuted mt-1">
-            Projeção de 6 meses. Clique num cenário para focar.
-          </p>
+          <p className="text-xs text-slate-500 mt-1">Projeção de 6 meses. Clique num cenário para focar.</p>
         </div>
       </div>
 
-      <div className="flex-1 min-h-[250px] w-full">
+      <div className="flex-1 min-h-[220px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={forecastData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1E2A3F" vertical={false} />
             <XAxis dataKey="mes" stroke="#64748B" fontSize={12} tickLine={false} axisLine={false} dy={10} />
             <YAxis stroke="#64748B" fontSize={10} tickFormatter={(val) => `R$ ${(val/1000).toFixed(0)}k`} tickLine={false} axisLine={false} />
-            <Tooltip 
-              contentStyle={{ backgroundColor: '#131A2A', borderColor: '#1E2A3F', borderRadius: '12px', color: '#fff' }}
-              formatter={(value) => [formatCurrency(value), 'Património Projetado']}
-            />
+            <Tooltip contentStyle={{ backgroundColor: '#131A2A', borderColor: '#1E2A3F', borderRadius: '12px', color: '#fff' }} formatter={(value) => [formatCurrency(value), 'Património Projetado']} />
             <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }} />
-            
             {scenarios.map((scenario) => (
-              <Line
-                key={scenario.key}
-                type="monotone"
-                dataKey={scenario.key}
-                name={scenario.name}
-                stroke={scenario.color}
-                strokeWidth={activeCollapse === scenario.name ? 4 : 2}
-                strokeOpacity={activeCollapse && activeCollapse !== scenario.name ? 0.2 : 1}
-                dot={activeCollapse === scenario.name ? { r: 6, fill: scenario.color, strokeWidth: 2, stroke: '#131A2A' } : false}
-                activeDot={{ r: 8, fill: scenario.color }}
-              />
+              <Line key={scenario.key} type="monotone" dataKey={scenario.key} name={scenario.name} stroke={scenario.color} strokeWidth={activeCollapse === scenario.name ? 4 : 2} strokeOpacity={activeCollapse && activeCollapse !== scenario.name ? 0.2 : 1} dot={activeCollapse === scenario.name ? { r: 6, fill: scenario.color, strokeWidth: 2, stroke: '#131A2A' } : false} activeDot={{ r: 8, fill: scenario.color }} />
             ))}
           </LineChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Botões de Colapso (Foco Interativo) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">
+      {todosCenarioNegativos && (
+        <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs font-bold text-red-400 flex items-center justify-center gap-2 animate-pulse">
+          <AlertTriangle className="w-4 h-4" />
+          Aviso Crítico: Todos os cenários projetam falência técnica a 6 meses. Reduza despesas urgentemente.
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
         {scenarios.map((s) => {
           const Icon = s.icon;
           const isActive = activeCollapse === s.name;
           return (
-            <button
-              key={s.name}
-              onClick={() => handleCollapse(s.name)}
-              className={`p-3 rounded-xl border text-left transition-all duration-300 ${
-                isActive 
-                  ? `bg-slate-800 border-${s.color.replace('#', 'bg-[')} shadow-[0_0_15px_rgba(0,0,0,0.3)] scale-[1.02]` 
-                  : 'bg-slate-900/50 border-white/5 hover:bg-slate-800/80 opacity-70 hover:opacity-100'
-              }`}
-              style={{ borderColor: isActive ? s.color : '' }}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <Icon className="w-4 h-4" style={{ color: s.color }} />
-                <span className="text-sm font-bold text-white">{s.name}</span>
-              </div>
+            <button key={s.name} onClick={() => handleCollapse(s.name)} className={`p-3 rounded-xl border text-left transition-all duration-300 ${isActive ? `bg-slate-800 shadow-lg scale-[1.02]` : 'bg-slate-900/50 border-white/5 hover:bg-slate-800/80 opacity-70 hover:opacity-100'}`} style={{ borderColor: isActive ? s.color : 'transparent' }}>
+              <div className="flex items-center gap-2 mb-1"><Icon className="w-4 h-4" style={{ color: s.color }} /><span className="text-sm font-bold text-white">{s.name}</span></div>
               <p className="text-[10px] text-slate-400 leading-tight">{s.desc}</p>
             </button>
           );

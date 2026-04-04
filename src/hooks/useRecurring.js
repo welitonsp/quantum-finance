@@ -1,94 +1,79 @@
-// src/hooks/useRecurring.js
-import { useState, useEffect, useCallback } from "react";
-import { 
-  collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc, serverTimestamp 
-} from "firebase/firestore";
-// ✅ CORREÇÃO: Apontando para a nova morada do Firebase
-import { db } from "../shared/api/firebase/index.js"; 
+import { useState, useCallback } from 'react';
+import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { db } from '../shared/api/firebase/index.js';
+import { toCentavos, fromCentavos } from '../shared/schemas/financialSchemas';
 
 export function useRecurring(uid) {
-  const [recurring, setRecurring] = useState([]);
-  const [loadingRecurring, setLoadingRecurring] = useState(true);
+  const [recurringTasks, setRecurringTasks] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    if (!uid) {
-      setRecurring([]);
-      setLoadingRecurring(false);
-      return;
+  const fetchRecurring = useCallback(async () => {
+    if (!uid) return;
+    setLoading(true);
+    try {
+      const q = query(collection(db, 'recurring'), where('userId', '==', uid));
+      const snapshot = await getDocs(q);
+      const data = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        value: fromCentavos(doc.data().value || 0),
+        id: doc.id
+      }));
+      setRecurringTasks(data);
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-
-    setLoadingRecurring(true);
-    const recurringRef = collection(db, "users", uid, "recurring");
-    const q = query(recurringRef);
-
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
-        const data = snapshot.docs.map(doc => ({
-          ...doc.data(),
-          id: doc.id 
-        }));
-        
-        data.sort((a, b) => {
-          if (a.active === b.active) {
-            return Number(b.value) - Number(a.value);
-          }
-          return a.active ? -1 : 1;
-        });
-        
-        setRecurring(data);
-        setLoadingRecurring(false);
-      }, 
-      (err) => {
-        console.error("❌ Erro ao ler despesas recorrentes:", err);
-        setLoadingRecurring(false);
-      }
-    );
-
-    return () => unsubscribe();
   }, [uid]);
 
-  const addRecurring = useCallback(async (data) => {
-    if (!uid) throw new Error("Utilizador não autenticado.");
+  const addRecurring = async (data) => {
+    if (!uid) return;
     try {
-      const recurringRef = collection(db, "users", uid, "recurring");
-      const docRef = await addDoc(recurringRef, {
+      const finalData = {
         ...data,
-        value: Number(data.value) || 0,
-        active: true,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp() 
-      });
-      return docRef.id;
+        userId: uid,
+        value: toCentavos(data.value),
+        createdAt: new Date().toISOString()
+      };
+      await addDoc(collection(db, 'recurring'), finalData);
+      await fetchRecurring();
     } catch (err) {
-      console.error("❌ Falha ao adicionar despesa recorrente:", err);
       throw err;
     }
-  }, [uid]);
+  };
 
-  const updateRecurring = useCallback(async (id, data) => {
-    if (!uid || !id) return;
+  const updateRecurring = async (id, data) => {
     try {
-      const docRef = doc(db, "users", uid, "recurring", id);
-      await updateDoc(docRef, {
+      const finalData = {
         ...data,
-        updatedAt: serverTimestamp() 
-      });
+        value: toCentavos(data.value)
+      };
+      const docRef = doc(db, 'recurring', id);
+      await updateDoc(docRef, finalData);
+      await fetchRecurring();
     } catch (err) {
-      console.error(`❌ Falha ao atualizar despesa recorrente ${id}:`, err);
       throw err;
     }
-  }, [uid]);
+  };
 
-  const removeRecurring = useCallback(async (id) => {
-    if (!uid || !id) return;
+  const removeRecurring = async (id) => {
     try {
-      const docRef = doc(db, "users", uid, "recurring", id);
-      await deleteDoc(docRef);
+      await deleteDoc(doc(db, 'recurring', id));
+      await fetchRecurring();
     } catch (err) {
-      console.error(`❌ Falha ao remover despesa recorrente:`, err);
       throw err;
     }
-  }, [uid]);
+  };
 
-  return { recurring, loadingRecurring, addRecurring, updateRecurring, removeRecurring };
+  return {
+    recurringTasks,
+    loading,
+    error,
+    fetchRecurring,
+    addRecurring,
+    updateRecurring,
+    removeRecurring
+  };
 }
