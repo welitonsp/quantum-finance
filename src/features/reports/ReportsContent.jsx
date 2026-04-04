@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Target, Filter, TrendingDown, AlertCircle, Calendar, Scissors } from 'lucide-react';
+import { Target, Filter, TrendingDown, AlertCircle, Calendar, Scissors, Sparkles, AlertTriangle } from 'lucide-react';
 import Decimal from 'decimal.js';
 import { formatCurrency } from '../../utils/formatters';
 
@@ -10,6 +10,7 @@ export default function ReportsContent({ transactions }) {
   const [activeTab, setActiveTab] = useState('pareto');
   const [timeFilter, setTimeFilter] = useState('30d'); 
   const [expenseFilter, setExpenseFilter] = useState('all'); 
+  const [showAIInsights, setShowAIInsights] = useState(false);
 
   const paretoData = useMemo(() => {
     if (!transactions || transactions.length === 0) return [];
@@ -31,7 +32,6 @@ export default function ReportsContent({ transactions }) {
         const cat = t.category || 'Diversos';
         if (expenseFilter === 'variables' && CATEGORIAS_FIXAS.includes(cat)) return;
 
-        // CÁLCULO RIGOROSO: Decimal.js
         const val = new Decimal(Math.abs(Number(t.value || 0)));
         
         catTotals[cat] = catTotals[cat] 
@@ -46,18 +46,34 @@ export default function ReportsContent({ transactions }) {
     const totalFloat = totalDespesas.toNumber();
     
     let acumulado = 0;
-    return sorted.map(([name, value]) => {
+    return sorted.map(([name, value], index) => {
       acumulado += value;
       return {
         name,
         valor: Number(value.toFixed(2)),
+        pctIndividual: totalFloat > 0 ? Number(((value / totalFloat) * 100).toFixed(1)) : 0,
         pctAcumulada: totalFloat > 0 ? Number(((acumulado / totalFloat) * 100).toFixed(1)) : 0,
-        isTop80: totalFloat > 0 && ((acumulado / totalFloat) * 100) <= 80.1
+        isTop80: totalFloat > 0 && ((acumulado / totalFloat) * 100) <= 80.1,
+        rank: index + 1
       };
     });
   }, [transactions, timeFilter, expenseFilter]);
 
   const topCategoriesCount = paretoData.filter(d => d.isTop80).length;
+  const top80Value = paretoData
+    .filter(d => d.isTop80)
+    .reduce((sum, item) => sum + item.valor, 0);
+
+  // INSIGHTS SIMULADOS (Preparados para receber Gemini real no Backend)
+  const aiInsights = useMemo(() => {
+    if (paretoData.length === 0) return [];
+    const topCategory = paretoData[0];
+    return [
+      `Os seus ${topCategoriesCount} maiores ralos representam ${formatCurrency(top80Value)} dos gastos neste período.`,
+      `A categoria "${topCategory.name}" sozinha consome ${topCategory.pctIndividual}% do seu dinheiro. Recomendo revisão prioritária.`,
+      `Foco Tático: Reduzir 20% em "${topCategory.name}" gera uma economia imediata de ${formatCurrency(topCategory.valor * 0.2)}.`
+    ];
+  }, [paretoData, topCategoriesCount, top80Value]);
 
   return (
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 relative z-10">
@@ -107,8 +123,18 @@ export default function ReportsContent({ transactions }) {
             </div>
 
             {paretoData.length > 0 ? (
-              <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
-                <div className="xl:col-span-3 h-[400px]">
+              <>
+                <div className="flex justify-end mb-4">
+                  <button
+                    onClick={() => setShowAIInsights(!showAIInsights)}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-xl text-sm font-bold text-indigo-400 transition-all"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Ver Dicas da IA
+                  </button>
+                </div>
+
+                <div className="h-[400px] w-full mb-8">
                   <ResponsiveContainer w="100%" height="100%">
                     <ComposedChart data={paretoData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1E2A3F" vertical={false} />
@@ -131,21 +157,51 @@ export default function ReportsContent({ transactions }) {
                   </ResponsiveContainer>
                 </div>
 
-                <div className="xl:col-span-1 flex flex-col gap-4">
-                  <div className="bg-slate-900/50 border border-white/5 p-5 rounded-2xl">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Target className="w-4 h-4 text-red-500" />
-                      <p className="text-xs font-bold uppercase text-red-500 tracking-wider">Atenção Crítica</p>
+                {/* INSIGHTS DA IA */}
+                {showAIInsights && (
+                  <div className="mb-8 p-6 bg-slate-900/80 border border-indigo-500/30 rounded-2xl animate-in slide-in-from-top-4">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Sparkles className="w-5 h-5 text-indigo-400" />
+                      <h4 className="font-bold text-indigo-400">Recomendações Quânticas da IA</h4>
                     </div>
-                    <p className="text-3xl font-black text-white">{topCategoriesCount}</p>
-                    <p className="text-sm text-slate-400 mt-1 leading-tight">categorias representam <span className="text-white font-bold">80%</span> dos gastos.</p>
+                    <ul className="space-y-3 text-sm text-slate-300">
+                      {aiInsights.map((insight, i) => (
+                        <li key={i} className="flex gap-3">
+                          <span className="text-indigo-500 mt-0.5">•</span>
+                          <span>{insight}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* TABELA DE RALOS FINANCEIROS */}
+                <div>
+                  <h4 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-500" />
+                    TOP RALOS FINANCEIROS ({topCategoriesCount} categorias = {formatCurrency(top80Value)})
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {paretoData.filter(d => d.isTop80).map((item, idx) => (
+                      <div key={idx} className="flex justify-between items-center bg-slate-900/50 p-4 rounded-xl border border-red-500/20 hover:border-red-500/40 transition-colors">
+                        <div>
+                          <span className="font-bold text-white text-sm">#{item.rank} {item.name}</span>
+                          <p className="text-xs text-red-400 mt-0.5">{item.pctAcumulada}% acumulado</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-mono font-bold text-white text-sm">{formatCurrency(item.valor)}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">{item.pctIndividual}% do total</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              </div>
+              </>
             ) : (
               <div className="text-center py-12 border-2 border-dashed border-white/10 rounded-2xl">
                 <AlertCircle className="w-12 h-12 text-slate-500 mx-auto mb-3" />
                 <h3 className="text-lg font-bold text-white">Sem dados para este filtro</h3>
+                <p className="text-sm text-slate-500 mt-2">Tente alargar o período ou mudar o tipo de despesa.</p>
               </div>
             )}
           </div>
