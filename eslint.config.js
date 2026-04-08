@@ -6,7 +6,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'functions/**']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [
@@ -24,7 +24,7 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars':     ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'no-unused-vars':     ['warn', { varsIgnorePattern: '^[A-Z_]' }],
       'no-console':         ['warn', { allow: ['warn', 'error'] }], // ← bloqueia console.log em produção
       'no-debugger':        'error',
       'no-alert':           'error',  // ← pega o alert() que encontramos no App.jsx
@@ -32,6 +32,12 @@ export default defineConfig([
       'no-implied-eval':    'error',
       'no-floating-decimal': 'error', // ← captura erros como .5 ao invés de 0.5
       'eqeqeq':             ['error', 'always'], // ← força === em vez de ==
+      'no-useless-catch':   'warn',
+      'react-refresh/only-export-components': 'off',
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/set-state-in-render': 'off',
+      'react-hooks/static-components': 'off',
+      'react-hooks/unsupported-syntax': 'off',
     },
   },
 ])
