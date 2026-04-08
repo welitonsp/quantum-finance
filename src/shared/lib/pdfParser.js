@@ -44,7 +44,7 @@ export const parsePDF = async (file, password = null) => {
       }
     } catch (e) { console.warn("Erro ao ler cabeçalho."); }
 
-    const regexTransacao = /(?:^|[^0-9])([0-3]\d\/[0-1]\d(?:\/\d{4})?)\s+(.+?)\s+(-?\s?\d{1,3}(?:[.\s]\d{3})*,\d{2})\s*([DC\-])?(?:\s.*)?$/i;
+    const regexTransacao = /(?:^|[^0-9])([0-3]\d\/[0-1]\d(?:\/\d{4})?)\s+(.+?)\s+(-?\s?\d{1,3}(?:[.\s]\d{3})*,\d{2})\s*([DC-])?(?:\s.*)?$/i;
     const transactions = [];
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {

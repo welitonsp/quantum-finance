@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Plus, Trash2, Repeat, AlertTriangle, CheckCircle2, X } from 'lucide-react';
 import Decimal from 'decimal.js';
-import { useRecurring } from '../hooks/useRecurring';
-import { formatCurrency } from '../utils/formatters';
+import { useRecurring } from '../../hooks/useRecurring';
+import { formatCurrency } from '../../utils/formatters';
 import toast from 'react-hot-toast';
 
 export default function RecurringManager({ uid }) {
