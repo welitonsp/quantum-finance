@@ -1,9 +1,8 @@
 // src/hooks/useTransactions.js
 import { useState, useEffect, useCallback } from "react";
-import { collection, query, onSnapshot, orderBy, limit } from "firebase/firestore";
-import { db } from "../shared/api/firebase/index"; 
-import { FirestoreService } from "../shared/services/FirestoreService"; 
-import { fromCentavos } from "../shared/schemas/financialSchemas"; 
+import { query, onSnapshot, orderBy, limit } from "firebase/firestore";
+import { FirestoreService } from "../shared/services/FirestoreService";
+import { fromCentavos } from "../shared/schemas/financialSchemas";
 
 export function useTransactions(uid) {
   const [transactions, setTransactions] = useState([]);
@@ -18,13 +17,12 @@ export function useTransactions(uid) {
     }
 
     setLoading(true);
-    setError(null);
 
-    // ✅ TETO DE SEGURANÇA: limit(300) impede leituras infinitas e gastos desnecessários!
+    // ✅ TETO DE SEGURANÇA: limit(500) para performance e economia de leituras
     const q = query(
-      collection(db, "users", uid, "transactions"), 
-      orderBy("createdAt", "desc"),
-      limit(300) 
+      FirestoreService.getTransactionsCollection(uid),
+      orderBy("date", "desc"),
+      limit(500)
     );
 
     const unsubscribe = onSnapshot(q, 
@@ -33,17 +31,20 @@ export function useTransactions(uid) {
           const raw = docSnap.data();
           return {
             ...raw,
-            // Converte os centavos do banco para o formato visual
-            value: raw.value !== undefined ? fromCentavos(raw.value) : 0, 
-            id: docSnap.id
+            id: docSnap.id,
+            // 🪙 CONVERSÃO: Centavos -> Decimal.js no Frontend
+            value: raw.value !== undefined ? fromCentavos(raw.value) : 0,
+            // Fallback de data para garantir ordenação visual
+            displayDate: raw.date || raw.createdAt?.toDate()?.toISOString().split('T')[0]
           };
         });
         setTransactions(data);
         setLoading(false);
+        setError(null);
       }, 
       (err) => {
-        console.error("❌ Erro no listener:", err);
-        setError(err.message);
+        console.error("❌ Erro fatal no listener Firestore:", err);
+        setError("Não foi possível sincronizar os dados. Verifique a sua ligação.");
         setLoading(false);
       }
     );
@@ -51,25 +52,11 @@ export function useTransactions(uid) {
     return () => unsubscribe();
   }, [uid]);
   
-  const add = useCallback(async (transactionData) => {
-    return await FirestoreService.addTransaction(uid, transactionData);
-  }, [uid]);
-
-  const update = useCallback(async (id, data) => {
-    if (!uid || !id) return;
-    return await FirestoreService.updateTransaction(uid, id, data);
-  }, [uid]);
-
-  const remove = useCallback(async (id) => {
-    if (!uid || !id) return;
-    return await FirestoreService.deleteTransaction(uid, id);
-  }, [uid]);
-
-  // ✅ ATUALIZADO: Agora usa o Lote Atômico Real do FirestoreService
-  const removeBatch = useCallback(async (ids) => {
-    if (!uid || !Array.isArray(ids) || ids.length === 0) return;
-    return await FirestoreService.deleteTransactionsBatch(uid, ids);
-  }, [uid]);
+  // Encapsulamento de métodos para simplicidade no componente
+  const add = useCallback((data) => FirestoreService.addTransaction(uid, data), [uid]);
+  const update = useCallback((id, data) => FirestoreService.updateTransaction(uid, id, data), [uid]);
+  const remove = useCallback((id) => FirestoreService.deleteTransaction(uid, id), [uid]);
+  const removeBatch = useCallback((ids) => FirestoreService.deleteTransactionsBatch(uid, ids), [uid]);
 
   return { transactions, loading, error, add, update, remove, removeBatch };
 }

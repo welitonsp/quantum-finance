@@ -1,263 +1,123 @@
 // src/shared/services/FirestoreService.js
-import { collection, doc, addDoc, getDocs, deleteDoc, updateDoc, serverTimestamp, writeBatch, query, where } from "firebase/firestore";
+import { 
+  collection, doc, addDoc, getDocs, deleteDoc, updateDoc, 
+  serverTimestamp, writeBatch, query, where, getDoc 
+} from "firebase/firestore";
 import { db } from "../api/firebase/index";
-import { validateTransaction, toCentavos, transactionSchema } from "../schemas/financialSchemas"; 
+import { validateTransaction, toCentavos, transactionSchema } from "../schemas/financialSchemas";
 
 export class FirestoreService {
+  /**
+   * Helper: Obtém a referência da coleção privada do usuário
+   */
   static getTransactionsCollection(uid) {
     return collection(db, "users", uid, "transactions");
   }
 
+  /**
+   * Helper: Gera uma chave única para evitar duplicatas (Deduplicação)
+   */
   static generateTransactionKey(transaction) {
-    const date = transaction.date || transaction.createdAt || "";
+    const date = transaction.date || "";
     const description = (transaction.description || "").trim().toLowerCase();
     const value = Math.abs(Number(transaction.value)).toString();
     const type = transaction.type === "entrada" ? "entrada" : "saida";
     return `${date}|${description}|${value}|${type}`;
   }
 
-  static async getTransactionsByPeriod(uid, startDate, endDate) {
-    try {
-      // CORREÇÃO: Busca baseada na data real da transação ('date') e não quando foi criada
-      const q = query(
-        this.getTransactionsCollection(uid),
-        where('date', '>=', startDate),
-        where('date', '<=', endDate)
-      );
-
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())
-        };
-      });
-    } catch (error) {
-      console.error("Erro no Radar Global do Firestore:", error);
-      return [];
-    }
-  }
-
-  static async addTransaction(uid, data) {
-    if (!uid) return;
-
-    const validation = validateTransaction({
-      description: data.description || "Transação sem nome",
-      value: data.value, // O valor JÁ VEM em centavos do formulário
-      type: data.type || "saida",
-      category: data.category || "Diversos",
-      date: data.date, 
-      accountId: data.account || "conta_corrente",
-      isRecurring: Boolean(data.isRecurring)
-    });
-
-    if (!validation.success) {
-      console.error("❌ Bloqueio Quântico! Dados inválidos:", validation.error.format());
-      throw new Error("Falha na validação de dados. Operação abortada pelo Zod.");
-    }
-    
-    const cleanData = validation.data;
-    const dataTransacao = cleanData.date ? new Date(`${cleanData.date}T12:00:00`) : new Date();
-    
-    const batch = writeBatch(db);
-    
-    const txRef = doc(this.getTransactionsCollection(uid));
-    batch.set(txRef, {
-      ...cleanData,
-      createdAt: dataTransacao,
-      uniqueKey: this.generateTransactionKey(cleanData),
-      registadoEm: serverTimestamp() 
-    });
-
-    const auditRef = doc(collection(db, "audit_logs"));
-    batch.set(auditRef, {
-      userId: uid,
-      transactionId: txRef.id,
-      operation: 'CREATE',
-      newData: cleanData,
-      timestamp: serverTimestamp()
-    });
-
-    await batch.commit();
-    return txRef.id;
-  }
-
+  /**
+   * GRAVAÇÃO EM LOTE (Batch): Importação massiva com deduplicação atômica
+   */
   static async saveAllTransactions(uid, transactions) {
-    if (!uid || transactions.length === 0) return { added: 0, duplicates: 0, invalid: 0 };
-    
-    const dates = transactions.map(tx => new Date(tx.date ? `${tx.date}T12:00:00` : Date.now()));
-    const minDate = new Date(Math.min(...dates));
-    const maxDate = new Date(Math.max(...dates));
-    
-    minDate.setDate(minDate.getDate() - 2);
-    maxDate.setDate(maxDate.getDate() + 2);
+    if (!uid || !transactions.length) return { added: 0, duplicates: 0, invalid: 0 };
 
-    const q = query(
-      this.getTransactionsCollection(uid),
-      where('createdAt', '>=', minDate),
-      where('createdAt', '<=', maxDate)
-    );
-    const snapshot = await getDocs(q);
-
-    const existingKeys = new Set();
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      if (data.uniqueKey) existingKeys.add(data.uniqueKey);
-    });
-
-    let batch = writeBatch(db);
-    const colRef = this.getTransactionsCollection(uid);
-    
-    let addedCount = 0;
-    let duplicateCount = 0;
-    let invalidCount = 0;
-    let currentBatchOperations = 0;
-
-    for (const tx of transactions) {
-      const validation = validateTransaction({
-        description: tx.description || "Transação Importada",
-        value: toCentavos(tx.value), // Mantido aqui para OFX/CSV que trazem decimais crus
-        type: tx.type === "entrada" ? "entrada" : "saida",
-        category: tx.category || "Diversos",
-        date: tx.date,
-        accountId: tx.account || "conta_corrente",
-        isRecurring: Boolean(tx.isRecurring)
-      });
-
-      if (!validation.success) {
-        console.warn(`⚠️ Linha ignorada: ${tx.description}`, validation.error.format());
-        invalidCount++;
-        continue;
-      }
-
-      const cleanData = validation.data;
-      const key = this.generateTransactionKey(cleanData);
-      
-      if (existingKeys.has(key)) {
-        duplicateCount++;
-        continue; 
-      }
-
-      existingKeys.add(key);
-
-      const docId = tx.uniqueHash || crypto.randomUUID();
-      const newDocRef = doc(colRef, docId);
-      const dataTransacao = cleanData.date ? new Date(`${cleanData.date}T12:00:00`) : new Date();
-      
-      batch.set(newDocRef, {
-        ...cleanData,
-        uniqueHash: docId,
-        uniqueKey: key,
-        createdAt: dataTransacao,
-        registadoEm: serverTimestamp()
-      }, { merge: true });
-      
-      addedCount++;
-      currentBatchOperations++;
-
-      if (currentBatchOperations >= 450) {
-        await batch.commit();
-        batch = writeBatch(db); 
-        currentBatchOperations = 0;
-      }
-    }
-
-    if (currentBatchOperations > 0) {
-      await batch.commit();
-    }
-    
-    return { added: addedCount, duplicates: duplicateCount, invalid: invalidCount };
-  }
-
-  static async deleteTransaction(uid, id) {
-    const docRef = doc(db, "users", uid, "transactions", id);
     const batch = writeBatch(db);
-    
-    batch.delete(docRef);
+    let added = 0;
+    let duplicates = 0;
+    let invalid = 0;
 
-    const auditRef = doc(collection(db, "audit_logs"));
-    batch.set(auditRef, {
-      userId: uid,
-      transactionId: id,
-      operation: 'DELETE',
-      timestamp: serverTimestamp()
+    // 1. Buscar transações existentes para checar duplicatas no período
+    // Nota: Em cenários de alta densidade, poderíamos filtrar por data inicial/final aqui
+    const snapshot = await getDocs(this.getTransactionsCollection(uid));
+    const existingKeys = new Set(snapshot.docs.map(doc => this.generateTransactionKey(doc.data())));
+
+    transactions.forEach(tx => {
+      try {
+        const key = this.generateTransactionKey(tx);
+        
+        if (existingKeys.has(key)) {
+          duplicates++;
+          return;
+        }
+
+        const validated = validateTransaction(tx);
+        const docRef = doc(this.getTransactionsCollection(uid));
+        
+        batch.set(docRef, {
+          ...validated,
+          value: toCentavos(tx.value), // Armazenar em centavos (Integer)
+          userId: uid,
+          createdAt: serverTimestamp(),
+          importKey: key
+        });
+
+        added++;
+        existingKeys.add(key); // Evitar duplicatas dentro do próprio lote
+      } catch (err) {
+        console.error("Erro ao validar transação no lote:", err);
+        invalid++;
+      }
     });
 
-    await batch.commit();
+    if (added > 0) await batch.commit();
+    return { added, duplicates, invalid };
   }
 
-  // CORREÇÃO: Delete em Lote 100% Atômico
-  static async deleteTransactionsBatch(uid, ids) {
-    if (!uid || !ids || ids.length === 0) return;
-    
-    const chunkSize = 200; 
-    const chunks = [];
-    
-    for (let i = 0; i < ids.length; i += chunkSize) {
-      chunks.push(ids.slice(i, i + chunkSize));
-    }
-
-    for (const chunk of chunks) {
-      const batch = writeBatch(db);
-      
-      chunk.forEach(id => {
-        const docRef = doc(db, "users", uid, "transactions", id);
-        batch.delete(docRef);
-        
-        const auditRef = doc(collection(db, "audit_logs"));
-        batch.set(auditRef, {
-          userId: uid,
-          transactionId: id,
-          operation: 'DELETE_BATCH',
-          timestamp: serverTimestamp()
-        });
-      });
-
-      await batch.commit(); 
-    }
+  /**
+   * ADIÇÃO ÚNICA: Cadastro manual de transação
+   */
+  static async addTransaction(uid, data) {
+    const validated = validateTransaction(data);
+    const docRef = await addDoc(this.getTransactionsCollection(uid), {
+      ...validated,
+      value: toCentavos(data.value),
+      userId: uid,
+      createdAt: serverTimestamp()
+    });
+    return docRef.id;
   }
 
-  // CORREÇÃO: Update com Validação Zod Parcial
+  /**
+   * ATUALIZAÇÃO: Edição de registro existente
+   */
   static async updateTransaction(uid, id, data) {
     const docRef = doc(db, "users", uid, "transactions", id);
     
-    const partialValidation = transactionSchema.partial().safeParse({
-      ...data,
-      value: data.value !== undefined ? Number(data.value) : undefined
+    // Validação parcial para atualização
+    const partialValidation = transactionSchema.partial().safeParse(data);
+    if (!partialValidation.success) throw new Error("Dados inválidos para atualização.");
+
+    await updateDoc(docRef, {
+      ...partialValidation.data,
+      value: toCentavos(data.value),
+      updatedAt: serverTimestamp()
     });
+  }
 
-    if (!partialValidation.success) {
-      console.error("❌ Bloqueio Quântico no UPDATE:", partialValidation.error.format());
-      throw new Error("Falha na validação de dados durante a atualização.");
-    }
-
-    const cleanData = partialValidation.data;
-    const dataTransacao = cleanData.date ? new Date(`${cleanData.date}T12:00:00`) : new Date();
-    
-    const updateData = {
-      ...cleanData,
-      createdAt: dataTransacao,
-      atualizadoEm: serverTimestamp()
-    };
-
-    Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
-
+  /**
+   * ELIMINAÇÃO EM LOTE: Operação atômica para limpeza
+   */
+  static async deleteTransactionsBatch(uid, ids) {
+    if (!ids.length) return;
     const batch = writeBatch(db);
-    batch.update(docRef, updateData);
-
-    const auditRef = doc(collection(db, "audit_logs"));
-    batch.set(auditRef, {
-      userId: uid,
-      transactionId: id,
-      operation: 'UPDATE',
-      changes: updateData,
-      timestamp: serverTimestamp()
+    ids.forEach(id => {
+      const docRef = doc(db, "users", uid, "transactions", id);
+      batch.delete(docRef);
     });
-
     await batch.commit();
   }
+
+  // --- GESTÃO DE REGRAS DE CATEGORIA ---
 
   static getRulesCollection(uid) {
     return collection(db, "users", uid, "categoryRules");
@@ -269,15 +129,11 @@ export class FirestoreService {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   }
 
-  static async addCategoryRule(uid, ruleData) {
-    return await addDoc(this.getRulesCollection(uid), {
-      category: ruleData.category,
-      keywords: ruleData.keywords,
-      criadoEm: serverTimestamp()
+  static async addCategoryRule(uid, rule) {
+    const docRef = await addDoc(this.getRulesCollection(uid), {
+      ...rule,
+      createdAt: serverTimestamp()
     });
-  }
-
-  static async deleteCategoryRule(uid, ruleId) {
-    await deleteDoc(doc(db, "users", uid, "categoryRules", ruleId));
+    return docRef.id;
   }
 }

@@ -1,18 +1,62 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // 1. Regras para os dados normais do utilizador (Ele pode ler e escrever tudo o que é dele)
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // Regra Global: Utilizador tem de estar autenticado
+    function isAuthenticated() {
+      return request.auth != null;
     }
 
-    // 2. 🔒 COFRE DE AUDITORIA BLINDADO (Apenas Inserção)
+    // Regra Global: O UID do documento/coleção tem de corresponder ao UID do utilizador
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    // ---------------------------------------------------------
+    // 🛡️ COFRE DO UTILIZADOR (ISOLAMENTO ABSOLUTO)
+    // ---------------------------------------------------------
+    match /users/{uid} {
+      // Permite ler/escrever no próprio documento de perfil
+      allow read, write: if isOwner(uid);
+
+      // Transações Financeiras
+      match /transactions/{transactionId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // Contas Bancárias (Corrente, Poupança, Cartões)
+      match /accounts/{accountId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // Despesas Fixas / Recorrentes
+      match /recurring/{recurringId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // Regras de Categorização da IA/Utilizador
+      match /categoryRules/{ruleId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // Histórico de Simulações de Mercado (Trade)
+      match /simulations/{simulationId} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
+    // ---------------------------------------------------------
+    // 🛡️ LOGS DE AUDITORIA (Apenas Escrita, Leitura só Admin)
+    // ---------------------------------------------------------
     match /audit_logs/{logId} {
-      // Só permite criar se estiver logado e se o campo userId do log for igual ao UID de quem está a enviar
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      // BLOQUEIO TOTAL: Ninguém apaga ou edita o rastro!
-      allow read, update, delete: if false; 
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if false; // Bloqueado para clientes
+    }
+
+    // Bloqueia qualquer outra coleção na raiz (Prevenção de erros de código)
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
