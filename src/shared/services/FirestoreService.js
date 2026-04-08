@@ -1,139 +1,268 @@
-// src/shared/services/FirestoreService.js
-import { 
-  collection, doc, addDoc, getDocs, deleteDoc, updateDoc, 
-  serverTimestamp, writeBatch, query, where, getDoc 
-} from "firebase/firestore";
+import { collection, doc, addDoc, getDocs, deleteDoc, updateDoc, serverTimestamp, writeBatch, query, where } from "firebase/firestore";
 import { db } from "../api/firebase/index";
-import { validateTransaction, toCentavos, transactionSchema } from "../schemas/financialSchemas";
+import { validateTransaction, toCentavos, transactionSchema } from "../schemas/financialSchemas"; 
 
 export class FirestoreService {
-  /**
-   * Helper: Obtém a referência da coleção privada do usuário
-   */
+  // ==========================================
+  // 1. REFERÊNCIAS DE COLEÇÕES
+  // ==========================================
   static getTransactionsCollection(uid) {
     return collection(db, "users", uid, "transactions");
   }
 
-  /**
-   * Helper: Gera uma chave única para evitar duplicatas (Deduplicação)
-   */
+  static getRulesCollection(uid) {
+    return collection(db, "users", uid, "categoryRules");
+  }
+
+  static getRecurringCollection(uid) {
+    return collection(db, "users", uid, "recurringTasks");
+  }
+
+  // ==========================================
+  // 2. UTILITÁRIOS
+  // ==========================================
   static generateTransactionKey(transaction) {
-    const date = transaction.date || "";
+    const date = transaction.date || transaction.createdAt || "";
     const description = (transaction.description || "").trim().toLowerCase();
     const value = Math.abs(Number(transaction.value)).toString();
     const type = transaction.type === "entrada" ? "entrada" : "saida";
     return `${date}|${description}|${value}|${type}`;
   }
 
-  /**
-   * GRAVAÇÃO EM LOTE (Batch): Importação massiva com deduplicação atômica
-   */
-  static async saveAllTransactions(uid, transactions) {
-    if (!uid || !transactions.length) return { added: 0, duplicates: 0, invalid: 0 };
+  // ==========================================
+  // 3. TRANSAÇÕES: LEITURA E GRAVAÇÃO ÚNICA
+  // ==========================================
+  static async getTransactionsByPeriod(uid, startDate, endDate) {
+    try {
+      const q = query(
+        this.getTransactionsCollection(uid),
+        where('date', '>=', startDate),
+        where('date', '<=', endDate)
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())
+        };
+      });
+    } catch (error) {
+      console.error("Erro no Radar Global do Firestore:", error);
+      return [];
+    }
+  }
 
+  static async addTransaction(uid, data) {
+    if (!uid) return;
+    const validation = validateTransaction({
+      description: data.description || "Transação sem nome",
+      value: data.value,
+      type: data.type || "saida",
+      category: data.category || "Diversos",
+      date: data.date, 
+      accountId: data.account || "conta_corrente",
+      isRecurring: Boolean(data.isRecurring)
+    });
+
+    if (!validation.success) {
+      throw new Error("Falha na validação de dados. Operação abortada pelo Zod.");
+    }
+    
+    const cleanData = validation.data;
+    const dataTransacao = cleanData.date ? new Date(`${cleanData.date}T12:00:00`) : new Date();
     const batch = writeBatch(db);
-    let added = 0;
-    let duplicates = 0;
-    let invalid = 0;
+    const txRef = doc(this.getTransactionsCollection(uid));
+    
+    batch.set(txRef, {
+      ...cleanData,
+      createdAt: dataTransacao,
+      uniqueKey: this.generateTransactionKey(cleanData),
+      registadoEm: serverTimestamp() 
+    });
 
-    // 1. Buscar transações existentes para checar duplicatas no período
-    // Nota: Em cenários de alta densidade, poderíamos filtrar por data inicial/final aqui
+    const auditRef = doc(collection(db, "audit_logs"));
+    batch.set(auditRef, { userId: uid, transactionId: txRef.id, operation: 'CREATE', newData: cleanData, timestamp: serverTimestamp() });
+
+    await batch.commit();
+    return txRef.id;
+  }
+
+  // ==========================================
+  // 4. TRANSAÇÕES: LOTE ATÓMICO (IMPORTAÇÃO COM BYPASS PARA IA)
+  // ==========================================
+  static async saveAllTransactions(uid, transactions) {
+    if (!uid || transactions.length === 0) return { added: 0, duplicates: 0, invalid: 0 };
+    
     const snapshot = await getDocs(this.getTransactionsCollection(uid));
-    const existingKeys = new Set(snapshot.docs.map(doc => this.generateTransactionKey(doc.data())));
+    const existingKeys = new Set();
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.uniqueKey) existingKeys.add(data.uniqueKey);
+    });
 
-    transactions.forEach(tx => {
+    let batch = writeBatch(db);
+    const colRef = this.getTransactionsCollection(uid);
+    
+    let addedCount = 0;
+    let duplicateCount = 0;
+    let invalidCount = 0;
+    let currentBatchOperations = 0;
+
+    for (const tx of transactions) {
       try {
-        const key = this.generateTransactionKey(tx);
+        // Formatação segura forçada (Bypass do Zod para não perder categorização da IA)
+        const safeDateStr = tx.date || new Date().toISOString().split('T')[0];
+        const safeValue = typeof tx.value === 'number' ? Math.round(tx.value * 100) : toCentavos(tx.value || 0);
+        
+        const safeData = {
+          description: tx.description || "Transação Importada",
+          value: safeValue,
+          type: tx.type === "entrada" ? "entrada" : "saida",
+          category: tx.category || "Diversos",
+          tags: tx.tags || [], // Preserva as tags de Fixa/Variável da IA
+          date: safeDateStr,
+          accountId: tx.account || "conta_corrente",
+          isRecurring: Boolean(tx.isRecurring)
+        };
+
+        const key = this.generateTransactionKey(safeData);
         
         if (existingKeys.has(key)) {
-          duplicates++;
-          return;
+          duplicateCount++;
+          continue; 
         }
 
-        const validated = validateTransaction(tx);
-        const docRef = doc(this.getTransactionsCollection(uid));
+        existingKeys.add(key);
+
+        const docId = tx.uniqueHash || crypto.randomUUID();
+        const newDocRef = doc(colRef, docId);
+        const dataTransacao = new Date(`${safeDateStr}T12:00:00`);
         
-        batch.set(docRef, {
-          ...validated,
-          value: toCentavos(tx.value), // Armazenar em centavos (Integer)
-          userId: uid,
-          createdAt: serverTimestamp(),
-          importKey: key
-        });
+        batch.set(newDocRef, {
+          ...safeData,
+          uniqueHash: docId,
+          uniqueKey: key,
+          createdAt: dataTransacao,
+          registadoEm: serverTimestamp()
+        }, { merge: true });
+        
+        addedCount++;
+        currentBatchOperations++;
 
-        added++;
-        existingKeys.add(key); // Evitar duplicatas dentro do próprio lote
+        // Submete o batch a cada 450 operações para respeitar o limite do Firestore
+        if (currentBatchOperations >= 450) {
+          await batch.commit();
+          batch = writeBatch(db); 
+          currentBatchOperations = 0;
+        }
       } catch (err) {
-        console.error("Erro ao validar transação no lote:", err);
-        invalid++;
+        console.warn(`⚠️ Linha ignorada: ${tx.description}`, err);
+        invalidCount++;
       }
-    });
+    }
 
-    if (added > 0) await batch.commit();
-    return { added, duplicates, invalid };
+    if (currentBatchOperations > 0) {
+      await batch.commit();
+    }
+    
+    return { added: addedCount, duplicates: duplicateCount, invalid: invalidCount };
   }
 
-  /**
-   * ADIÇÃO ÚNICA: Cadastro manual de transação
-   */
-  static async addTransaction(uid, data) {
-    const validated = validateTransaction(data);
-    const docRef = await addDoc(this.getTransactionsCollection(uid), {
-      ...validated,
-      value: toCentavos(data.value),
-      userId: uid,
-      createdAt: serverTimestamp()
-    });
-    return docRef.id;
-  }
-
-  /**
-   * ATUALIZAÇÃO: Edição de registro existente
-   */
+  // ==========================================
+  // 5. TRANSAÇÕES: ATUALIZAÇÃO E ELIMINAÇÃO
+  // ==========================================
   static async updateTransaction(uid, id, data) {
     const docRef = doc(db, "users", uid, "transactions", id);
+    const partialValidation = transactionSchema.partial().safeParse({ ...data, value: data.value !== undefined ? Number(data.value) : undefined });
     
-    // Validação parcial para atualização
-    const partialValidation = transactionSchema.partial().safeParse(data);
-    if (!partialValidation.success) throw new Error("Dados inválidos para atualização.");
-
-    await updateDoc(docRef, {
-      ...partialValidation.data,
-      value: toCentavos(data.value),
-      updatedAt: serverTimestamp()
-    });
-  }
-
-  /**
-   * ELIMINAÇÃO EM LOTE: Operação atômica para limpeza
-   */
-  static async deleteTransactionsBatch(uid, ids) {
-    if (!ids.length) return;
+    if (!partialValidation.success) throw new Error("Falha na validação de dados durante a atualização.");
+    
+    const cleanData = partialValidation.data;
+    const dataTransacao = cleanData.date ? new Date(`${cleanData.date}T12:00:00`) : new Date();
+    const updateData = { ...cleanData, createdAt: dataTransacao, atualizadoEm: serverTimestamp() };
+    
+    // Remove chaves indefinidas para o Firestore não dar erro
+    Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+    
     const batch = writeBatch(db);
-    ids.forEach(id => {
-      const docRef = doc(db, "users", uid, "transactions", id);
-      batch.delete(docRef);
-    });
+    batch.update(docRef, updateData);
+    
+    const auditRef = doc(collection(db, "audit_logs"));
+    batch.set(auditRef, { userId: uid, transactionId: id, operation: 'UPDATE', changes: updateData, timestamp: serverTimestamp() });
+    
     await batch.commit();
   }
 
-  // --- GESTÃO DE REGRAS DE CATEGORIA ---
-
-  static getRulesCollection(uid) {
-    return collection(db, "users", uid, "categoryRules");
+  static async deleteTransaction(uid, id) {
+    const docRef = doc(db, "users", uid, "transactions", id);
+    const batch = writeBatch(db);
+    batch.delete(docRef);
+    
+    const auditRef = doc(collection(db, "audit_logs"));
+    batch.set(auditRef, { userId: uid, transactionId: id, operation: 'DELETE', timestamp: serverTimestamp() });
+    
+    await batch.commit();
   }
 
+  static async deleteTransactionsBatch(uid, ids) {
+    if (!uid || !ids || ids.length === 0) return;
+    const chunkSize = 200; 
+    const chunks = [];
+    
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      chunks.push(ids.slice(i, i + chunkSize));
+    }
+    
+    for (const chunk of chunks) {
+      const batch = writeBatch(db);
+      chunk.forEach(id => {
+        const docRef = doc(db, "users", uid, "transactions", id);
+        batch.delete(docRef);
+        const auditRef = doc(collection(db, "audit_logs"));
+        batch.set(auditRef, { userId: uid, transactionId: id, operation: 'DELETE_BATCH', timestamp: serverTimestamp() });
+      });
+      await batch.commit(); 
+    }
+  }
+
+  // ==========================================
+  // 6. GESTÃO DE REGRAS DE CATEGORIA
+  // ==========================================
   static async getCategoryRules(uid) {
     if (!uid) return [];
     const snap = await getDocs(this.getRulesCollection(uid));
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   }
 
-  static async addCategoryRule(uid, rule) {
-    const docRef = await addDoc(this.getRulesCollection(uid), {
-      ...rule,
+  static async addCategoryRule(uid, ruleData) {
+    return await addDoc(this.getRulesCollection(uid), { 
+      category: ruleData.category, 
+      keywords: ruleData.keywords, 
+      criadoEm: serverTimestamp() 
+    });
+  }
+
+  static async deleteCategoryRule(uid, ruleId) {
+    await deleteDoc(doc(db, "users", uid, "categoryRules", ruleId));
+  }
+
+  // ==========================================
+  // 7. GESTÃO DE DESPESAS RECORRENTES
+  // ==========================================
+  static async addRecurringTask(uid, data) {
+    if (!uid) return;
+    const docRef = await addDoc(this.getRecurringCollection(uid), {
+      ...data,
       createdAt: serverTimestamp()
     });
     return docRef.id;
+  }
+
+  static async deleteRecurringTask(uid, id) {
+    if (!uid || !id) return;
+    const docRef = doc(db, "users", uid, "recurringTasks", id);
+    await deleteDoc(docRef);
   }
 }

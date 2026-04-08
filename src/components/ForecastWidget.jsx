@@ -14,6 +14,7 @@ export default function ForecastWidget({ transactions, currentMonth, currentYear
     let saldoAtual = new Decimal(0);
     const mesesSet = new Set();
 
+    // 1. Digerir todas as transações para calcular médias históricas
     transactions.forEach(t => {
       const val = new Decimal(Math.abs(Number(t.value || 0)));
       if (t.type === 'receita' || t.type === 'entrada') {
@@ -29,12 +30,19 @@ export default function ForecastWidget({ transactions, currentMonth, currentYear
       }
     });
 
+    // Proteção contra divisão por zero e cálculo de fluxo médio
     const numMeses = Math.max(mesesSet.size, 1);
     const mediaReceita = totalReceitas.dividedBy(numMeses);
     const mediaDespesa = totalDespesas.dividedBy(numMeses);
 
+    // 2. Os Três Cenários Quânticos
+    // Cenário Base: Mantém o ritmo exato de gastos
     const fluxoBase = mediaReceita.minus(mediaDespesa);
+    
+    // Cenário Pareto: Reduz as despesas em 20% (regra 80/20)
     const fluxoPareto = mediaReceita.minus(mediaDespesa.times(0.8)); 
+    
+    // Cenário Agressivo: Pareto + Rendimento de 1% ao mês sobre o saldo positivo
     const taxaJurosAgressiva = new Decimal(0.01); 
 
     const data = [];
@@ -44,6 +52,7 @@ export default function ForecastWidget({ transactions, currentMonth, currentYear
 
     const nomeMeses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
+    // Ponto de partida (Mês Atual)
     data.push({
       mes: 'Hoje',
       Base: saldoBase.toNumber(),
@@ -51,6 +60,7 @@ export default function ForecastWidget({ transactions, currentMonth, currentYear
       Agressivo: saldoAgressivo.toNumber()
     });
 
+    // Projeção para os próximos 6 meses
     for (let i = 1; i <= 6; i++) {
       let mesIndex = (currentMonth - 1 + i) % 12;
       
@@ -75,36 +85,53 @@ export default function ForecastWidget({ transactions, currentMonth, currentYear
 
   const handleCollapse = (scenarioName) => setActiveCollapse(activeCollapse === scenarioName ? null : scenarioName);
 
+  // Paleta de Cores Atualizada (Para encaixar no tema Dark Slate)
   const scenarios = [
-    { name: 'Base', key: 'Base', color: '#ef4444', icon: ShieldAlert, desc: 'Tendência atual.' },
-    { name: 'Pareto', key: 'Pareto', color: '#10b981', icon: Target, desc: 'Cortando 20% gastos.' },
-    { name: 'Agressivo', key: 'Agressivo', color: '#3b82f6', icon: TrendingUp, desc: 'Pareto + 1% mês.' }
+    { name: 'Base', key: 'Base', color: '#F97316', icon: ShieldAlert, desc: 'Tendência atual.' },      // Laranja
+    { name: 'Pareto', key: 'Pareto', color: '#06B6D4', icon: Target, desc: 'Cortando 20% gastos.' },    // Ciano
+    { name: 'Agressivo', key: 'Agressivo', color: '#10B981', icon: TrendingUp, desc: 'Pareto + 1% mês.' } // Esmeralda
   ];
 
-  // AVISO DE CENÁRIO NEGATIVO
+  // AVISO DE CENÁRIO CRÍTICO: Se até o cenário agressivo der prejuízo
   const todosCenarioNegativos = forecastData.length > 0 && forecastData[forecastData.length - 1]?.Agressivo < 0;
 
   return (
-    <div className="h-full flex flex-col p-4 md:p-6">
+    <div className="bg-slate-900/40 border border-white/5 backdrop-blur-sm rounded-3xl h-full flex flex-col p-4 md:p-6 shadow-xl">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <Zap className="w-5 h-5 text-amber-400" /> Superposição Quântica
           </h2>
-          <p className="text-xs text-slate-500 mt-1">Projeção de 6 meses. Clique num cenário para focar.</p>
+          <p className="text-xs text-slate-400 mt-1">Projeção de 6 meses. Clique num cenário para focar.</p>
         </div>
       </div>
 
       <div className="flex-1 min-h-[220px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={forecastData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1E2A3F" vertical={false} />
-            <XAxis dataKey="mes" stroke="#64748B" fontSize={12} tickLine={false} axisLine={false} dy={10} />
+          <LineChart data={forecastData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" vertical={false} />
+            <XAxis dataKey="mes" stroke="#64748B" fontSize={10} tickLine={false} axisLine={false} dy={10} />
             <YAxis stroke="#64748B" fontSize={10} tickFormatter={(val) => `R$ ${(val/1000).toFixed(0)}k`} tickLine={false} axisLine={false} />
-            <Tooltip contentStyle={{ backgroundColor: '#131A2A', borderColor: '#1E2A3F', borderRadius: '12px', color: '#fff' }} formatter={(value) => [formatCurrency(value), 'Património Projetado']} />
-            <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }} />
+            
+            <Tooltip 
+              contentStyle={{ backgroundColor: '#0F172A', borderColor: '#1E293B', borderRadius: '12px', color: '#fff' }} 
+              formatter={(value) => [formatCurrency(value), 'Património Projetado']} 
+            />
+            
+            <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px', color: '#94A3B8' }} />
+            
             {scenarios.map((scenario) => (
-              <Line key={scenario.key} type="monotone" dataKey={scenario.key} name={scenario.name} stroke={scenario.color} strokeWidth={activeCollapse === scenario.name ? 4 : 2} strokeOpacity={activeCollapse && activeCollapse !== scenario.name ? 0.2 : 1} dot={activeCollapse === scenario.name ? { r: 6, fill: scenario.color, strokeWidth: 2, stroke: '#131A2A' } : false} activeDot={{ r: 8, fill: scenario.color }} />
+              <Line 
+                key={scenario.key} 
+                type="monotone" 
+                dataKey={scenario.key} 
+                name={scenario.name} 
+                stroke={scenario.color} 
+                strokeWidth={activeCollapse === scenario.name ? 4 : 2} 
+                strokeOpacity={activeCollapse && activeCollapse !== scenario.name ? 0.2 : 1} 
+                dot={activeCollapse === scenario.name ? { r: 6, fill: scenario.color, strokeWidth: 2, stroke: '#0F172A' } : false} 
+                activeDot={{ r: 8, fill: scenario.color, stroke: '#0F172A', strokeWidth: 2 }} 
+              />
             ))}
           </LineChart>
         </ResponsiveContainer>
@@ -112,8 +139,8 @@ export default function ForecastWidget({ transactions, currentMonth, currentYear
 
       {todosCenarioNegativos && (
         <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs font-bold text-red-400 flex items-center justify-center gap-2 animate-pulse">
-          <AlertTriangle className="w-4 h-4" />
-          Aviso Crítico: Todos os cenários projetam falência técnica a 6 meses. Reduza despesas urgentemente.
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          Aviso Crítico: Todos os cenários projetam falência técnica a 6 meses.
         </div>
       )}
 
@@ -122,8 +149,18 @@ export default function ForecastWidget({ transactions, currentMonth, currentYear
           const Icon = s.icon;
           const isActive = activeCollapse === s.name;
           return (
-            <button key={s.name} onClick={() => handleCollapse(s.name)} className={`p-3 rounded-xl border text-left transition-all duration-300 ${isActive ? `bg-slate-800 shadow-lg scale-[1.02]` : 'bg-slate-900/50 border-white/5 hover:bg-slate-800/80 opacity-70 hover:opacity-100'}`} style={{ borderColor: isActive ? s.color : 'transparent' }}>
-              <div className="flex items-center gap-2 mb-1"><Icon className="w-4 h-4" style={{ color: s.color }} /><span className="text-sm font-bold text-white">{s.name}</span></div>
+            <button 
+              key={s.name} 
+              onClick={() => handleCollapse(s.name)} 
+              className={`p-3 rounded-xl border text-left transition-all duration-300 
+                ${isActive ? `bg-slate-800 shadow-lg scale-[1.02]` : 'bg-slate-900/50 border-white/5 hover:bg-slate-800/80 opacity-70 hover:opacity-100'}
+              `} 
+              style={{ borderColor: isActive ? s.color : 'transparent' }}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Icon className="w-4 h-4" style={{ color: s.color }} />
+                <span className="text-sm font-bold text-white">{s.name}</span>
+              </div>
               <p className="text-[10px] text-slate-400 leading-tight">{s.desc}</p>
             </button>
           );

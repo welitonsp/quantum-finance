@@ -1,77 +1,80 @@
-import { useState, useCallback } from 'react';
-import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+// src/hooks/useRecurring.js
+import { useState, useEffect, useCallback } from 'react';
+import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index.js';
 import { toCentavos, fromCentavos } from '../shared/schemas/financialSchemas';
+import { FirestoreService } from '../shared/services/FirestoreService';
 
 export function useRecurring(uid) {
   const [recurringTasks, setRecurringTasks] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchRecurring = useCallback(async () => {
-    if (!uid) return;
-    setLoading(true);
-    try {
-      const q = query(collection(db, 'recurring'), where('userId', '==', uid));
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs.map(doc => ({
-        ...doc.data(),
-        value: fromCentavos(doc.data().value || 0),
-        id: doc.id
-      }));
-      setRecurringTasks(data);
-      setError(null);
-    } catch (err) {
-      setError(err.message);
-    } finally {
+  // 1. Radar em Tempo Real (Substitui o fetchRecurring manual)
+  useEffect(() => {
+    if (!uid) {
+      setRecurringTasks([]);
       setLoading(false);
+      return;
     }
+
+    setLoading(true);
+    // Usa o cofre blindado do utilizador (users/{uid}/recurringTasks)
+    const colRef = FirestoreService.getRecurringCollection(uid);
+
+    const unsubscribe = onSnapshot(colRef,
+      (snapshot) => {
+        const data = snapshot.docs.map(docSnap => ({
+          ...docSnap.data(),
+          // Reverte de Centavos para Decimal no Frontend
+          value: docSnap.data().value !== undefined ? fromCentavos(docSnap.data().value) : 0,
+          id: docSnap.id
+        }));
+        setRecurringTasks(data);
+        setLoading(false);
+        setError(null);
+      },
+      (err) => {
+        console.error("❌ Erro no Radar de Recorrentes:", err);
+        setError(err.message);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
   }, [uid]);
 
-  const addRecurring = async (data) => {
+  // 2. Operações de Escrita (Ligadas ao FirestoreService)
+  const addRecurring = useCallback(async (data) => {
     if (!uid) return;
-    try {
-      const finalData = {
-        ...data,
-        userId: uid,
-        value: toCentavos(data.value),
-        createdAt: new Date().toISOString()
-      };
-      await addDoc(collection(db, 'recurring'), finalData);
-      await fetchRecurring();
-    } catch (err) {
-      throw err;
-    }
-  };
+    const finalData = { 
+      ...data, 
+      value: toCentavos(data.value) 
+    };
+    return await FirestoreService.addRecurringTask(uid, finalData);
+  }, [uid]);
 
-  const updateRecurring = async (id, data) => {
-    try {
-      const finalData = {
-        ...data,
-        value: toCentavos(data.value)
-      };
-      const docRef = doc(db, 'recurring', id);
-      await updateDoc(docRef, finalData);
-      await fetchRecurring();
-    } catch (err) {
-      throw err;
+  const updateRecurring = useCallback(async (id, data) => {
+    if (!uid || !id) return;
+    const finalData = { ...data };
+    if (data.value !== undefined) {
+      finalData.value = toCentavos(data.value);
     }
-  };
+    // Gravação direta na coleção isolada correta
+    const docRef = doc(db, "users", uid, "recurringTasks", id);
+    await updateDoc(docRef, finalData);
+  }, [uid]);
 
-  const removeRecurring = async (id) => {
-    try {
-      await deleteDoc(doc(db, 'recurring', id));
-      await fetchRecurring();
-    } catch (err) {
-      throw err;
-    }
-  };
+  const removeRecurring = useCallback(async (id) => {
+    if (!uid || !id) return;
+    return await FirestoreService.deleteRecurringTask(uid, id);
+  }, [uid]);
 
+  // Mantemos exatamente o mesmo retorno para não quebrar a sua UI atual
   return {
     recurringTasks,
     loading,
     error,
-    fetchRecurring,
     addRecurring,
     updateRecurring,
     removeRecurring

@@ -21,7 +21,7 @@ function sanitizeData(text) {
 }
 
 // ============================================================================
-// 1. MOTOR QUÂNTICO: Análise de Pareto (O seu código original mantido)
+// 1. MOTOR QUÂNTICO: Análise de Pareto (Regra 80/20)
 // ============================================================================
 exports.analyzeParetoInsights = onCall({ cors: true, maxInstances: 10, secrets: ["GEMINI_API_KEY"] }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Acesso negado: O utilizador não está autenticado.");
@@ -80,9 +80,10 @@ exports.analyzeParetoInsights = onCall({ cors: true, maxInstances: 10, secrets: 
 });
 
 // ============================================================================
-// 2. MOTOR QUÂNTICO: Categorização em Lote (Para importar Extratos)
+// 2. MOTOR QUÂNTICO: Categorização Avançada em Lote (Importação)
 // ============================================================================
-exports.categorizeTransactionsBatch = onCall({ cors: true, secrets: ["GEMINI_API_KEY"] }, async (request) => {
+// ⚡ NOTA: timeoutSeconds aumentado para 120s para permitir leitura de extratos grandes
+exports.categorizeTransactionsBatch = onCall({ cors: true, secrets: ["GEMINI_API_KEY"], timeoutSeconds: 120 }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Acesso negado.");
 
     const { transactions } = request.data;
@@ -93,20 +94,28 @@ exports.categorizeTransactionsBatch = onCall({ cors: true, secrets: ["GEMINI_API
     try {
         const model = genAI.getGenerativeModel({ 
             model: "gemini-1.5-flash",
+            // Forçamos a IA a devolver SEMPRE um JSON limpo
             generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
         });
 
+        // Formatamos de forma leve para poupar tokens e acelerar a IA
         const txListString = transactions.map(t => 
-            `ID: ${t.id} | Descrição: "${t.description}" | Valor: R$ ${t.value}`
+            `ID: ${t.id} | Descrição: "${t.description}" | Valor: R$ ${t.value} | Tipo: ${t.type}`
         ).join('\n');
         
-        const prompt = `Você é um sistema financeiro sênior de alta precisão. 
-Sua tarefa é ler o extrato bancário abaixo e classificar CADA transação em uma destas categorias estritas:
-[Alimentação, Transporte, Assinaturas, Educação, Saúde, Moradia, Impostos/Taxas, Lazer, Vestuário, Salário, Freelance, Investimento, Diversos, Outros].
+        const prompt = `Você é um analista financeiro de elite. Analise este lote de transações bancárias.
+Para CADA transação, defina:
+1. "category": Uma categoria estrita [Alimentação, Transporte, Assinaturas, Educação, Saúde, Moradia, Impostos/Taxas, Lazer, Vestuário, Salário, Freelance, Investimento, Diversos, Cartão de Crédito, Empréstimos, Outros].
+2. "tag": A classificação estratégica [Fixa, Variável, Endividamento, Receita].
+   - "Fixa": Contas recorrentes mensais (aluguel, internet, assinaturas, seguros).
+   - "Variável": Gastos do dia a dia que oscilam (supermercado, restaurante, uber, lazer).
+   - "Endividamento": Pagamento de faturas de cartão, parcelas de empréstimos, financiamentos e juros.
+   - "Receita": Para entradas de dinheiro (salário, rendimentos).
 
-Responda APENAS com um array JSON válido neste formato: [{"id": "ID_DA_TRANSAÇÃO", "category": "NOME_DA_CATEGORIA"}].
+Retorne APENAS um array JSON exato neste formato: 
+[{"id": "ID_AQUI", "category": "CATEGORIA", "tag": "TAG"}]
 
-Extrato:
+Extrato a analisar:
 ${txListString}`;
 
         const result = await model.generateContent(prompt);
