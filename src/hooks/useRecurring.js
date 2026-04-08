@@ -10,7 +10,6 @@ export function useRecurring(uid) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // 1. Radar em Tempo Real (Substitui o fetchRecurring manual)
   useEffect(() => {
     if (!uid) {
       setRecurringTasks([]);
@@ -19,14 +18,12 @@ export function useRecurring(uid) {
     }
 
     setLoading(true);
-    // Usa o cofre blindado do utilizador (users/{uid}/recurringTasks)
     const colRef = FirestoreService.getRecurringCollection(uid);
 
     const unsubscribe = onSnapshot(colRef,
       (snapshot) => {
         const data = snapshot.docs.map(docSnap => ({
           ...docSnap.data(),
-          // Reverte de Centavos para Decimal no Frontend
           value: docSnap.data().value !== undefined ? fromCentavos(docSnap.data().value) : 0,
           id: docSnap.id
         }));
@@ -44,23 +41,16 @@ export function useRecurring(uid) {
     return () => unsubscribe();
   }, [uid]);
 
-  // 2. Operações de Escrita (Ligadas ao FirestoreService)
   const addRecurring = useCallback(async (data) => {
     if (!uid) return;
-    const finalData = { 
-      ...data, 
-      value: toCentavos(data.value) 
-    };
+    const finalData = { ...data, value: toCentavos(data.value) };
     return await FirestoreService.addRecurringTask(uid, finalData);
   }, [uid]);
 
   const updateRecurring = useCallback(async (id, data) => {
     if (!uid || !id) return;
     const finalData = { ...data };
-    if (data.value !== undefined) {
-      finalData.value = toCentavos(data.value);
-    }
-    // Gravação direta na coleção isolada correta
+    if (data.value !== undefined) finalData.value = toCentavos(data.value);
     const docRef = doc(db, "users", uid, "recurringTasks", id);
     await updateDoc(docRef, finalData);
   }, [uid]);
@@ -70,13 +60,5 @@ export function useRecurring(uid) {
     return await FirestoreService.deleteRecurringTask(uid, id);
   }, [uid]);
 
-  // Mantemos exatamente o mesmo retorno para não quebrar a sua UI atual
-  return {
-    recurringTasks,
-    loading,
-    error,
-    addRecurring,
-    updateRecurring,
-    removeRecurring
-  };
+  return { recurringTasks, loading, error, addRecurring, updateRecurring, removeRecurring };
 }
