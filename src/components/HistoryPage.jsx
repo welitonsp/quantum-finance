@@ -9,11 +9,12 @@ export default function HistoryPage({
   return (
     <div className="space-y-6 animate-in fade-in duration-500 relative z-10 flex flex-col h-full">
       <div>
-        <h1 className="text-2xl font-bold text-white mb-1">Livro Razão</h1>
-        <p className="text-sm text-quantum-fgMuted">Gestão completa e auditoria de todas as suas movimentações.</p>
+        {/* Título modernizado e focado na operação */}
+        <h1 className="text-2xl font-bold text-white mb-1">Movimentações</h1>
+        <p className="text-sm text-slate-400">Gestão completa e auditoria de todas as suas movimentações financeiras.</p>
       </div>
 
-      <div className="flex-1 bg-quantum-card border border-quantum-border rounded-2xl overflow-hidden shadow-xl">
+      <div className="flex-1 bg-slate-900/40 backdrop-blur-md border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
         <TransactionsManager
           transactions={transactions}
           loading={loading}

@@ -80,7 +80,7 @@ export class FirestoreService {
       for (const tx of chunk) {
         try {
           const safeDateStr = tx.date || new Date().toISOString().split('T')[0];
-          const safeValue = typeof tx.value === 'number' ? Math.round(tx.value * 100) : toCentavos(tx.value || 0);
+          const safeValue = typeof tx.value === 'number' ? tx.value : Number(tx.value || 0);
           
           const safeData = {
             description: tx.description || "Transação Importada", value: safeValue,

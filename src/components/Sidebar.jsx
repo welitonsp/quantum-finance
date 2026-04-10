@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigation } from '../contexts/NavigationContext';
 import { 
   LayoutDashboard, PieChart, Settings, LogOut, 
-  Landmark, TrendingUp, BarChart2, BrainCircuit, Repeat, Clock, X 
+  Landmark, BrainCircuit, Repeat, Clock, X 
 } from "lucide-react";
 
 export default function Sidebar({ user, isMobileMenuOpen, setIsMobileMenuOpen, isSidebarCollapsed, setIsSettingsOpen, handleLogout }) {
@@ -19,22 +19,15 @@ export default function Sidebar({ user, isMobileMenuOpen, setIsMobileMenuOpen, i
       items: [
         { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
         { id: 'reports', icon: PieChart, label: 'BI & Relatórios' },
+        { id: 'quantum', icon: BrainCircuit, label: 'Quantum AI' },
       ]
     },
     {
       title: "Cofre Quântico",
       items: [
         { id: 'accounts', icon: Landmark, label: 'Minhas Contas' },
-        { id: 'history', icon: Clock, label: 'Livro Razão' },
+        { id: 'history', icon: Clock, label: 'Movimentações' },
         { id: 'recurring', icon: Repeat, label: 'Despesas Fixas' },
-      ]
-    },
-    {
-      title: "Mercados & IA",
-      items: [
-        { id: 'portfolio', icon: TrendingUp, label: 'Portfólio' },
-        { id: 'markets', icon: BarChart2, label: 'Bolsa e Cripto' },
-        { id: 'quantum', icon: BrainCircuit, label: 'Quantum AI' },
       ]
     }
   ];
@@ -55,16 +48,16 @@ export default function Sidebar({ user, isMobileMenuOpen, setIsMobileMenuOpen, i
         <div className={`p-6 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
           {!isSidebarCollapsed && (
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-cyan-500/20">
                 <BrainCircuit className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400 tracking-tight">
+              <span className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-cyan-200 tracking-tight">
                 Quantum
               </span>
             </div>
           )}
           {isSidebarCollapsed && (
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-600 to-cyan-400 flex items-center justify-center">
               <BrainCircuit className="w-5 h-5 text-white" />
             </div>
           )}
@@ -90,7 +83,7 @@ export default function Sidebar({ user, isMobileMenuOpen, setIsMobileMenuOpen, i
                       title={isSidebarCollapsed ? item.label : ""}
                       className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'px-4'} py-3 rounded-xl transition-all duration-200 group ${
                         isActive 
-                          ? 'bg-gradient-to-r from-indigo-500/10 to-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-sm' 
+                          ? 'bg-gradient-to-r from-cyan-500/10 to-cyan-400/5 text-cyan-400 border border-cyan-500/20 shadow-sm' 
                           : 'text-slate-400 hover:bg-white/5 hover:text-white border border-transparent'
                       }`}
                     >

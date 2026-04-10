@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import toast from 'react-hot-toast';
 import { FirestoreService } from "../shared/services/FirestoreService";
 import { getFunctions, httpsCallable } from "firebase/functions"; 
@@ -10,28 +10,8 @@ export const useAppLogic = (user, transactions, activeModule, setCurrentMonth, s
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [transactionToEdit, setTransactionToEdit] = useState(null);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
-  
-  const notifiedLargeTxRef = useRef(new Set());
 
-  useEffect(() => {
-    if (!transactions?.length) return;
-    const largeExpenses = transactions.filter(tx => tx.type === 'saida' && Math.abs(Number(tx.value)) > 1000 && !notifiedLargeTxRef.current.has(tx.id));
-    largeExpenses.forEach(tx => {
-      toast.custom((t) => (
-        <div className={`${t.visible ? 'animate-in fade-in slide-in-from-top-2' : 'animate-out fade-out slide-out-to-top-2'} max-w-md w-full bg-slate-900 shadow-2xl rounded-2xl flex ring-1 ring-orange-500/50 p-4`}>
-          <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center mr-3"><span className="text-lg">💸</span></div>
-          <div className="flex-1">
-            <p className="text-sm font-bold text-white uppercase tracking-wider">Gasto Atípico</p>
-            <p className="text-xs text-slate-400 mt-1">{tx.description}</p>
-          </div>
-          <button onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-400 hover:text-white ml-4 border-l border-white/10 pl-4 transition-colors">Fechar</button>
-        </div>
-      ), { duration: 8000 });
-      notifiedLargeTxRef.current.add(tx.id);
-    });
-  }, [transactions]);
-
-  // 🌟 O MOTOR QUÂNTICO (Ativado)
+  // 🌟 O MOTOR QUÂNTICO DE IMPORTAÇÃO E ANÁLISE
   const handleImport = useCallback(async (transacoesImportadas) => {
     if (!user?.uid || !transacoesImportadas?.length) return { added: 0, duplicates: 0, invalid: 0 };
 
@@ -75,9 +55,33 @@ export const useAppLogic = (user, transactions, activeModule, setCurrentMonth, s
       
       if (result.added > 0) {
         toast.success(
-          `Sucesso! +${result.added} Registos. (Ignorados: ${result.duplicates}, Inválidos: ${result.invalid})`, 
-          { id: toastId, duration: 6000, style: { background: '#059669', color: '#fff' } }
+          `Sucesso! +${result.added} Registos. (Ignorados: ${result.duplicates})`, 
+          { id: toastId, duration: 4000, style: { background: '#059669', color: '#fff' } }
         );
+
+        // 🎯 O RADAR DE GASTOS ATÍPICOS (AGORA DISPARA APENAS NA IMPORTAÇÃO)
+        const largeExpenses = transacoesFinais.filter(tx => 
+          (tx.type === 'saida' || tx.type === 'despesa') && Math.abs(Number(tx.value)) > 1000
+        );
+
+        if (largeExpenses.length > 0) {
+          // Atraso de 2s para não atropelar a notificação de sucesso
+          setTimeout(() => {
+            largeExpenses.forEach(tx => {
+              toast.custom((t) => (
+                <div className={`${t.visible ? 'animate-in fade-in slide-in-from-top-2' : 'animate-out fade-out slide-out-to-top-2'} max-w-md w-full bg-slate-900 shadow-2xl rounded-2xl flex ring-1 ring-orange-500/50 p-4`}>
+                  <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center mr-3"><span className="text-lg">💸</span></div>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-white uppercase tracking-wider">Alerta de Gasto Atípico</p>
+                    <p className="text-xs text-slate-400 mt-1">{tx.description} (R$ {Math.abs(Number(tx.value)).toFixed(2)})</p>
+                  </div>
+                  <button onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-400 hover:text-white ml-4 border-l border-white/10 pl-4 transition-colors">Fechar</button>
+                </div>
+              ), { duration: 10000 }); // Fica 10 segundos no ecrã para dar tempo de ler
+            });
+          }, 2000);
+        }
+
       } else {
         toast.error(`Aviso: Adicionados: ${result.added}, Duplicados: ${result.duplicates}, Inválidos: ${result.invalid}`, { id: toastId, duration: 6000 });
       }
