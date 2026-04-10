@@ -3,29 +3,29 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Regra Global: Utilizador tem de estar autenticado
+    // ─── FUNÇÕES DE VALIDAÇÃO GLOBAIS ─────────────────────────
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Regra Global: O UID do documento/coleção tem de corresponder ao UID do utilizador
     function isOwner(uid) {
       return isAuthenticated() && request.auth.uid == uid;
     }
 
-    // ---------------------------------------------------------
-    // 🛡️ COFRE DO UTILIZADOR (ISOLAMENTO ABSOLUTO)
-    // ---------------------------------------------------------
+    // ─── 🛡️ COFRE DO UTILIZADOR (ISOLAMENTO ABSOLUTO) ─────────
     match /users/{uid} {
-      // Permite ler/escrever no próprio documento de perfil
+      // Perfil do utilizador
       allow read, write: if isOwner(uid);
 
-      // Transações Financeiras
+      // Transações (Validação rigorosa para impedir dados corrompidos)
       match /transactions/{transactionId} {
-        allow read, write: if isOwner(uid);
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) 
+                           && request.resource.data.keys().hasAll(['value', 'type'])
+                           && (request.resource.data.type == 'entrada' || request.resource.data.type == 'saida' || request.resource.data.type == 'receita' || request.resource.data.type == 'despesa');
       }
 
-      // Contas Bancárias (Corrente, Poupança, Cartões)
+      // Contas Bancárias
       match /accounts/{accountId} {
         allow read, write: if isOwner(uid);
       }
@@ -40,21 +40,26 @@ service cloud.firestore {
         allow read, write: if isOwner(uid);
       }
 
-      // Histórico de Simulações de Mercado (Trade)
+      // Histórico de Simulações de Mercado
       match /simulations/{simulationId} {
         allow read, write: if isOwner(uid);
       }
     }
 
-    // ---------------------------------------------------------
-    // 🛡️ LOGS DE AUDITORIA (Apenas Escrita, Leitura só Admin)
-    // ---------------------------------------------------------
+    // ─── 🛡️ LOGS DE AUDITORIA & IA ────────────────────────────
     match /audit_logs/{logId} {
+      // O utilizador só pode CRIAR um log se o userId dentro do log for o dele
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if false; // Bloqueado para clientes
+      allow read, update, delete: if false; // Ninguém pode apagar ou ler o log (apenas Admin no console)
     }
 
-    // Bloqueia qualquer outra coleção na raiz (Prevenção de erros de código)
+    match /ai_usage_logs/{uid} {
+      // Coleção usada pelas Cloud Functions para controlar Rate Limit da IA
+      allow read: if isOwner(uid);
+      allow write: if false; // Apenas o backend (Admin) pode escrever aqui
+    }
+
+    // Bloqueio de segurança máxima para tudo o resto
     match /{document=**} {
       allow read, write: if false;
     }
