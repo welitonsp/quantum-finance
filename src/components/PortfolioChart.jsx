@@ -27,7 +27,6 @@ const generateData = (points, baseValue = 250000) => {
 };
 
 const formatDateLabel = (index, period) => {
-  // Para períodos curtos, exibir horário; para longos, data simplificada
   if (period.days === 1) {
     const hour = index % 24;
     return `${hour}h`;
@@ -48,7 +47,6 @@ export default function PortfolioChart() {
     setChartData(generateData(period.points));
   };
 
-  // Determina se a tendência geral é positiva
   const firstValue = chartData[0]?.value || 0;
   const lastValue = chartData[chartData.length - 1]?.value || 0;
   const isPositive = lastValue >= firstValue;
@@ -97,8 +95,9 @@ export default function PortfolioChart() {
         </div>
       </div>
 
-      <div className="h-72 w-full">
-        <ResponsiveContainer width="100%" height="100%">
+      {/* 🛡️ BLINDAGEM: min-h-[288px] na div e minWidth/minHeight no ResponsiveContainer */}
+      <div className="h-72 w-full min-h-[288px]">
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={288}>
           <LineChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
             <defs>
               <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">

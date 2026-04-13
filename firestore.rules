@@ -2,7 +2,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Regra Global Tática: Se o Comandante fez Login, a porta do cofre abre.
+    // 🛡️ REGRA TÁTICA DE SEGURANÇA 
+    // Garante que o sistema nunca bloqueia a leitura ou escrita 
+    // desde que exista uma credencial de acesso válida (request.auth != null).
+    // Aplica-se a todas as coleções (transactions, recurring, etc.)
+    
     match /{document=**} {
       allow read, write: if request.auth != null;
     }

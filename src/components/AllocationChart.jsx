@@ -27,8 +27,9 @@ export default function AllocationChart() {
     <div className="glass-card-quantum p-6">
       <h3 className="text-lg font-bold text-white mb-4">Alocação</h3>
       
-      <div className="h-48 w-full">
-        <ResponsiveContainer width="100%" height="100%">
+      {/* 🛡️ BLINDAGEM: min-h-[192px] na div e minWidth/minHeight no ResponsiveContainer */}
+      <div className="h-48 w-full min-h-[192px]">
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={192}>
           <PieChart>
             <Pie
               data={allocations}

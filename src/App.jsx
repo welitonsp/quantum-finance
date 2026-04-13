@@ -24,6 +24,17 @@ import RecurringManager from "./components/RecurringManager";
 import QuantumAIPage from "./components/QuantumAIPage";
 import HistoryPage from "./components/HistoryPage";
 
+// ─── FILTRO DE RUÍDO TÁTICO (Silenciador Quântico) ───────────────────────────
+// A biblioteca Recharts emite um falso-positivo no React 18.
+// Este filtro interceta a mensagem inofensiva e mantém a nossa consola militar limpa.
+const originalConsoleWarn = console.warn;
+console.warn = (...args) => {
+  if (typeof args[0] === 'string' && args[0].includes('The width(-1) and height(-1)')) {
+    return; // Alvo abatido. Silencia o aviso da consola.
+  }
+  originalConsoleWarn(...args);
+};
+
 // ─── Constantes globais (isoladas da renderização) ───────────────────────────
 const MESES_DO_ANO = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -99,10 +110,11 @@ const AuthenticatedApp = ({ user, handleLogout }) => {
   useEffect(() => safeStorageSet('quantum_sidebar_collapsed', isSidebarCollapsed), [isSidebarCollapsed]);
   useEffect(() => safeStorageSet('quantum_monthly_goal', monthlyGoal), [monthlyGoal]);
 
-  const { transactions, loading, add, remove, removeBatch, update } = useTransactions(user.uid);
+  const safeUID = user?.uid || "";
+
+  const { transactions, loading, add, remove, removeBatch, update } = useTransactions(safeUID);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } = useFinancialData(transactions, activeModule, currentMonth, currentYear);
 
-  // 🚀 Chamada atualizada: Limpa e focada nos motores de dados
   const {
     isAIChatOpen, setIsAIChatOpen, isFormOpen, setIsFormOpen, isSettingsOpen, setIsSettingsOpen,
     transactionToEdit, setTransactionToEdit, transactionToDelete, setTransactionToDelete,
@@ -154,8 +166,8 @@ const AuthenticatedApp = ({ user, handleLogout }) => {
                   isFormOpen={isFormOpen} setIsFormOpen={setIsFormOpen} transactionToEdit={transactionToEdit} setTransactionToEdit={setTransactionToEdit}
                 />
               )}
-              {currentPage === 'accounts' && <AccountsManager uid={user.uid} />}
-              {currentPage === 'recurring' && <RecurringManager uid={user.uid} />}
+              {currentPage === 'accounts' && <AccountsManager uid={safeUID} />}
+              {currentPage === 'recurring' && <RecurringManager uid={safeUID} />}
               {currentPage === 'quantum' && <QuantumAIPage />}
               {(currentPage === 'history' || currentPage === 'wallet') && (
                 <HistoryPage transactions={displayedTransactions} loading={loading} onEdit={(tx) => { setTransactionToEdit(tx); setIsFormOpen(true); }} onDeleteRequest={setTransactionToDelete} onBatchDelete={handleBatchDelete} onBatchImport={handleImport} />
@@ -170,7 +182,7 @@ const AuthenticatedApp = ({ user, handleLogout }) => {
         <BrainCircuit className="w-7 h-7 text-white group-hover:animate-pulse" />
       </button>
 
-      {isSettingsOpen && <ErrorBoundary><CategorySettings uid={user.uid} onClose={() => setIsSettingsOpen(false)} /></ErrorBoundary>}
+      {isSettingsOpen && <ErrorBoundary><CategorySettings uid={safeUID} onClose={() => setIsSettingsOpen(false)} /></ErrorBoundary>}
       <ErrorBoundary><AIAssistantChat transactions={displayedTransactions} balances={moduleBalances} isOpen={isAIChatOpen} onClose={() => setIsAIChatOpen(false)} /></ErrorBoundary>
     </div>
   );

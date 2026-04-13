@@ -1,43 +1,32 @@
-// ✅ CORREÇÃO CRÍTICA: Os comandos agora vêm do 'firebase/firestore' correto!
 import { collection, addDoc, updateDoc, deleteDoc, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db } from '../api/firebase/index.js';
 
 export const FirestoreService = {
   
-  // GRAVAÇÃO DE TRANSAÇÃO ÚNICA (Em Centavos)
+  // ─── TRANSAÇÕES GERAIS ──────────────────────────────────────────────────────
   async saveTransaction(uid, transactionData) {
     if (!uid) throw new Error('UID ausente.');
-    
-    // 🛡️ MULTIPLICA POR 100 E ARREDONDA PARA INTEIRO (Padrão Bancário)
     const safeValue = Math.round(Number(transactionData.value || 0) * 100);
-
     const docRef = await addDoc(collection(db, 'transactions'), {
-      ...transactionData,
-      value: safeValue, // Guardado como centavos puros
-      uid,
+      ...transactionData, value: safeValue, uid,
       createdAt: transactionData.createdAt || serverTimestamp(),
       updatedAt: serverTimestamp()
     });
     return docRef.id;
   },
 
-  // GRAVAÇÃO EM MASSA (IMPORTAÇÃO OFX/CSV)
   async saveAllTransactions(uid, transactions) {
     if (!uid || !transactions.length) return { added: 0, duplicates: 0, invalid: 0 };
-    
     const batch = writeBatch(db);
-    let added = 0;
-    let duplicates = 0;
-    let invalid = 0;
-    const cache = new Set(); // Proteção contra duplicados no mesmo lote
+    let added = 0, duplicates = 0, invalid = 0;
+    const cache = new Set(); 
 
     transactions.forEach((tx) => {
       const isIncome = tx.type === 'receita' || tx.type === 'entrada';
-      // 🛡️ CONVERSÃO SEGURA PARA INTEIRO
       const rawVal = Number(tx.value || tx.amount || 0);
       if (isNaN(rawVal) || rawVal === 0) { invalid++; return; }
       
-      const safeValue = Math.round(Math.abs(rawVal) * 100); // Em centavos
+      const safeValue = Math.round(Math.abs(rawVal) * 100); 
       const txType = isIncome ? 'receita' : 'saida';
       const category = tx.category || 'Diversos';
       const date = tx.date || new Date().toISOString().split('T')[0];
@@ -49,16 +38,9 @@ export const FirestoreService = {
 
       const docRef = doc(collection(db, 'transactions'));
       batch.set(docRef, {
-        uid,
-        description: tx.description,
-        value: safeValue, // Guardado como centavos
-        type: txType,
-        category,
-        date,
-        account,
-        tags: tx.tags || [],
-        createdAt: new Date(date).getTime(),
-        updatedAt: serverTimestamp()
+        uid, description: tx.description, value: safeValue, type: txType,
+        category, date, account, tags: tx.tags || [],
+        createdAt: new Date(date).getTime(), updatedAt: serverTimestamp()
       });
       added++;
     });
@@ -69,14 +51,9 @@ export const FirestoreService = {
 
   async updateTransaction(id, data) {
     if (!id) throw new Error('ID ausente.');
-    // Se o valor foi alterado na edição, converte para centavos
     const updatePayload = { ...data, updatedAt: serverTimestamp() };
-    if (data.value !== undefined) {
-      updatePayload.value = Math.round(Number(data.value) * 100);
-    }
-    
-    const docRef = doc(db, 'transactions', id);
-    await updateDoc(docRef, updatePayload);
+    if (data.value !== undefined) updatePayload.value = Math.round(Number(data.value) * 100);
+    await updateDoc(doc(db, 'transactions', id), updatePayload);
   },
 
   async deleteTransaction(id) {
@@ -87,9 +64,34 @@ export const FirestoreService = {
   async deleteBatchTransactions(ids) {
     if (!ids || ids.length === 0) return;
     const batch = writeBatch(db);
-    ids.forEach(id => {
-      batch.delete(doc(db, 'transactions', id));
-    });
+    ids.forEach(id => batch.delete(doc(db, 'transactions', id)));
     await batch.commit();
+  },
+
+  // ─── DESPESAS RECORRENTES (FUNÇÕES RESTAURADAS) ───────────────────────────
+  getRecurringCollection() {
+    return collection(db, 'recurring');
+  },
+
+  async saveRecurringTransaction(uid, data) {
+    if (!uid) throw new Error('UID ausente.');
+    const safeValue = Math.round(Number(data.value || 0) * 100);
+    const docRef = await addDoc(collection(db, 'recurring'), {
+      ...data, value: safeValue, uid,
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+    });
+    return docRef.id;
+  },
+
+  async updateRecurringTransaction(id, data) {
+    if (!id) throw new Error('ID ausente.');
+    const updatePayload = { ...data, updatedAt: serverTimestamp() };
+    if (data.value !== undefined) updatePayload.value = Math.round(Number(data.value) * 100);
+    await updateDoc(doc(db, 'recurring', id), updatePayload);
+  },
+
+  async deleteRecurringTransaction(id) {
+    if (!id) throw new Error('ID ausente.');
+    await deleteDoc(doc(db, 'recurring', id));
   }
 };

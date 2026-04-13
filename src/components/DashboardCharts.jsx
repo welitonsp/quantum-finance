@@ -68,10 +68,9 @@ export default function DashboardCharts({ categoryData }) {
           <p className="text-xs text-slate-500">Clique na legenda para filtrar</p>
         </div>
         
-        {/* ✅ CORREÇÃO: relative, h-80, min-h-0 para o Recharts funcionar perfeitamente */}
-        <div className="relative h-80 w-full min-h-0 flex-1">
-          {/* ✅ CORREÇÃO: width e height em 100% */}
-          <ResponsiveContainer width="100%" height="100%">
+        {/* 🛡️ BLINDAGEM: min-h-[320px] e minWidth/minHeight garantem que o Recharts não colapsa */}
+        <div className="relative h-80 w-full min-h-[320px] flex-1">
+          <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={320}>
             <PieChart>
               <Pie
                 data={visibleData}
@@ -96,7 +95,6 @@ export default function DashboardCharts({ categoryData }) {
             </PieChart>
           </ResponsiveContainer>
           
-          {/* ✅ CORREÇÃO: Posicionamento Absoluto em vez de margem negativa */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <DonutCenter totalExpenses={totalExpenses} />
           </div>

@@ -17,7 +17,6 @@ export default function TrendsChart({ transactions }) {
     }
 
     transactions.forEach(tx => {
-      // ✅ CORREÇÃO: Prioriza a data exata da transação
       const rawDate = tx.date || tx.createdAt;
       const txDate = rawDate?.toDate 
         ? rawDate.toDate() 
@@ -29,7 +28,7 @@ export default function TrendsChart({ transactions }) {
       
       if (monthlyData[monthKey]) {
         const val = new Decimal(tx.value || 0);
-        if (tx.type === 'entrada') {
+        if (tx.type === 'entrada' || tx.type === 'receita') {
           monthlyData[monthKey].receitas = new Decimal(monthlyData[monthKey].receitas).plus(val).toNumber();
         } else {
           monthlyData[monthKey].despesas = new Decimal(monthlyData[monthKey].despesas).plus(val).toNumber();
@@ -51,8 +50,9 @@ export default function TrendsChart({ transactions }) {
   return (
     <div className="bg-quantum-card p-4 md:p-6 rounded-3xl border border-quantum-border shadow-lg">
       <h3 className="text-lg font-bold text-white mb-6 tracking-wide">Tendência Histórica (6 Meses)</h3>
-      <div className="h-72 w-full">
-        <ResponsiveContainer width="100%" height="100%">
+      {/* 🛡️ BLINDAGEM: min-h-[288px] e propriedades estritas no ResponsiveContainer */}
+      <div className="h-72 w-full min-h-[288px]">
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={288}>
           <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <defs>
               <linearGradient id="colorReceitas" x1="0" y1="0" x2="0" y2="1">
