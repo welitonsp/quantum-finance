@@ -1,150 +1,116 @@
-// src/features/ai-chat/AIAssistantChat.jsx
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { X, Send, Bot, User, Loader2, Sparkles, ShieldCheck } from 'lucide-react';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { app } from '../../shared/api/firebase/index.js'; 
-import ReactMarkdown from 'react-markdown'; 
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Send, BrainCircuit, User, Loader2 } from 'lucide-react';
+import { GeminiService } from './GeminiService'; 
 
-export default function AIAssistantChat({ transactions, balances, isOpen, onClose }) {
+export const AIAssistantChat = ({ transactions, balances, isOpen, onClose }) => {
   const [messages, setMessages] = useState([
-    { role: 'ai', content: 'Olá, Comandante. Sou o seu Gestor de Património Quântico. Já analisei o seu fluxo de caixa deste mês. Como posso ajudar a otimizar as suas finanças hoje?' }
+    { role: 'ai', text: 'Olá, Comandante Weliton! Sou a Quantum AI. O motor está blindado. Como posso ajudar com a sua estratégia financeira hoje?' }
   ]);
-  const [input, setInput] = useState('');
+  const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
-  // 🌟 CONTEXTO INTELIGENTE: Utiliza os saldos já calculados pelo sistema central
-  const financialContext = useMemo(() => {
-    const format = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
-    
-    return {
-      entradas: format(balances?.geral?.receitas),
-      saidas: format(balances?.geral?.despesas),
-      saldo: format(balances?.geral?.saldo),
-      totalTransacoes: transactions?.length || 0
-    };
-  }, [balances, transactions]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
+  // Autoscroll para a mensagem mais recente
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
-  // Se não estiver aberto (botão não clicado), não renderiza nada
-  if (!isOpen) return null;
-
-  const handleSend = async (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if (!inputMessage.trim()) return;
 
-    const userMsg = input.trim();
-    setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    const userText = inputMessage.trim();
+    setInputMessage('');
+    
+    // Adicionar mensagem do utilizador à UI
+    const newMessages = [...messages, { role: 'user', text: userText }];
+    setMessages(newMessages);
     setIsLoading(true);
 
     try {
-      const functions = getFunctions(app);
-      const quantumChatAdvisor = httpsCallable(functions, 'quantumChatAdvisor');
-      
-      const result = await quantumChatAdvisor({ 
-        message: userMsg,
-        financialContext: financialContext 
-      });
+      // Formatação tática dos dados para a IA analisar
+      const contextData = {
+        balances,
+        // Limita a 50 transações recentes para não sobrecarregar a memória da IA
+        recentTransactions: transactions.slice(0, 50) 
+      };
 
-      setMessages(prev => [...prev, { role: 'ai', content: result.data.reply }]);
+      // Chamada ao Motor da IA
+      const aiResponse = await GeminiService.sendMessage(userText, newMessages, contextData);
+      
+      setMessages(prev => [...prev, { role: 'ai', text: aiResponse }]);
     } catch (error) {
-      console.error("Erro de comunicação com o Quantum:", error);
-      setMessages(prev => [...prev, { 
-        role: 'ai', 
-        content: '⚠️ Ocorreu uma interferência quântica nos servidores. Por favor, tente novamente.' 
-      }]);
+      console.error("Erro no link de comunicação Quântico:", error);
+      setMessages(prev => [...prev, { role: 'ai', text: '🚨 Interferência quântica detectada. Não foi possível processar a resposta. Verifique a chave da API no seu ficheiro .env.' }]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  return (
-    <div className="fixed bottom-24 right-6 md:right-8 w-[350px] md:w-[420px] flex flex-col h-[600px] max-h-[80vh] bg-slate-900 border border-cyan-500/20 rounded-3xl overflow-hidden shadow-2xl shadow-cyan-500/10 z-50 animate-in slide-in-from-bottom-10">
-      <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none"></div>
+  if (!isOpen) return null;
 
-      {/* CABEÇALHO */}
-      <div className="p-4 border-b border-white/10 bg-slate-950 flex items-center justify-between z-10">
+  return (
+    <div className="fixed bottom-24 right-6 md:right-8 w-[90vw] md:w-[400px] h-[500px] bg-slate-900 border border-cyan-500/30 rounded-3xl shadow-2xl flex flex-col z-50 overflow-hidden animate-in fade-in slide-in-from-bottom-4">
+      
+      {/* ─── Cabeçalho ─── */}
+      <div className="p-4 bg-slate-950 border-b border-white/5 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-cyan-500/20 text-cyan-400 rounded-xl">
-            <Sparkles className="w-5 h-5" />
+          <div className="p-2 bg-cyan-500/20 rounded-xl">
+            <BrainCircuit className="w-5 h-5 text-cyan-400" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-white tracking-wide">Quantum Advisor</h2>
-            <div className="flex items-center gap-1 text-[10px] text-slate-400">
-              <ShieldCheck className="w-3 h-3 text-emerald-400" />
-              Conexão Nuvem Segura (Grau Bancário)
-            </div>
+            <h3 className="font-bold text-white leading-none">Quantum AI</h3>
+            <span className="text-xs text-cyan-400 font-medium">Online e operacional</span>
           </div>
         </div>
-        {/* 🌟 BOTÃO DE FECHAR (Crucial para a UI flutuante) */}
-        <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors">
           <X className="w-5 h-5" />
         </button>
       </div>
 
-      {/* ÁREA DE MENSAGENS */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar z-10 bg-slate-900/50">
+      {/* ─── Janela de Conversa ─── */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
         {messages.map((msg, idx) => (
-          <div key={idx} className={`flex gap-3 max-w-[90%] ${msg.role === 'user' ? 'ml-auto flex-row-reverse' : ''}`}>
-            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${msg.role === 'user' ? 'bg-cyan-600 text-white' : 'bg-cyan-500/20 text-cyan-400'}`}>
-              {msg.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+          <div key={idx} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-lg ${msg.role === 'user' ? 'bg-indigo-600 shadow-indigo-500/20' : 'bg-cyan-600 shadow-cyan-500/20'}`}>
+              {msg.role === 'user' ? <User className="w-4 h-4 text-white" /> : <BrainCircuit className="w-4 h-4 text-white" />}
             </div>
-            <div className={`p-3.5 rounded-2xl text-sm leading-relaxed ${
-              msg.role === 'user' 
-                ? 'bg-cyan-600 text-white rounded-tr-none shadow-md' 
-                : 'bg-slate-800 border border-white/5 text-slate-200 rounded-tl-none prose prose-invert prose-p:leading-snug prose-li:my-0 max-w-none shadow-md'
-            }`}>
-              {msg.role === 'user' ? (
-                 msg.content
-              ) : (
-                <ReactMarkdown>{msg.content}</ReactMarkdown>
-              )}
+            <div className={`p-3 rounded-2xl max-w-[75%] text-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-800 text-slate-200 rounded-tl-none border border-white/5'}`}>
+              {msg.text}
             </div>
           </div>
         ))}
         {isLoading && (
-          <div className="flex gap-3 max-w-[85%]">
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
-              <Loader2 className="w-4 h-4 animate-spin" />
+          <div className="flex gap-3">
+            <div className="w-8 h-8 rounded-full bg-cyan-600 flex items-center justify-center shrink-0 shadow-lg shadow-cyan-500/20">
+              <BrainCircuit className="w-4 h-4 text-white" />
             </div>
-            <div className="p-4 rounded-2xl bg-slate-800 border border-white/5 rounded-tl-none flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></div>
-              <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse delay-75"></div>
-              <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse delay-150"></div>
+            <div className="p-4 bg-slate-800 rounded-2xl rounded-tl-none border border-white/5 flex items-center">
+              <Loader2 className="w-4 h-4 text-cyan-400 animate-spin" />
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* INPUT */}
-      <div className="p-4 border-t border-white/5 bg-slate-950 z-10">
-        <form onSubmit={handleSend} className="relative flex items-center">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Pergunte sobre os seus gastos..."
-            className="w-full bg-slate-900 border border-white/10 rounded-xl pl-4 pr-12 py-3.5 text-sm text-white focus:outline-none focus:border-cyan-500/50 transition-all placeholder:text-slate-500"
-            disabled={isLoading}
-          />
-          <button
-            type="submit"
-            disabled={!input.trim() || isLoading}
-            className="absolute right-2 p-2 bg-cyan-500 hover:bg-cyan-400 text-slate-900 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-          >
-            <Send className="w-4 h-4" />
-          </button>
-        </form>
-      </div>
+      {/* ─── Painel de Comando (Input) ─── */}
+      <form onSubmit={handleSendMessage} className="p-4 bg-slate-950 border-t border-white/5 flex gap-2">
+        <input 
+          type="text" 
+          value={inputMessage}
+          onChange={(e) => setInputMessage(e.target.value)}
+          placeholder="Pergunte sobre as suas finanças..." 
+          disabled={isLoading}
+          className="flex-1 bg-slate-900 border border-white/10 rounded-xl px-4 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500 transition-colors disabled:opacity-50"
+        />
+        <button 
+          type="submit" 
+          disabled={isLoading || !inputMessage.trim()}
+          className="p-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(8,145,178,0.3)]"
+        >
+          <Send className="w-5 h-5" />
+        </button>
+      </form>
     </div>
   );
-}
+};

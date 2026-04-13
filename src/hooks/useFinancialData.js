@@ -25,7 +25,7 @@ export function useFinancialData(transactions, activeModule, currentMonth, curre
     });
   }, [transactions, activeModule, currentMonth, currentYear]);
 
-  // 2. CÁLCULO DE SALDOS REAIS (Global vs Mensal)
+  // 2. CÁLCULO DE SALDOS REAIS E PRECISÃO DECIMAL
   const moduleBalances = useMemo(() => {
     if (!transactions) return { geral: { saldo: 0, receitas: 0, despesas: 0, patrimonio: 0, dividas: 0 } };
 
@@ -37,14 +37,17 @@ export function useFinancialData(transactions, activeModule, currentMonth, curre
       const txAccount = tx.account || 'conta_corrente';
       if (activeModule !== 'geral' && txAccount !== activeModule) return;
 
-      const val = new Decimal(Math.abs(Number(tx.value || 0)));
+      // 🛡️ DESENCRIPTAR CENTAVOS: Divide por 100 para restabelecer os decimais reais
+      const rawVal = Number(tx.value || 0);
+      const val = new Decimal(Math.abs(rawVal)).dividedBy(100); 
+      
       const isIncome = tx.type === 'entrada' || tx.type === 'receita';
 
-      // ACUMULADO GLOBAL (O verdadeiro Saldo Bancário de todo o histórico)
+      // ACUMULADO GLOBAL (O verdadeiro Saldo Bancário de todo o histórico baixado)
       if (isIncome) saldoAcumulado = saldoAcumulado.plus(val);
       else saldoAcumulado = saldoAcumulado.minus(val);
 
-      // APENAS DO MÊS SELECIONADO (Para os painéis vermelho e verde)
+      // APENAS DO MÊS SELECIONADO
       const rawDate = tx.date || tx.data || tx.createdAt;
       if (rawDate) {
         let txDate = rawDate.toDate ? rawDate.toDate() : new Date(rawDate);
@@ -77,7 +80,9 @@ export function useFinancialData(transactions, activeModule, currentMonth, curre
       if (tx.type === 'saida' || tx.type === 'despesa') {
         const cat = tx.category || 'Diversos';
         const current = map[cat] ? new Decimal(map[cat]) : new Decimal(0);
-        map[cat] = current.plus(new Decimal(Math.abs(Number(tx.value || 0)))).toNumber();
+        // Desencriptar centavos para os gráficos
+        const val = new Decimal(Math.abs(Number(tx.value || 0))).dividedBy(100);
+        map[cat] = current.plus(val).toNumber();
       }
     });
     
@@ -95,6 +100,26 @@ export function useFinancialData(transactions, activeModule, currentMonth, curre
     return [...categoryData].slice(0, 4);
   }, [categoryData]);
 
-  // 🌟 O GRANDE TRUQUE: Enviamos o "allTransactions" para os gráficos que precisam de histórico
-  return { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions: transactions };
+  // Enviar a matriz desencriptada de centavos para a UI
+  const allTransactionsDecrypted = useMemo(() => {
+    return (transactions || []).map(tx => ({
+      ...tx,
+      value: new Decimal(Number(tx.value || 0)).dividedBy(100).toNumber()
+    }));
+  }, [transactions]);
+
+  const displayedTransactionsDecrypted = useMemo(() => {
+    return (displayedTransactions || []).map(tx => ({
+      ...tx,
+      value: new Decimal(Number(tx.value || 0)).dividedBy(100).toNumber()
+    }));
+  }, [displayedTransactions]);
+
+  return { 
+    displayedTransactions: displayedTransactionsDecrypted, 
+    moduleBalances, 
+    categoryData, 
+    topExpensesData, 
+    allTransactions: allTransactionsDecrypted 
+  };
 }

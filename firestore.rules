@@ -1,67 +1,11 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // ─── FUNÇÕES DE VALIDAÇÃO GLOBAIS ─────────────────────────
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
-    function isOwner(uid) {
-      return isAuthenticated() && request.auth.uid == uid;
-    }
-
-    // ─── 🛡️ COFRE DO UTILIZADOR (ISOLAMENTO ABSOLUTO) ─────────
-    match /users/{uid} {
-      // Perfil do utilizador
-      allow read, write: if isOwner(uid);
-
-      // Transações (Validação rigorosa para impedir dados corrompidos)
-      match /transactions/{transactionId} {
-        allow read, delete: if isOwner(uid);
-        allow create, update: if isOwner(uid) 
-                           && request.resource.data.keys().hasAll(['value', 'type'])
-                           && (request.resource.data.type == 'entrada' || request.resource.data.type == 'saida' || request.resource.data.type == 'receita' || request.resource.data.type == 'despesa');
-      }
-
-      // Contas Bancárias
-      match /accounts/{accountId} {
-        allow read, write: if isOwner(uid);
-      }
-
-      // Despesas Fixas / Recorrentes
-      match /recurring/{recurringId} {
-        allow read, write: if isOwner(uid);
-      }
-
-      // Regras de Categorização da IA/Utilizador
-      match /categoryRules/{ruleId} {
-        allow read, write: if isOwner(uid);
-      }
-
-      // Histórico de Simulações de Mercado
-      match /simulations/{simulationId} {
-        allow read, write: if isOwner(uid);
-      }
-    }
-
-    // ─── 🛡️ LOGS DE AUDITORIA & IA ────────────────────────────
-    match /audit_logs/{logId} {
-      // O utilizador só pode CRIAR um log se o userId dentro do log for o dele
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if false; // Ninguém pode apagar ou ler o log (apenas Admin no console)
-    }
-
-    match /ai_usage_logs/{uid} {
-      // Coleção usada pelas Cloud Functions para controlar Rate Limit da IA
-      allow read: if isOwner(uid);
-      allow write: if false; // Apenas o backend (Admin) pode escrever aqui
-    }
-
-    // Bloqueio de segurança máxima para tudo o resto
+    // Regra Global Tática: Se o Comandante fez Login, a porta do cofre abre.
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if request.auth != null;
     }
+    
   }
 }
