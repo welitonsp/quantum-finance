@@ -60,3 +60,17 @@ export const fromCentavos = (val) => {
     .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
     .toNumber();
 };
+
+// ─── Cartões de Crédito ───────────────────────────────────────────────────
+export const creditCardSchema = z.object({
+  name:        z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  limit:       z.number().int("Limite em centavos").positive("Limite deve ser positivo"),
+  closingDay:  z.number().min(1).max(31, "Dia de fecho entre 1 e 31"),
+  dueDay:      z.number().min(1).max(31, "Dia de vencimento entre 1 e 31"),
+  color:       z.string().default('#00E68A'),
+  active:      z.boolean().default(true),
+});
+
+export function validateCreditCard(data) {
+  return creditCardSchema.safeParse(data);
+}

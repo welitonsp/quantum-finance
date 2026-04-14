@@ -1,8 +1,8 @@
 import React from 'react';
 import { useNavigation } from '../contexts/NavigationContext';
-import { 
-  LayoutDashboard, PieChart, Settings, LogOut, 
-  Landmark, BrainCircuit, Repeat, Clock, X 
+import {
+  LayoutDashboard, PieChart, Settings, LogOut,
+  Landmark, BrainCircuit, Repeat, Clock, X, CreditCard
 } from "lucide-react";
 
 export default function Sidebar({ user, isMobileMenuOpen, setIsMobileMenuOpen, isSidebarCollapsed, setIsSettingsOpen, handleLogout }) {
@@ -25,9 +25,10 @@ export default function Sidebar({ user, isMobileMenuOpen, setIsMobileMenuOpen, i
     {
       title: "Cofre Quântico",
       items: [
-        { id: 'accounts', icon: Landmark, label: 'Minhas Contas' },
-        { id: 'history', icon: Clock, label: 'Movimentações' },
-        { id: 'recurring', icon: Repeat, label: 'Despesas Fixas' },
+        { id: 'accounts',  icon: Landmark,    label: 'Minhas Contas'    },
+        { id: 'cards',     icon: CreditCard,  label: 'Cartões de Crédito' },
+        { id: 'history',   icon: Clock,       label: 'Movimentações'    },
+        { id: 'recurring', icon: Repeat,      label: 'Despesas Fixas'   },
       ]
     }
   ];

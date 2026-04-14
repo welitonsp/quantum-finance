@@ -21,12 +21,39 @@ function detectSeparator(firstLine) {
   return semicolons > commas ? ';' : ',';
 }
 
+/**
+ * Normaliza datas em múltiplos formatos para YYYY-MM-DD.
+ * Suporta: YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY, DD-MM-YYYY
+ */
 function validateISODate(raw) {
   if (!raw) return null;
   const s = raw.trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
-  const d = new Date(s + 'T00:00:00');
-  return isNaN(d.getTime()) ? null : s;
+
+  // Formato ISO já correto: YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const d = new Date(s + 'T00:00:00');
+    return isNaN(d.getTime()) ? null : s;
+  }
+
+  // Formato DD/MM/YYYY (mais comum em bancos brasileiros/portugueses)
+  const ptBR = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (ptBR) {
+    const [, dd, mm, yyyy] = ptBR;
+    const iso = `${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
+    const d = new Date(iso + 'T00:00:00');
+    if (!isNaN(d.getTime()) && d.getMonth() + 1 === Number(mm)) return iso;
+  }
+
+  // Formato YYYY/MM/DD
+  const altISO = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (altISO) {
+    const [, yyyy, mm, dd] = altISO;
+    const iso = `${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
+    const d = new Date(iso + 'T00:00:00');
+    return isNaN(d.getTime()) ? null : iso;
+  }
+
+  return null;
 }
 
 function parseAmount(raw) {
@@ -39,18 +66,34 @@ function mapHeaders(headers) {
   const map = { date: -1, description: -1, value: -1 };
   headers.forEach((h, i) => {
     const norm = h.toLowerCase()
-      .replace(/^\uFEFF/, '')       
-      .replace(/[^a-zà-ú]/g, '');  
-    if (['data', 'date'].includes(norm))                                   map.date = i;
-    if (['lancamento', 'lançamento', 'descricao', 'descrição',
-         'historico', 'histórico', 'memo', 'description'].includes(norm))  map.description = i;
-    if (['valor', 'value', 'amount', 'quantia'].includes(norm))            map.value = i;
+      .replace(/^\uFEFF/, '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')  // Remove acentos
+      .replace(/[^a-z0-9]/g, '');
+
+    // Data
+    if (['data', 'date', 'datamovimento', 'datalan', 'datalancamento',
+         'datalcto', 'dataoperacao', 'dataaplicacao'].includes(norm)) {
+      map.date = i;
+    }
+    // Descrição
+    if (['lancamento', 'descricao', 'historico', 'memo', 'description',
+         'estabelecimento', 'detalhes', 'detalhe', 'complemento',
+         'observacao', 'notadedetalhe', 'nomefornecedor'].includes(norm)) {
+      map.description = i;
+    }
+    // Valor
+    if (['valor', 'value', 'amount', 'quantia', 'debito', 'credito',
+         'montante', 'valortransacao', 'valorpago', 'valoroperacao',
+         'valormov'].includes(norm)) {
+      if (map.value === -1) map.value = i; // Pega o primeiro encontrado
+    }
   });
   return map;
 }
 
 function resolveType(amount) {
-  return amount < 0 ? 'entrada' : 'saida';
+  // Débitos bancários são negativos → 'saida'; créditos são positivos → 'entrada'
+  return amount < 0 ? 'saida' : 'entrada';
 }
 
 export async function parseCSV(file) {
