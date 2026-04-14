@@ -2,14 +2,14 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // 🛡️ REGRA TÁTICA DE SEGURANÇA 
-    // Garante que o sistema nunca bloqueia a leitura ou escrita 
-    // desde que exista uma credencial de acesso válida (request.auth != null).
-    // Aplica-se a todas as coleções (transactions, recurring, etc.)
-    
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    // 🛡️ REGRA TÁTICA DE ISOLAMENTO QUÂNTICO
+    // Garante que um utilizador só pode ver, editar ou apagar os SEUS próprios dados.
+    match /{collection}/{document=**} {
+      // O utilizador só pode LER e APAGAR se o documento lhe pertencer
+      allow read, delete: if request.auth != null && resource.data.uid == request.auth.uid;
+      
+      // O utilizador só pode CRIAR ou ATUALIZAR se a informação que está a enviar contiver o seu UID
+      allow create, update: if request.auth != null && request.resource.data.uid == request.auth.uid;
     }
-    
   }
 }

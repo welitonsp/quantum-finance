@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import CountUp from 'react-countup';
 import {
   ArrowRightLeft, TrendingUp, TrendingDown, AlertTriangle,
@@ -150,16 +150,16 @@ export default function DashboardContent({
         </div>
       </motion.div>
 
-      {/* ── FORMULÁRIO TRANSAÇÃO ────────────────────────────── */}
-      {isFormOpen && (
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+      {/* ── FORMULÁRIO TRANSAÇÃO (modal overlay) ─────────────── */}
+      <AnimatePresence>
+        {isFormOpen && (
           <TransactionForm
             onSave={onSaveTransaction}
             editingTransaction={transactionToEdit}
             onCancelEdit={() => { setTransactionToEdit(null); setIsFormOpen(false); }}
           />
-        </motion.div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* ── INTEL STRIP (MÉTRICAS DE FLUXO) ─────────────────── */}
       <motion.div variants={itemVariants}>

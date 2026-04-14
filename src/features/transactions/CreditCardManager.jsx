@@ -136,7 +136,9 @@ function CardForm({ initial, onSave, onCancel }) {
       toast.error('Preencha nome e limite.');
       return;
     }
-    onSave({ ...form, limit: Number(form.limit) });
+    // 🛡️ MATEMÁTICA MILITAR: Transforma o limite em Centavos Inteiros antes de gravar
+    const limitEmCentavos = Math.round(Number(form.limit) * 100);
+    onSave({ ...form, limit: limitEmCentavos });
   };
 
   return (

@@ -64,7 +64,12 @@ Transações:
 ${transactions.map(t => `ID: ${t.id} | Descrição: "${t.description}" | Valor: R$ ${t.value}`).join('\n')}`;
 
       const result = await model.generateContent(prompt);
-      return JSON.parse(result.response.text());
+      let text = result.response.text();
+      
+      // 🛡️ BLINDAGEM JSON: Remove as crases do markdown que a IA adora colocar
+      text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+      
+      return JSON.parse(text);
     } catch (error) {
       console.error("Erro na Categorização IA:", error);
       return [];

@@ -68,6 +68,17 @@ export const FirestoreService = {
     await batch.commit();
   },
 
+  // Atualiza campos específicos em múltiplas transações de uma só vez (ex: re-categorizar lote)
+  async batchUpdateTransactions(ids, updateData) {
+    if (!ids || ids.length === 0) return;
+    const batch = writeBatch(db);
+    const payload = { ...updateData, updatedAt: serverTimestamp() };
+    // Nunca permitir sobrescrita acidental de valor via batch — requer updateTransaction individual
+    delete payload.value;
+    ids.forEach(id => batch.update(doc(db, 'transactions', id), payload));
+    await batch.commit();
+  },
+
   // ─── DESPESAS RECORRENTES (FUNÇÕES RESTAURADAS) ───────────────────────────
   getRecurringCollection() {
     return collection(db, 'recurring');
