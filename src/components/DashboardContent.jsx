@@ -12,6 +12,7 @@ import { formatCurrency } from '../utils/formatters';
 // Componentes Principais
 import ForecastWidget from './ForecastWidget';
 import TransactionForm from '../features/transactions/TransactionForm';
+import ProactiveBriefing from './ProactiveBriefing';
 
 // Componentes Modulares
 import { calcStatus } from '../utils/dashboardUtils';
@@ -165,6 +166,23 @@ export default function DashboardContent({
       <motion.div variants={itemVariants}>
         <IntelStrip savingsRate={savingsRate} debtRatio={debtRatio} goalProgress={goalProgress} />
       </motion.div>
+
+      {/* ── BRIEFING PRÓ-ATIVO DA IA ─────────────────────────── */}
+      <AnimatePresence>
+        <motion.div variants={itemVariants}>
+          <ProactiveBriefing
+            uid={user?.uid}
+            financialContext={{
+              saldo:        saldo,
+              entradas:     receitas,
+              saidas:       despesas,
+              transactions: transactions,
+              currentMonth,
+              currentYear,
+            }}
+          />
+        </motion.div>
+      </AnimatePresence>
 
       {/* ── PROJEÇÃO QUÂNTICA ───────────────────────────────── */}
       <motion.div variants={itemVariants} className="grid grid-cols-1 gap-6">
