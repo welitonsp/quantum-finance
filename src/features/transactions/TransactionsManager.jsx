@@ -6,9 +6,9 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Filter, Trash2, Edit3, ArrowUpRight, ArrowDownRight,
-  CheckSquare, Square, X, ChevronDown, SlidersHorizontal,
+  CheckSquare, Square, MinusSquare, X, ChevronDown, SlidersHorizontal,
   TrendingUp, TrendingDown, Minus, Tag, Calendar, ArrowUpDown,
-  Layers, RotateCcw, Zap, AlertTriangle, Check
+  Layers, RotateCcw, Zap, AlertTriangle, Check, ShieldAlert
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
@@ -311,7 +311,14 @@ export default function TransactionsManager({
     setSelected(new Set(filtered.filter(tx => tx.category === cat).map(t => t.id)));
   }, [filtered]);
 
-  const allFilteredSelected = filtered.length > 0 && filtered.every(t => selected.has(t.id));
+  // Seleciona TODOS os lançamentos (incluindo fora dos filtros ativos)
+  const selectAllTransactions = useCallback(() => {
+    setSelected(new Set(transactions.map(t => t.id)));
+  }, [transactions]);
+
+  const allFilteredSelected    = filtered.length > 0 && filtered.every(t => selected.has(t.id));
+  const allTransactionsSelected = transactions.length > 0 && transactions.every(t => selected.has(t.id));
+  const someSelected           = selected.size > 0 && !allFilteredSelected;
 
   // ── Batch delete ──────────────────────────────────────────────────────────
   const handleBatchDelete = useCallback(async () => {
@@ -503,7 +510,39 @@ export default function TransactionsManager({
       </div>
 
       {/* ═══ STATS BAR ══════════════════════════════════════════════════════ */}
-      <div className="flex items-center gap-4 px-4 py-2.5 bg-quantum-bg/20 border-b border-quantum-border text-xs overflow-x-auto custom-scrollbar">
+      <div className="flex items-center gap-3 px-4 py-2.5 bg-quantum-bg/20 border-b border-quantum-border text-xs overflow-x-auto custom-scrollbar">
+
+        {/* ── Checkbox Master ─────────────────────────────────────────── */}
+        <button
+          onClick={allFilteredSelected ? clearSelected : selectAll}
+          title={allFilteredSelected ? 'Desmarcar tudo' : `Marcar todos os ${filtered.length} visíveis`}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border font-bold transition-all shrink-0 ${
+            allFilteredSelected
+              ? 'bg-quantum-accentDim border-quantum-accent/40 text-quantum-accent'
+              : someSelected
+              ? 'bg-quantum-bgSecondary border-quantum-accent/20 text-quantum-accent/70'
+              : 'bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted hover:text-white hover:border-quantum-accent/20'
+          }`}
+        >
+          {allFilteredSelected
+            ? <CheckSquare className="w-3.5 h-3.5" />
+            : someSelected
+            ? <MinusSquare  className="w-3.5 h-3.5" />
+            : <Square       className="w-3.5 h-3.5" />
+          }
+          <span className="hidden sm:inline">
+            {allFilteredSelected ? 'Desmarcar' : 'Marcar Todos'}
+          </span>
+          <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+            allFilteredSelected ? 'bg-quantum-accent/20 text-quantum-accent' : 'bg-quantum-border/60 text-quantum-fgMuted'
+          }`}>
+            {allFilteredSelected ? selected.size : filtered.length}
+          </span>
+        </button>
+
+        <div className="w-px h-4 bg-quantum-border shrink-0" />
+
+        {/* ── Contadores ─────────────────────────────────────────────── */}
         <span className="text-quantum-fgMuted shrink-0">
           <span className="font-black text-white">{stats.count}</span> registos
         </span>
@@ -522,11 +561,9 @@ export default function TransactionsManager({
           </span>
         </span>
 
-        {/* Seleção rápida por tipo/categoria */}
+        {/* ── Seleção rápida por tipo/categoria ──────────────────────── */}
         <div className="ml-auto flex items-center gap-1.5 shrink-0">
-          <span className="text-quantum-fgMuted">Selecionar:</span>
-          <button onClick={selectAll}             className="text-quantum-accent hover:underline font-bold">Todos ({filtered.length})</button>
-          <span className="text-quantum-border">·</span>
+          <span className="text-quantum-fgMuted hidden md:inline">Selecionar:</span>
           <button onClick={() => selectByType('entrada')} className="text-quantum-accent hover:underline font-bold">Entradas</button>
           <span className="text-quantum-border">·</span>
           <button onClick={() => selectByType('saida')}   className="text-quantum-red hover:underline font-bold">Saídas</button>
@@ -556,6 +593,11 @@ export default function TransactionsManager({
                   <span className="text-sm font-black text-white">
                     {selected.size} selecionada{selected.size > 1 ? 's' : ''}
                   </span>
+                  {allTransactionsSelected && (
+                    <span className="text-[10px] px-2 py-0.5 bg-quantum-accent/20 border border-quantum-accent/30 text-quantum-accent rounded-full font-bold">
+                      TODOS os {transactions.length}
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap gap-2 ml-2">
@@ -589,6 +631,32 @@ export default function TransactionsManager({
                 </div>
               </div>
 
+              {/* ── Banner "Selecionar TODOS" (padrão Gmail) ─────────────────── */}
+              <AnimatePresence>
+                {allFilteredSelected && !allTransactionsSelected && transactions.length > filtered.length && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="flex flex-wrap items-center gap-3 px-3 py-2.5 bg-quantum-bg/60 border border-quantum-accent/15 rounded-xl">
+                      <ShieldAlert className="w-4 h-4 text-quantum-accent shrink-0" />
+                      <span className="text-xs text-quantum-fgMuted flex-1">
+                        Todos os <strong className="text-white">{filtered.length}</strong> lançamentos visíveis estão selecionados.
+                      </span>
+                      <button
+                        onClick={selectAllTransactions}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-quantum-accentDim border border-quantum-accent/30 text-quantum-accent rounded-lg text-xs font-black hover:bg-quantum-accent/20 transition-all shrink-0"
+                      >
+                        <CheckSquare className="w-3.5 h-3.5" />
+                        Selecionar todos os {transactions.length} lançamentos
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Painel de confirmação de apagar */}
               <AnimatePresence>
                 {batchAction === 'delete' && confirmDelete && (
@@ -596,18 +664,43 @@ export default function TransactionsManager({
                     initial={{ opacity: 0, y: -8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
-                    className="flex items-center gap-3 p-3 bg-quantum-redDim border border-quantum-red/30 rounded-xl"
+                    className={`p-3 border rounded-xl space-y-2.5 ${
+                      allTransactionsSelected
+                        ? 'bg-red-950/40 border-red-500/50'
+                        : 'bg-quantum-redDim border-quantum-red/30'
+                    }`}
                   >
-                    <AlertTriangle className="w-4 h-4 text-quantum-red shrink-0" />
-                    <p className="text-xs text-quantum-fg flex-1">
-                      Tem a certeza? Vai apagar <strong>{selected.size} movimentações</strong> permanentemente.
-                    </p>
-                    <div className="flex gap-2 shrink-0">
-                      <button onClick={() => { setBatchAction(null); setConfirmDelete(false); }} className="px-3 py-1.5 bg-quantum-bgSecondary border border-quantum-border rounded-lg text-xs text-quantum-fgMuted hover:text-white font-bold">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${allTransactionsSelected ? 'text-red-400' : 'text-quantum-red'}`} />
+                      <div className="flex-1 min-w-0">
+                        {allTransactionsSelected ? (
+                          <p className="text-xs text-red-300 font-bold leading-relaxed">
+                            ⚠️ Atenção! Vai apagar <strong className="text-red-200">TODOS os {selected.size} lançamentos</strong> da sua conta permanentemente. Esta ação não pode ser desfeita!
+                          </p>
+                        ) : (
+                          <p className="text-xs text-quantum-fg leading-relaxed">
+                            Tem a certeza? Vai apagar <strong>{selected.size} movimentações</strong> permanentemente.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        onClick={() => { setBatchAction(null); setConfirmDelete(false); }}
+                        className="px-3 py-1.5 bg-quantum-bgSecondary border border-quantum-border rounded-lg text-xs text-quantum-fgMuted hover:text-white font-bold"
+                      >
                         Cancelar
                       </button>
-                      <button onClick={handleBatchDelete} className="px-3 py-1.5 bg-quantum-red text-white rounded-lg text-xs font-black hover:bg-red-600 transition-colors">
-                        Confirmar Apagar
+                      <button
+                        onClick={handleBatchDelete}
+                        className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-black transition-colors ${
+                          allTransactionsSelected
+                            ? 'bg-red-600 hover:bg-red-500 text-white'
+                            : 'bg-quantum-red hover:bg-red-600 text-white'
+                        }`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        {allTransactionsSelected ? 'Apagar TUDO' : `Confirmar Apagar ${selected.size}`}
                       </button>
                     </div>
                   </motion.div>
