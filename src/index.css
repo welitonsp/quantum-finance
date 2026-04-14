@@ -83,6 +83,19 @@
     transform: translateY(-1px);
   }
 
+  /* ─── Botão Secundário Quantum ─── */
+  .btn-quantum-secondary {
+    @apply px-4 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 active:scale-95;
+    background: rgba(30, 42, 63, 0.8);
+    color: #6B7A94;
+    border: 1px solid rgba(30, 42, 63, 0.9);
+  }
+  .btn-quantum-secondary:hover {
+    background: rgba(30, 42, 63, 1);
+    color: #E8ECF4;
+    border-color: rgba(0, 230, 138, 0.2);
+  }
+
   /* ─── Botão Danger ─── */
   .btn-quantum-danger {
     @apply px-5 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 active:scale-95;
