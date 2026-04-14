@@ -6,28 +6,22 @@
 
 @layer base {
   body {
-    /* Aplica o novo fundo escuro e cor de texto a toda a aplicação */
     @apply bg-quantum-bg text-quantum-fg font-sans overflow-x-hidden antialiased;
   }
-  
-  /* Scrollbar Customizada */
-  ::-webkit-scrollbar {
-    width: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: #0A0E17;
-  }
+
+  /* ─── Scrollbar Quântica ─── */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
     background: #1E2A3F;
-    border-radius: 3px;
+    border-radius: 999px;
   }
-  ::-webkit-scrollbar-thumb:hover {
-    background: #00E68A;
-  }
+  ::-webkit-scrollbar-thumb:hover { background: #00E68A44; }
 }
 
 @layer components {
-  /* Efeito de brilho animado para o texto "Weliton" */
+
+  /* ─── Shimmer de texto ─── */
   .shimmer-text {
     background: linear-gradient(90deg, #E8ECF4 0%, #00E68A 50%, #E8ECF4 100%);
     background-size: 200% 100%;
@@ -36,21 +30,165 @@
     background-clip: text;
     @apply animate-shimmer;
   }
-  
-  /* Classe base para os nossos novos cartões */
+
+  /* ─── Glass Card Quantum (Nível 1 — base) ─── */
   .glass-card-quantum {
-    @apply bg-quantum-card border border-quantum-border rounded-2xl relative overflow-hidden transition-all duration-300 shadow-lg;
+    @apply relative overflow-hidden rounded-2xl transition-all duration-300;
+    background: rgba(19, 26, 42, 0.7);
+    border: 1px solid rgba(30, 42, 63, 0.8);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow:
+      0 4px 24px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
   .glass-card-quantum:hover {
-    @apply border-quantum-accent/40;
+    border-color: rgba(0, 230, 138, 0.25);
+    box-shadow:
+      0 4px 32px rgba(0, 0, 0, 0.4),
+      0 0 20px rgba(0, 230, 138, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
-  
-  /* Esconde scrollbars onde precisamos de scroll limpo (ex: Ticker) */
-  .custom-scrollbar::-webkit-scrollbar {
-    display: none;
+
+  /* ─── Glass Card Quantum (Nível 2 — KPI destacado) ─── */
+  .glass-card-elite {
+    @apply relative overflow-hidden rounded-2xl transition-all duration-300;
+    background: linear-gradient(135deg, rgba(19, 26, 42, 0.9) 0%, rgba(15, 21, 32, 0.95) 100%);
+    border: 1px solid rgba(0, 230, 138, 0.15);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.4),
+      0 0 0 1px rgba(0, 230, 138, 0.05),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
-  .custom-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+  .glass-card-elite:hover {
+    border-color: rgba(0, 230, 138, 0.35);
+    box-shadow:
+      0 8px 40px rgba(0, 0, 0, 0.5),
+      0 0 30px rgba(0, 230, 138, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    transform: translateY(-1px);
+  }
+
+  /* ─── Botão Primário Quantum ─── */
+  .btn-quantum-primary {
+    @apply relative overflow-hidden px-5 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 active:scale-95;
+    background: linear-gradient(135deg, #00E68A 0%, #00B86E 100%);
+    color: #0A0E17;
+    box-shadow: 0 0 20px rgba(0, 230, 138, 0.3), 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+  .btn-quantum-primary:hover {
+    box-shadow: 0 0 30px rgba(0, 230, 138, 0.5), 0 2px 12px rgba(0, 0, 0, 0.4);
+    transform: translateY(-1px);
+  }
+
+  /* ─── Botão Danger ─── */
+  .btn-quantum-danger {
+    @apply px-5 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 active:scale-95;
+    background: rgba(255, 71, 87, 0.15);
+    color: #FF4757;
+    border: 1px solid rgba(255, 71, 87, 0.3);
+    box-shadow: 0 0 12px rgba(255, 71, 87, 0.1);
+  }
+  .btn-quantum-danger:hover {
+    background: rgba(255, 71, 87, 0.25);
+    box-shadow: 0 0 20px rgba(255, 71, 87, 0.2);
+  }
+
+  /* ─── Badge de status ─── */
+  .badge-quantum-green {
+    @apply text-xs font-bold px-2.5 py-1 rounded-lg;
+    background: rgba(0, 230, 138, 0.12);
+    color: #00E68A;
+    border: 1px solid rgba(0, 230, 138, 0.2);
+  }
+  .badge-quantum-red {
+    @apply text-xs font-bold px-2.5 py-1 rounded-lg;
+    background: rgba(255, 71, 87, 0.12);
+    color: #FF4757;
+    border: 1px solid rgba(255, 71, 87, 0.2);
+  }
+  .badge-quantum-gold {
+    @apply text-xs font-bold px-2.5 py-1 rounded-lg;
+    background: rgba(255, 184, 0, 0.12);
+    color: #FFB800;
+    border: 1px solid rgba(255, 184, 0, 0.2);
+  }
+
+  /* ─── Glow de texto para valores de destaque ─── */
+  .text-glow-green {
+    color: #00E68A;
+    text-shadow: 0 0 20px rgba(0, 230, 138, 0.5);
+  }
+  .text-glow-red {
+    color: #FF4757;
+    text-shadow: 0 0 20px rgba(255, 71, 87, 0.5);
+  }
+  .text-glow-gold {
+    color: #FFB800;
+    text-shadow: 0 0 20px rgba(255, 184, 0, 0.5);
+  }
+
+  /* ─── Borda com gradiente (efeito neofuturista) ─── */
+  .border-gradient-quantum {
+    position: relative;
+  }
+  .border-gradient-quantum::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(0, 230, 138, 0.4), rgba(168, 85, 247, 0.2), rgba(0, 230, 138, 0.1));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* ─── Linha de scan (decoração cyberpunk) ─── */
+  .scanline-effect {
+    position: relative;
+    overflow: hidden;
+  }
+  .scanline-effect::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 230, 138, 0.015) 2px,
+      rgba(0, 230, 138, 0.015) 4px
+    );
+    pointer-events: none;
+  }
+
+  /* ─── Input Quantum ─── */
+  .input-quantum {
+    @apply w-full rounded-xl px-4 py-3 text-sm text-white placeholder:text-quantum-fgMuted outline-none transition-all;
+    background: rgba(15, 21, 32, 0.8);
+    border: 1px solid rgba(30, 42, 63, 0.9);
+  }
+  .input-quantum:focus {
+    border-color: rgba(0, 230, 138, 0.4);
+    box-shadow: 0 0 0 3px rgba(0, 230, 138, 0.08), 0 0 15px rgba(0, 230, 138, 0.05);
+  }
+
+  /* ─── Scrollbar invisível (scroll limpo) ─── */
+  .custom-scrollbar::-webkit-scrollbar { display: none; }
+  .custom-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* ─── Progress bar quântica ─── */
+  .progress-quantum {
+    @apply h-1.5 rounded-full overflow-hidden;
+    background: rgba(30, 42, 63, 0.8);
+  }
+  .progress-quantum-fill {
+    @apply h-full rounded-full transition-all duration-700 ease-out;
+    background: linear-gradient(90deg, #00E68A, #00B86E);
+    box-shadow: 0 0 8px rgba(0, 230, 138, 0.4);
   }
 }

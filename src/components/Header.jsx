@@ -1,7 +1,8 @@
 // src/components/Header.jsx
-import { Menu, ChevronLeft, ChevronRight, Sun, Moon, Plus, Eye, EyeOff } from "lucide-react";
+import { Menu, ChevronLeft, ChevronRight, Sun, Moon, Plus, Eye, EyeOff, TrendingDown, Flame } from "lucide-react";
 import ImportButton from "../features/transactions/ImportButton";
 import { usePrivacy } from "../contexts/PrivacyContext";
+import { useMemo } from "react";
 
 const PAGE_TITLES = {
   dashboard:  'Painel Central',
@@ -9,12 +10,78 @@ const PAGE_TITLES = {
   history:    'Livro Razão',
   wallet:     'Carteira',
   accounts:   'As Minhas Contas',
+  cards:      'Cartões de Crédito',
   portfolio:  'Portfólio',
   markets:    'Mercados',
   quantum:    'Quantum AI',
   recurring:  'Despesas Recorrentes',
 };
 
+// ─── HUD de Burn Rate ────────────────────────────────────────────────────────
+function BurnRateHUD({ transactions, currentMonth, currentYear }) {
+  const { isPrivacyMode } = usePrivacy();
+
+  const { burnRate, percentDoMes } = useMemo(() => {
+    if (!transactions || transactions.length === 0) return { burnRate: 0, percentDoMes: 0 };
+
+    const today = new Date();
+    const diaAtual = today.getDate();
+
+    const despesasMes = transactions
+      .filter(tx => {
+        if (tx.type !== 'saida' && tx.type !== 'despesa') return false;
+        const d = new Date(tx.date || tx.createdAt);
+        return d.getMonth() + 1 === currentMonth && d.getFullYear() === currentYear;
+      })
+      .reduce((acc, tx) => acc + Math.abs(Number(tx.value || 0)), 0);
+
+    const ritmoDiario = diaAtual > 0 ? despesasMes / diaAtual : 0;
+    const diasNoMes = new Date(currentYear, currentMonth, 0).getDate();
+    const projecao = ritmoDiario * diasNoMes;
+
+    // percentDoMes: proporção dos dias já consumidos no mês
+    const pct = Math.round((diaAtual / diasNoMes) * 100);
+
+    return { burnRate: ritmoDiario, percentDoMes: pct };
+  }, [transactions, currentMonth, currentYear]);
+
+  if (burnRate === 0) return null;
+
+  const color = percentDoMes < 50
+    ? { text: 'text-quantum-accent', bar: 'bg-quantum-accent', glow: 'rgba(0,230,138,0.5)' }
+    : percentDoMes < 75
+    ? { text: 'text-quantum-gold',   bar: 'bg-quantum-gold',   glow: 'rgba(255,184,0,0.5)' }
+    : { text: 'text-quantum-red',    bar: 'bg-quantum-red',    glow: 'rgba(255,71,87,0.5)' };
+
+  const formatted = isPrivacyMode
+    ? '••••'
+    : `R$ ${burnRate.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/dia`;
+
+  return (
+    <div className="hidden lg:flex items-center gap-3 px-4 py-2 bg-quantum-card/60 backdrop-blur-sm border border-quantum-border rounded-xl" title="Burn Rate diário do mês atual">
+      <div className={`p-1.5 rounded-lg bg-quantum-bgSecondary ${color.text}`}>
+        <Flame className="w-3.5 h-3.5" />
+      </div>
+      <div className="flex flex-col gap-1 min-w-[120px]">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-quantum-fgMuted uppercase tracking-wider font-medium">Burn Rate</span>
+          <span className={`text-[10px] font-bold font-mono ${color.text}`}>{percentDoMes}% do mês</span>
+        </div>
+        <div className="w-full h-1 bg-quantum-border rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-1000 ${color.bar}`}
+            style={{ width: `${Math.min(percentDoMes, 100)}%`, boxShadow: `0 0 6px ${color.glow}` }}
+          />
+        </div>
+        <span className={`text-xs font-bold font-mono ${color.text}`} style={{ textShadow: `0 0 10px ${color.glow}` }}>
+          {formatted}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Header Principal ────────────────────────────────────────────────────────
 export default function Header({
   currentPage,
   currentMonth,
@@ -37,76 +104,87 @@ export default function Header({
   const pageTitle = PAGE_TITLES[currentPage] || 'Quantum Finance';
 
   return (
-    <header className="h-24 border-b border-slate-200 dark:border-white/5 bg-white/50 dark:bg-slate-950/30 backdrop-blur-md flex items-center justify-between px-4 lg:px-8 flex-shrink-0 transition-all z-40 relative">
+    <header className="h-20 border-b border-quantum-border bg-quantum-bg/80 backdrop-blur-xl flex items-center justify-between px-4 lg:px-8 flex-shrink-0 transition-all z-40 relative shadow-[0_1px_0_rgba(0,230,138,0.04)]">
+      {/* ─── Esquerda: Menu + Título ─── */}
       <div className="flex items-center gap-4">
-        {/* ✅ CORREÇÃO: aria-label em botões de Menu */}
-        <button 
-          onClick={() => setIsMobileMenuOpen(true)} 
-          className="lg:hidden p-2 bg-slate-100 dark:bg-white/5 rounded-xl text-slate-800 dark:text-white"
+        <button
+          onClick={() => setIsMobileMenuOpen(true)}
+          className="lg:hidden p-2 bg-quantum-card rounded-xl text-quantum-fg border border-quantum-border"
           aria-label="Abrir menu mobile"
         >
-          <Menu className="w-6 h-6" />
+          <Menu className="w-5 h-5" />
         </button>
-        
-        <button 
-          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} 
-          className="hidden lg:flex p-2 bg-white dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white border border-slate-200 dark:border-white/5 transition-colors shadow-sm dark:shadow-none"
+
+        <button
+          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          className="hidden lg:flex p-2 bg-quantum-card hover:bg-quantum-cardHover rounded-xl text-quantum-fgMuted hover:text-quantum-fg border border-quantum-border transition-all"
           title={isSidebarCollapsed ? "Expandir Menu" : "Recolher Menu"}
           aria-label={isSidebarCollapsed ? "Expandir Menu" : "Recolher Menu"}
         >
           <Menu className="w-5 h-5" />
         </button>
 
-        <h2 className="text-xl md:text-2xl font-black text-slate-800 dark:text-white tracking-wide hidden sm:block">
+        <h2 className="text-lg md:text-xl font-black text-white tracking-wide hidden sm:block">
           {pageTitle}
         </h2>
       </div>
 
-      <div className="flex items-center gap-1 md:gap-2 bg-white dark:bg-slate-900/80 p-1.5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm dark:shadow-inner">
-         <button 
-           onClick={handlePrevMonth} 
-           className="p-2 hover:bg-slate-50 dark:hover:bg-white/10 rounded-xl text-slate-500 dark:text-slate-300 transition-colors"
-           aria-label="Mês anterior"
-         >
-           <ChevronLeft className="w-4 md:w-5 h-4 md:h-5" />
-         </button>
-         
-         <div className="flex flex-col items-center justify-center w-28 md:w-40" aria-live="polite">
-           <span className="text-xs md:text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">
-             {nomeMeses && currentMonth ? nomeMeses[currentMonth - 1] : 'MÊS'}
-           </span>
-           <span className="text-[10px] md:text-xs font-mono text-indigo-600 dark:text-cyan-400">
-             {currentYear || new Date().getFullYear()}
-           </span>
-         </div>
-         
-         <button 
-           onClick={handleNextMonth} 
-           className="p-2 hover:bg-slate-50 dark:hover:bg-white/10 rounded-xl text-slate-500 dark:text-slate-300 transition-colors"
-           aria-label="Próximo mês"
-         >
-           <ChevronRight className="w-4 md:w-5 h-4 md:h-5" />
-         </button>
+      {/* ─── Centro: HUD Burn Rate + Seletor de Mês ─── */}
+      <div className="flex items-center gap-3">
+        {(currentPage === 'dashboard' || currentPage === 'history' || currentPage === 'reports') && (
+          <BurnRateHUD
+            transactions={transactions}
+            currentMonth={currentMonth}
+            currentYear={currentYear}
+          />
+        )}
+
+        <div className="flex items-center gap-1 bg-quantum-card/80 p-1.5 rounded-2xl border border-quantum-border shadow-inner">
+          <button
+            onClick={handlePrevMonth}
+            className="p-2 hover:bg-quantum-cardHover rounded-xl text-quantum-fgMuted hover:text-white transition-colors"
+            aria-label="Mês anterior"
+          >
+            <ChevronLeft className="w-4 md:w-5 h-4 md:h-5" />
+          </button>
+
+          <div className="flex flex-col items-center justify-center w-24 md:w-36" aria-live="polite">
+            <span className="text-xs md:text-sm font-bold text-white uppercase tracking-wider">
+              {nomeMeses && currentMonth ? nomeMeses[currentMonth - 1] : 'MÊS'}
+            </span>
+            <span className="text-[10px] md:text-xs font-mono text-quantum-accent">
+              {currentYear || new Date().getFullYear()}
+            </span>
+          </div>
+
+          <button
+            onClick={handleNextMonth}
+            className="p-2 hover:bg-quantum-cardHover rounded-xl text-quantum-fgMuted hover:text-white transition-colors"
+            aria-label="Próximo mês"
+          >
+            <ChevronRight className="w-4 md:w-5 h-4 md:h-5" />
+          </button>
+        </div>
       </div>
 
-      <div className="flex items-center gap-2 md:gap-4">
-        {/* ✅ CORREÇÃO: aria-label em botões de contexto */}
-        <button 
-          onClick={togglePrivacy} 
-          className={`p-3 rounded-xl border transition-all shadow-sm dark:shadow-none ${isPrivacyMode ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-500/30' : 'bg-white dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-white/5'}`}
+      {/* ─── Direita: Ações ─── */}
+      <div className="flex items-center gap-2 md:gap-3">
+        <button
+          onClick={togglePrivacy}
+          className={`p-2.5 rounded-xl border transition-all ${isPrivacyMode ? 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30 shadow-[0_0_12px_rgba(99,102,241,0.2)]' : 'bg-quantum-card text-quantum-fgMuted border-quantum-border hover:text-white hover:border-quantum-accent/30'}`}
           title="Modo Privacidade (Alt + P)"
           aria-label={isPrivacyMode ? "Desativar modo privacidade" : "Ativar modo privacidade"}
         >
-          {isPrivacyMode ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+          {isPrivacyMode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
         </button>
 
-        <button 
-          onClick={toggleTheme} 
-          className="p-3 bg-white dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-cyan-400 border border-slate-200 dark:border-white/5 transition-all shadow-sm dark:shadow-none"
+        <button
+          onClick={toggleTheme}
+          className="p-2.5 bg-quantum-card hover:bg-quantum-cardHover rounded-xl text-quantum-fgMuted hover:text-quantum-accent border border-quantum-border transition-all"
           title={theme === 'dark' ? 'Ativar Modo Claro' : 'Ativar Modo Escuro'}
           aria-label={theme === 'dark' ? 'Ativar Modo Claro' : 'Ativar Modo Escuro'}
         >
-          {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
 
         {currentPage === 'dashboard' && (
@@ -114,13 +192,14 @@ export default function Header({
             <div className="hidden xl:block">
               <ImportButton onImportTransactions={handleImport} uid={user?.uid} existingTransactions={transactions} />
             </div>
-            <button 
-              onClick={() => setIsFormOpen(!isFormOpen)} 
-              className="px-4 py-2.5 md:px-6 md:py-3.5 bg-gradient-to-r from-indigo-600 to-cyan-500 text-white rounded-2xl flex items-center text-xs md:text-sm font-bold shadow-lg shadow-indigo-500/25 hover:shadow-cyan-500/40 hover:scale-105 active:scale-95 transition-all"
+            <button
+              onClick={() => setIsFormOpen(!isFormOpen)}
+              className="btn-quantum-primary flex items-center gap-2"
               title="Nova Transação (Alt + N)"
               aria-label="Adicionar nova transação"
             >
-              <Plus className="w-4 h-4 md:w-5 md:h-5 md:mr-2" /> <span className="hidden md:inline">Nova Transação</span>
+              <Plus className="w-4 h-4" />
+              <span className="hidden md:inline text-sm">Nova Transação</span>
             </button>
           </>
         )}

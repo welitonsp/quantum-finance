@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, lazy, Suspense } from "react";
 import { auth } from "./shared/api/firebase/index.js";
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
-import { BrainCircuit, AlertTriangle } from "lucide-react";
+import { BrainCircuit, AlertTriangle, Loader2 } from "lucide-react";
 import toast, { Toaster } from 'react-hot-toast';
 
 import { useTheme } from "./contexts/ThemeContext";
@@ -17,12 +17,23 @@ import LoginScreen from "./components/LoginScreen";
 import QuantumBackground from "./components/QuantumBackground";
 import DashboardContent from "./components/DashboardContent";
 import CategorySettings from "./components/CategorySettings";
-import ReportsContent from "./features/reports/ReportsContent";
-import { AIAssistantChat } from "./features/ai-chat/AIAssistantChat";
-import AccountsManager from "./features/transactions/AccountsManager";
-import RecurringManager from "./components/RecurringManager";
-import QuantumAIPage from "./components/QuantumAIPage";
-import HistoryPage from "./components/HistoryPage";
+
+// ─── Páginas pesadas com lazy load (reduz bundle inicial) ────────────────────
+const ReportsContent     = lazy(() => import("./features/reports/ReportsContent"));
+const AIAssistantChat    = lazy(() => import("./features/ai-chat/AIAssistantChat").then(m => ({ default: m.AIAssistantChat })));
+const AccountsManager    = lazy(() => import("./features/transactions/AccountsManager"));
+const CreditCardManager  = lazy(() => import("./features/transactions/CreditCardManager"));
+const RecurringManager   = lazy(() => import("./components/RecurringManager"));
+const QuantumAIPage      = lazy(() => import("./components/QuantumAIPage"));
+const HistoryPage        = lazy(() => import("./components/HistoryPage"));
+
+// ─── Fallback de loading quântico ───────────────────────────────────────────
+const QuantumLoader = () => (
+  <div className="flex flex-col items-center justify-center h-64 gap-4">
+    <Loader2 className="w-10 h-10 text-quantum-accent animate-spin" />
+    <span className="text-xs text-quantum-fgMuted uppercase tracking-widest animate-pulse">A carregar módulo...</span>
+  </div>
+);
 
 // ─── FILTRO DE RUÍDO TÁTICO (Silenciador Quântico) ───────────────────────────
 // A biblioteca Recharts emite um falso-positivo no React 18.
@@ -156,23 +167,34 @@ const AuthenticatedApp = ({ user, handleLogout }) => {
 
           <main className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 lg:p-12">
             <ErrorBoundary>
-              {currentPage === 'dashboard' && (
-                <DashboardContent
-                  user={user} transactions={displayedTransactions} allTransactions={allTransactions} loading={loading}
-                  moduleBalances={moduleBalances} categoryData={categoryData} topExpensesData={topExpensesData}
-                  monthlyGoal={monthlyGoal} setMonthlyGoal={setMonthlyGoal} onSaveTransaction={handleSaveTransaction}
-                  onEditTransaction={(tx) => { setTransactionToEdit(tx); setIsFormOpen(true); }}
-                  onDeleteRequest={setTransactionToDelete} onBatchDelete={handleBatchDelete}
-                  isFormOpen={isFormOpen} setIsFormOpen={setIsFormOpen} transactionToEdit={transactionToEdit} setTransactionToEdit={setTransactionToEdit}
-                />
-              )}
-              {currentPage === 'accounts' && <AccountsManager uid={safeUID} />}
-              {currentPage === 'recurring' && <RecurringManager uid={safeUID} />}
-              {currentPage === 'quantum' && <QuantumAIPage />}
-              {(currentPage === 'history' || currentPage === 'wallet') && (
-                <HistoryPage transactions={displayedTransactions} loading={loading} onEdit={(tx) => { setTransactionToEdit(tx); setIsFormOpen(true); }} onDeleteRequest={setTransactionToDelete} onBatchDelete={handleBatchDelete} onBatchImport={handleImport} />
-              )}
-              {currentPage === 'reports' && <ReportsContent transactions={displayedTransactions} balances={moduleBalances} />}
+              <Suspense fallback={<QuantumLoader />}>
+                {currentPage === 'dashboard' && (
+                  <DashboardContent
+                    user={user} transactions={displayedTransactions} allTransactions={allTransactions} loading={loading}
+                    moduleBalances={moduleBalances} categoryData={categoryData} topExpensesData={topExpensesData}
+                    monthlyGoal={monthlyGoal} setMonthlyGoal={setMonthlyGoal} onSaveTransaction={handleSaveTransaction}
+                    onEditTransaction={(tx) => { setTransactionToEdit(tx); setIsFormOpen(true); }}
+                    onDeleteRequest={setTransactionToDelete} onBatchDelete={handleBatchDelete}
+                    isFormOpen={isFormOpen} setIsFormOpen={setIsFormOpen} transactionToEdit={transactionToEdit} setTransactionToEdit={setTransactionToEdit}
+                  />
+                )}
+                {currentPage === 'accounts' && <AccountsManager uid={safeUID} />}
+                {currentPage === 'cards' && <CreditCardManager uid={safeUID} transactions={allTransactions} />}
+                {currentPage === 'recurring' && <RecurringManager uid={safeUID} />}
+                {currentPage === 'quantum' && (
+                  <QuantumAIPage
+                    transactions={displayedTransactions}
+                    allTransactions={allTransactions}
+                    balances={moduleBalances}
+                    currentMonth={currentMonth}
+                    currentYear={currentYear}
+                  />
+                )}
+                {(currentPage === 'history' || currentPage === 'wallet') && (
+                  <HistoryPage transactions={displayedTransactions} loading={loading} onEdit={(tx) => { setTransactionToEdit(tx); setIsFormOpen(true); }} onDeleteRequest={setTransactionToDelete} onBatchDelete={handleBatchDelete} onBatchImport={handleImport} />
+                )}
+                {currentPage === 'reports' && <ReportsContent transactions={displayedTransactions} balances={moduleBalances} />}
+              </Suspense>
             </ErrorBoundary>
           </main>
         </div>
@@ -183,7 +205,11 @@ const AuthenticatedApp = ({ user, handleLogout }) => {
       </button>
 
       {isSettingsOpen && <ErrorBoundary><CategorySettings uid={safeUID} onClose={() => setIsSettingsOpen(false)} /></ErrorBoundary>}
-      <ErrorBoundary><AIAssistantChat transactions={displayedTransactions} balances={moduleBalances} isOpen={isAIChatOpen} onClose={() => setIsAIChatOpen(false)} /></ErrorBoundary>
+      <ErrorBoundary>
+        <Suspense fallback={null}>
+          <AIAssistantChat transactions={displayedTransactions} balances={moduleBalances} isOpen={isAIChatOpen} onClose={() => setIsAIChatOpen(false)} />
+        </Suspense>
+      </ErrorBoundary>
     </div>
   );
 };
