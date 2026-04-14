@@ -35,17 +35,6 @@ const QuantumLoader = () => (
   </div>
 );
 
-// ─── FILTRO DE RUÍDO TÁTICO (Silenciador Quântico) ───────────────────────────
-// A biblioteca Recharts emite um falso-positivo no React 18.
-// Este filtro interceta a mensagem inofensiva e mantém a nossa consola militar limpa.
-const originalConsoleWarn = console.warn;
-console.warn = (...args) => {
-  if (typeof args[0] === 'string' && args[0].includes('The width(-1) and height(-1)')) {
-    return; // Alvo abatido. Silencia o aviso da consola.
-  }
-  originalConsoleWarn(...args);
-};
-
 // ─── Constantes globais (isoladas da renderização) ───────────────────────────
 const MESES_DO_ANO = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -97,7 +86,13 @@ class ErrorBoundary extends React.Component {
         <div className="p-8 m-4 bg-slate-900/80 border border-red-500/30 rounded-3xl flex flex-col items-center justify-center text-center backdrop-blur-md">
           <AlertTriangle className="w-16 h-16 text-red-500 mb-4 animate-pulse" />
           <h2 className="text-xl font-bold text-white mb-2">Anomalia Detetada</h2>
-          <button onClick={() => window.location.reload()} className="px-6 py-3 bg-red-600 text-white rounded-xl font-bold">Reiniciar Sistema</button>
+          {/* ✅ CORREÇÃO 2: Soft Reset restaurado em vez de reload destrutivo */}
+          <button 
+            onClick={() => this.setState({ hasError: false })} 
+            className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-red-500/20"
+          >
+            Reiniciar Módulo
+          </button>
         </div>
       );
     }
@@ -218,6 +213,23 @@ const AuthenticatedApp = ({ user, handleLogout }) => {
 export default function App() {
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
+
+  // ✅ CORREÇÃO 1: Silenciador Quântico movido para dentro do ciclo de vida do React
+  // Garante que o patch do console só ocorre no cliente após a montagem,
+  // e é devidamente limpo ao desmontar, protegendo testes e a memória (Cleanup).
+  useEffect(() => {
+    const originalConsoleWarn = console.warn;
+    console.warn = (...args) => {
+      if (typeof args[0] === 'string' && args[0].includes('The width(-1) and height(-1)')) {
+        return; 
+      }
+      originalConsoleWarn(...args);
+    };
+
+    return () => {
+      console.warn = originalConsoleWarn;
+    };
+  }, []);
 
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => { setUser(u); setAuthReady(true); });
