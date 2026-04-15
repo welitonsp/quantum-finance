@@ -3,6 +3,7 @@
 import { useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { FirestoreService } from '../shared/services/FirestoreService';
+import { showAIFeedbackBatch } from '../shared/lib/aiFeedbackToast';
 
 export function useImportActions(user) {
   // Depende apenas da uid primitiva — não do objeto user completo,
@@ -22,6 +23,12 @@ export function useImportActions(user) {
 
       if (result.added > 0) {
         toast.success(`Importação concluída: ${result.added} registos adicionados.`, { id: toastId });
+        // [AI_FEEDBACK_LOOP] Mostrar loop de feedback para as primeiras transações categorizadas
+        const sample = parsedData
+          .filter(tx => tx.category && tx.category !== 'Importado' && tx.category !== 'Diversos')
+          .slice(0, 3)
+          .map(tx => ({ description: tx.description, category: tx.category }));
+        if (sample.length > 0) showAIFeedbackBatch(sample, 900, 3);
       } else if (result.duplicates > 0) {
         toast.success(`Ficheiro importado. ${result.duplicates} registos ignorados (duplicados).`, { id: toastId });
       } else {

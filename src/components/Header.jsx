@@ -1,8 +1,9 @@
 // src/components/Header.jsx
-import { Menu, ChevronLeft, ChevronRight, Sun, Moon, Plus, Eye, EyeOff, TrendingDown, Flame } from "lucide-react";
+import { Menu, ChevronLeft, ChevronRight, Sun, Moon, Plus, Eye, EyeOff, Flame, CalendarClock, Wind, Command } from "lucide-react";
 import ImportButton from "../features/transactions/ImportButton";
 import { usePrivacy } from "../contexts/PrivacyContext";
 import { useMemo } from "react";
+import { motion } from "framer-motion";
 
 const PAGE_TITLES = {
   dashboard:  'Painel Central',
@@ -81,6 +82,137 @@ function BurnRateHUD({ transactions, currentMonth, currentYear }) {
   );
 }
 
+// ─── KPIs de Sobrevivência (D2Z + Liberdade Diária) ──────────────────────────
+const staggerContainer = {
+  hidden: {},
+  show:   { transition: { staggerChildren: 0.08 } },
+};
+const kpiItem = {
+  hidden: { opacity: 0, y: 6  },
+  show:   { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
+};
+
+function SurvivalKPIs({ transactions, currentMonth, currentYear }) {
+  const { isPrivacyMode } = usePrivacy();
+
+  const { d2z, liberdadeDiaria } = useMemo(() => {
+    if (!transactions || transactions.length === 0) return { d2z: null, liberdadeDiaria: null };
+
+    const today        = new Date();
+    const diaAtual     = today.getDate();
+    const diasNoMes    = new Date(currentYear, currentMonth, 0).getDate();
+    const diasRestantes = Math.max(diasNoMes - diaAtual, 1);
+
+    // Saldo total acumulado (todas as transações, não filtrado por mês)
+    const saldoTotal = transactions.reduce((acc, tx) => {
+      const val = Math.abs(Number(tx.value || 0));
+      return (tx.type === 'entrada' || tx.type === 'receita') ? acc + val : acc - val;
+    }, 0);
+
+    // Burn rate do mês corrente (despesas / dias decorridos)
+    const despesasMes = transactions
+      .filter(tx => {
+        if (tx.type !== 'saida' && tx.type !== 'despesa') return false;
+        const d = new Date(tx.date || tx.createdAt);
+        return d.getMonth() + 1 === currentMonth && d.getFullYear() === currentYear;
+      })
+      .reduce((acc, tx) => acc + Math.abs(Number(tx.value || 0)), 0);
+
+    const ritmoDiario = diaAtual > 0 ? despesasMes / diaAtual : 0;
+
+    // [MATH_SAFE_GUARD] D2Z: ritmoDiario <= 0 → sem burn, saldo estável (símbolo especial)
+    const d2zVal = ritmoDiario > 0
+      ? Math.floor(saldoTotal / ritmoDiario)
+      : saldoTotal > 0 ? Infinity : null;
+
+    // [MATH_SAFE_GUARD] Liberdade Diária: diasRestantes nunca pode ser 0 (já é Math.max(...,1))
+    // Garantia explícita para cobrir edge-cases de fuso horário no último dia do mês
+    const safeDias     = diasRestantes > 0 ? diasRestantes : 1;
+    const liberdadeVal = saldoTotal / safeDias;
+
+    return { d2z: d2zVal, liberdadeDiaria: liberdadeVal };
+  }, [transactions, currentMonth, currentYear]);
+
+  if (d2z === null && liberdadeDiaria === null) return null;
+
+  // [MATH_SAFE_GUARD] Infinity → "Estável" (sem burn rate, saldo positivo)
+  const d2zIsStable = d2z === Infinity;
+  const d2zDisplay  = isPrivacyMode ? '••' : d2zIsStable ? 'Estável' : `${d2z} dias`;
+
+  // ── Cores condicionais D2Z ──
+  const d2zColor = d2z === null      ? { text: 'text-quantum-fgMuted', glow: 'transparent'          }
+    : d2zIsStable                    ? { text: 'text-quantum-accent',  glow: 'rgba(0,230,138,0.45)' }
+    : d2z > 30                       ? { text: 'text-quantum-accent',  glow: 'rgba(0,230,138,0.45)' }
+    : d2z > 15                       ? { text: 'text-quantum-gold',    glow: 'rgba(255,184,0,0.45)' }
+    :                                  { text: 'text-quantum-red',     glow: 'rgba(255,71,87,0.45)' };
+
+  // ── Cores condicionais Liberdade Diária ──
+  const libColor = liberdadeDiaria >= 0
+    ? { text: 'text-quantum-accent', glow: 'rgba(0,230,138,0.45)' }
+    : { text: 'text-quantum-red',    glow: 'rgba(255,71,87,0.45)'  };
+
+  const fmtCurrency = (v) => isPrivacyMode
+    ? '••••'
+    : `R$ ${Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/dia`;
+
+  return (
+    <motion.div
+      variants={staggerContainer}
+      initial="hidden"
+      animate="show"
+      className="hidden xl:flex items-center gap-2"
+    >
+      {/* ── D2Z ── */}
+      {d2z !== null && (
+        <motion.div
+          variants={kpiItem}
+          className="flex items-center gap-2.5 px-3.5 py-2 bg-quantum-card/60 backdrop-blur-sm border border-quantum-border rounded-xl"
+          title="Dias até o saldo chegar a zero no ritmo atual"
+        >
+          <div className={`p-1.5 rounded-lg bg-quantum-bgSecondary ${d2zColor.text}`}>
+            <CalendarClock className="w-3.5 h-3.5" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] text-quantum-fgMuted uppercase tracking-wider font-medium leading-none mb-1">
+              Dias p/ Zero
+            </span>
+            <span
+              className={`text-xs font-bold font-mono leading-none ${d2zColor.text}`}
+              style={{ textShadow: `0 0 10px ${d2zColor.glow}` }}
+            >
+              {d2zDisplay}
+            </span>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── Liberdade Diária ── */}
+      {liberdadeDiaria !== null && (
+        <motion.div
+          variants={kpiItem}
+          className="flex items-center gap-2.5 px-3.5 py-2 bg-quantum-card/60 backdrop-blur-sm border border-quantum-border rounded-xl"
+          title="Valor disponível por dia até ao fim do mês"
+        >
+          <div className={`p-1.5 rounded-lg bg-quantum-bgSecondary ${libColor.text}`}>
+            <Wind className="w-3.5 h-3.5" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] text-quantum-fgMuted uppercase tracking-wider font-medium leading-none mb-1">
+              Liberdade Diária
+            </span>
+            <span
+              className={`text-xs font-bold font-mono leading-none ${libColor.text}`}
+              style={{ textShadow: `0 0 10px ${libColor.glow}` }}
+            >
+              {fmtCurrency(liberdadeDiaria)}
+            </span>
+          </div>
+        </motion.div>
+      )}
+    </motion.div>
+  );
+}
+
 // ─── Header Principal ────────────────────────────────────────────────────────
 export default function Header({
   currentPage,
@@ -98,7 +230,8 @@ export default function Header({
   setIsFormOpen,
   user,
   transactions,
-  handleImport
+  handleImport,
+  onOpenCommandPalette,
 }) {
   const { isPrivacyMode, togglePrivacy } = usePrivacy();
   const pageTitle = PAGE_TITLES[currentPage] || 'Quantum Finance';
@@ -129,14 +262,21 @@ export default function Header({
         </h2>
       </div>
 
-      {/* ─── Centro: HUD Burn Rate + Seletor de Mês ─── */}
+      {/* ─── Centro: Survival KPIs + HUD Burn Rate + Seletor de Mês ─── */}
       <div className="flex items-center gap-3">
         {(currentPage === 'dashboard' || currentPage === 'history' || currentPage === 'reports') && (
-          <BurnRateHUD
-            transactions={transactions}
-            currentMonth={currentMonth}
-            currentYear={currentYear}
-          />
+          <>
+            <SurvivalKPIs
+              transactions={transactions}
+              currentMonth={currentMonth}
+              currentYear={currentYear}
+            />
+            <BurnRateHUD
+              transactions={transactions}
+              currentMonth={currentMonth}
+              currentYear={currentYear}
+            />
+          </>
         )}
 
         <div className="flex items-center gap-1 bg-quantum-card/80 p-1.5 rounded-2xl border border-quantum-border shadow-inner">
@@ -169,6 +309,19 @@ export default function Header({
 
       {/* ─── Direita: Ações ─── */}
       <div className="flex items-center gap-2 md:gap-3">
+        {/* ── Botão Command Palette ── */}
+        {onOpenCommandPalette && (
+          <button
+            onClick={onOpenCommandPalette}
+            className="hidden md:flex items-center gap-1.5 px-3 py-2 bg-quantum-card hover:bg-quantum-cardHover rounded-xl text-quantum-fgMuted hover:text-white border border-quantum-border transition-all group"
+            title="Palete de Comandos (Ctrl+K)"
+            aria-label="Abrir palete de comandos"
+          >
+            <Command className="w-3.5 h-3.5" />
+            <span className="text-xs font-mono text-quantum-fgMuted group-hover:text-white/70 transition-colors">⌘K</span>
+          </button>
+        )}
+
         <button
           onClick={togglePrivacy}
           className={`p-2.5 rounded-xl border transition-all ${isPrivacyMode ? 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30 shadow-[0_0_12px_rgba(99,102,241,0.2)]' : 'bg-quantum-card text-quantum-fgMuted border-quantum-border hover:text-white hover:border-quantum-accent/30'}`}

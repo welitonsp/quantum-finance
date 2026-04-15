@@ -13,6 +13,7 @@ import { formatCurrency } from '../utils/formatters';
 import ForecastWidget from './ForecastWidget';
 import TransactionForm from '../features/transactions/TransactionForm';
 import ProactiveBriefing from './ProactiveBriefing';
+import SurvivalHeatmap from './SurvivalHeatmap';
 
 // Componentes Modulares
 import { calcStatus } from '../utils/dashboardUtils';
@@ -165,6 +166,15 @@ export default function DashboardContent({
       {/* ── INTEL STRIP (MÉTRICAS DE FLUXO) ─────────────────── */}
       <motion.div variants={itemVariants}>
         <IntelStrip savingsRate={savingsRate} debtRatio={debtRatio} goalProgress={goalProgress} />
+      </motion.div>
+
+      {/* ── MAPA DE CALOR FINANCEIRO ─────────────────────────── */}
+      <motion.div variants={itemVariants}>
+        <SurvivalHeatmap
+          transactions={transactions}
+          currentMonth={currentMonth}
+          currentYear={currentYear}
+        />
       </motion.div>
 
       {/* ── BRIEFING PRÓ-ATIVO DA IA ─────────────────────────── */}

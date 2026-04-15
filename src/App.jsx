@@ -26,6 +26,8 @@ const CreditCardManager  = lazy(() => import("./features/transactions/CreditCard
 const RecurringManager   = lazy(() => import("./components/RecurringManager"));
 const QuantumAIPage      = lazy(() => import("./components/QuantumAIPage"));
 const HistoryPage        = lazy(() => import("./components/HistoryPage"));
+const CommandPalette     = lazy(() => import("./components/CommandPalette"));
+const SimulationCenter   = lazy(() => import("./features/simulation/SimulationCenter"));
 
 // ─── Fallback de loading quântico ───────────────────────────────────────────
 const QuantumLoader = () => (
@@ -109,9 +111,11 @@ const AuthenticatedApp = ({ user, handleLogout }) => {
     activeModule, setActiveModule, handlePrevMonth, handleNextMonth 
   } = useNavigation();
 
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => safeStorageGet('quantum_sidebar_collapsed', false));
-  const [monthlyGoal, setMonthlyGoal] = useState(() => Number(safeStorageGet('quantum_monthly_goal', 0)));
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed]       = useState(() => safeStorageGet('quantum_sidebar_collapsed', false));
+  const [monthlyGoal, setMonthlyGoal]                     = useState(() => Number(safeStorageGet('quantum_monthly_goal', 0)));
+  const [isMobileMenuOpen, setIsMobileMenuOpen]           = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen]  = useState(false);
+  const [isCommanderMode, setIsCommanderMode]             = useState(false);
 
   useEffect(() => safeStorageSet('quantum_sidebar_collapsed', isSidebarCollapsed), [isSidebarCollapsed]);
   useEffect(() => safeStorageSet('quantum_monthly_goal', monthlyGoal), [monthlyGoal]);
@@ -129,10 +133,26 @@ const AuthenticatedApp = ({ user, handleLogout }) => {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // Ctrl+Shift+K / Cmd+Shift+K — Commander Mode
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key?.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommanderMode(true);
+        setIsCommandPaletteOpen(true);
+        return;
+      }
+      // Ctrl+K / Cmd+K — Command Palette normal
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key?.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommanderMode(false);
+        setIsCommandPaletteOpen(prev => !prev);
+        return;
+      }
       if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
       if (e.altKey && e.key?.toLowerCase() === 'p') { e.preventDefault(); togglePrivacy(); }
       if (e.altKey && e.key?.toLowerCase() === 'n') { e.preventDefault(); setIsFormOpen(true); }
-      if (e.key === 'Escape') { 
+      if (e.key === 'Escape') {
+        setIsCommandPaletteOpen(false);
+        setIsCommanderMode(false);
         setIsFormOpen(false); setIsAIChatOpen(false); setTransactionToDelete(null); setIsMobileMenuOpen(false);
       }
     };
@@ -152,12 +172,13 @@ const AuthenticatedApp = ({ user, handleLogout }) => {
         </div>
 
         <div className="flex-1 flex flex-col w-full overflow-hidden pointer-events-auto bg-slate-950/80 backdrop-blur-sm">
-          <Header 
+          <Header
             currentPage={currentPage} currentMonth={currentMonth} currentYear={currentYear}
             handlePrevMonth={handlePrevMonth} handleNextMonth={handleNextMonth} nomeMeses={MESES_DO_ANO}
-            theme={theme} toggleTheme={toggleTheme} isSidebarCollapsed={isSidebarCollapsed} setIsSidebarCollapsed={setIsSidebarCollapsed} 
+            theme={theme} toggleTheme={toggleTheme} isSidebarCollapsed={isSidebarCollapsed} setIsSidebarCollapsed={setIsSidebarCollapsed}
             setIsMobileMenuOpen={setIsMobileMenuOpen} isFormOpen={isFormOpen} setIsFormOpen={setIsFormOpen}
-            user={user} transactions={transactions} handleImport={handleImport} 
+            user={user} transactions={transactions} handleImport={handleImport}
+            onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
           />
 
           <main className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 lg:p-12">
@@ -188,7 +209,13 @@ const AuthenticatedApp = ({ user, handleLogout }) => {
                 {(currentPage === 'history' || currentPage === 'wallet') && (
                   <HistoryPage transactions={displayedTransactions} loading={loading} onEdit={(tx) => { setTransactionToEdit(tx); setIsFormOpen(true); }} onDeleteRequest={setTransactionToDelete} onBatchDelete={handleBatchDelete} onBatchImport={handleImport} />
                 )}
-                {currentPage === 'reports' && <ReportsContent transactions={displayedTransactions} balances={moduleBalances} />}
+                {currentPage === 'reports'     && <ReportsContent transactions={displayedTransactions} balances={moduleBalances} />}
+                {currentPage === 'simulation'  && (
+                  <SimulationCenter
+                    transactions={displayedTransactions}
+                    balances={moduleBalances}
+                  />
+                )}
               </Suspense>
             </ErrorBoundary>
           </main>
@@ -203,6 +230,15 @@ const AuthenticatedApp = ({ user, handleLogout }) => {
       <ErrorBoundary>
         <Suspense fallback={null}>
           <AIAssistantChat transactions={displayedTransactions} balances={moduleBalances} isOpen={isAIChatOpen} onClose={() => setIsAIChatOpen(false)} />
+        </Suspense>
+      </ErrorBoundary>
+      <ErrorBoundary>
+        <Suspense fallback={null}>
+          <CommandPalette
+            isOpen={isCommandPaletteOpen}
+            onClose={() => { setIsCommandPaletteOpen(false); setIsCommanderMode(false); }}
+            isCommanderMode={isCommanderMode}
+          />
         </Suspense>
       </ErrorBoundary>
     </div>

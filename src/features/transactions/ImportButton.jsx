@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 import { useParserWorker } from '../../shared/lib/useParserWorker';
 import { GeminiService } from '../ai-chat/GeminiService';
 import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
+import ReconciliationEngine from './ReconciliationEngine';
 
 // ─── Dicionário local para poupar chamadas à IA ──────────────────────────────
 const LOCAL_DICTIONARY = {
@@ -443,12 +444,13 @@ function ErrorPanel({ message, onRetry }) {
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
 export default function ImportButton({ onImportTransactions, existingTransactions = [] }) {
-  const [isOpen,        setIsOpen]        = useState(false);
-  const [status,        setStatus]        = useState('idle');
-  const [errorMessage,  setErrorMessage]  = useState('');
-  const [preview,       setPreview]       = useState([]);
-  const [stats,         setStats]         = useState({ total: 0, added: 0, duplicates: 0 });
-  const [colMapState,   setColMapState]   = useState(null); // { headers, previewRows, autoMap, file }
+  const [isOpen,              setIsOpen]              = useState(false);
+  const [status,              setStatus]              = useState('idle');
+  const [errorMessage,        setErrorMessage]        = useState('');
+  const [preview,             setPreview]             = useState([]);
+  const [stats,               setStats]               = useState({ total: 0, added: 0, duplicates: 0 });
+  const [colMapState,         setColMapState]         = useState(null); // { headers, previewRows, autoMap, file }
+  const [reconciliationQueue, setReconciliationQueue] = useState([]);
 
   const fileInputRef = useRef(null);
 
@@ -552,10 +554,10 @@ export default function ImportButton({ onImportTransactions, existingTransaction
         }
       }
 
-      // 4. PREVIEW — deixar o utilizador rever antes de importar
-      setPreview(fresh);
+      // 4. RECONCILIAÇÃO — cada transação passa pelo "Tinder Financeiro"
+      setReconciliationQueue(fresh);
       setStats(prev => ({ ...prev, total: parsed.length, duplicates }));
-      setStatus('preview');
+      setStatus('reconciliation');
 
     } catch (err) {
       console.error('Importação falhou:', err);
@@ -592,6 +594,7 @@ export default function ImportButton({ onImportTransactions, existingTransaction
     setIsOpen(false);
     setStatus('idle');
     setPreview([]);
+    setReconciliationQueue([]);
     setColMapState(null);
     setErrorMessage('');
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -606,8 +609,28 @@ export default function ImportButton({ onImportTransactions, existingTransaction
         <span className="hidden sm:inline">Importar Ficheiro</span>
       </button>
 
+      {/* ── Reconciliation Engine — full-screen overlay z-[60] ── */}
       <AnimatePresence>
-        {isOpen && (
+        {status === 'reconciliation' && (
+          <ReconciliationEngine
+            queue={reconciliationQueue}
+            existingTransactions={existingTransactions}
+            onComplete={(resolvedTxs) => {
+              // Fila resolvida → confirmar importação directamente
+              handleConfirmImport(resolvedTxs);
+            }}
+            onCancel={() => {
+              setReconciliationQueue([]);
+              setStatus('idle');
+              setIsOpen(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── Import Modal (ocultado durante reconciliação) ── */}
+      <AnimatePresence>
+        {isOpen && status !== 'reconciliation' && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}

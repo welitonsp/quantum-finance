@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigation } from '../contexts/NavigationContext';
 import {
   LayoutDashboard, PieChart, Settings, LogOut,
-  Landmark, BrainCircuit, Repeat, Clock, X, CreditCard
+  Landmark, BrainCircuit, Repeat, Clock, X, CreditCard, FlaskConical
 } from "lucide-react";
 
 export default function Sidebar({ user, isMobileMenuOpen, setIsMobileMenuOpen, isSidebarCollapsed, setIsSettingsOpen, handleLogout }) {
@@ -17,9 +17,10 @@ export default function Sidebar({ user, isMobileMenuOpen, setIsMobileMenuOpen, i
     {
       title: "Visão Principal",
       items: [
-        { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-        { id: 'reports', icon: PieChart, label: 'BI & Relatórios' },
-        { id: 'quantum', icon: BrainCircuit, label: 'Quantum AI' },
+        { id: 'dashboard',   icon: LayoutDashboard, label: 'Dashboard'            },
+        { id: 'reports',     icon: PieChart,        label: 'BI & Relatórios'      },
+        { id: 'quantum',     icon: BrainCircuit,    label: 'Quantum AI'           },
+        { id: 'simulation',  icon: FlaskConical,    label: 'Monte Carlo'          },
       ]
     },
     {
