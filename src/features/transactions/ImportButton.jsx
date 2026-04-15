@@ -12,8 +12,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-import { parseCSV, parseCSVWithMapping, getCSVHeaders } from '../../shared/lib/csvParser';
-import { parseOFX } from '../../shared/lib/ofxParser';
+import { useParserWorker } from '../../shared/lib/useParserWorker';
 import { GeminiService } from '../ai-chat/GeminiService';
 import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
 
@@ -96,7 +95,7 @@ function DropZone({ onFile, fileInputRef }) {
       }`}
     >
       <input
-        type="file" ref={fileInputRef} className="hidden" accept=".csv,.ofx"
+        type="file" ref={fileInputRef} className="hidden" accept=".csv,.ofx,.pdf"
         onChange={e => { if (e.target.files?.[0]) onFile(e.target.files[0]); }}
       />
       <motion.div
@@ -109,11 +108,13 @@ function DropZone({ onFile, fileInputRef }) {
         {dragging ? 'Largar aqui!' : 'Arraste o seu extrato'}
       </p>
       <p className="text-xs text-quantum-fgMuted max-w-xs leading-relaxed">
-        Formatos suportados: <span className="text-quantum-fg font-mono">CSV</span> e <span className="text-quantum-fg font-mono">OFX</span>.
-        O Motor Gemini categoriza automaticamente as despesas desconhecidas.
+        Formatos suportados: <span className="text-quantum-fg font-mono">CSV</span>,{' '}
+        <span className="text-quantum-fg font-mono">OFX</span> e{' '}
+        <span className="text-quantum-fg font-mono">PDF</span>.
+        Processado localmente — o Motor Gemini categoriza automaticamente.
       </p>
       <div className="mt-5 flex gap-2">
-        {['CSV','OFX'].map(f => (
+        {['CSV','OFX','PDF'].map(f => (
           <span key={f} className="text-[10px] font-mono font-bold px-2.5 py-1 bg-quantum-bgSecondary border border-quantum-border rounded-lg text-quantum-fgMuted">
             .{f.toLowerCase()}
           </span>
@@ -451,6 +452,9 @@ export default function ImportButton({ onImportTransactions, existingTransaction
 
   const fileInputRef = useRef(null);
 
+  // ─── Web Worker para parse off-thread ────────────────────────────────────
+  const { parseFile, parseFileWithMapping } = useParserWorker();
+
   // ─── Deduplicação local (antes de ir à IA) ────────────────────────────────
   const deduplicate = useCallback((parsed) => {
     const existingHashes = new Set();
@@ -490,35 +494,37 @@ export default function ImportButton({ onImportTransactions, existingTransaction
     return forAI;
   };
 
-  // ─── Pipeline principal ────────────────────────────────────────────────────
-  const processFile = useCallback(async (file, customMapping = null) => {
+  // ─── Pipeline principal (off-thread via Web Worker) ───────────────────────
+  const processFile = useCallback(async (file, customMapping = null, pdfPassword = null) => {
     setStatus('parsing');
     setErrorMessage('');
 
     try {
-      // 1. PARSE
+      // 1. PARSE — corre 100% no Web Worker (main thread livre a 60fps)
       let parsed;
-      const ext = file.name.toLowerCase();
-
-      if (ext.endsWith('.ofx')) {
-        parsed = await parseOFX(file);
-      } else if (ext.endsWith('.csv')) {
-        try {
-          parsed = customMapping
-            ? await parseCSVWithMapping(file, customMapping)
-            : await parseCSV(file);
-        } catch (err) {
-          if (err.code === 'COLUMNS_NOT_FOUND') {
-            // Mostrar mapeamento manual
-            const { headers, separator, previewRows, autoMap } = await getCSVHeaders(file);
-            setColMapState({ headers, previewRows, autoMap, file });
-            setStatus('col_mapping');
-            return;
-          }
-          throw err;
+      try {
+        parsed = customMapping
+          ? await parseFileWithMapping(file, customMapping)
+          : await parseFile(file, pdfPassword ? { password: pdfPassword } : {});
+      } catch (err) {
+        // CSV sem colunas identificáveis → mostrar mapeamento manual
+        if (err.code === 'COLUMNS_NOT_FOUND') {
+          setColMapState({
+            headers:     err.headers    || [],
+            previewRows: err.previewRows || [],
+            autoMap:     err.autoMap    || { dateIdx: -1, descIdx: -1, valueIdx: -1 },
+            file,
+          });
+          setStatus('col_mapping');
+          return;
         }
-      } else {
-        throw new Error('Formato não suportado. Use CSV ou OFX.');
+        // PDF protegido por password
+        if (err.message === 'PASSWORD_REQUIRED') {
+          const pwd = prompt('Este PDF está protegido. Introduza a password:');
+          if (pwd) { processFile(file, null, pwd); return; }
+          throw new Error('Password necessária para abrir este PDF.');
+        }
+        throw err;
       }
 
       if (!parsed || parsed.length === 0) throw new Error('Nenhuma transação válida encontrada no ficheiro.');
@@ -576,9 +582,10 @@ export default function ImportButton({ onImportTransactions, existingTransaction
   }, [onImportTransactions, stats.duplicates]);
 
   // ─── Aplicar mapeamento manual de colunas ─────────────────────────────────
+  // Reutiliza processFile com o mapping explícito — worker recebe de volta
   const handleApplyMapping = useCallback((mapping) => {
     if (colMapState?.file) processFile(colMapState.file, mapping);
-  }, [colMapState, processFile]);
+  }, [colMapState, processFile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const closeModal = () => {
     if (status === 'parsing' || status === 'ai_processing' || status === 'importing') return;
@@ -619,7 +626,7 @@ export default function ImportButton({ onImportTransactions, existingTransaction
                   </div>
                   <div>
                     <h3 className="font-black text-white text-sm tracking-wide">Ingestão Quântica</h3>
-                    <p className="text-[10px] text-quantum-fgMuted">CSV · OFX · IA Categorization</p>
+                    <p className="text-[10px] text-quantum-fgMuted">CSV · OFX · PDF · IA Categorization</p>
                   </div>
                 </div>
                 {!['parsing','ai_processing','importing'].includes(status) && (

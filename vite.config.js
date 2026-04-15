@@ -1,4 +1,4 @@
-// ✅ vite.config.js COMPLETO E OTIMIZADO
+// vite.config.js — Quantum Finance
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -10,11 +10,11 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       workbox: {
-        // Cache de assets estáticos por 30 dias
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Excluir workers do cache do service worker (geridos pelo browser diretamente)
+        globIgnores: ['**/workers/*.js'],
         runtimeCaching: [
           {
-            // Cache das fontes do Google por 1 ano
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',
             options: {
@@ -40,20 +40,24 @@ export default defineConfig({
     })
   ],
   build: {
-    // ✅ Divisão automática de chunks — carregamento muito mais rápido
     rollupOptions: {
       output: {
         manualChunks: {
-          'vendor-react':   ['react', 'react-dom'],
-          'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
-          'vendor-charts':  ['chart.js', 'react-chartjs-2', 'recharts'],
-          'vendor-utils':   ['decimal.js', 'zod', '@tanstack/react-query'],
+          'vendor-react':    ['react', 'react-dom'],
+          // firebase/functions incluído — necessário para o proxy seguro da IA
+          'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/functions'],
+          'vendor-charts':   ['chart.js', 'react-chartjs-2', 'recharts'],
+          'vendor-utils':    ['decimal.js', 'zod', '@tanstack/react-query'],
+          // pdfjs separado — carrega apenas quando o utilizador importa um PDF
+          'vendor-pdfjs':    ['pdfjs-dist'],
         }
       }
     },
-    // ✅ Aviso quando chunk > 500kb (sinal de problema)
     chunkSizeWarningLimit: 500,
-    // ✅ Sem source maps em produção (não expor código)
     sourcemap: false,
-  }
+  },
+  // Configuração explícita para Web Workers (Vite trata ?worker como ES module)
+  worker: {
+    format: 'es',
+  },
 })
