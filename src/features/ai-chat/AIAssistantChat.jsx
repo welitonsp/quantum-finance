@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, BrainCircuit, User, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GeminiService } from './GeminiService';
+import { aiProvider } from '../../shared/ai/aiProvider';
 
 export const AIAssistantChat = ({ transactions, balances, isOpen, onClose }) => {
   const [messages, setMessages] = useState([
@@ -26,13 +26,30 @@ export const AIAssistantChat = ({ transactions, balances, isOpen, onClose }) => 
     setIsLoading(true);
 
     try {
-      const contextData = { balances, recentTransactions: transactions.slice(0, 50) };
-      const aiResponse = await GeminiService.getFinancialAdvice(userText, {
-        saldo: balances?.geral?.saldo ?? 0,
-        entradas: balances?.geral?.receitas ?? 0,
-        saidas: balances?.geral?.despesas ?? 0,
-        transactions: transactions.slice(0, 50),
-      });
+      const systemPrompt = {
+        role: 'system',
+        content:
+          'Você é a Quantum AI, auditora financeira de elite. Seja direto, objetivo e use dados concretos.\n' +
+          'Dados financeiros do utilizador:\n' +
+          JSON.stringify({
+            saldo:              balances?.geral?.saldo     ?? 0,
+            entradas:           balances?.geral?.receitas  ?? 0,
+            saidas:             balances?.geral?.despesas  ?? 0,
+            ultimasTransacoes:  transactions.slice(0, 50),
+          }),
+      };
+
+      // Mapeia histórico de UI {role:'user'|'ai', text} → formato do provider
+      const historyMsgs = messages.map(m => ({
+        role:    m.role === 'user' ? 'user' : 'assistant',
+        content: m.text,
+      }));
+
+      const aiResponse = await aiProvider.chatCompletion([
+        systemPrompt,
+        ...historyMsgs,
+        { role: 'user', content: userText },
+      ]);
       setMessages(prev => [...prev, { role: 'ai', text: aiResponse }]);
     } catch (error) {
       console.error("Erro no link de comunicação Quântico:", error);

@@ -6,7 +6,7 @@ import {
   Flame, ShieldAlert, Zap, ChevronRight, RefreshCw, Loader2,
   CheckCircle, Target, BarChart3
 } from 'lucide-react';
-import { GeminiService } from '../features/ai-chat/GeminiService';
+import { aiProvider } from '../shared/ai/aiProvider';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function groupByCategory(transactions) {
@@ -225,7 +225,7 @@ function FixedExpensesRisk({ balances, recurringTotal }) {
   );
 }
 
-// ─── Painel de Auditoria Automática (Gemini) ─────────────────────────────────
+// ─── Painel de Auditoria Automática ──────────────────────────────────────────
 function AuditReportPanel({ transactions, balances, currentMonth, currentYear }) {
   const [report, setReport]   = useState('');
   const [loading, setLoading] = useState(false);
@@ -234,18 +234,27 @@ function AuditReportPanel({ transactions, balances, currentMonth, currentYear })
   const generateReport = useCallback(async () => {
     setLoading(true);
     try {
-      const text = await GeminiService.generateAuditReport({
-        saldo:    balances?.geral?.saldo    ?? 0,
-        entradas: balances?.geral?.receitas ?? 0,
-        saidas:   balances?.geral?.despesas ?? 0,
+      const contextJson = JSON.stringify({
+        saldo:        balances?.geral?.saldo    ?? 0,
+        entradas:     balances?.geral?.receitas ?? 0,
+        saidas:       balances?.geral?.despesas ?? 0,
         transactions,
         currentMonth,
         currentYear,
       });
+      const text = await aiProvider.chatCompletion([
+        {
+          role: 'system',
+          content:
+            'Você é um auditor financeiro CFO de elite. Analise os dados abaixo e gere um relatório ' +
+            'completo em Markdown com riscos, burn rate, anomalias e recomendações.\n\nDados:\n' + contextJson,
+        },
+        { role: 'user', content: 'Gere o relatório de auditoria financeira.' },
+      ]);
       setReport(text);
       setGenerated(true);
     } catch (e) {
-      setReport('🚨 Falha ao gerar relatório. Verifique a chave da API Gemini.');
+      setReport('🚨 Falha ao gerar relatório. Verifique a configuração do motor de IA (VITE_GROQ_API_KEY / Ollama).');
     } finally {
       setLoading(false);
     }
@@ -260,7 +269,7 @@ function AuditReportPanel({ transactions, balances, currentMonth, currentYear })
           </div>
           <div>
             <h4 className="text-sm font-bold text-white">Auditoria Automática</h4>
-            <p className="text-xs text-quantum-fgMuted">Relatório CFO gerado por Gemini AI</p>
+            <p className="text-xs text-quantum-fgMuted">Relatório CFO gerado por Motor Híbrido IA</p>
           </div>
         </div>
         <button
@@ -312,7 +321,7 @@ function AuditReportPanel({ transactions, balances, currentMonth, currentYear })
           >
             <BarChart3 className="w-10 h-10 text-quantum-fgMuted" />
             <p className="text-sm text-quantum-fgMuted">
-              Clique em "Gerar Auditoria" para que o Gemini AI analise os seus dados e entregue um relatório CFO completo.
+              Clique em "Gerar Auditoria" para que o Motor Híbrido IA analise os seus dados e entregue um relatório CFO completo.
             </p>
           </motion.div>
         )}

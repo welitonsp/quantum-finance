@@ -19,7 +19,7 @@ import {
   BrainCircuit, ChevronDown, ChevronUp, RefreshCw,
   AlertTriangle, ShieldCheck, AlertCircle, Zap, X
 } from 'lucide-react';
-import { GeminiService } from '../features/ai-chat/GeminiService';
+import { aiProvider } from '../shared/ai/aiProvider';
 
 // ─── Utilitário: número da semana ISO no ano ──────────────────────────────────
 function getISOWeek(date = new Date()) {
@@ -113,7 +113,16 @@ export default function ProactiveBriefing({ financialContext, uid, className = '
     if (forceExpand) setExpanded(true);
 
     try {
-      const text = await GeminiService.generateAuditReport(financialContext);
+      const text = await aiProvider.chatCompletion([
+        {
+          role: 'system',
+          content:
+            'Você é um auditor financeiro CFO de elite. Analise os dados abaixo e gere um briefing ' +
+            'semanal em Markdown: riscos, anomalias, tendências e recomendações. Seja direto e objetivo.\n\n' +
+            'Dados:\n' + JSON.stringify(financialContext),
+        },
+        { role: 'user', content: 'Gere o briefing financeiro semanal completo.' },
+      ]);
       const ts   = new Date();
       setBriefing(text);
       setGeneratedAt(ts);
