@@ -1,13 +1,31 @@
-// src/components/DashboardCharts.jsx
-import { useState, useMemo } from "react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Sector } from "recharts";
-import { TrendingUp, TrendingDown, Wallet } from "lucide-react";
+import { useState, useMemo } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Sector } from 'recharts';
+import { TrendingUp, TrendingDown, Wallet } from 'lucide-react';
 
-const formatCurrency = (value) => {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
-};
+interface CategoryDataItem {
+  name: string;
+  value: number;
+  color: string;
+  total?: number;
+}
 
-const CustomTooltip = ({ active, payload }) => {
+interface DashboardChartsProps {
+  categoryData: CategoryDataItem[];
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: Array<{ payload: CategoryDataItem & { total: number } }>;
+}
+
+interface DonutCenterProps {
+  totalExpenses: number;
+}
+
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+function CustomTooltip({ active, payload }: CustomTooltipProps) {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     return (
@@ -19,30 +37,32 @@ const CustomTooltip = ({ active, payload }) => {
     );
   }
   return null;
-};
+}
 
-const DonutCenter = ({ totalExpenses }) => (
-  <div className="text-center pointer-events-none transition-colors">
-    <p className="text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Total gasto</p>
-    <p className="text-slate-800 dark:text-white text-2xl font-black">{formatCurrency(totalExpenses)}</p>
-  </div>
-);
+function DonutCenter({ totalExpenses }: DonutCenterProps) {
+  return (
+    <div className="text-center pointer-events-none transition-colors">
+      <p className="text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Total gasto</p>
+      <p className="text-slate-800 dark:text-white text-2xl font-black">{formatCurrency(totalExpenses)}</p>
+    </div>
+  );
+}
 
-export default function DashboardCharts({ categoryData }) {
-  const [activeIndex, setActiveIndex] = useState(null);
-  const [hiddenCategories, setHiddenCategories] = useState({});
+export default function DashboardCharts({ categoryData }: DashboardChartsProps) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [hiddenCategories, setHiddenCategories] = useState<Record<string, boolean>>({});
 
   const totalExpenses = useMemo(
     () => categoryData.reduce((sum, item) => sum + item.value, 0),
-    [categoryData]
+    [categoryData],
   );
 
   const visibleData = useMemo(
-    () => categoryData.filter((item) => !hiddenCategories[item.name]),
-    [categoryData, hiddenCategories]
+    () => categoryData.filter((item) => !hiddenCategories[item.name]).map(item => ({ ...item, total: totalExpenses })),
+    [categoryData, hiddenCategories, totalExpenses],
   );
 
-  const toggleCategory = (name) => {
+  const toggleCategory = (name: string) => {
     setHiddenCategories((prev) => ({ ...prev, [name]: !prev[name] }));
   };
 
@@ -58,7 +78,6 @@ export default function DashboardCharts({ categoryData }) {
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-      {/* Donut Chart */}
       <div className="glass-card-quantum p-6 transition-all hover:border-cyan-500/30 flex flex-col">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2 transition-colors">
@@ -67,8 +86,7 @@ export default function DashboardCharts({ categoryData }) {
           </h3>
           <p className="text-xs text-slate-500">Clique na legenda para filtrar</p>
         </div>
-        
-        {/* 🛡️ BLINDAGEM: min-h-[320px] e minWidth/minHeight garantem que o Recharts não colapsa */}
+
         <div className="relative h-80 w-full min-h-[320px] flex-1">
           <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={320}>
             <PieChart>
@@ -80,11 +98,11 @@ export default function DashboardCharts({ categoryData }) {
                 outerRadius={100}
                 paddingAngle={2}
                 dataKey="value"
-                activeIndex={activeIndex}
-                activeShape={(props) => (
-                  <Sector {...props} outerRadius={props.outerRadius + 8} fill={props.fill} stroke="#fff" strokeWidth={2} />
+                activeIndex={activeIndex ?? undefined}
+                activeShape={(props: Record<string, unknown>) => (
+                  <Sector {...props} outerRadius={(props.outerRadius as number) + 8} fill={props.fill as string} stroke="#fff" strokeWidth={2} />
                 )}
-                onMouseEnter={(_, index) => setActiveIndex(index)}
+                onMouseEnter={(_: unknown, index: number) => setActiveIndex(index)}
                 onMouseLeave={() => setActiveIndex(null)}
               >
                 {visibleData.map((entry, index) => (
@@ -94,14 +112,13 @@ export default function DashboardCharts({ categoryData }) {
               <Tooltip content={<CustomTooltip />} />
             </PieChart>
           </ResponsiveContainer>
-          
+
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <DonutCenter totalExpenses={totalExpenses} />
           </div>
         </div>
       </div>
 
-      {/* Legenda Interativa */}
       <div className="glass-card-quantum p-6 transition-all hover:border-indigo-500/30 flex flex-col">
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
@@ -114,12 +131,12 @@ export default function DashboardCharts({ categoryData }) {
               onClick={() => toggleCategory(item.name)}
               className={`w-full flex items-center justify-between p-3 rounded-xl transition-all border border-transparent ${
                 hiddenCategories[item.name]
-                  ? "bg-slate-100 dark:bg-slate-800/50 opacity-50"
-                  : "bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800/70 border-slate-200 dark:border-transparent hover:border-slate-300 dark:hover:border-white/5 shadow-sm dark:shadow-none"
+                  ? 'bg-slate-100 dark:bg-slate-800/50 opacity-50'
+                  : 'bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800/70 border-slate-200 dark:border-transparent hover:border-slate-300 dark:hover:border-white/5 shadow-sm dark:shadow-none'
               }`}
             >
               <div className="flex items-center gap-3">
-                <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: hiddenCategories[item.name] ? "#94a3b8" : item.color }} />
+                <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: hiddenCategories[item.name] ? '#94a3b8' : item.color }} />
                 <span className="text-sm font-bold text-slate-700 dark:text-white transition-colors">{item.name}</span>
               </div>
               <div className="text-right">

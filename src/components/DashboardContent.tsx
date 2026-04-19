@@ -3,96 +3,137 @@ import { motion, AnimatePresence } from 'framer-motion';
 import CountUp from 'react-countup';
 import {
   ArrowRightLeft, TrendingUp, TrendingDown, AlertTriangle,
-  CheckCircle2, Activity, Landmark, Info
+  CheckCircle2, Activity, Landmark, Info,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { Variants } from 'framer-motion';
 
 import { useNavigation } from '../contexts/NavigationContext';
 import { formatCurrency } from '../utils/formatters';
 
-// Componentes Principais
 import ForecastWidget from './ForecastWidget';
 import TransactionForm from '../features/transactions/TransactionForm';
 import ProactiveBriefing from './ProactiveBriefing';
 import SurvivalHeatmap from './SurvivalHeatmap';
 
-// Componentes Modulares
 import { calcStatus } from '../utils/dashboardUtils';
 import { HealthGauge } from './HealthGauge';
 import { SparkLine } from './SparkLine';
 import { IntelStrip } from './IntelStrip';
 import { CategoryBreakdown } from './CategoryBreakdown';
 
-// ─── ANIMAÇÕES (Framer Motion) ───────────────────────────────
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.15, delayChildren: 0.1 }
-  }
+type AnyRecord = Record<string, unknown>;
+type GaugeColor = 'emerald' | 'amber' | 'red';
+
+interface ModuleBalance {
+  saldo?: number;
+  receitas?: number;
+  despesas?: number;
+}
+
+interface ModuleBalances {
+  geral?: ModuleBalance;
+  [key: string]: ModuleBalance | undefined;
+}
+
+interface MonthlyGoal {
+  percent?: number;
+}
+
+interface DashboardContentProps {
+  user: { uid?: string; displayName?: string | null } | null;
+  transactions: AnyRecord[];
+  allTransactions?: AnyRecord[];
+  loading: boolean;
+  moduleBalances: ModuleBalances | null;
+  monthlyGoal: MonthlyGoal | null;
+  setMonthlyGoal: (goal: MonthlyGoal) => void;
+  onSaveTransaction: (tx: AnyRecord) => Promise<void>;
+  isFormOpen: boolean;
+  setIsFormOpen: (v: boolean) => void;
+  transactionToEdit: AnyRecord | null;
+  setTransactionToEdit: (tx: AnyRecord | null) => void;
+}
+
+const containerVariants: Variants = {
+  hidden:  { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.15, delayChildren: 0.1 } },
 };
 
-const itemVariants = {
-  hidden: { opacity: 0, y: 30 },
-  visible: {
-    opacity: 1, y: 0,
-    transition: { type: 'spring', stiffness: 80, damping: 15 }
-  }
+const itemVariants: Variants = {
+  hidden:  { opacity: 0, y: 30 },
+  visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 80, damping: 15 } },
 };
 
 export default function DashboardContent({
   user, transactions, allTransactions, loading, moduleBalances,
   monthlyGoal, setMonthlyGoal, onSaveTransaction,
-  isFormOpen, setIsFormOpen, transactionToEdit, setTransactionToEdit
-}) {
+  isFormOpen, setIsFormOpen, transactionToEdit, setTransactionToEdit,
+}: DashboardContentProps) {
   const { currentMonth, currentYear } = useNavigation();
 
-  // Foco no Fluxo de Caixa
-  const saldo      = moduleBalances?.geral?.saldo      || 0;
-  const receitas   = moduleBalances?.geral?.receitas   || 0;
-  const despesas   = moduleBalances?.geral?.despesas   || 0;
-  
-  // Parâmetros mantidos apenas para o motor de cálculo (dashboardUtils) não quebrar
-  const patrimonio = saldo; 
+  const saldo    = moduleBalances?.geral?.saldo    ?? 0;
+  const receitas = moduleBalances?.geral?.receitas ?? 0;
+  const despesas = moduleBalances?.geral?.despesas ?? 0;
+
+  const patrimonio = saldo;
   const dividas    = 0;
-  const metaEcon   = monthlyGoal?.percent || 20;
+  const metaEcon   = monthlyGoal?.percent ?? 20;
 
   const st = useMemo(
     () => calcStatus(saldo, receitas, despesas, patrimonio, dividas, metaEcon),
-    [saldo, receitas, despesas, patrimonio, dividas, metaEcon]
+    [saldo, receitas, despesas, patrimonio, dividas, metaEcon],
   );
-  
+
   const { status, color, rec, score, savingsRate, debtRatio, goalProgress } = st;
 
-  const StatusIcon = status === 'CRÍTICO' ? AlertTriangle : status === 'ATENÇÃO' ? Activity : CheckCircle2;
+  const StatusIcon: LucideIcon =
+    status === 'CRÍTICO' ? AlertTriangle :
+    status === 'ATENÇÃO' ? Activity :
+    CheckCircle2;
+
   const incomeDelta = receitas > 0 ? ((receitas - despesas) / receitas * 100) : 0;
 
-  const badgeColor = {
+  const badgeColor = ({
     emerald: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    amber: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    red: 'bg-red-500/10 text-red-400 border-red-500/20'
-  }[color];
+    amber:   'bg-amber-500/10  text-amber-400  border-amber-500/20',
+    red:     'bg-red-500/10    text-red-400    border-red-500/20',
+  } as Record<GaugeColor, string>)[color as GaugeColor] ?? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
 
-  const glowColor = { emerald: 'bg-emerald-500', amber: 'bg-amber-500', red: 'bg-red-500' }[color];
+  const glowColor = ({
+    emerald: 'bg-emerald-500',
+    amber:   'bg-amber-500',
+    red:     'bg-red-500',
+  } as Record<GaugeColor, string>)[color as GaugeColor] ?? 'bg-emerald-500';
 
-  const handleEditTx = useCallback((t) => {
+  const handleEditTx = useCallback((t: AnyRecord) => {
     setTransactionToEdit(t);
     setIsFormOpen(true);
   }, [setTransactionToEdit, setIsFormOpen]);
 
+  const financialContext = {
+    saldo,
+    entradas: receitas,
+    saidas:   despesas,
+    transactions,
+    currentMonth,
+    currentYear,
+  };
+
   return (
-    <motion.div 
+    <motion.div
       variants={containerVariants}
       initial="hidden"
       animate="visible"
       className="max-w-[1800px] mx-auto px-4 md:px-6 py-8 space-y-6"
     >
-      {/* ── HERO (FOCO EM SALDO E CAIXA MENSAL) ─────────────── */}
+      {/* HERO */}
       <motion.div variants={itemVariants} className="relative bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 overflow-hidden transition-all hover:shadow-2xl">
         <div className={`absolute top-0 right-0 w-[500px] h-[500px] blur-[100px] opacity-20 rounded-full ${glowColor} -translate-y-1/2 translate-x-1/3 animate-slow-rotate`} />
-        
+
         <div className="relative z-10 flex flex-col xl:flex-row gap-8">
           <div className="flex items-start gap-6 flex-1">
-            <HealthGauge score={score} color={color} />
+            <HealthGauge score={score} color={color as GaugeColor} />
             <div className="flex-1">
               <p className="text-slate-400 font-bold uppercase text-xs tracking-wider mb-1">Saldo em Caixa</p>
               <div className="flex flex-wrap items-baseline gap-3 mb-3">
@@ -152,7 +193,6 @@ export default function DashboardContent({
         </div>
       </motion.div>
 
-      {/* ── FORMULÁRIO TRANSAÇÃO (modal overlay) ─────────────── */}
       <AnimatePresence>
         {isFormOpen && (
           <TransactionForm
@@ -163,38 +203,20 @@ export default function DashboardContent({
         )}
       </AnimatePresence>
 
-      {/* ── INTEL STRIP (MÉTRICAS DE FLUXO) ─────────────────── */}
       <motion.div variants={itemVariants}>
         <IntelStrip savingsRate={savingsRate} debtRatio={debtRatio} goalProgress={goalProgress} />
       </motion.div>
 
-      {/* ── MAPA DE CALOR FINANCEIRO ─────────────────────────── */}
       <motion.div variants={itemVariants}>
-        <SurvivalHeatmap
-          transactions={transactions}
-          currentMonth={currentMonth}
-          currentYear={currentYear}
-        />
+        <SurvivalHeatmap transactions={transactions} currentMonth={currentMonth} currentYear={currentYear} />
       </motion.div>
 
-      {/* ── BRIEFING PRÓ-ATIVO DA IA ─────────────────────────── */}
       <AnimatePresence>
         <motion.div variants={itemVariants}>
-          <ProactiveBriefing
-            uid={user?.uid}
-            financialContext={{
-              saldo:        saldo,
-              entradas:     receitas,
-              saidas:       despesas,
-              transactions: transactions,
-              currentMonth,
-              currentYear,
-            }}
-          />
+          <ProactiveBriefing uid={user?.uid} financialContext={financialContext} />
         </motion.div>
       </AnimatePresence>
 
-      {/* ── PROJEÇÃO QUÂNTICA ───────────────────────────────── */}
       <motion.div variants={itemVariants} className="grid grid-cols-1 gap-6">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
@@ -207,13 +229,11 @@ export default function DashboardContent({
           </div>
         </div>
       </motion.div>
-      
-      {/* ── DISTRIBUIÇÃO POR CATEGORIA ──────────────────────── */}
+
       <motion.div variants={itemVariants}>
         <CategoryBreakdown transactions={transactions} />
       </motion.div>
 
-      {/* ── FAB MOBILE ──────────────────────────────────────── */}
       <button
         onClick={() => setIsFormOpen(true)}
         className="fixed bottom-6 right-6 lg:hidden w-14 h-14 bg-gradient-to-br from-cyan-500 to-violet-500 rounded-full flex items-center justify-center shadow-2xl shadow-cyan-500/50 z-50 active:scale-95 transition-transform"
@@ -222,7 +242,6 @@ export default function DashboardContent({
         <ArrowRightLeft className="w-6 h-6 text-white" />
       </button>
 
-      {/* ── ANIMAÇÕES CSS GLOBAIS ───────────────────────────── */}
       <style>{`
         @keyframes slowRotate { 0% { transform: translate(-30%, -30%) rotate(0deg); } 100% { transform: translate(-30%, -30%) rotate(360deg); } }
         .animate-slow-rotate { animation: slowRotate 20s infinite linear; }

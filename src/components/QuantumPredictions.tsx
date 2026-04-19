@@ -1,30 +1,39 @@
-// src/components/QuantumPredictions.jsx
+// src/components/QuantumPredictions.tsx
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Minus, WandSparkles } from 'lucide-react';
 
-// Dados mockados movidos para fora, mas podem ser substituídos por props reais depois
-const defaultPredictions = [
-  { asset: 'BTC', signal: 'COMPRA FORTE', confidence: 94, target: 'R$ 380.000', timeline: '7 dias', bullish: true },
-  { asset: 'ETH', signal: 'COMPRA', confidence: 87, target: 'R$ 22.500', timeline: '14 dias', bullish: true },
-  { asset: 'PETR4', signal: 'NEUTRO', confidence: 62, target: 'R$ 39.50', timeline: '30 dias', bullish: null },
-  { asset: 'VALE3', signal: 'VENDA', confidence: 78, target: 'R$ 56.00', timeline: '10 dias', bullish: false },
+interface Prediction {
+  asset: string;
+  signal: string;
+  confidence: number;
+  target: string;
+  timeline: string;
+  bullish: boolean | null;
+}
+
+interface QuantumPredictionsProps {
+  predictions?: Prediction[];
+}
+
+const defaultPredictions: Prediction[] = [
+  { asset: 'BTC',   signal: 'COMPRA FORTE', confidence: 94, target: 'R$ 380.000', timeline: '7 dias',  bullish: true  },
+  { asset: 'ETH',   signal: 'COMPRA',       confidence: 87, target: 'R$ 22.500',  timeline: '14 dias', bullish: true  },
+  { asset: 'PETR4', signal: 'NEUTRO',       confidence: 62, target: 'R$ 39.50',   timeline: '30 dias', bullish: null  },
+  { asset: 'VALE3', signal: 'VENDA',        confidence: 78, target: 'R$ 56.00',   timeline: '10 dias', bullish: false },
 ];
 
-export default function QuantumPredictions({ predictions = defaultPredictions }) {
-  // Estado adicionado para gerir a animação de entrada das barras
+export default function QuantumPredictions({ predictions = defaultPredictions }: QuantumPredictionsProps) {
   const [animated, setAnimated] = useState(false);
 
   useEffect(() => {
-    // Atrasa a animação ligeiramente para dar um efeito "wow" ao carregar a página
     const timer = setTimeout(() => setAnimated(true), 400);
     return () => clearTimeout(timer);
   }, []);
 
   return (
     <div className="glass-card-quantum p-6 relative overflow-hidden">
-      {/* Fundo com glow (Convertido para Tailwind puro para não depender de CSS externo) */}
-      <div className="absolute w-64 h-64 bg-purple-500/20 rounded-full blur-[80px] -top-20 -right-20 pointer-events-none"></div>
-      <div className="absolute w-48 h-48 bg-emerald-500/10 rounded-full blur-[80px] bottom-0 left-0 pointer-events-none"></div>
+      <div className="absolute w-64 h-64 bg-purple-500/20 rounded-full blur-[80px] -top-20 -right-20 pointer-events-none" />
+      <div className="absolute w-48 h-48 bg-emerald-500/10 rounded-full blur-[80px] bottom-0 left-0 pointer-events-none" />
 
       <div className="relative z-10">
         <div className="flex items-center gap-3 mb-6">
@@ -40,8 +49,8 @@ export default function QuantumPredictions({ predictions = defaultPredictions })
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {predictions.map((p) => {
             const signalColor = p.bullish === true ? '#00E68A' : p.bullish === false ? '#FF4757' : '#FFB800';
-            const signalBg = p.bullish === true ? 'bg-quantum-accentDim' : p.bullish === false ? 'bg-quantum-redDim' : 'bg-quantum-goldDim';
-            const Icon = p.bullish === true ? TrendingUp : p.bullish === false ? TrendingDown : Minus;
+            const signalBg    = p.bullish === true ? 'bg-quantum-accentDim' : p.bullish === false ? 'bg-quantum-redDim' : 'bg-quantum-goldDim';
+            const Icon        = p.bullish === true ? TrendingUp : p.bullish === false ? TrendingDown : Minus;
 
             return (
               <div
@@ -70,19 +79,18 @@ export default function QuantumPredictions({ predictions = defaultPredictions })
                   </div>
                 </div>
 
-                {/* Acessibilidade e Animação aplicadas aqui */}
-                <div 
+                <div
                   className="w-full h-1.5 bg-quantum-bg rounded-full overflow-hidden"
                   role="progressbar"
                   aria-valuenow={p.confidence}
-                  aria-valuemin="0"
-                  aria-valuemax="100"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
                 >
                   <div
                     className="h-full rounded-full transition-all duration-1000 ease-out"
-                    style={{ 
-                      width: animated ? `${p.confidence}%` : '0%', 
-                      background: `linear-gradient(90deg, ${signalColor}, #A855F7)` 
+                    style={{
+                      width: animated ? `${p.confidence}%` : '0%',
+                      background: `linear-gradient(90deg, ${signalColor}, #A855F7)`,
                     }}
                   />
                 </div>

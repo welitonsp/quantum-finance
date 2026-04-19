@@ -5,26 +5,37 @@ import { useRecurring } from '../hooks/useRecurring';
 import { formatCurrency } from '../utils/formatters';
 import toast from 'react-hot-toast';
 
-export default function RecurringManager({ uid }) {
-  // 🛡️ O Hook agora trabalha sozinho. Nada de fetchRecurring solto.
-  const { recurringTasks, loading, addRecurring, removeRecurring } = useRecurring(uid);
-  
-  const [itemToDelete, setItemToDelete] = useState(null);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  
-  const [newDescription, setNewDescription] = useState('');
-  const [newValue, setNewValue] = useState('');
-  const [newCategory, setNewCategory] = useState('Moradia');
-  const [newFrequency, setNewFrequency] = useState('mensal');
+interface RecurringManagerProps {
+  uid: string;
+}
 
-  // 🛡️ Motor de Cálculo Blindado contra "Undefined"
+interface RecurringItem {
+  id: string;
+  description?: string;
+  value?: number;
+  category?: string;
+  frequency?: string;
+  active?: boolean;
+}
+
+export default function RecurringManager({ uid }: RecurringManagerProps) {
+  const { recurringTasks, loading, addRecurring, removeRecurring } = useRecurring(uid);
+
+  const [itemToDelete, setItemToDelete]   = useState<RecurringItem | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isProcessing, setIsProcessing]   = useState(false);
+
+  const [newDescription, setNewDescription] = useState('');
+  const [newValue, setNewValue]             = useState('');
+  const [newCategory, setNewCategory]       = useState('Moradia');
+  const [newFrequency, setNewFrequency]     = useState('mensal');
+
   const { totalMensal, totalAnual, itensAtivos } = useMemo(() => {
     let mensal = new Decimal(0);
     let anual  = new Decimal(0);
     let ativos = 0;
 
-    const tasks = recurringTasks || []; // Fallback seguro
+    const tasks = (recurringTasks as RecurringItem[]) || [];
 
     tasks.forEach(item => {
       if (item.active !== false) {
@@ -40,20 +51,15 @@ export default function RecurringManager({ uid }) {
       }
     });
 
-    return {
-      totalMensal:  mensal.toNumber(),
-      totalAnual:   anual.toNumber(),
-      itensAtivos:  ativos
-    };
+    return { totalMensal: mensal.toNumber(), totalAnual: anual.toNumber(), itensAtivos: ativos };
   }, [recurringTasks]);
 
-  const handleAddRecurring = async (e) => {
+  const handleAddRecurring = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!newDescription || !newValue) {
-      toast.error("Preencha a descrição e o valor.");
+      toast.error('Preencha a descrição e o valor.');
       return;
     }
-    
     setIsProcessing(true);
     try {
       await addRecurring({
@@ -63,16 +69,15 @@ export default function RecurringManager({ uid }) {
         frequency: newFrequency,
         active: true,
       });
-      
-      toast.success("Despesa fixa registada!");
+      toast.success('Despesa fixa registada!');
       setIsAddModalOpen(false);
       setNewDescription('');
       setNewValue('');
       setNewCategory('Moradia');
       setNewFrequency('mensal');
     } catch (err) {
-      console.error("Erro ao adicionar contrato:", err);
-      toast.error("Erro na encriptação da despesa.");
+      console.error('Erro ao adicionar contrato:', err);
+      toast.error('Erro na encriptação da despesa.');
     } finally {
       setIsProcessing(false);
     }
@@ -82,10 +87,10 @@ export default function RecurringManager({ uid }) {
     if (!itemToDelete) return;
     try {
       await removeRecurring(itemToDelete.id);
-      toast.success("Contrato eliminado.");
+      toast.success('Contrato eliminado.');
       setItemToDelete(null);
     } catch (err) {
-      toast.error("Erro ao remover o contrato.");
+      toast.error('Erro ao remover o contrato.');
     }
   };
 
@@ -93,16 +98,16 @@ export default function RecurringManager({ uid }) {
     return <div className="p-8 text-center text-cyan-500 animate-pulse font-mono uppercase tracking-widest text-xs mt-10">A carregar motor de contratos...</div>;
   }
 
+  const tasks = (recurringTasks as RecurringItem[]) || [];
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 relative z-10 flex flex-col h-full w-full max-w-[1600px] mx-auto pb-12">
-      
-      {/* ── HEADER ───────────────────────────────────────────── */}
+
       <div>
         <h1 className="text-2xl font-bold text-white mb-1">Despesas Fixas</h1>
         <p className="text-sm text-slate-400">Motor de gestão de contratos, assinaturas e compromissos recorrentes.</p>
       </div>
 
-      {/* ── PAINEL DE IMPACTO FINANCEIRO (NEOFUTURISTA) ──────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800 rounded-3xl p-6 shadow-xl transition-all hover:-translate-y-1">
           <div className="flex items-center gap-2 text-slate-400 mb-2">
@@ -125,8 +130,8 @@ export default function RecurringManager({ uid }) {
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Contratos Ativos</span>
             <span className="font-mono text-3xl font-black text-cyan-400">{itensAtivos}</span>
           </div>
-          <button 
-            onClick={() => setIsAddModalOpen(true)} 
+          <button
+            onClick={() => setIsAddModalOpen(true)}
             className="w-14 h-14 bg-cyan-600 hover:bg-cyan-500 rounded-full flex items-center justify-center text-white transition-all shadow-[0_0_20px_rgba(8,145,178,0.4)] hover:scale-105 active:scale-95"
             title="Novo Contrato Fixo"
           >
@@ -135,16 +140,15 @@ export default function RecurringManager({ uid }) {
         </div>
       </div>
 
-      {/* ── LISTA DE COMPROMISSOS (O COFRE) ──────────────────── */}
       <div className="flex-1 bg-slate-900/40 backdrop-blur-md border border-slate-800 rounded-3xl overflow-hidden shadow-xl flex flex-col">
         <div className="p-6 border-b border-slate-800/50 bg-slate-950/30 flex justify-between items-center">
           <h2 className="text-xs font-black text-slate-300 uppercase tracking-[0.2em] flex items-center gap-2">
             <Repeat className="w-4 h-4 text-cyan-400" /> Lista de Contratos
           </h2>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-          {(!recurringTasks || recurringTasks.length === 0) ? (
+          {tasks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <div className="w-16 h-16 bg-slate-800/50 rounded-full flex items-center justify-center mb-4">
                 <Repeat className="w-8 h-8 text-slate-500" />
@@ -154,7 +158,7 @@ export default function RecurringManager({ uid }) {
             </div>
           ) : (
             <div className="divide-y divide-slate-800/50">
-              {recurringTasks.map(item => (
+              {tasks.map(item => (
                 <div key={item.id} className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-slate-800/30 transition-colors group">
                   <div className="flex items-center gap-4">
                     <div className={`p-2 rounded-xl ${item.active !== false ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}>
@@ -169,9 +173,9 @@ export default function RecurringManager({ uid }) {
                     </div>
                   </div>
                   <div className="flex items-center gap-5 w-full sm:w-auto justify-between sm:justify-end">
-                    <span className="font-mono text-base font-bold text-slate-300">{formatCurrency(item.value)}</span>
-                    <button 
-                      onClick={() => setItemToDelete(item)} 
+                    <span className="font-mono text-base font-bold text-slate-300">{formatCurrency(item.value ?? 0)}</span>
+                    <button
+                      onClick={() => setItemToDelete(item)}
                       className="p-2.5 text-slate-500 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all"
                       title="Remover"
                     >
@@ -185,7 +189,6 @@ export default function RecurringManager({ uid }) {
         </div>
       </div>
 
-      {/* ── MODAL: NOVA DESPESA ─────────────────────────────── */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
@@ -195,24 +198,24 @@ export default function RecurringManager({ uid }) {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            
+
             <form onSubmit={handleAddRecurring} className="p-6 space-y-5">
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Descrição</label>
-                <input type="text" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} required placeholder="Ex: Aluguel, Internet..."
+                <input type="text" value={newDescription} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewDescription(e.target.value)} required placeholder="Ex: Aluguel, Internet..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-cyan-500 transition-colors placeholder:text-slate-600" />
               </div>
-              
+
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Valor Fixo (R$)</label>
-                <input type="number" step="0.01" value={newValue} onChange={(e) => setNewValue(e.target.value)} required placeholder="0.00"
+                <input type="number" step="0.01" value={newValue} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewValue(e.target.value)} required placeholder="0.00"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-cyan-500 font-mono transition-colors placeholder:text-slate-600" />
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Categoria</label>
-                  <select value={newCategory} onChange={(e) => setNewCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-cyan-500 transition-colors">
+                  <select value={newCategory} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setNewCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-cyan-500 transition-colors">
                     <option value="Moradia">Moradia</option>
                     <option value="Transporte">Transporte</option>
                     <option value="Assinaturas">Assinaturas</option>
@@ -223,7 +226,7 @@ export default function RecurringManager({ uid }) {
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Frequência</label>
-                  <select value={newFrequency} onChange={(e) => setNewFrequency(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-cyan-500 transition-colors">
+                  <select value={newFrequency} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setNewFrequency(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-cyan-500 transition-colors">
                     <option value="mensal">Mensal</option>
                     <option value="anual">Anual</option>
                   </select>
@@ -240,7 +243,6 @@ export default function RecurringManager({ uid }) {
         </div>
       )}
 
-      {/* ── MODAL: CONFIRMAR ELIMINAÇÃO ─────────────────────── */}
       {itemToDelete && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95">
@@ -253,12 +255,12 @@ export default function RecurringManager({ uid }) {
                 <p className="text-xs text-slate-400 mt-1">Ação irreversível.</p>
               </div>
             </div>
-            
+
             <div className="bg-slate-950 p-4 rounded-xl mb-6 border border-white/5">
               <p className="text-sm font-bold truncate text-slate-300">"{itemToDelete.description}"</p>
-              <p className="text-xs font-mono text-red-400 mt-1">{formatCurrency(itemToDelete.value)}</p>
+              <p className="text-xs font-mono text-red-400 mt-1">{formatCurrency(itemToDelete.value ?? 0)}</p>
             </div>
-            
+
             <div className="flex gap-3">
               <button onClick={() => setItemToDelete(null)} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors">Cancelar</button>
               <button onClick={handleDelete} className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl transition-colors shadow-[0_0_15px_rgba(239,68,68,0.3)]">Eliminar</button>

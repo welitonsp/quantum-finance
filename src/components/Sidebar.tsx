@@ -2,48 +2,78 @@ import React from 'react';
 import { useNavigation } from '../contexts/NavigationContext';
 import {
   LayoutDashboard, PieChart, Settings, LogOut,
-  Landmark, BrainCircuit, Repeat, Clock, X, CreditCard, FlaskConical
-} from "lucide-react";
+  Landmark, BrainCircuit, Repeat, Clock, X, CreditCard, FlaskConical,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
-export default function Sidebar({ user, isMobileMenuOpen, setIsMobileMenuOpen, isSidebarCollapsed, setIsSettingsOpen, handleLogout }) {
+interface SidebarProps {
+  user: { displayName?: string | null; email?: string | null } | null;
+  isMobileMenuOpen: boolean;
+  setIsMobileMenuOpen: (open: boolean) => void;
+  isSidebarCollapsed: boolean;
+  setIsSettingsOpen: (open: boolean) => void;
+  handleLogout: () => void;
+}
+
+interface NavItem {
+  id: string;
+  icon: LucideIcon;
+  label: string;
+}
+
+interface NavGroup {
+  title: string;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    title: 'Visão Principal',
+    items: [
+      { id: 'dashboard',  icon: LayoutDashboard, label: 'Dashboard'          },
+      { id: 'reports',    icon: PieChart,        label: 'BI & Relatórios'    },
+      { id: 'quantum',    icon: BrainCircuit,    label: 'Quantum AI'         },
+      { id: 'simulation', icon: FlaskConical,    label: 'Monte Carlo'        },
+    ],
+  },
+  {
+    title: 'Cofre Quântico',
+    items: [
+      { id: 'accounts',  icon: Landmark,   label: 'Minhas Contas'      },
+      { id: 'cards',     icon: CreditCard, label: 'Cartões de Crédito' },
+      { id: 'history',   icon: Clock,      label: 'Movimentações'      },
+      { id: 'recurring', icon: Repeat,     label: 'Despesas Fixas'     },
+    ],
+  },
+];
+
+export default function Sidebar({
+  isMobileMenuOpen,
+  setIsMobileMenuOpen,
+  isSidebarCollapsed,
+  setIsSettingsOpen,
+  handleLogout,
+}: SidebarProps) {
   const { currentPage, setCurrentPage } = useNavigation();
 
-  const handleNavClick = (page) => {
+  const handleNavClick = (page: string) => {
     setCurrentPage(page);
     setIsMobileMenuOpen(false);
   };
 
-  const navGroups = [
-    {
-      title: "Visão Principal",
-      items: [
-        { id: 'dashboard',   icon: LayoutDashboard, label: 'Dashboard'            },
-        { id: 'reports',     icon: PieChart,        label: 'BI & Relatórios'      },
-        { id: 'quantum',     icon: BrainCircuit,    label: 'Quantum AI'           },
-        { id: 'simulation',  icon: FlaskConical,    label: 'Monte Carlo'          },
-      ]
-    },
-    {
-      title: "Cofre Quântico",
-      items: [
-        { id: 'accounts',  icon: Landmark,    label: 'Minhas Contas'    },
-        { id: 'cards',     icon: CreditCard,  label: 'Cartões de Crédito' },
-        { id: 'history',   icon: Clock,       label: 'Movimentações'    },
-        { id: 'recurring', icon: Repeat,      label: 'Despesas Fixas'   },
-      ]
-    }
-  ];
-
   const sidebarClasses = `fixed md:static inset-y-0 left-0 z-50 transform ${
-    isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+    isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
   } md:translate-x-0 transition-all duration-300 ease-in-out bg-slate-900/95 md:bg-slate-900/50 backdrop-blur-xl border-r border-white/5 flex flex-col ${
-    isSidebarCollapsed ? "w-20" : "w-64"
+    isSidebarCollapsed ? 'w-20' : 'w-64'
   }`;
 
   return (
     <>
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden" onClick={() => setIsMobileMenuOpen(false)} />
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
       )}
 
       <aside className={sidebarClasses}>
@@ -69,7 +99,7 @@ export default function Sidebar({ user, isMobileMenuOpen, setIsMobileMenuOpen, i
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar py-4 space-y-6">
-          {navGroups.map((group, index) => (
+          {NAV_GROUPS.map((group, index) => (
             <div key={index} className="px-4">
               {!isSidebarCollapsed && (
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 ml-2">{group.title}</p>
@@ -82,10 +112,10 @@ export default function Sidebar({ user, isMobileMenuOpen, setIsMobileMenuOpen, i
                     <button
                       key={item.id}
                       onClick={() => handleNavClick(item.id)}
-                      title={isSidebarCollapsed ? item.label : ""}
+                      title={isSidebarCollapsed ? item.label : ''}
                       className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'px-4'} py-3 rounded-xl transition-all duration-200 group ${
-                        isActive 
-                          ? 'bg-gradient-to-r from-cyan-500/10 to-cyan-400/5 text-cyan-400 border border-cyan-500/20 shadow-sm' 
+                        isActive
+                          ? 'bg-gradient-to-r from-cyan-500/10 to-cyan-400/5 text-cyan-400 border border-cyan-500/20 shadow-sm'
                           : 'text-slate-400 hover:bg-white/5 hover:text-white border border-transparent'
                       }`}
                     >
@@ -100,18 +130,18 @@ export default function Sidebar({ user, isMobileMenuOpen, setIsMobileMenuOpen, i
         </div>
 
         <div className="p-4 border-t border-white/5 space-y-2">
-          <button 
+          <button
             onClick={() => setIsSettingsOpen(true)}
-            title={isSidebarCollapsed ? "Configurações" : ""}
+            title={isSidebarCollapsed ? 'Configurações' : ''}
             className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'px-4'} py-3 text-slate-400 hover:bg-white/5 hover:text-white rounded-xl transition-colors border border-transparent`}
           >
             <Settings className={`w-5 h-5 ${isSidebarCollapsed ? '' : 'mr-3'}`} />
             {!isSidebarCollapsed && <span className="font-bold text-sm">Configurações</span>}
           </button>
-          
-          <button 
+
+          <button
             onClick={handleLogout}
-            title={isSidebarCollapsed ? "Sair" : ""}
+            title={isSidebarCollapsed ? 'Sair' : ''}
             className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'px-4'} py-3 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors border border-transparent`}
           >
             <LogOut className={`w-5 h-5 ${isSidebarCollapsed ? '' : 'mr-3'}`} />

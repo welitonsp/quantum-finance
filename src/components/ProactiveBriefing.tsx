@@ -1,111 +1,92 @@
-/**
- * ProactiveBriefing.jsx — Painel de Briefing Pró-Ativo da IA
- * ──────────────────────────────────────────────────────────────────────────
- * Gera automaticamente um relatório semanal assim que o utilizador abre o
- * dashboard. O resultado é cacheado em localStorage para evitar chamadas
- * repetidas à API (cache válido por 7 dias, chave = uid + semana do ano).
- *
- * Comportamento:
- *  • Na primeira abertura da semana → gera o briefing automaticamente (delay 2s)
- *  • Nas aberturas seguintes → exibe o briefing cacheado instantaneamente
- *  • Botão "Gerar Novo" força refresh manual
- *  • Colapsa/expande com AnimatePresence
- */
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import {
   BrainCircuit, ChevronDown, ChevronUp, RefreshCw,
-  AlertTriangle, ShieldCheck, AlertCircle, Zap, X
+  AlertTriangle, ShieldCheck, AlertCircle, Zap, X,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { aiProvider } from '../shared/ai/aiProvider';
 
-// ─── Utilitário: número da semana ISO no ano ──────────────────────────────────
-function getISOWeek(date = new Date()) {
-  const d     = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+type AnyRecord = Record<string, unknown>;
+
+interface FinancialContext {
+  saldo: number;
+  entradas: number;
+  saidas: number;
+  transactions: AnyRecord[];
+  currentMonth: number;
+  currentYear: number;
+}
+
+interface ProactiveBriefingProps {
+  financialContext: FinancialContext | null;
+  uid?: string;
+  className?: string;
+}
+
+type Severity = 'critical' | 'warning' | 'ok';
+
+interface SeverityConfig {
+  icon: LucideIcon;
+  iconClass: string;
+  badgeClass: string;
+  barClass: string;
+  label: string;
+}
+
+interface CachedBriefing {
+  text: string;
+  ts: string;
+}
+
+function getISOWeek(date = new Date()): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const dayNum = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
 
-function getCacheKey(uid) {
+function getCacheKey(uid: string): string {
   const week = getISOWeek();
   const year = new Date().getFullYear();
   return `qf_briefing_${uid}_${year}_w${week}`;
 }
 
-// ─── Detectar severidade pelo conteúdo do relatório ──────────────────────────
-function detectSeverity(text = '') {
+function detectSeverity(text = ''): Severity {
   const lower = text.toLowerCase();
   if (lower.includes('alerta vermelho') || lower.includes('crítico') || lower.includes('perigo')) return 'critical';
-  if (lower.includes('atenção')  || lower.includes('cuidado')  || lower.includes('risco')) return 'warning';
+  if (lower.includes('atenção') || lower.includes('cuidado') || lower.includes('risco')) return 'warning';
   return 'ok';
 }
 
-const SEVERITY_CONFIG = {
+const SEVERITY_CONFIG: Record<Severity, SeverityConfig> = {
   critical: {
-    icon:       AlertTriangle,
-    iconClass:  'text-red-400',
+    icon: AlertTriangle, iconClass: 'text-red-400',
     badgeClass: 'bg-red-500/10 border-red-500/30 text-red-400',
-    barClass:   'from-red-600 to-red-400',
-    label:      'Alerta Crítico',
+    barClass: 'from-red-600 to-red-400', label: 'Alerta Crítico',
   },
   warning: {
-    icon:       AlertCircle,
-    iconClass:  'text-amber-400',
+    icon: AlertCircle, iconClass: 'text-amber-400',
     badgeClass: 'bg-amber-500/10 border-amber-500/30 text-amber-400',
-    barClass:   'from-amber-500 to-yellow-400',
-    label:      'Atenção Necessária',
+    barClass: 'from-amber-500 to-yellow-400', label: 'Atenção Necessária',
   },
   ok: {
-    icon:       ShieldCheck,
-    iconClass:  'text-emerald-400',
+    icon: ShieldCheck, iconClass: 'text-emerald-400',
     badgeClass: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
-    barClass:   'from-emerald-500 to-teal-400',
-    label:      'Finanças Estáveis',
+    barClass: 'from-emerald-500 to-teal-400', label: 'Finanças Estáveis',
   },
 };
 
-// ─── COMPONENTE PRINCIPAL ────────────────────────────────────────────────────
-export default function ProactiveBriefing({ financialContext, uid, className = '' }) {
-  const [briefing,     setBriefing]     = useState(null);     // texto do relatório
-  const [loading,      setLoading]      = useState(false);
-  const [expanded,     setExpanded]     = useState(false);
-  const [dismissed,    setDismissed]    = useState(false);
-  const [generatedAt,  setGeneratedAt]  = useState(null);
-  const [fromCache,    setFromCache]    = useState(false);
-  const autoTriggered = useRef(false);
-
-  // ── Carregar do cache ou gerar automaticamente ───────────────────────────
-  useEffect(() => {
-    if (!uid || autoTriggered.current) return;
-    autoTriggered.current = true;
-
-    const cacheKey = getCacheKey(uid);
-    const cached   = localStorage.getItem(cacheKey);
-
-    if (cached) {
-      try {
-        const { text, ts } = JSON.parse(cached);
-        setBriefing(text);
-        setGeneratedAt(new Date(ts));
-        setFromCache(true);
-        setExpanded(false); // começa colapsado se vier do cache
-        return;
-      } catch {
-        localStorage.removeItem(cacheKey);
-      }
-    }
-
-    // Sem cache → gerar automaticamente após 2s (para não bloquear o carregamento do dashboard)
-    const timer = setTimeout(() => {
-      generate(false);
-    }, 2000);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uid]);
+export default function ProactiveBriefing({ financialContext, uid, className = '' }: ProactiveBriefingProps) {
+  const [briefing,    setBriefing]    = useState<string | null>(null);
+  const [loading,     setLoading]     = useState(false);
+  const [expanded,    setExpanded]    = useState(false);
+  const [dismissed,   setDismissed]   = useState(false);
+  const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
+  const [fromCache,   setFromCache]   = useState(false);
+  const autoTriggered = useRef<boolean>(false);
 
   const generate = useCallback(async (forceExpand = true) => {
     if (loading || !financialContext) return;
@@ -123,17 +104,15 @@ export default function ProactiveBriefing({ financialContext, uid, className = '
         },
         { role: 'user', content: 'Gere o briefing financeiro semanal completo.' },
       ]);
-      const ts   = new Date();
+      const ts = new Date();
       setBriefing(text);
       setGeneratedAt(ts);
       setFromCache(false);
       setExpanded(true);
       setDismissed(false);
 
-      // Salvar no cache
       if (uid) {
-        const cacheKey = getCacheKey(uid);
-        localStorage.setItem(cacheKey, JSON.stringify({ text, ts: ts.toISOString() }));
+        localStorage.setItem(getCacheKey(uid), JSON.stringify({ text, ts: ts.toISOString() }));
       }
     } catch (e) {
       console.error('Erro ao gerar briefing:', e);
@@ -144,17 +123,46 @@ export default function ProactiveBriefing({ financialContext, uid, className = '
     }
   }, [loading, financialContext, uid]);
 
-  // ── Não renderiza se dispensado ou sem dados suficientes ─────────────────
+  useEffect(() => {
+    if (!uid || autoTriggered.current) return;
+    autoTriggered.current = true;
+
+    const cacheKey = getCacheKey(uid);
+    const cached   = localStorage.getItem(cacheKey);
+
+    if (cached) {
+      try {
+        const { text, ts } = JSON.parse(cached) as CachedBriefing;
+        setBriefing(text);
+        setGeneratedAt(new Date(ts));
+        setFromCache(true);
+        setExpanded(false);
+        return;
+      } catch {
+        localStorage.removeItem(cacheKey);
+      }
+    }
+
+    const timer = setTimeout(() => { generate(false); }, 2000);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid]);
+
   if (dismissed) return null;
   if (!briefing && !loading) return null;
 
-  const severity  = briefing ? detectSeverity(briefing) : 'ok';
-  const cfg       = SEVERITY_CONFIG[severity];
-  const SevIcon   = cfg.icon;
+  const severity = briefing ? detectSeverity(briefing) : 'ok';
+  const cfg      = SEVERITY_CONFIG[severity];
+  const SevIcon  = cfg.icon;
 
   const timeLabel = generatedAt
     ? generatedAt.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
     : null;
+
+  const borderClass =
+    severity === 'critical' ? 'border-red-500/20 bg-red-950/20' :
+    severity === 'warning'  ? 'border-amber-500/20 bg-amber-950/15' :
+                              'border-emerald-500/15 bg-emerald-950/10';
 
   return (
     <motion.div
@@ -162,29 +170,18 @@ export default function ProactiveBriefing({ financialContext, uid, className = '
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -12 }}
       transition={{ type: 'spring', stiffness: 200, damping: 22 }}
-      className={`relative rounded-2xl border overflow-hidden ${className} ${
-        severity === 'critical'
-          ? 'border-red-500/20   bg-red-950/20'
-          : severity === 'warning'
-          ? 'border-amber-500/20 bg-amber-950/15'
-          : 'border-emerald-500/15 bg-emerald-950/10'
-      }`}
+      className={`relative rounded-2xl border overflow-hidden ${className} ${borderClass}`}
       style={{ backdropFilter: 'blur(12px)' }}
     >
-      {/* Barra de cor no topo */}
       <div className={`h-[2px] w-full bg-gradient-to-r ${cfg.barClass} opacity-70`} />
 
-      {/* ── Header ──────────────────────────────────────────────────── */}
       <div
         className="flex items-center gap-3 px-5 py-3.5 cursor-pointer select-none"
         onClick={() => setExpanded(e => !e)}
         role="button"
         aria-expanded={expanded}
       >
-        {/* Ícone de IA pulsando durante loading */}
-        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-          loading ? 'bg-quantum-accentDim animate-pulse' : cfg.badgeClass.split(' ')[0]
-        }`}>
+        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${loading ? 'bg-quantum-accentDim animate-pulse' : cfg.badgeClass.split(' ')[0]}`}>
           {loading
             ? <Zap className="w-4 h-4 text-quantum-accent" />
             : <BrainCircuit className="w-4 h-4 text-quantum-accent" />
@@ -220,7 +217,6 @@ export default function ProactiveBriefing({ financialContext, uid, className = '
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {/* Botão regenerar */}
           {!loading && (
             <button
               onClick={e => { e.stopPropagation(); generate(true); }}
@@ -230,8 +226,6 @@ export default function ProactiveBriefing({ financialContext, uid, className = '
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
           )}
-
-          {/* Dispensar */}
           <button
             onClick={e => { e.stopPropagation(); setDismissed(true); }}
             title="Dispensar"
@@ -239,8 +233,6 @@ export default function ProactiveBriefing({ financialContext, uid, className = '
           >
             <X className="w-3.5 h-3.5" />
           </button>
-
-          {/* Expand toggle */}
           {expanded
             ? <ChevronUp   className="w-4 h-4 text-quantum-fgMuted" />
             : <ChevronDown className="w-4 h-4 text-quantum-fgMuted" />
@@ -248,7 +240,6 @@ export default function ProactiveBriefing({ financialContext, uid, className = '
         </div>
       </div>
 
-      {/* ── Conteúdo expansível ──────────────────────────────────────── */}
       <AnimatePresence initial={false}>
         {expanded && (
           <motion.div
@@ -268,16 +259,8 @@ export default function ProactiveBriefing({ financialContext, uid, className = '
                   </span>
                 </div>
               ) : (
-                <div className="
-                  prose prose-invert prose-sm max-w-none
-                  prose-headings:text-white prose-headings:font-black prose-headings:text-sm
-                  prose-p:text-slate-300 prose-p:text-sm prose-p:leading-relaxed
-                  prose-strong:text-white prose-strong:font-bold
-                  prose-ul:text-slate-300 prose-li:text-sm prose-li:marker:text-quantum-accent
-                  prose-code:text-quantum-accent prose-code:bg-quantum-accentDim prose-code:px-1 prose-code:rounded
-                  prose-blockquote:border-l-quantum-accent prose-blockquote:text-slate-400
-                ">
-                  <ReactMarkdown>{briefing}</ReactMarkdown>
+                <div className="prose prose-invert prose-sm max-w-none prose-headings:text-white prose-headings:font-black prose-headings:text-sm prose-p:text-slate-300 prose-p:text-sm prose-p:leading-relaxed prose-strong:text-white prose-strong:font-bold prose-ul:text-slate-300 prose-li:text-sm prose-li:marker:text-quantum-accent prose-code:text-quantum-accent prose-code:bg-quantum-accentDim prose-code:px-1 prose-code:rounded prose-blockquote:border-l-quantum-accent prose-blockquote:text-slate-400">
+                  <ReactMarkdown>{briefing ?? ''}</ReactMarkdown>
                 </div>
               )}
             </div>

@@ -2,36 +2,30 @@ import React, { useMemo, memo } from 'react';
 import { BarChart2, Info } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 
-export const CategoryBreakdown = memo(({ transactions }) => {
-  const { incomeCategories, expenseCategories } = useMemo(() => {
-    const incomeMap = {};
-    const expenseMap = {};
-    (transactions || []).forEach(t => {
-      const isIncome = t.type === 'receita' || t.type === 'entrada' || t.amount > 0;
-      const cat = t.category || 'Outros';
-      const amount = Math.abs(t.value || t.amount || 0);
-      if (isIncome) {
-        incomeMap[cat] = (incomeMap[cat] || 0) + amount;
-      } else {
-        expenseMap[cat] = (expenseMap[cat] || 0) + amount;
-      }
-    });
-    const incomeTotal = Object.values(incomeMap).reduce((a,b) => a+b, 0) || 1;
-    const expenseTotal = Object.values(expenseMap).reduce((a,b) => a+b, 0) || 1;
-    const colors = ['#22d3ee','#818cf8','#f472b6','#34d399','#fbbf24','#f87171','#a78bfa'];
-    
-    const process = (map, total) => Object.entries(map)
-      .sort((a,b) => b[1] - a[1])
-      .slice(0,5)
-      .map(([name, value], i) => ({ name, value, pct: (value/total)*100, color: colors[i % colors.length] }));
-      
-    return {
-      incomeCategories: process(incomeMap, incomeTotal),
-      expenseCategories: process(expenseMap, expenseTotal),
-    };
-  }, [transactions]);
+type AnyRecord = Record<string, unknown>;
 
-  const renderCategoryList = (categories, title, type) => (
+interface CategoryEntry {
+  name: string;
+  value: number;
+  pct: number;
+  color: string;
+}
+
+interface CategoryBreakdownProps {
+  transactions?: AnyRecord[];
+}
+
+const COLORS = ['#22d3ee','#818cf8','#f472b6','#34d399','#fbbf24','#f87171','#a78bfa'];
+
+function processMap(map: Record<string, number>, total: number): CategoryEntry[] {
+  return Object.entries(map)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([name, value], i) => ({ name, value, pct: (value / total) * 100, color: COLORS[i % COLORS.length] }));
+}
+
+function CategoryList({ categories, title, type }: { categories: CategoryEntry[]; title: string; type: 'income' | 'expense' }) {
+  return (
     <div className="flex-1">
       <h3 className={`text-sm font-bold mb-4 ${type === 'income' ? 'text-emerald-400' : 'text-red-400'} uppercase tracking-wider`}>{title}</h3>
       {categories.length === 0 ? (
@@ -59,6 +53,32 @@ export const CategoryBreakdown = memo(({ transactions }) => {
       )}
     </div>
   );
+}
+
+export const CategoryBreakdown = memo(({ transactions }: CategoryBreakdownProps) => {
+  const { incomeCategories, expenseCategories } = useMemo(() => {
+    const incomeMap: Record<string, number> = {};
+    const expenseMap: Record<string, number> = {};
+
+    (transactions ?? []).forEach(t => {
+      const isIncome = t.type === 'receita' || t.type === 'entrada' || (t.amount as number) > 0;
+      const cat = (t.category as string) || 'Outros';
+      const amount = Math.abs((t.value as number) || (t.amount as number) || 0);
+      if (isIncome) {
+        incomeMap[cat] = (incomeMap[cat] ?? 0) + amount;
+      } else {
+        expenseMap[cat] = (expenseMap[cat] ?? 0) + amount;
+      }
+    });
+
+    const incomeTotal = Object.values(incomeMap).reduce((a, b) => a + b, 0) || 1;
+    const expenseTotal = Object.values(expenseMap).reduce((a, b) => a + b, 0) || 1;
+
+    return {
+      incomeCategories: processMap(incomeMap, incomeTotal),
+      expenseCategories: processMap(expenseMap, expenseTotal),
+    };
+  }, [transactions]);
 
   return (
     <div className="bg-slate-900/40 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
@@ -68,8 +88,8 @@ export const CategoryBreakdown = memo(({ transactions }) => {
         <Info className="w-4 h-4 text-slate-500 cursor-help" title="Divisão de receitas e despesas por categoria." />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {renderCategoryList(incomeCategories, '💰 Receitas', 'income')}
-        {renderCategoryList(expenseCategories, '📉 Despesas', 'expense')}
+        <CategoryList categories={incomeCategories} title="💰 Receitas" type="income" />
+        <CategoryList categories={expenseCategories} title="📉 Despesas" type="expense" />
       </div>
     </div>
   );

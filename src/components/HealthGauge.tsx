@@ -1,14 +1,21 @@
+// src/components/HealthGauge.tsx
 import React, { useState, useEffect, memo } from 'react';
-import { MONO } from '../utils/dashboardUtils';
 
-export const HealthGauge = memo(({ score, color }) => {
+type GaugeColor = 'emerald' | 'amber' | 'red';
+
+interface HealthGaugeProps {
+  score: number;
+  color: GaugeColor;
+}
+
+export const HealthGauge = memo(({ score, color }: HealthGaugeProps) => {
   const [animatedFill, setAnimatedFill] = useState(0);
-  const r = 46;
+  const r    = 46;
   const circ = 2 * Math.PI * r;
-  const arc = circ * 0.72;
+  const arc  = circ * 0.72;
   const fill = (Math.max(0, animatedFill) / 100) * arc;
-  const C = { emerald: '#10b981', amber: '#f59e0b', red: '#ef4444' }[color] || '#10b981';
-  const lbl = color === 'red' ? 'CRÍTICO' : color === 'amber' ? 'ATENÇÃO' : score >= 80 ? 'EXCELENTE' : 'SAUDÁVEL';
+  const C    = ({ emerald: '#10b981', amber: '#f59e0b', red: '#ef4444' } as Record<GaugeColor, string>)[color] ?? '#10b981';
+  const lbl  = color === 'red' ? 'CRÍTICO' : color === 'amber' ? 'ATENÇÃO' : score >= 80 ? 'EXCELENTE' : 'SAUDÁVEL';
 
   useEffect(() => {
     const timeout = setTimeout(() => setAnimatedFill(score), 200);

@@ -1,11 +1,28 @@
-// src/components/HistoryPage.jsx
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { ListChecks, TrendingUp, TrendingDown, Scale } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import TransactionsManager from '../features/transactions/TransactionsManager';
 
-// ─── Card de KPI compacto ──────────────────────────────────────────────────────
-function StatPill({ icon: Icon, label, value, colorClass }) {
+type AnyRecord = Record<string, unknown>;
+
+interface HistoryPageProps {
+  transactions?: AnyRecord[];
+  loading: boolean;
+  onEdit: (tx: AnyRecord) => void;
+  onDeleteRequest: (tx: AnyRecord) => void;
+  onBatchDelete: (ids: string[]) => void;
+  onDeleteAll: () => void;
+}
+
+interface StatPillProps {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  colorClass: string;
+}
+
+function StatPill({ icon: Icon, label, value, colorClass }: StatPillProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -21,11 +38,9 @@ function StatPill({ icon: Icon, label, value, colorClass }) {
   );
 }
 
-function fmt(n) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
-}
+const fmt = (n: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
 
-// ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
 export default function HistoryPage({
   transactions = [],
   loading,
@@ -33,11 +48,11 @@ export default function HistoryPage({
   onDeleteRequest,
   onBatchDelete,
   onDeleteAll,
-}) {
+}: HistoryPageProps) {
   const stats = useMemo(() => {
     let totalIn = 0, totalOut = 0;
     transactions.forEach(tx => {
-      const v = (tx.value || 0) / 100;
+      const v = ((tx.value as number) || 0) / 100;
       if (tx.type === 'entrada' || tx.type === 'receita') totalIn  += v;
       else                                                  totalOut += v;
     });
@@ -49,7 +64,6 @@ export default function HistoryPage({
   return (
     <div className="space-y-5 animate-in fade-in duration-500 relative z-10 flex flex-col h-full">
 
-      {/* ── Cabeçalho ─────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -63,7 +77,6 @@ export default function HistoryPage({
           </p>
         </div>
 
-        {/* Pills de stats — só aparecem com dados */}
         {!loading && stats.count > 0 && (
           <motion.div
             className="flex flex-wrap gap-2 sm:gap-2.5"
@@ -71,37 +84,18 @@ export default function HistoryPage({
             animate={{ opacity: 1 }}
             transition={{ delay: 0.1 }}
           >
+            <StatPill icon={ListChecks} label="Total"    value={`${stats.count} lançamentos`} colorClass="border-slate-700/60" />
+            <StatPill icon={TrendingUp} label="Entradas" value={fmt(stats.totalIn)}           colorClass="border-emerald-500/20 text-emerald-400" />
+            <StatPill icon={TrendingDown} label="Saídas" value={fmt(stats.totalOut)}          colorClass="border-red-500/20 text-red-400" />
             <StatPill
-              icon={ListChecks}
-              label="Total"
-              value={`${stats.count} lançamentos`}
-              colorClass="border-slate-700/60"
-            />
-            <StatPill
-              icon={TrendingUp}
-              label="Entradas"
-              value={fmt(stats.totalIn)}
-              colorClass="border-emerald-500/20 text-emerald-400"
-            />
-            <StatPill
-              icon={TrendingDown}
-              label="Saídas"
-              value={fmt(stats.totalOut)}
-              colorClass="border-red-500/20 text-red-400"
-            />
-            <StatPill
-              icon={Scale}
-              label="Saldo"
+              icon={Scale} label="Saldo"
               value={`${netPositive ? '+' : ''}${fmt(stats.net)}`}
-              colorClass={netPositive
-                ? 'border-emerald-500/30 text-emerald-300'
-                : 'border-red-500/30 text-red-300'}
+              colorClass={netPositive ? 'border-emerald-500/30 text-emerald-300' : 'border-red-500/30 text-red-300'}
             />
           </motion.div>
         )}
       </div>
 
-      {/* ── Painel principal ──────────────────────────────────────── */}
       <motion.div
         className="flex-1 glass-card-quantum rounded-2xl overflow-hidden"
         initial={{ opacity: 0, y: 12 }}
