@@ -13,21 +13,10 @@ import {
 import toast from 'react-hot-toast';
 
 import { useParserWorker } from '../../shared/lib/useParserWorker';
-import { GeminiService } from '../ai-chat/GeminiService';
+import { BayesianClassifier } from '../../shared/ai/bayesianClassifier';
+import { aiProvider } from '../../shared/ai/aiProvider';
 import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
 import ReconciliationEngine from './ReconciliationEngine';
-
-// ─── Dicionário local para poupar chamadas à IA ──────────────────────────────
-const LOCAL_DICTIONARY = {
-  'UBER': 'Transporte', '99APP': 'Transporte', 'POSTO': 'Transporte', 'SHELL': 'Transporte',
-  'IFOOD': 'Alimentação', 'MCDONALDS': 'Alimentação', 'BURGER': 'Alimentação',
-  'SUPERMERCADO': 'Alimentação', 'CARREFOUR': 'Alimentação', 'EXTRA': 'Alimentação',
-  'NETFLIX': 'Assinaturas', 'SPOTIFY': 'Assinaturas', 'AMAZON': 'Assinaturas',
-  'SALARIO': 'Salário', 'PAGTO SALARIO': 'Salário',
-  'RENDIMENTO': 'Investimento', 'DIVIDENDO': 'Investimento',
-  'FARMACIA': 'Saúde', 'DROGASIL': 'Saúde', 'HOSPITAL': 'Saúde',
-  'ESCOLA': 'Educação', 'FACULDADE': 'Educação', 'CURSO': 'Educação',
-};
 
 // ─── Mapa de cores por categoria ─────────────────────────────────────────────
 const CAT_COLORS = {
@@ -112,7 +101,7 @@ function DropZone({ onFile, fileInputRef }) {
         Formatos suportados: <span className="text-quantum-fg font-mono">CSV</span>,{' '}
         <span className="text-quantum-fg font-mono">OFX</span> e{' '}
         <span className="text-quantum-fg font-mono">PDF</span>.
-        Processado localmente — o Motor Gemini categoriza automaticamente.
+        Processado localmente — Motor Híbrido IA categoriza automaticamente.
       </p>
       <div className="mt-5 flex gap-2">
         {['CSV','OFX','PDF'].map(f => (
@@ -129,7 +118,7 @@ function DropZone({ onFile, fileInputRef }) {
 function LoadingPanel({ status }) {
   const msg = {
     parsing:       { title: 'A Extrair Dados...', sub: 'A ler e filtrar duplicados do extrato.' },
-    ai_processing: { title: 'Deep Scan Gemini Ativo', sub: 'A categorizar despesas desconhecidas com IA.' },
+    ai_processing: { title: 'Motor Híbrido Ativo', sub: 'Bayesiano local + Cloud AI a categorizar transações.' },
     importing:     { title: 'A Sincronizar com o Cofre', sub: 'A gravar as transações no Firestore.' },
   }[status] || { title: 'A processar...', sub: '' };
 
@@ -482,20 +471,6 @@ export default function ImportButton({ onImportTransactions, existingTransaction
     return { fresh, duplicates };
   }, [existingTransactions]);
 
-  // ─── Aplicar dicionário local e recolher desconhecidos para IA ────────────
-  const localCategorize = (transactions) => {
-    const forAI = [];
-    transactions.forEach(tx => {
-      const upper = tx.description.toUpperCase();
-      let found = false;
-      for (const [key, cat] of Object.entries(LOCAL_DICTIONARY)) {
-        if (upper.includes(key)) { tx.category = cat; found = true; break; }
-      }
-      if (!found && (tx.type === 'saida' || tx.type === 'despesa')) forAI.push(tx);
-    });
-    return forAI;
-  };
-
   // ─── Pipeline principal (off-thread via Web Worker) ───────────────────────
   const processFile = useCallback(async (file, customMapping = null, pdfPassword = null) => {
     setStatus('parsing');
@@ -541,16 +516,72 @@ export default function ImportButton({ onImportTransactions, existingTransaction
         return;
       }
 
-      // 3. CATEGORIZAÇÃO (local + IA)
+      // 3. CATEGORIZAÇÃO (Bayesiano Local + Batch IA)
       setStatus('ai_processing');
-      const forAI = localCategorize(fresh);
-      if (forAI.length > 0) {
-        const iaResults = await GeminiService.categorizeTransactionsBatch(forAI);
-        if (Array.isArray(iaResults)) {
-          iaResults.forEach(r => {
-            const tx = fresh.find(t => t.id === r.id);
-            if (tx && r.category) tx.category = r.category;
-          });
+
+      const classifier = new BayesianClassifier();
+      classifier.train(
+        existingTransactions.filter(t => t.description && t.category)
+      );
+
+      const needsAI = [];
+      let bayesianCount = 0;
+
+      fresh.forEach(tx => {
+        const { category, confidence } = classifier.classify(tx.description);
+        if (confidence >= 0.75) {
+          tx.category = category;
+          bayesianCount++;
+        } else {
+          needsAI.push(tx);
+        }
+      });
+
+      const aiCount = needsAI.length;
+      if (import.meta.env.DEV) {
+        console.info('IA Pipeline -> Local Bayesian:', bayesianCount, '| Cloud AI:', aiCount);
+      }
+
+      if (needsAI.length > 0) {
+        try {
+          const txLines = needsAI
+            .map(tx => `- id: "${tx.id}", descrição: "${tx.description}", valor: ${tx.value}, tipo: ${tx.type}`)
+            .join('\n');
+
+          const prompt =
+            `Categorize as seguintes transações financeiras.\n` +
+            `Responda EXCLUSIVAMENTE com JSON válido no formato:\n` +
+            `{ "results": [{ "id": "tx-id", "category": "Nome Exato" }] }\n\n` +
+            `Use ESTRITAMENTE uma das categorias abaixo (respeitando acentos e capitalização):\n` +
+            `${ALLOWED_CATEGORIES.join(', ')}\n\n` +
+            `Transações:\n${txLines}`;
+
+          const responseText = await aiProvider.chatCompletion([
+            {
+              role: 'system',
+              content: 'Você é um classificador financeiro preciso. Responda apenas com JSON válido, sem texto adicional.',
+            },
+            { role: 'user', content: prompt },
+          ], { temperature: 0.05 });
+
+          const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (Array.isArray(parsed.results)) {
+              const newTrainingData = [];
+              parsed.results.forEach(r => {
+                const tx = fresh.find(t => t.id === r.id);
+                if (tx && r.category && ALLOWED_CATEGORIES.includes(r.category)) {
+                  tx.category = r.category;
+                  newTrainingData.push({ description: tx.description, category: r.category });
+                }
+              });
+              classifier.train(newTrainingData);
+            }
+          }
+        } catch (aiErr) {
+          console.warn('[ImportButton] Batch IA falhou, aplicando fallback "Outros":', aiErr);
+          needsAI.forEach(tx => { if (!tx.category) tx.category = 'Outros'; });
         }
       }
 
