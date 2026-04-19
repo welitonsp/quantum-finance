@@ -1,34 +1,40 @@
-// src/shared/lib/ofxParser.js
+// src/shared/lib/ofxParser.ts
 
-function readFileAsText(file) {
+export interface ParsedTransaction {
+  id: string;
+  fitId: string | null;
+  description: string;
+  value: number;
+  type: 'entrada' | 'saida' | 'receita';
+  date: string;
+  category: string;
+  source: string;
+}
+
+function readFileAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
+    reader.onload = () => resolve(reader.result as string);
     reader.onerror = () => reject(new Error(`Falha ao ler o arquivo: ${file.name}`));
-    // OFX usa frequentemente esta codificação
-    reader.readAsText(file, 'windows-1252'); 
+    reader.readAsText(file, 'windows-1252');
   });
 }
 
-function extractTag(block, tag) {
+function extractTag(block: string, tag: string): string | null {
   const match = block.match(new RegExp(`<${tag}>([^<\\r\\n]+)`));
   return match ? match[1].trim() : null;
 }
 
-function parseOFXDate(raw) {
+function parseOFXDate(raw: string | null): string | null {
   if (!raw) return null;
-  const digits = raw.replace(/\D/g, ''); 
+  const digits = raw.replace(/\D/g, '');
   if (digits.length < 8) return null;
-
-  const year  = digits.slice(0, 4);
-  const month = digits.slice(4, 6);
-  const day   = digits.slice(6, 8);
-
+  const year = digits.slice(0, 4), month = digits.slice(4, 6), day = digits.slice(6, 8);
   const date = new Date(`${year}-${month}-${day}T12:00:00`);
   return isNaN(date.getTime()) ? null : `${year}-${month}-${day}`;
 }
 
-export async function parseOFX(file) {
+export async function parseOFX(file: File): Promise<ParsedTransaction[]> {
   if (!file) throw new Error('Nenhum arquivo fornecido.');
   const text = await readFileAsText(file);
 
@@ -37,38 +43,32 @@ export async function parseOFX(file) {
   }
 
   const trnRegex = /<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi;
-  const transactions = [];
-  const seenFitIds = new Set();
-  let match;
+  const transactions: ParsedTransaction[] = [];
+  const seenFitIds = new Set<string>();
+  let match: RegExpExecArray | null;
 
   while ((match = trnRegex.exec(text)) !== null) {
     const block = match[1];
-    
-    // FITID é a impressão digital única do banco
     const fitId = extractTag(block, 'FITID');
     if (fitId && seenFitIds.has(fitId)) continue;
     if (fitId) seenFitIds.add(fitId);
 
     const amountStr = extractTag(block, 'TRNAMT');
     const amount = amountStr ? parseFloat(amountStr.replace(',', '.')) : null;
-
     if (amount === null || isNaN(amount) || amount === 0) continue;
 
-    const dateRaw = extractTag(block, 'DTPOSTED');
-    const date = parseOFXDate(dateRaw) ?? new Date().toISOString().split('T')[0];
-
+    const date = parseOFXDate(extractTag(block, 'DTPOSTED')) ?? new Date().toISOString().split('T')[0];
     const memo = extractTag(block, 'MEMO') ?? extractTag(block, 'NAME') ?? 'Transação OFX';
-    const type = amount > 0 ? 'receita' : 'saida';
 
     transactions.push({
-      id: fitId || crypto.randomUUID(), // Usa o ID do banco se existir
-      fitId: fitId || null,
+      id:          fitId || crypto.randomUUID(),
+      fitId:       fitId || null,
       description: memo.replace(/\s+/g, ' ').trim(),
-      value: Math.abs(amount),
-      type: type,
-      date: date,
-      category: 'Diversos', // Categoria padrão (será subscrita pela IA)
-      source: 'ofx'
+      value:       Math.abs(amount),
+      type:        amount > 0 ? 'receita' : 'saida',
+      date,
+      category:    'Diversos',
+      source:      'ofx',
     });
   }
 

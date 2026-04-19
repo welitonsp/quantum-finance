@@ -1,6 +1,27 @@
+// src/utils/dashboardUtils.ts
+
 export const MONO = "'JetBrains Mono','Fira Code','SF Mono',ui-monospace,monospace";
 
-export const calcStatus = (saldo, receitas, despesas, patrimonio, dividas, meta) => {
+export interface FinancialStatus {
+  status: string;
+  risk: string;
+  color: string;
+  rec: string;
+  score: number;
+  savingsRate: number;
+  debtRatio: number;
+  goalProgress: number;
+  patrimonyRisk: number;
+}
+
+export const calcStatus = (
+  saldo: number,
+  receitas: number,
+  despesas: number,
+  patrimonio: number,
+  dividas: number,
+  meta: number,
+): FinancialStatus => {
   const savingsRate   = receitas > 0 ? ((receitas - despesas) / receitas) * 100 : 0;
   const debtRatio     = receitas > 0 ? (despesas / receitas) * 100 : 0;
   const patrimonyRisk = patrimonio <= 0 ? 100 : (dividas / Math.abs(patrimonio)) * 100;
@@ -15,7 +36,7 @@ export const calcStatus = (saldo, receitas, despesas, patrimonio, dividas, meta)
 
   let status = 'SAUDÁVEL', risk = 'BAIXO', color = 'emerald';
   let rec = 'Indicadores estáveis. Considere aumentar aportes em renda variável.';
-  
+
   if (saldo < 0 || debtRatio > 90 || patrimonyRisk > 150) {
     status = 'CRÍTICO'; risk = 'ALTO'; color = 'red';
     rec = 'Interrompa gastos não essenciais. Reestruture dívidas imediatamente.';
@@ -26,6 +47,6 @@ export const calcStatus = (saldo, receitas, despesas, patrimonio, dividas, meta)
     status = 'EXCELENTE'; risk = 'MÍNIMO'; color = 'emerald';
     rec = 'Desempenho excepcional. Acelere posições em ativos de maior retorno.';
   }
-  
+
   return { status, risk, color, rec, score, savingsRate, debtRatio, goalProgress, patrimonyRisk };
 };
