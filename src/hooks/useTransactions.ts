@@ -1,22 +1,30 @@
+// src/hooks/useTransactions.ts
 import { useState, useEffect, useCallback } from 'react';
 import { collection, query, where, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index.js';
 import { FirestoreService } from '../shared/services/FirestoreService';
 
-// ─── Limite tático ─────────────────────────────────────────────────────────────
+type AnyRecord = Record<string, unknown>;
+
+interface FirestoreTimestamp { seconds: number; nanoseconds: number; }
+
+interface Transaction extends AnyRecord {
+  id: string;
+  createdAt?: FirestoreTimestamp | number | string | null;
+}
+
 // Previne explosão de leitura no Firestore e poupa RAM.
 //
-// ⚠️ AVISO: sem orderBy(), o Firestore retorna 3000 documentos em ordem
-// arbitrária. Se o utilizador tiver >3000 transações, registos recentes
-// podem não ser incluídos. A ordenação local apenas ordena o que chegou.
-// Trade-off intencional para evitar índice composto pago (uid + createdAt).
-// Reavalie se a base de utilizadores crescer além desse volume.
+// ⚠️ Sem orderBy(), o Firestore retorna documentos em ordem arbitrária.
+// Se o utilizador tiver >3000 transações, registos recentes podem não ser
+// incluídos. Ordenação local apenas ordena o que chegou — trade-off intencional
+// para evitar índice composto pago (uid + createdAt).
 const QUERY_LIMIT = 3000;
 
-export function useTransactions(uid) {
-  const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+export function useTransactions(uid: string | null | undefined) {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState<Error | null>(null);
 
   useEffect(() => {
     if (!uid) {
@@ -26,8 +34,7 @@ export function useTransactions(uid) {
       return;
     }
 
-    // Reseta o estado ao trocar de utilizador — evita flash de dados antigos
-    // ou erro de sessão anterior visível na nova sessão.
+    // Reseta ao trocar de utilizador — evita flash de dados da sessão anterior.
     setLoading(true);
     setError(null);
 
@@ -40,7 +47,7 @@ export function useTransactions(uid) {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const txs = snapshot.docs.map((doc) => ({
+        const txs: Transaction[] = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         }));
@@ -48,8 +55,10 @@ export function useTransactions(uid) {
         // Ordenação local — evita índice composto pago no Firebase.
         // Suporta Timestamp do Firestore (.seconds) e Unix timestamp numérico.
         txs.sort((a, b) => {
-          const timeA = a.createdAt?.seconds ?? (typeof a.createdAt === 'number' ? a.createdAt : 0);
-          const timeB = b.createdAt?.seconds ?? (typeof b.createdAt === 'number' ? b.createdAt : 0);
+          const ca = a.createdAt;
+          const cb = b.createdAt;
+          const timeA = (ca as FirestoreTimestamp | null)?.seconds ?? (typeof ca === 'number' ? ca : 0);
+          const timeB = (cb as FirestoreTimestamp | null)?.seconds ?? (typeof cb === 'number' ? cb : 0);
           return timeB - timeA;
         });
 
@@ -63,27 +72,23 @@ export function useTransactions(uid) {
       }
     );
 
-    // Corta a ligação em tempo real ao desmontar ou ao trocar de uid
     return () => unsubscribe();
   }, [uid]);
 
-  // useCallback impede que o React recrie estas funções a cada render,
-  // evitando re-renders desnecessários nos componentes filhos que as recebem.
-
-  const add = useCallback(async (data) => {
-    return await FirestoreService.saveTransaction(uid, data);
+  const add = useCallback(async (data: AnyRecord): Promise<string> => {
+    return await FirestoreService.saveTransaction(uid!, data);
   }, [uid]);
 
   // remove, removeBatch e update não dependem de uid — deps vazia é intencional.
-  const remove = useCallback(async (id) => {
+  const remove = useCallback(async (id: string): Promise<void> => {
     return await FirestoreService.deleteTransaction(id);
   }, []);
 
-  const removeBatch = useCallback(async (ids) => {
+  const removeBatch = useCallback(async (ids: string[]): Promise<void> => {
     return await FirestoreService.deleteBatchTransactions(ids);
   }, []);
 
-  const update = useCallback(async (id, data) => {
+  const update = useCallback(async (id: string, data: AnyRecord): Promise<void> => {
     return await FirestoreService.updateTransaction(id, data);
   }, []);
 
