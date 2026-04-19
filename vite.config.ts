@@ -1,7 +1,11 @@
-// vite.config.js — Quantum Finance
+// vite.config.ts — Quantum Finance
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   plugins: [
@@ -19,10 +23,10 @@ export default defineConfig({
             handler: 'CacheFirst',
             options: {
               cacheName: 'google-fonts-cache',
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 }
-            }
-          }
-        ]
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+            },
+          },
+        ],
       },
       manifest: {
         name: 'Quantum Finance',
@@ -34,11 +38,16 @@ export default defineConfig({
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
-        ]
-      }
-    })
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+        ],
+      },
+    }),
   ],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
   build: {
     rollupOptions: {
       output: {
@@ -50,8 +59,8 @@ export default defineConfig({
           'vendor-utils':    ['decimal.js', 'zod', '@tanstack/react-query'],
           // pdfjs separado — carrega apenas quando o utilizador importa um PDF
           'vendor-pdfjs':    ['pdfjs-dist'],
-        }
-      }
+        },
+      },
     },
     chunkSizeWarningLimit: 500,
     sourcemap: false,
