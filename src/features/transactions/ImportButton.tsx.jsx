@@ -1,4 +1,5 @@
-// src/features/transactions/ImportButton.jsx
+// @ts-nocheck
+// src/features/transactions/ImportButton.tsx
 //
 // Fluxo de 6 estados:
 //   idle → parsing → [col_mapping] → ai_processing → preview → importing → success | error
@@ -13,21 +14,12 @@ import {
 import toast from 'react-hot-toast';
 
 import { useParserWorker } from '../../shared/lib/useParserWorker';
-import { GeminiService } from '../ai-chat/GeminiService';
 import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
 import ReconciliationEngine from './ReconciliationEngine';
 
-// ─── Dicionário local para poupar chamadas à IA ──────────────────────────────
-const LOCAL_DICTIONARY = {
-  'UBER': 'Transporte', '99APP': 'Transporte', 'POSTO': 'Transporte', 'SHELL': 'Transporte',
-  'IFOOD': 'Alimentação', 'MCDONALDS': 'Alimentação', 'BURGER': 'Alimentação',
-  'SUPERMERCADO': 'Alimentação', 'CARREFOUR': 'Alimentação', 'EXTRA': 'Alimentação',
-  'NETFLIX': 'Assinaturas', 'SPOTIFY': 'Assinaturas', 'AMAZON': 'Assinaturas',
-  'SALARIO': 'Salário', 'PAGTO SALARIO': 'Salário',
-  'RENDIMENTO': 'Investimento', 'DIVIDENDO': 'Investimento',
-  'FARMACIA': 'Saúde', 'DROGASIL': 'Saúde', 'HOSPITAL': 'Saúde',
-  'ESCOLA': 'Educação', 'FACULDADE': 'Educação', 'CURSO': 'Educação',
-};
+// Importando o novo Motor Híbrido (Bayesiano + Groq/Ollama)
+import { BayesianClassifier } from '../../shared/ai/bayesianClassifier';
+import { aiProvider } from '../../shared/ai/aiProvider';
 
 // ─── Mapa de cores por categoria ─────────────────────────────────────────────
 const CAT_COLORS = {
@@ -112,7 +104,7 @@ function DropZone({ onFile, fileInputRef }) {
         Formatos suportados: <span className="text-quantum-fg font-mono">CSV</span>,{' '}
         <span className="text-quantum-fg font-mono">OFX</span> e{' '}
         <span className="text-quantum-fg font-mono">PDF</span>.
-        Processado localmente — o Motor Gemini categoriza automaticamente.
+        Processado com o Motor Híbrido IA (Bayesiano + Cloud).
       </p>
       <div className="mt-5 flex gap-2">
         {['CSV','OFX','PDF'].map(f => (
@@ -129,7 +121,7 @@ function DropZone({ onFile, fileInputRef }) {
 function LoadingPanel({ status }) {
   const msg = {
     parsing:       { title: 'A Extrair Dados...', sub: 'A ler e filtrar duplicados do extrato.' },
-    ai_processing: { title: 'Deep Scan Gemini Ativo', sub: 'A categorizar despesas desconhecidas com IA.' },
+    ai_processing: { title: 'Motor Híbrido Ativo', sub: 'A classificar despesas usando Edge AI e Cloud.' },
     importing:     { title: 'A Sincronizar com o Cofre', sub: 'A gravar as transações no Firestore.' },
   }[status] || { title: 'A processar...', sub: '' };
 
@@ -162,7 +154,7 @@ function ColumnMapper({ headers, previewRows, autoMap, onApply, onCancel }) {
   const ready = mapping.dateIdx !== '' && mapping.descIdx !== '' && mapping.valueIdx !== '';
 
   const FIELDS = [
-    { key: 'dateIdx',  label: 'Coluna de Data',      color: 'text-cyan-400'           },
+    { key: 'dateIdx',  label: 'Coluna de Data',      color: 'text-cyan-400'            },
     { key: 'descIdx',  label: 'Coluna de Descrição',  color: 'text-quantum-fg'         },
     { key: 'valueIdx', label: 'Coluna de Valor',      color: 'text-quantum-accent'     },
   ];
@@ -176,7 +168,6 @@ function ColumnMapper({ headers, previewRows, autoMap, onApply, onCancel }) {
         </p>
       </div>
 
-      {/* Selectores de colunas */}
       <div className="space-y-3">
         {FIELDS.map(({ key, label, color }) => (
           <div key={key}>
@@ -195,7 +186,6 @@ function ColumnMapper({ headers, previewRows, autoMap, onApply, onCancel }) {
         ))}
       </div>
 
-      {/* Preview das primeiras linhas */}
       {previewRows.length > 0 && (
         <div>
           <p className="text-xs text-quantum-fgMuted uppercase tracking-wider mb-2">Pré-visualização (primeiras {previewRows.length} linhas)</p>
@@ -265,7 +255,6 @@ function PreviewPanel({ transactions, onConfirm, onCancel }) {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-      {/* Cabeçalho de resumo */}
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-quantum-bgSecondary rounded-xl p-3 text-center border border-quantum-border">
           <p className="text-[10px] text-quantum-fgMuted uppercase mb-1">Total</p>
@@ -281,7 +270,6 @@ function PreviewPanel({ transactions, onConfirm, onCancel }) {
         </div>
       </div>
 
-      {/* Tabela com checkbox */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <button onClick={toggleAll} className="flex items-center gap-2 text-xs text-quantum-fgMuted hover:text-white transition-colors">
@@ -316,22 +304,18 @@ function PreviewPanel({ transactions, onConfirm, onCancel }) {
                       tx._selected ? 'bg-transparent' : 'bg-quantum-bg/40 opacity-40'
                     }`}
                   >
-                    {/* Checkbox */}
                     <td className="px-3 py-2">
                       <button onClick={() => toggle(tx.id)} className="flex items-center justify-center w-full">
                         {tx._selected
                           ? <CheckSquare className="w-3.5 h-3.5 text-quantum-accent" />
-                          : <Square     className="w-3.5 h-3.5 text-quantum-fgMuted" />
+                          : <Square      className="w-3.5 h-3.5 text-quantum-fgMuted" />
                         }
                       </button>
                     </td>
-                    {/* Data */}
                     <td className="px-3 py-2 font-mono text-quantum-fgMuted whitespace-nowrap">{tx.date}</td>
-                    {/* Descrição */}
                     <td className="px-3 py-2 text-quantum-fg max-w-[140px] truncate" title={tx.description}>
                       {tx.description}
                     </td>
-                    {/* Categoria (editável) */}
                     <td className="px-3 py-2">
                       {editingId === tx.id ? (
                         <select
@@ -354,7 +338,6 @@ function PreviewPanel({ transactions, onConfirm, onCancel }) {
                         </button>
                       )}
                     </td>
-                    {/* Valor */}
                     <td className={`px-3 py-2 text-right font-mono font-bold whitespace-nowrap ${
                       (tx.type === 'entrada' || tx.type === 'receita') ? 'text-quantum-accent' : 'text-quantum-red'
                     }`}>
@@ -368,7 +351,6 @@ function PreviewPanel({ transactions, onConfirm, onCancel }) {
         </div>
       </div>
 
-      {/* Ações */}
       <div className="flex gap-3">
         <button onClick={onCancel} className="btn-quantum-secondary flex items-center gap-2">
           <RotateCcw className="w-3.5 h-3.5" /> Recomeçar
@@ -449,15 +431,13 @@ export default function ImportButton({ onImportTransactions, existingTransaction
   const [errorMessage,        setErrorMessage]        = useState('');
   const [preview,             setPreview]             = useState([]);
   const [stats,               setStats]               = useState({ total: 0, added: 0, duplicates: 0 });
-  const [colMapState,         setColMapState]         = useState(null); // { headers, previewRows, autoMap, file }
+  const [colMapState,         setColMapState]         = useState(null); 
   const [reconciliationQueue, setReconciliationQueue] = useState([]);
 
   const fileInputRef = useRef(null);
 
-  // ─── Web Worker para parse off-thread ────────────────────────────────────
   const { parseFile, parseFileWithMapping } = useParserWorker();
 
-  // ─── Deduplicação local (antes de ir à IA) ────────────────────────────────
   const deduplicate = useCallback((parsed) => {
     const existingHashes = new Set();
     existingTransactions.forEach(t => {
@@ -482,34 +462,17 @@ export default function ImportButton({ onImportTransactions, existingTransaction
     return { fresh, duplicates };
   }, [existingTransactions]);
 
-  // ─── Aplicar dicionário local e recolher desconhecidos para IA ────────────
-  const localCategorize = (transactions) => {
-    const forAI = [];
-    transactions.forEach(tx => {
-      const upper = tx.description.toUpperCase();
-      let found = false;
-      for (const [key, cat] of Object.entries(LOCAL_DICTIONARY)) {
-        if (upper.includes(key)) { tx.category = cat; found = true; break; }
-      }
-      if (!found && (tx.type === 'saida' || tx.type === 'despesa')) forAI.push(tx);
-    });
-    return forAI;
-  };
-
-  // ─── Pipeline principal (off-thread via Web Worker) ───────────────────────
   const processFile = useCallback(async (file, customMapping = null, pdfPassword = null) => {
     setStatus('parsing');
     setErrorMessage('');
 
     try {
-      // 1. PARSE — corre 100% no Web Worker (main thread livre a 60fps)
       let parsed;
       try {
         parsed = customMapping
           ? await parseFileWithMapping(file, customMapping)
           : await parseFile(file, pdfPassword ? { password: pdfPassword } : {});
       } catch (err) {
-        // CSV sem colunas identificáveis → mostrar mapeamento manual
         if (err.code === 'COLUMNS_NOT_FOUND') {
           setColMapState({
             headers:     err.headers    || [],
@@ -520,7 +483,6 @@ export default function ImportButton({ onImportTransactions, existingTransaction
           setStatus('col_mapping');
           return;
         }
-        // PDF protegido por password
         if (err.message === 'PASSWORD_REQUIRED') {
           const pwd = prompt('Este PDF está protegido. Introduza a password:');
           if (pwd) { processFile(file, null, pwd); return; }
@@ -531,7 +493,6 @@ export default function ImportButton({ onImportTransactions, existingTransaction
 
       if (!parsed || parsed.length === 0) throw new Error('Nenhuma transação válida encontrada no ficheiro.');
 
-      // 2. DEDUPLICAÇÃO
       const { fresh, duplicates } = deduplicate(parsed);
       if (fresh.length === 0) {
         toast('Todos os registos já existem no Cofre.', { icon: '🛡️' });
@@ -541,23 +502,67 @@ export default function ImportButton({ onImportTransactions, existingTransaction
         return;
       }
 
-      // 3. CATEGORIZAÇÃO (local + IA)
+      // 3. CATEGORIZAÇÃO HÍBRIDA (Bayesiano Local + Cloud IA)
       setStatus('ai_processing');
-      const forAI = localCategorize(fresh);
-      if (forAI.length > 0) {
-        const iaResults = await GeminiService.categorizeTransactionsBatch(forAI);
-        if (Array.isArray(iaResults)) {
-          iaResults.forEach(r => {
-            const tx = fresh.find(t => t.id === r.id);
-            if (tx && r.category) tx.category = r.category;
-          });
+      try {
+        const classifier = new BayesianClassifier();
+        classifier.train(existingTransactions);
+
+        const needsAI = [];
+        let bayesianCount = 0;
+        let aiCount = 0;
+
+        fresh.forEach(tx => {
+          if (tx.type === 'saida' || tx.type === 'despesa') {
+            const { category, confidence } = classifier.classify(tx.description);
+            if (confidence >= 0.75) {
+              tx.category = category;
+              bayesianCount++;
+            } else {
+              needsAI.push(tx);
+            }
+          }
+        });
+
+        if (needsAI.length > 0) {
+          aiCount = needsAI.length;
+          const promptDesc = needsAI.map(t => ({ id: t.id, desc: t.description }));
+          const systemMsg = `Categorize as transações. Use ESTRITAMENTE as categorias: ${ALLOWED_CATEGORIES.join(', ')}. Retorne APENAS JSON válido: { "results": [{ "id": "...", "category": "..." }] }.`;
+          
+          const iaResponse = await aiProvider.chatCompletion([
+            { role: 'system', content: systemMsg },
+            { role: 'user', content: JSON.stringify(promptDesc) }
+          ]);
+
+          try {
+            const parsedRes = typeof iaResponse === 'string' ? JSON.parse(iaResponse) : iaResponse;
+            if (parsedRes.results) {
+              parsedRes.results.forEach(r => {
+                const tx = fresh.find(t => t.id === r.id);
+                if (tx && r.category && ALLOWED_CATEGORIES.includes(r.category)) {
+                  tx.category = r.category;
+                }
+              });
+              // Treinar o classificador com os novos aprendizados da IA
+              const newTrainingData = parsedRes.results.map(r => {
+                const tx = fresh.find(t => t.id === r.id);
+                return { description: tx?.description || '', category: r.category };
+              }).filter(d => d.description !== '');
+              classifier.train(newTrainingData);
+            }
+          } catch (e) {
+            console.error('Erro ao fazer parse do JSON da IA:', e);
+          }
         }
+        console.info(`IA Pipeline -> Local Bayesian: ${bayesianCount} | Cloud AI: ${aiCount}`);
+      } catch (aiError) {
+        console.error('Erro no pipeline Híbrido IA:', aiError);
+        // Fallback silencioso, continua o fluxo mesmo se a IA falhar
       }
 
-      // 4. RECONCILIAÇÃO — cada transação passa pelo "Tinder Financeiro"
-      setReconciliationQueue(fresh);
+      setPreview(fresh);
+      setStatus('preview');
       setStats(prev => ({ ...prev, total: parsed.length, duplicates }));
-      setStatus('reconciliation');
 
     } catch (err) {
       console.error('Importação falhou:', err);
@@ -566,12 +571,17 @@ export default function ImportButton({ onImportTransactions, existingTransaction
     }
   }, [deduplicate]);
 
-  // ─── Confirmar importação após preview ────────────────────────────────────
   const handleConfirmImport = useCallback(async (selectedTxs) => {
+    // Agora encaminha as selecionadas para a reconciliação (Tinder Financeiro)
+    setReconciliationQueue(selectedTxs);
+    setStatus('reconciliation');
+  }, []);
+
+  const handleReconciliationComplete = useCallback(async (resolvedTxs) => {
     setStatus('importing');
     try {
-      const result = await onImportTransactions(selectedTxs);
-      const added     = result?.added     ?? selectedTxs.length;
+      const result = await onImportTransactions(resolvedTxs);
+      const added      = result?.added      ?? resolvedTxs.length;
       const duplicates = result?.duplicates ?? stats.duplicates;
       setStats(prev => ({ ...prev, added, duplicates }));
       setStatus('success');
@@ -583,11 +593,9 @@ export default function ImportButton({ onImportTransactions, existingTransaction
     }
   }, [onImportTransactions, stats.duplicates]);
 
-  // ─── Aplicar mapeamento manual de colunas ─────────────────────────────────
-  // Reutiliza processFile com o mapping explícito — worker recebe de volta
   const handleApplyMapping = useCallback((mapping) => {
     if (colMapState?.file) processFile(colMapState.file, mapping);
-  }, [colMapState, processFile]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [colMapState, processFile]); 
 
   const closeModal = () => {
     if (status === 'parsing' || status === 'ai_processing' || status === 'importing') return;
@@ -609,16 +617,12 @@ export default function ImportButton({ onImportTransactions, existingTransaction
         <span className="hidden sm:inline">Importar Ficheiro</span>
       </button>
 
-      {/* ── Reconciliation Engine — full-screen overlay z-[60] ── */}
       <AnimatePresence>
         {status === 'reconciliation' && (
           <ReconciliationEngine
             queue={reconciliationQueue}
             existingTransactions={existingTransactions}
-            onComplete={(resolvedTxs) => {
-              // Fila resolvida → confirmar importação directamente
-              handleConfirmImport(resolvedTxs);
-            }}
+            onComplete={handleReconciliationComplete}
             onCancel={() => {
               setReconciliationQueue([]);
               setStatus('idle');
@@ -628,7 +632,6 @@ export default function ImportButton({ onImportTransactions, existingTransaction
         )}
       </AnimatePresence>
 
-      {/* ── Import Modal (ocultado durante reconciliação) ── */}
       <AnimatePresence>
         {isOpen && status !== 'reconciliation' && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
@@ -641,7 +644,6 @@ export default function ImportButton({ onImportTransactions, existingTransaction
                 status === 'preview' ? 'max-w-2xl' : 'max-w-lg'
               }`}
             >
-              {/* Cabeçalho */}
               <div className="p-4 border-b border-white/5 flex items-center justify-between bg-quantum-bg/60">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-quantum-accent/10 rounded-xl border border-quantum-accent/20">
@@ -649,7 +651,7 @@ export default function ImportButton({ onImportTransactions, existingTransaction
                   </div>
                   <div>
                     <h3 className="font-black text-white text-sm tracking-wide">Ingestão Quântica</h3>
-                    <p className="text-[10px] text-quantum-fgMuted">CSV · OFX · PDF · IA Categorization</p>
+                    <p className="text-[10px] text-quantum-fgMuted">CSV · OFX · PDF · Motor Híbrido IA</p>
                   </div>
                 </div>
                 {!['parsing','ai_processing','importing'].includes(status) && (
@@ -659,10 +661,8 @@ export default function ImportButton({ onImportTransactions, existingTransaction
                 )}
               </div>
 
-              {/* Barra de steps */}
               {showStepBar && <StepBar current={status} />}
 
-              {/* Conteúdo principal */}
               <div className={`p-6 ${status === 'preview' ? 'overflow-y-auto max-h-[70vh] custom-scrollbar' : ''}`}>
                 <AnimatePresence mode="wait">
                   {status === 'idle' && (
