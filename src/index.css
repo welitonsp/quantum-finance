@@ -5,6 +5,79 @@
 @tailwind utilities;
 
 @layer base {
+
+  /* ─── Tokens de Tema (Light) ─── */
+  :root {
+    --q-bg:           #F8FAFC;
+    --q-bg-sec:       #F1F5F9;
+    --q-card:         #FFFFFF;
+    --q-card-hover:   #F8FAFC;
+    --q-border:       #E2E8F0;
+    --q-fg:           #0F172A;
+    --q-fg-muted:     #64748B;
+
+    /* Glass surfaces — light */
+    --q-glass-bg:          rgba(255, 255, 255, 0.72);
+    --q-glass-bg-elite:    linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(241,245,249,0.96) 100%);
+    --q-glass-border:      rgba(226, 232, 240, 0.85);
+    --q-glass-shadow:      0 4px 24px rgba(15,23,42,0.08), inset 0 1px 0 rgba(255,255,255,0.9);
+    --q-glass-shadow-h:    0 4px 32px rgba(15,23,42,0.12), 0 0 20px rgba(0,230,138,0.07), inset 0 1px 0 rgba(255,255,255,0.95);
+    --q-glass-elite-sh:    0 8px 32px rgba(15,23,42,0.10), 0 0 0 1px rgba(0,230,138,0.06), inset 0 1px 0 rgba(255,255,255,0.8);
+    --q-glass-elite-sh-h:  0 8px 40px rgba(15,23,42,0.15), 0 0 30px rgba(0,230,138,0.10), inset 0 1px 0 rgba(255,255,255,0.9);
+
+    /* Inputs — light */
+    --q-input-bg:     rgba(241, 245, 249, 0.85);
+    --q-input-border: rgba(226, 232, 240, 0.95);
+
+    /* Buttons secondary — light */
+    --q-btn-sec-bg:       rgba(226, 232, 240, 0.85);
+    --q-btn-sec-fg:       #64748B;
+    --q-btn-sec-border:   rgba(226, 232, 240, 0.95);
+    --q-btn-sec-bg-h:     rgba(226, 232, 240, 1);
+    --q-btn-sec-fg-h:     #0F172A;
+
+    /* Misc */
+    --q-scrollbar:    #CBD5E1;
+    --q-progress-bg:  rgba(226, 232, 240, 0.85);
+    --q-scanline:     rgba(0, 230, 138, 0.008);
+  }
+
+  /* ─── Tokens de Tema (Dark) ─── */
+  .dark {
+    --q-bg:           #0A0E17;
+    --q-bg-sec:       #0F1520;
+    --q-card:         #131A2A;
+    --q-card-hover:   #182035;
+    --q-border:       #1E2A3F;
+    --q-fg:           #E8ECF4;
+    --q-fg-muted:     #6B7A94;
+
+    /* Glass surfaces — dark */
+    --q-glass-bg:          rgba(19, 26, 42, 0.72);
+    --q-glass-bg-elite:    linear-gradient(135deg, rgba(19,26,42,0.92) 0%, rgba(15,21,32,0.96) 100%);
+    --q-glass-border:      rgba(30, 42, 63, 0.85);
+    --q-glass-shadow:      0 4px 24px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.04);
+    --q-glass-shadow-h:    0 4px 32px rgba(0,0,0,0.40), 0 0 20px rgba(0,230,138,0.06), inset 0 1px 0 rgba(255,255,255,0.06);
+    --q-glass-elite-sh:    0 8px 32px rgba(0,0,0,0.40), 0 0 0 1px rgba(0,230,138,0.05), inset 0 1px 0 rgba(255,255,255,0.05);
+    --q-glass-elite-sh-h:  0 8px 40px rgba(0,0,0,0.50), 0 0 30px rgba(0,230,138,0.10), inset 0 1px 0 rgba(255,255,255,0.07);
+
+    /* Inputs — dark */
+    --q-input-bg:     rgba(15, 21, 32, 0.85);
+    --q-input-border: rgba(30, 42, 63, 0.95);
+
+    /* Buttons secondary — dark */
+    --q-btn-sec-bg:       rgba(30, 42, 63, 0.85);
+    --q-btn-sec-fg:       #6B7A94;
+    --q-btn-sec-border:   rgba(30, 42, 63, 0.95);
+    --q-btn-sec-bg-h:     rgba(30, 42, 63, 1);
+    --q-btn-sec-fg-h:     #E8ECF4;
+
+    /* Misc */
+    --q-scrollbar:    #1E2A3F;
+    --q-progress-bg:  rgba(30, 42, 63, 0.85);
+    --q-scanline:     rgba(0, 230, 138, 0.015);
+  }
+
   body {
     @apply bg-quantum-bg text-quantum-fg font-sans overflow-x-hidden antialiased;
   }
@@ -13,7 +86,7 @@
   ::-webkit-scrollbar { width: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
-    background: #1E2A3F;
+    background: var(--q-scrollbar);
     border-radius: 999px;
   }
   ::-webkit-scrollbar-thumb:hover { background: #00E68A44; }
@@ -23,7 +96,7 @@
 
   /* ─── Shimmer de texto ─── */
   .shimmer-text {
-    background: linear-gradient(90deg, #E8ECF4 0%, #00E68A 50%, #E8ECF4 100%);
+    background: linear-gradient(90deg, var(--q-fg) 0%, #00E68A 50%, var(--q-fg) 100%);
     background-size: 200% 100%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -34,40 +107,29 @@
   /* ─── Glass Card Quantum (Nível 1 — base) ─── */
   .glass-card-quantum {
     @apply relative overflow-hidden rounded-2xl transition-all duration-300;
-    background: rgba(19, 26, 42, 0.7);
-    border: 1px solid rgba(30, 42, 63, 0.8);
+    background: var(--q-glass-bg);
+    border: 1px solid var(--q-glass-border);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    box-shadow:
-      0 4px 24px rgba(0, 0, 0, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    box-shadow: var(--q-glass-shadow);
   }
   .glass-card-quantum:hover {
     border-color: rgba(0, 230, 138, 0.25);
-    box-shadow:
-      0 4px 32px rgba(0, 0, 0, 0.4),
-      0 0 20px rgba(0, 230, 138, 0.06),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    box-shadow: var(--q-glass-shadow-h);
   }
 
   /* ─── Glass Card Quantum (Nível 2 — KPI destacado) ─── */
   .glass-card-elite {
     @apply relative overflow-hidden rounded-2xl transition-all duration-300;
-    background: linear-gradient(135deg, rgba(19, 26, 42, 0.9) 0%, rgba(15, 21, 32, 0.95) 100%);
+    background: var(--q-glass-bg-elite);
     border: 1px solid rgba(0, 230, 138, 0.15);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.4),
-      0 0 0 1px rgba(0, 230, 138, 0.05),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    box-shadow: var(--q-glass-elite-sh);
   }
   .glass-card-elite:hover {
     border-color: rgba(0, 230, 138, 0.35);
-    box-shadow:
-      0 8px 40px rgba(0, 0, 0, 0.5),
-      0 0 30px rgba(0, 230, 138, 0.1),
-      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    box-shadow: var(--q-glass-elite-sh-h);
     transform: translateY(-1px);
   }
 
@@ -86,13 +148,13 @@
   /* ─── Botão Secundário Quantum ─── */
   .btn-quantum-secondary {
     @apply px-4 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 active:scale-95;
-    background: rgba(30, 42, 63, 0.8);
-    color: #6B7A94;
-    border: 1px solid rgba(30, 42, 63, 0.9);
+    background: var(--q-btn-sec-bg);
+    color: var(--q-btn-sec-fg);
+    border: 1px solid var(--q-btn-sec-border);
   }
   .btn-quantum-secondary:hover {
-    background: rgba(30, 42, 63, 1);
-    color: #E8ECF4;
+    background: var(--q-btn-sec-bg-h);
+    color: var(--q-btn-sec-fg-h);
     border-color: rgba(0, 230, 138, 0.2);
   }
 
@@ -173,17 +235,17 @@
       0deg,
       transparent,
       transparent 2px,
-      rgba(0, 230, 138, 0.015) 2px,
-      rgba(0, 230, 138, 0.015) 4px
+      var(--q-scanline) 2px,
+      var(--q-scanline) 4px
     );
     pointer-events: none;
   }
 
   /* ─── Input Quantum ─── */
   .input-quantum {
-    @apply w-full rounded-xl px-4 py-3 text-sm text-white placeholder:text-quantum-fgMuted outline-none transition-all;
-    background: rgba(15, 21, 32, 0.8);
-    border: 1px solid rgba(30, 42, 63, 0.9);
+    @apply w-full rounded-xl px-4 py-3 text-sm text-quantum-fg placeholder:text-quantum-fgMuted outline-none transition-all;
+    background: var(--q-input-bg);
+    border: 1px solid var(--q-input-border);
   }
   .input-quantum:focus {
     border-color: rgba(0, 230, 138, 0.4);
@@ -197,7 +259,7 @@
   /* ─── Progress bar quântica ─── */
   .progress-quantum {
     @apply h-1.5 rounded-full overflow-hidden;
-    background: rgba(30, 42, 63, 0.8);
+    background: var(--q-progress-bg);
   }
   .progress-quantum-fill {
     @apply h-full rounded-full transition-all duration-700 ease-out;
