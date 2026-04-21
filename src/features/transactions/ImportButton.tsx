@@ -1,6 +1,7 @@
 // src/features/transactions/ImportButton.tsx
 // Fluxo de estados: idle → parsing → [col_mapping] → ai_processing → preview → importing → success | error | reconciliation
 import React, { useState, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   UploadCloud, Loader2, AlertTriangle, CheckCircle2,
@@ -672,35 +673,39 @@ export default function ImportButton({ onImportTransactions, existingTransaction
         <span className="hidden sm:inline">Importar Ficheiro</span>
       </button>
 
-      <AnimatePresence>
-        {status === 'reconciliation' && (
-          <ReconciliationEngine
-            queue={reconciliationQueue}
-            existingTransactions={existingTransactions}
-            onComplete={(resolvedTxs: Transaction[]) => {
-              void handleConfirmImport(resolvedTxs as ParsedTransaction[]);
-            }}
-            onCancel={() => {
-              setReconciliationQueue([]);
-              setStatus('idle');
-              setIsOpen(false);
-            }}
-          />
-        )}
-      </AnimatePresence>
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {status === 'reconciliation' && (
+            <ReconciliationEngine
+              queue={reconciliationQueue}
+              existingTransactions={existingTransactions}
+              onComplete={(resolvedTxs: Transaction[]) => {
+                void handleConfirmImport(resolvedTxs as ParsedTransaction[]);
+              }}
+              onCancel={() => {
+                setReconciliationQueue([]);
+                setStatus('idle');
+                setIsOpen(false);
+              }}
+            />
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
-      <AnimatePresence>
-        {isOpen && status !== 'reconciliation' && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-              className={`bg-quantum-card w-full rounded-3xl border border-quantum-border shadow-[0_0_60px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col ${
-                status === 'preview' ? 'max-w-2xl' : 'max-w-lg'
-              }`}
-            >
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isOpen && status !== 'reconciliation' && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                className={`bg-quantum-card w-full max-h-[90vh] rounded-3xl border border-quantum-border shadow-[0_0_60px_rgba(0,0,0,0.6)] flex flex-col ${
+                  status === 'preview' ? 'max-w-2xl' : 'max-w-lg'
+                }`}
+              >
               <div className="p-4 border-b border-white/5 flex items-center justify-between bg-quantum-bg/60">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-quantum-accent/10 rounded-xl border border-quantum-accent/20">
@@ -720,7 +725,7 @@ export default function ImportButton({ onImportTransactions, existingTransaction
 
               {showStepBar && <StepBar current={status} />}
 
-              <div className={`p-6 ${status === 'preview' ? 'overflow-y-auto max-h-[70vh] custom-scrollbar' : ''}`}>
+              <div className="p-6 overflow-y-auto custom-scrollbar flex-1 min-h-0">
                 <AnimatePresence mode="wait">
                   {status === 'idle' && (
                     <motion.div key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -772,7 +777,9 @@ export default function ImportButton({ onImportTransactions, existingTransaction
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
     </>
   );
 }
