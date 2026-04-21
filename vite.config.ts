@@ -1,6 +1,7 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import { VitePWA } from 'vite-plugin-pwa'
+/// <reference types="vitest" />
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   plugins: [
@@ -17,10 +18,10 @@ export default defineConfig({
             handler: 'CacheFirst',
             options: {
               cacheName: 'google-fonts-cache',
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 }
-            }
-          }
-        ]
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+            },
+          },
+        ],
       },
       manifest: {
         name: 'Quantum Finance',
@@ -32,10 +33,10 @@ export default defineConfig({
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
-        ]
-      }
-    })
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+        ],
+      },
+    }),
   ],
   build: {
     rollupOptions: {
@@ -46,8 +47,8 @@ export default defineConfig({
           'vendor-charts':   ['chart.js', 'react-chartjs-2', 'recharts'],
           'vendor-utils':    ['decimal.js', 'zod', '@tanstack/react-query'],
           'vendor-pdfjs':    ['pdfjs-dist'],
-        }
-      }
+        },
+      },
     },
     chunkSizeWarningLimit: 500,
     sourcemap: false,
@@ -55,4 +56,21 @@ export default defineConfig({
   worker: {
     format: 'es',
   },
-})
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    globals: true,
+    css: false,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'lcov'],
+      include: [
+        'src/shared/types/**/*.ts',
+        'src/shared/schemas/**/*.ts',
+        'src/shared/lib/**/*.ts',
+        'src/utils/**/*.ts',
+      ],
+      exclude: ['**/*.test.ts', '**/*.test.tsx'],
+    },
+  },
+});
