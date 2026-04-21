@@ -295,15 +295,15 @@ export default function ReconciliationEngine({
                     {card.description}
                   </p>
                 </div>
-                <div className="flex items-end justify-between">
-                  <div>
+                <div className="flex flex-wrap items-end justify-between gap-y-3 gap-x-2 mt-2">
+                  <div className="shrink-0">
                     <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Data</p>
                     <p className="text-sm font-mono font-bold text-slate-300">{fmtDate(card.date)}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Valor</p>
                     <p
-                      className={`text-2xl font-black font-mono ${isIncome ? 'text-emerald-400' : 'text-rose-400'}`}
+                      className={`text-xl sm:text-2xl font-black font-mono leading-none pb-1 pr-1 ${isIncome ? 'text-emerald-400' : 'text-rose-400'}`}
                       style={{ textShadow: isIncome ? '0 0 20px rgba(52,211,153,0.5)' : '0 0 20px rgba(251,113,133,0.5)' }}
                     >
                       {isPrivacyMode ? '••••••' : `${isIncome ? '+' : '-'}${fmtBRL(Number(card.value))}`}
@@ -343,19 +343,19 @@ export default function ReconciliationEngine({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
-            className="flex items-center gap-4 w-full"
+            className="flex items-center gap-2 sm:gap-4 w-full"
           >
             <motion.button
               whileHover={{ scale: 1.06 }} whileTap={{ scale: 0.94 }}
               onClick={handleApprove}
               onMouseEnter={() => setHint('left')}
               onMouseLeave={() => setHint(null)}
-              className="flex-1 flex flex-col items-center gap-1.5 py-3.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 rounded-2xl text-emerald-400 transition-all"
+              className="flex-1 min-w-0 flex flex-col items-center gap-1.5 py-3.5 px-2 sm:px-5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 rounded-2xl text-emerald-400 transition-all"
               title="Aprovar como Nova (←)"
             >
               <ArrowLeft className="w-5 h-5" />
-              <span className="text-[10px] font-black uppercase tracking-wider">Aprovar</span>
-              <kbd className="text-[9px] text-emerald-600 font-mono">←</kbd>
+              <span className="truncate w-full text-center text-[10px] font-black uppercase tracking-wider">Aprovar</span>
+              <kbd className="hidden sm:inline text-[9px] text-emerald-600 font-mono">←</kbd>
             </motion.button>
 
             <motion.button
@@ -363,12 +363,12 @@ export default function ReconciliationEngine({
               onClick={handleDiscard}
               onMouseEnter={() => setHint('down')}
               onMouseLeave={() => setHint(null)}
-              className="flex flex-col items-center gap-1.5 py-3.5 px-5 bg-slate-800/60 hover:bg-red-500/10 border border-white/8 hover:border-red-500/25 rounded-2xl text-slate-400 hover:text-red-400 transition-all"
+              className="flex flex-col items-center gap-1.5 py-3.5 px-3 sm:px-5 bg-slate-800/60 hover:bg-red-500/10 border border-white/8 hover:border-red-500/25 rounded-2xl text-slate-400 hover:text-red-400 transition-all"
               title="Ignorar / Descartar (Del)"
             >
               <Trash2 className="w-4 h-4" />
-              <span className="text-[10px] font-black uppercase tracking-wider">Ignorar</span>
-              <kbd className="text-[9px] font-mono opacity-50">Del</kbd>
+              <span className="truncate w-full text-center text-[10px] font-black uppercase tracking-wider">Ignorar</span>
+              <kbd className="hidden sm:inline text-[9px] font-mono opacity-50">Del</kbd>
             </motion.button>
 
             <motion.button
@@ -376,12 +376,12 @@ export default function ReconciliationEngine({
               onClick={handleMerge}
               onMouseEnter={() => setHint('right')}
               onMouseLeave={() => setHint(null)}
-              className="flex-1 flex flex-col items-center gap-1.5 py-3.5 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/25 rounded-2xl text-cyan-400 transition-all"
+              className="flex-1 min-w-0 flex flex-col items-center gap-1.5 py-3.5 px-2 sm:px-5 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/25 rounded-2xl text-cyan-400 transition-all"
               title="Merge / Conciliar (→)"
             >
               <GitMerge className="w-5 h-5" />
-              <span className="text-[10px] font-black uppercase tracking-wider">Conciliar</span>
-              <kbd className="text-[9px] text-cyan-600 font-mono">→</kbd>
+              <span className="truncate w-full text-center text-[10px] font-black uppercase tracking-wider">Conciliar</span>
+              <kbd className="hidden sm:inline text-[9px] text-cyan-600 font-mono">→</kbd>
             </motion.button>
           </motion.div>
         )}
