@@ -137,7 +137,64 @@ export class GeminiService {
     }
   }
 
-  // ── MOTOR 4 — Detecção Local de Anomalias (100% cliente) ──────────────────
+  // ── MOTOR 4 — Briefing Proativo por Período ───────────────────────────────
+  static async generateProactiveBriefing(
+    kpis:         { totalBalance: number; totalIncome: number; totalExpense: number },
+    categoryData: { name: string; value: number }[],
+    timeRange:    string
+  ): Promise<string> {
+    const rangeLabel: Record<string, string> = {
+      '7d': 'últimos 7 dias', '30d': 'últimos 30 dias',
+      '90d': 'últimos 90 dias', 'all': 'todo o período disponível',
+    };
+    const periodo = rangeLabel[timeRange] ?? timeRange;
+
+    const retencao = kpis.totalIncome > 0
+      ? (((kpis.totalIncome - kpis.totalExpense) / kpis.totalIncome) * 100).toFixed(1)
+      : '0.0';
+
+    const topCats = categoryData.slice(0, 5)
+      .map(c => `${c.name} (R$ ${c.value.toFixed(2)})`)
+      .join(', ') || 'nenhuma despesa registrada';
+
+    const prompt = [
+      `Você é um CFO pessoal especialista em finanças pessoais brasileiras.`,
+      `Analise os dados financeiros reais do utilizador referentes aos ${periodo}:`,
+      ``,
+      `• Saldo total acumulado: R$ ${kpis.totalBalance.toFixed(2)}`,
+      `• Receitas no período:   R$ ${kpis.totalIncome.toFixed(2)}`,
+      `• Despesas no período:   R$ ${kpis.totalExpense.toFixed(2)}`,
+      `• Taxa de retenção:      ${retencao}%`,
+      `• Maiores categorias de gasto: ${topCats}`,
+      ``,
+      `Escreva um briefing financeiro executivo em português (pt-BR), em exatamente 2 ou 3 frases curtas.`,
+      `Tom: direto, encorajador e acionável.`,
+      `Destaque 1 ponto positivo e 1 ação concreta e específica que o utilizador pode tomar agora.`,
+      `Não use markdown, listas, asteriscos ou emojis. Não repita os números literalmente — interprete-os.`,
+    ].join('\n');
+
+    try {
+      const fn     = getFunction('chatWithQuantumAI', 30);
+      const result = await fn({
+        prompt,
+        financialContext: {
+          saldo:    kpis.totalBalance,
+          entradas: kpis.totalIncome,
+          saidas:   kpis.totalExpense,
+        },
+      });
+      const data = result.data as { reply?: string } | null;
+      const text = data?.reply?.trim() ?? '';
+      if (!text) throw new Error('Resposta vazia');
+      return text;
+    } catch (error) {
+      const err = error as { code?: string; message?: string };
+      console.error('[GeminiService][proactiveBriefing]', err.message);
+      throw error;
+    }
+  }
+
+  // ── MOTOR 5 — Detecção Local de Anomalias (100% cliente) ──────────────────
   static detectAnomalies(
     currentMonthTxs: Transaction[] = [],
     historicalTxs:   Transaction[] = [],

@@ -212,6 +212,17 @@ export default function DashboardContent({
         <IntelStrip savingsRate={savingsRate} debtRatio={debtRatio} goalProgress={goalProgress} />
       </motion.div>
 
+      {/* ── BRIEFING IA — acima dos gráficos ──────────────────── */}
+      <motion.div variants={itemVariants}>
+        <ProactiveBriefing
+          uid={user?.uid ?? ''}
+          kpis={kpis}
+          categoryData={dashCategoryData}
+          timeRange={timeRange}
+          dataLoading={dashLoading}
+        />
+      </motion.div>
+
       {/* ── KPIs + GRÁFICOS (dados reais com filtro de tempo) ─── */}
       <motion.div variants={itemVariants} className="space-y-4">
         {/* Seletor de período */}
@@ -243,16 +254,6 @@ export default function DashboardContent({
       <motion.div variants={itemVariants}>
         <SurvivalHeatmap transactions={transactions} currentMonth={currentMonth} currentYear={currentYear} />
       </motion.div>
-
-      {/* ── BRIEFING PRÓ-ATIVO ────────────────────────────────── */}
-      <AnimatePresence>
-        <motion.div variants={itemVariants}>
-          <ProactiveBriefing
-            uid={user?.uid ?? ''}
-            financialContext={{ saldo, entradas: receitas, saidas: despesas, transactions, currentMonth, currentYear }}
-          />
-        </motion.div>
-      </AnimatePresence>
 
       {/* ── PROJEÇÃO QUÂNTICA ─────────────────────────────────── */}
       <motion.div variants={itemVariants} className="grid grid-cols-1 gap-6">
