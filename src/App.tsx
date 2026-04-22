@@ -141,7 +141,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
 
   const safeUID = user.uid;
 
-  const { transactions, loading, add, remove, removeBatch, update } = useTransactions(safeUID);
+  const { transactions, loading, add, addBatch, remove, removeBatch, update } = useTransactions(safeUID);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
     useFinancialData(transactions, activeModule, currentMonth, currentYear);
 
@@ -149,7 +149,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
     isAIChatOpen, setIsAIChatOpen, isFormOpen, setIsFormOpen, isSettingsOpen, setIsSettingsOpen,
     transactionToEdit, setTransactionToEdit, transactionToDelete, setTransactionToDelete,
     handleImport, handleSaveTransaction, confirmDelete, handleBatchDelete,
-  } = useAppLogic(user, update, add, remove, removeBatch);
+  } = useAppLogic(user, update, add, addBatch, remove, removeBatch);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

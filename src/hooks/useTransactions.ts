@@ -49,6 +49,7 @@ interface UseTransactionsReturn {
   loading:      boolean;
   error:        Error | null;
   add:          (data: Partial<Transaction>) => Promise<string>;
+  addBatch:     (items: Partial<Transaction>[]) => Promise<string[]>;
   remove:       (id: string) => Promise<void>;
   removeBatch:  (ids: string[]) => Promise<void>;
   update:       (id: string, data: Partial<Transaction>) => Promise<void>;
@@ -354,6 +355,42 @@ export function useTransactions(uid: string): UseTransactionsReturn {
     enqueue({ type: 'delete', itemId: id, previous, retries: 0 });
   }, [uid, enqueue]);
 
+  // ── ADD BATCH — Optimistic UI + enqueue (1 processQueue trigger) ──────────
+  const addBatch = useCallback(async (items: Partial<Transaction>[]): Promise<string[]> => {
+    if (!uid) throw new Error('[useTransactions][addBatch] UID ausente.');
+    if (!items.length) return [];
+
+    const now       = Date.now();
+    const tempIds:     string[]      = [];
+    const optimistics: Transaction[] = [];
+
+    items.forEach(data => {
+      const tempId: string = makeTempId();
+      const optimistic: Transaction = {
+        description: '',
+        value:       0,
+        type:        'saida',
+        category:    'Outros',
+        date:        new Date().toISOString().slice(0, 10),
+        ...data,
+        id:        tempId,
+        uid,
+        createdAt: now,
+        updatedAt: now,
+      };
+      pendingAdds.current.set(tempId, optimistic);
+      optimistics.push(optimistic);
+      tempIds.push(tempId);
+      // Push directly to avoid N processQueue triggers; one call below handles all
+      queueRef.current.push({ type: 'add', tempId, data, retries: 0 });
+    });
+
+    setTransactions(prev => [...optimistics, ...prev]);
+    void processQueue();
+
+    return tempIds;
+  }, [uid, processQueue]);
+
   // ── REMOVE BATCH — Optimistic + enqueue ───────────────────────────────────
   const removeBatch = useCallback(async (ids: string[]): Promise<void> => {
     if (!uid || !ids.length) return;
@@ -379,5 +416,5 @@ export function useTransactions(uid: string): UseTransactionsReturn {
     }
   }, [uid, enqueue]);
 
-  return { transactions, loading, error, add, remove, removeBatch, update };
+  return { transactions, loading, error, add, addBatch, remove, removeBatch, update };
 }

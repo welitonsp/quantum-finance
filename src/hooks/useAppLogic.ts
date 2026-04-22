@@ -23,9 +23,10 @@ interface UseAppLogicReturn {
 
 export function useAppLogic(
   user: User | null,
-  update: (id: string, data: Partial<Transaction>) => Promise<void>,
-  add: (data: Partial<Transaction>) => Promise<string>,
-  remove: (id: string) => Promise<void>,
+  update:     (id: string, data: Partial<Transaction>) => Promise<void>,
+  add:        (data: Partial<Transaction>) => Promise<string>,
+  addBatch:   (items: Partial<Transaction>[]) => Promise<string[]>,
+  remove:     (id: string) => Promise<void>,
   removeBatch: (ids: string[]) => Promise<void>
 ): UseAppLogicReturn {
   const modalState = useModalState();
@@ -42,7 +43,7 @@ export function useAppLogic(
     setTransactionToDelete: modalState.setTransactionToDelete,
   });
 
-  const { handleImport } = useImportActions(user);
+  const { handleImport } = useImportActions(user, addBatch);
 
   const confirmDelete = () => confirmDeleteAction(modalState.transactionToDelete);
 

@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft, ArrowRight, Trash2, CheckCircle2, GitMerge,
-  Zap, ShieldCheck, ChevronRight,
+  Zap, ShieldCheck, ChevronRight, Sparkles,
 } from 'lucide-react';
 import { usePrivacy } from '../../contexts/PrivacyContext';
 import type { Transaction } from '../../shared/types/transaction';
@@ -15,7 +15,11 @@ import type { Transaction } from '../../shared/types/transaction';
 type HintDir = 'left' | 'right' | 'down' | null;
 type ExitDir  = 'left' | 'right' | 'down';
 
-interface ResolvedTransaction extends Transaction {
+interface ImportTransaction extends Transaction {
+  _aiCategorized?: boolean;
+}
+
+interface ResolvedTransaction extends ImportTransaction {
   _reconciled?: boolean;
   _mergedWith?: string;
 }
@@ -27,7 +31,7 @@ interface Stats {
 }
 
 interface Props {
-  queue:                Transaction[];
+  queue:                ImportTransaction[];
   existingTransactions: Transaction[];
   onComplete:           (resolved: ResolvedTransaction[]) => void;
   onCancel:             () => void;
@@ -150,7 +154,7 @@ export default function ReconciliationEngine({
 }: Props) {
   const { isPrivacyMode } = usePrivacy();
 
-  const [queue,    setQueue]    = useState<Transaction[]>(() => [...(initialQueue ?? [])]);
+  const [queue,    setQueue]    = useState<ImportTransaction[]>(() => [...(initialQueue ?? [])]);
   const [resolved, setResolved] = useState<ResolvedTransaction[]>([]);
   const [stats,    setStats]    = useState<Stats>({ approved: 0, merged: 0, discarded: 0 });
   const [isDone,   setIsDone]   = useState(false);
@@ -283,11 +287,22 @@ export default function ReconciliationEngine({
                 className="relative z-10 w-full bg-quantum-card/80 border border-quantum-border backdrop-blur-xl rounded-3xl p-6 shadow-2xl shadow-black/60 select-none"
               >
                 <div className="flex items-center justify-between mb-5">
-                  <span className={`inline-flex items-center px-3 py-1 rounded-xl border text-[11px] font-black uppercase tracking-wider ${catClass(card.category)}`}>
-                    {card.category ?? 'Diversos'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-xl border text-[11px] font-black uppercase tracking-wider ${catClass(card.category)}`}>
+                      {card.category ?? 'Diversos'}
+                    </span>
+                    {card._aiCategorized && (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-quantum-accent/10 border border-quantum-accent/25 text-quantum-accent text-[9px] font-bold uppercase tracking-wider"
+                        title="Categoria sugerida pela IA"
+                      >
+                        <Sparkles className="w-2.5 h-2.5" />
+                        IA
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[10px] font-mono text-quantum-fgMuted uppercase">
-                    {(card as Transaction & { source?: string }).source?.toUpperCase() ?? 'IMPORT'}
+                    {(card as ImportTransaction & { source?: string }).source?.toUpperCase() ?? 'IMPORT'}
                   </span>
                 </div>
                 <div className="mb-6">

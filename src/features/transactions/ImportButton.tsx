@@ -11,7 +11,7 @@ import {
 import toast from 'react-hot-toast';
 
 import { useParserWorker } from '../../shared/lib/useParserWorker';
-import { GeminiService } from '../ai-chat/GeminiService';
+import { batchCategorizeDescriptions } from '../../utils/aiCategorize';
 import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
 import ReconciliationEngine from './ReconciliationEngine';
 import type { Transaction } from '../../shared/types/transaction';
@@ -23,8 +23,9 @@ type ImportStatus =
   | 'preview' | 'importing' | 'success' | 'error' | 'reconciliation';
 
 interface ParsedTransaction extends Omit<Transaction, 'id'> {
-  id: string;
-  _selected?: boolean;
+  id:              string;
+  _selected?:      boolean;
+  _aiCategorized?: boolean;
 }
 
 interface ColMapState {
@@ -620,15 +621,21 @@ export default function ImportButton({ onImportTransactions, existingTransaction
       }
 
       setStatus('ai_processing');
+      // Local dictionary first — items not matched go to AI
       const forAI = localCategorize(fresh);
+
       if (forAI.length > 0) {
-        const iaResults = await GeminiService.categorizeTransactionsBatch(forAI) as Array<{ id: string; category?: string }> | null;
-        if (Array.isArray(iaResults)) {
-          iaResults.forEach(r => {
-            const tx = fresh.find(t => t.id === r.id);
-            if (tx && r.category) tx.category = r.category;
-          });
-        }
+        // Extract unique descriptions for a single batch request (RULE: 1 request / file)
+        const uniqueDescs = [...new Set(forAI.map(tx => tx.description).filter(Boolean))];
+        const categoryMap = await batchCategorizeDescriptions(uniqueDescs);
+
+        forAI.forEach(tx => {
+          const aiCat = categoryMap[tx.description];
+          if (aiCat) {
+            tx.category       = aiCat;
+            tx._aiCategorized = true;
+          }
+        });
       }
 
       setReconciliationQueue(fresh);
