@@ -8,16 +8,19 @@ import {
 
 import { useNavigation } from '../contexts/NavigationContext';
 import { formatCurrency } from '../utils/formatters';
+import { useDashboardData } from '../hooks/useFinancialData';
 import ForecastWidget from './ForecastWidget';
 import TransactionForm from '../features/transactions/TransactionForm';
 import ProactiveBriefing from './ProactiveBriefing';
 import SurvivalHeatmap from './SurvivalHeatmap';
+import WealthKPIs from './WealthKPIs';
+import DashboardCharts from './DashboardCharts';
 import { calcStatus } from '../utils/dashboardUtils';
 import { HealthGauge } from './HealthGauge';
 import { SparkLine } from './SparkLine';
 import { IntelStrip } from './IntelStrip';
-import { CategoryBreakdown } from './CategoryBreakdown';
 import type { Transaction, ModuleBalances, CategoryDataPoint } from '../shared/types/transaction';
+import type { TimeRange } from '../hooks/useFinancialData';
 
 interface Props {
   user: { uid: string } | null;
@@ -49,6 +52,16 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 80, damping: 15 } },
 };
 
+const TIME_RANGE_LABELS: { value: TimeRange; label: string }[] = [
+  { value: '7d',  label: '7 dias'  },
+  { value: '30d', label: '30 dias' },
+  { value: '90d', label: '90 dias' },
+  { value: 'all', label: 'Tudo'    },
+];
+
+// suppress unused import warning
+void formatCurrency;
+
 export default function DashboardContent({
   user,
   transactions,
@@ -63,6 +76,7 @@ export default function DashboardContent({
 }: Props) {
   const { currentMonth, currentYear } = useNavigation();
 
+  // ── Hero metrics from existing moduleBalances prop ────────────────────────
   const saldo    = moduleBalances?.geral?.saldo    ?? 0;
   const receitas = moduleBalances?.geral?.receitas ?? 0;
   const despesas = moduleBalances?.geral?.despesas ?? 0;
@@ -97,7 +111,17 @@ export default function DashboardContent({
     setTransactionToEdit(t);
     setIsFormOpen(true);
   }, [setTransactionToEdit, setIsFormOpen]);
-  void handleEditTx; // used by CategoryBreakdown child if needed
+  void handleEditTx;
+
+  // ── Dashboard data hook (real-time, with timeRange) ───────────────────────
+  const {
+    kpis,
+    timelineData,
+    categoryData: dashCategoryData,
+    timeRange,
+    setTimeRange,
+    loading: dashLoading,
+  } = useDashboardData(user?.uid ?? '');
 
   return (
     <motion.div
@@ -188,6 +212,33 @@ export default function DashboardContent({
         <IntelStrip savingsRate={savingsRate} debtRatio={debtRatio} goalProgress={goalProgress} />
       </motion.div>
 
+      {/* ── KPIs + GRÁFICOS (dados reais com filtro de tempo) ─── */}
+      <motion.div variants={itemVariants} className="space-y-4">
+        {/* Seletor de período */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mr-1">Período:</span>
+          {TIME_RANGE_LABELS.map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => setTimeRange(value)}
+              className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                timeRange === value
+                  ? 'bg-quantum-accent/20 text-quantum-accent border-quantum-accent/40'
+                  : 'bg-quantum-card text-quantum-fgMuted border-quantum-border hover:border-quantum-accent/30 hover:text-quantum-fg'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* KPIs agregados */}
+        <WealthKPIs kpis={kpis} loading={dashLoading} />
+
+        {/* Gráficos */}
+        <DashboardCharts timelineData={timelineData} categoryData={dashCategoryData} />
+      </motion.div>
+
       {/* ── MAPA DE CALOR ─────────────────────────────────────── */}
       <motion.div variants={itemVariants}>
         <SurvivalHeatmap transactions={transactions} currentMonth={currentMonth} currentYear={currentYear} />
@@ -221,11 +272,6 @@ export default function DashboardContent({
         </div>
       </motion.div>
 
-      {/* ── DISTRIBUIÇÃO POR CATEGORIA ────────────────────────── */}
-      <motion.div variants={itemVariants}>
-        <CategoryBreakdown transactions={transactions} />
-      </motion.div>
-
       {/* ── FAB MOBILE ────────────────────────────────────────── */}
       <button
         onClick={() => setIsFormOpen(true)}
@@ -242,6 +288,3 @@ export default function DashboardContent({
     </motion.div>
   );
 }
-
-// suppress unused import warning
-void formatCurrency;

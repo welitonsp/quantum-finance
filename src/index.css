@@ -15,6 +15,8 @@
     --q-border:       #E2E8F0;
     --q-fg:           #0F172A;
     --q-fg-muted:     #64748B;
+    --q-success:      #00E68A;
+    --q-danger:       #FF4757;
 
     /* Glass surfaces — light */
     --q-glass-bg:          rgba(255, 255, 255, 0.72);
@@ -51,6 +53,8 @@
     --q-border:       #1E2A3F;
     --q-fg:           #E8ECF4;
     --q-fg-muted:     #6B7A94;
+    --q-success:      #00E68A;
+    --q-danger:       #FF4757;
 
     /* Glass surfaces — dark */
     --q-glass-bg:          rgba(19, 26, 42, 0.72);

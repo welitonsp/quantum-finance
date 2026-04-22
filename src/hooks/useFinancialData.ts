@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import Decimal from 'decimal.js';
 import type { Transaction, ModuleBalances, CategoryDataPoint } from '../shared/types/transaction';
+import { useTransactions } from './useTransactions';
 
 interface FirestoreTimestamp { toDate: () => Date; }
 
@@ -16,6 +17,8 @@ function resolveDate(raw: unknown): Date | null {
   const d = new Date(raw as string | number);
   return isNaN(d.getTime()) ? null : d;
 }
+
+// ─── Existing hook (kept for App.tsx compatibility) ──────────────────────────
 
 export interface FinancialDataReturn {
   displayedTransactions: Transaction[];
@@ -126,4 +129,118 @@ export function useFinancialData(
     topExpensesData,
     allTransactions: allTransactionsDecrypted
   };
+}
+
+// ─── Dashboard Aggregation Hook ───────────────────────────────────────────────
+
+export type TimeRange = '7d' | '30d' | '90d' | 'all';
+
+export interface DashboardKPIs {
+  totalBalance: number;
+  totalIncome:  number;
+  totalExpense: number;
+}
+
+export interface TimelineDataPoint {
+  date:    string;
+  income:  number;
+  expense: number;
+}
+
+export interface CategoryChartPoint {
+  name:  string;
+  value: number;
+}
+
+export interface DashboardDataReturn {
+  kpis:         DashboardKPIs;
+  timelineData: TimelineDataPoint[];
+  categoryData: CategoryChartPoint[];
+  timeRange:    TimeRange;
+  setTimeRange: (r: TimeRange) => void;
+  loading:      boolean;
+}
+
+const RANGE_DAYS: Record<Exclude<TimeRange, 'all'>, number> = {
+  '7d': 7, '30d': 30, '90d': 90,
+};
+
+export function useDashboardData(uid: string): DashboardDataReturn {
+  const { transactions, loading } = useTransactions(uid);
+  const [timeRange, setTimeRange] = useState<TimeRange>('30d');
+
+  const filtered = useMemo(() => {
+    if (!transactions.length) return [];
+    if (timeRange === 'all') return transactions;
+    const cutoff = new Date(Date.now() - RANGE_DAYS[timeRange] * 86_400_000);
+    return transactions.filter(tx => {
+      const d = resolveDate(tx.date || tx.createdAt);
+      return d !== null && d >= cutoff;
+    });
+  }, [transactions, timeRange]);
+
+  const kpis = useMemo((): DashboardKPIs => {
+    let totalBalance = new Decimal(0);
+    let totalIncome  = new Decimal(0);
+    let totalExpense = new Decimal(0);
+
+    transactions.forEach(tx => {
+      const val = new Decimal(Math.abs(Number(tx.value || 0))).dividedBy(100);
+      if (tx.type === 'entrada' || tx.type === 'receita') totalBalance = totalBalance.plus(val);
+      else                                                 totalBalance = totalBalance.minus(val);
+    });
+
+    filtered.forEach(tx => {
+      const val = new Decimal(Math.abs(Number(tx.value || 0))).dividedBy(100);
+      if (tx.type === 'entrada' || tx.type === 'receita') totalIncome  = totalIncome.plus(val);
+      else                                                 totalExpense = totalExpense.plus(val);
+    });
+
+    return {
+      totalBalance: totalBalance.toNumber(),
+      totalIncome:  totalIncome.toNumber(),
+      totalExpense: totalExpense.toNumber(),
+    };
+  }, [transactions, filtered]);
+
+  const timelineData = useMemo((): TimelineDataPoint[] => {
+    const map = new Map<string, { income: Decimal; expense: Decimal }>();
+
+    filtered.forEach(tx => {
+      const d = resolveDate(tx.date || tx.createdAt);
+      if (!d) return;
+      const key   = d.toISOString().slice(0, 10);
+      const entry = map.get(key) ?? { income: new Decimal(0), expense: new Decimal(0) };
+      const val   = new Decimal(Math.abs(Number(tx.value || 0))).dividedBy(100);
+      if (tx.type === 'entrada' || tx.type === 'receita') entry.income  = entry.income.plus(val);
+      else                                                 entry.expense = entry.expense.plus(val);
+      map.set(key, entry);
+    });
+
+    return Array.from(map.entries())
+      .map(([date, { income, expense }]) => ({
+        date,
+        income:  income.toNumber(),
+        expense: expense.toNumber(),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [filtered]);
+
+  const categoryData = useMemo((): CategoryChartPoint[] => {
+    const map = new Map<string, Decimal>();
+
+    filtered.forEach(tx => {
+      if (tx.type !== 'saida' && tx.type !== 'despesa') return;
+      const cat = tx.category || 'Diversos';
+      map.set(cat, (map.get(cat) ?? new Decimal(0)).plus(
+        new Decimal(Math.abs(Number(tx.value || 0))).dividedBy(100)
+      ));
+    });
+
+    return Array.from(map.entries())
+      .map(([name, val]) => ({ name, value: val.toNumber() }))
+      .sort((a, b) => b.value - a.value);
+  }, [filtered]);
+
+  return { kpis, timelineData, categoryData, timeRange, setTimeRange, loading };
 }
