@@ -141,7 +141,8 @@ export class GeminiService {
   static async generateProactiveBriefing(
     kpis:         { totalBalance: number; totalIncome: number; totalExpense: number },
     categoryData: { name: string; value: number }[],
-    timeRange:    string
+    timeRange:    string,
+    forecast?:    { projectedBalance: number; minBalance: number; health: string }
   ): Promise<string> {
     const rangeLabel: Record<string, string> = {
       '7d': 'últimos 7 dias', '30d': 'últimos 30 dias',
@@ -157,19 +158,35 @@ export class GeminiService {
       .map(c => `${c.name} (R$ ${c.value.toFixed(2)})`)
       .join(', ') || 'nenhuma despesa registrada';
 
+    const forecastBlock = forecast ? [
+      ``,
+      `DADOS PREDITIVOS (próximos 30 dias):`,
+      `• Saldo projetado ao final: R$ ${forecast.projectedBalance.toFixed(2)}`,
+      `• Pior saldo previsto:      R$ ${forecast.minBalance.toFixed(2)}`,
+      `• Saúde financeira:        ${forecast.health}`,
+      ...(forecast.minBalance < 0 ? [
+        `• ⚠️ ALERTA: o modelo prevê caixa NEGATIVO. Prioridade máxima: corte de gastos imediato.`,
+      ] : []),
+    ] : [];
+
     const prompt = [
       `Você é um CFO pessoal especialista em finanças pessoais brasileiras.`,
       `Analise os dados financeiros reais do utilizador referentes aos ${periodo}:`,
       ``,
+      `DADOS HISTÓRICOS DO PERÍODO:`,
       `• Saldo total acumulado: R$ ${kpis.totalBalance.toFixed(2)}`,
       `• Receitas no período:   R$ ${kpis.totalIncome.toFixed(2)}`,
       `• Despesas no período:   R$ ${kpis.totalExpense.toFixed(2)}`,
       `• Taxa de retenção:      ${retencao}%`,
       `• Maiores categorias de gasto: ${topCats}`,
+      ...forecastBlock,
+      ``,
+      `REGRAS DE OURO:`,
+      `1. Se o pior saldo previsto for negativo, emita um ALERTA CRÍTICO sobre risco de caixa negativo e sugira corte na categoria de maior gasto.`,
+      `2. Caso contrário, destaque 1 ponto positivo e 1 ação concreta e específica.`,
       ``,
       `Escreva um briefing financeiro executivo em português (pt-BR), em exatamente 2 ou 3 frases curtas.`,
       `Tom: direto, encorajador e acionável.`,
-      `Destaque 1 ponto positivo e 1 ação concreta e específica que o utilizador pode tomar agora.`,
       `Não use markdown, listas, asteriscos ou emojis. Não repita os números literalmente — interprete-os.`,
     ].join('\n');
 

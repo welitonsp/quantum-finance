@@ -16,6 +16,7 @@ import SurvivalHeatmap from './SurvivalHeatmap';
 import WealthKPIs from './WealthKPIs';
 import DashboardCharts from './DashboardCharts';
 import { calcStatus } from '../utils/dashboardUtils';
+import { useForecast } from '../hooks/useForecast';
 import { HealthGauge } from './HealthGauge';
 import { SparkLine } from './SparkLine';
 import { IntelStrip } from './IntelStrip';
@@ -80,6 +81,9 @@ export default function DashboardContent({
   const saldo    = moduleBalances?.geral?.saldo    ?? 0;
   const receitas = moduleBalances?.geral?.receitas ?? 0;
   const despesas = moduleBalances?.geral?.despesas ?? 0;
+
+  // Forecast driven by the full transaction set and live balance
+  const forecast = useForecast(allTransactions.length > 0 ? allTransactions : transactions, saldo);
 
   const patrimonio = saldo;
   const dividas    = 0;
@@ -220,6 +224,7 @@ export default function DashboardContent({
           categoryData={dashCategoryData}
           timeRange={timeRange}
           dataLoading={dashLoading}
+          forecast={forecast}
         />
       </motion.div>
 

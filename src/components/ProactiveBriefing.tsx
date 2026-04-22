@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { GeminiService } from '../features/ai-chat/GeminiService';
 import type { DashboardKPIs, CategoryChartPoint, TimeRange } from '../hooks/useFinancialData';
+import type { ForecastResult } from '../hooks/useForecast';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,30 +44,28 @@ const SEVERITY_CONFIG: Record<Severity, SeverityConfig> = {
   },
 };
 
-function detectSeverity(text: string): Severity {
-  const lower = text.toLowerCase();
-  if (lower.includes('alerta vermelho') || lower.includes('crítico') || lower.includes('perigo'))
-    return 'critical';
-  if (lower.includes('atenção') || lower.includes('cuidado') || lower.includes('risco'))
-    return 'warning';
+function calcSeverity(forecast: ForecastResult | undefined): Severity {
+  if (forecast?.minBalance !== undefined && forecast.minBalance < 0) return 'critical';
+  if (forecast?.health === 'warning') return 'warning';
   return 'ok';
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
-  uid:         string;
-  kpis:        DashboardKPIs;
+  uid:          string;
+  kpis:         DashboardKPIs;
   categoryData: CategoryChartPoint[];
-  timeRange:   TimeRange;
-  dataLoading: boolean;
-  className?:  string;
+  timeRange:    TimeRange;
+  dataLoading:  boolean;
+  forecast?:    ForecastResult;
+  className?:   string;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ProactiveBriefing({
-  uid, kpis, categoryData, timeRange, dataLoading, className = '',
+  uid, kpis, categoryData, timeRange, dataLoading, forecast, className = '',
 }: Props) {
   const [briefing,  setBriefing]  = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -78,8 +77,8 @@ export default function ProactiveBriefing({
   const lastCallKey = useRef<string>('');
   const abortedRef  = useRef<boolean>(false);
 
-  // Stable key: rounded to avoid floating-point noise triggering calls
-  const dataKey = `${timeRange}|${Math.round(kpis.totalBalance)}|${Math.round(kpis.totalIncome)}|${Math.round(kpis.totalExpense)}`;
+  // Stable key: includes forecast signals so a health-state change triggers a fresh briefing
+  const dataKey = `${timeRange}|${Math.round(kpis.totalBalance)}|${Math.round(forecast?.minBalance ?? 0)}|${forecast?.health ?? ''}`;
 
   const fetchBriefing = useCallback(async (forced = false) => {
     if (!uid) return;
@@ -96,7 +95,10 @@ export default function ProactiveBriefing({
     }
 
     try {
-      const text = await GeminiService.generateProactiveBriefing(kpis, categoryData, timeRange);
+      const forecastPayload = forecast
+        ? { projectedBalance: forecast.finalBalance, minBalance: forecast.minBalance, health: forecast.health }
+        : undefined;
+      const text = await GeminiService.generateProactiveBriefing(kpis, categoryData, timeRange, forecastPayload);
       if (abortedRef.current) return;
       setBriefing(text);
       setExpanded(true);
@@ -128,7 +130,7 @@ export default function ProactiveBriefing({
   if (errored)   return null;  // silent failure — don't break UX
   if (!aiLoading && !briefing) return null;
 
-  const severity = briefing ? detectSeverity(briefing) : 'ok';
+  const severity = calcSeverity(forecast);
   const cfg      = SEVERITY_CONFIG[severity];
   const SevIcon  = cfg.icon;
 
