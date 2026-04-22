@@ -25,7 +25,7 @@ export default function MarketAssets({ onTradeClick }: Props) {
     <div className="glass-card-quantum p-6 flex-1">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="text-lg font-bold text-white">Ativos em Destaque</h3>
+          <h3 className="text-lg font-bold text-quantum-fg">Ativos em Destaque</h3>
           <p className="text-xs text-quantum-fgMuted mt-1">Top performers do dia</p>
         </div>
         <button className="px-4 py-2 text-xs font-bold text-quantum-fgMuted border border-quantum-border rounded-lg hover:border-quantum-accent hover:text-quantum-accent transition-colors">
@@ -57,7 +57,7 @@ export default function MarketAssets({ onTradeClick }: Props) {
               </div>
             </div>
 
-            <div className="col-span-3 font-mono font-semibold text-sm text-white">
+            <div className="col-span-3 font-mono font-semibold text-sm text-quantum-fg">
               {a.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </div>
 

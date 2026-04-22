@@ -18,7 +18,7 @@ const CustomTooltip = ({ active, payload }: RechartsTooltipProps) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-quantum-card border border-quantum-border rounded-xl p-3 shadow-xl">
-        <p className="text-white font-bold text-sm">{payload[0].name}</p>
+        <p className="text-quantum-fg font-bold text-sm">{payload[0].name}</p>
         <p className="text-quantum-fgMuted font-mono text-xs">{payload[0].value}% do portfólio</p>
       </div>
     );
@@ -29,7 +29,7 @@ const CustomTooltip = ({ active, payload }: RechartsTooltipProps) => {
 export default function AllocationChart() {
   return (
     <div className="glass-card-quantum p-6">
-      <h3 className="text-lg font-bold text-white mb-4">Alocação</h3>
+      <h3 className="text-lg font-bold text-quantum-fg mb-4">Alocação</h3>
       <div style={{ minHeight: 192 }}>
         <ResponsiveContainer width="100%" minWidth={100} minHeight={192}>
           <PieChart>
@@ -47,7 +47,7 @@ export default function AllocationChart() {
           <div key={i} className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: a.color }} />
             <span className="text-xs text-quantum-fgMuted truncate">{a.name}</span>
-            <span className="text-xs font-bold text-white ml-auto font-mono">{a.value}%</span>
+            <span className="text-xs font-bold text-quantum-fg ml-auto font-mono">{a.value}%</span>
           </div>
         ))}
       </div>

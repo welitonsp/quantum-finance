@@ -27,7 +27,7 @@ export const HealthGauge = memo(({ score, color }: Props) => {
           style={{ transition: 'stroke-dasharray 1.6s cubic-bezier(0.4,0,0.2,1)' }} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
-        <span className="font-mono text-3xl font-bold text-slate-100 leading-none">{score}</span>
+        <span className="font-mono text-3xl font-bold text-quantum-fg leading-none">{score}</span>
         <span className="text-[8px] font-bold tracking-[0.12em] uppercase" style={{ color: C }}>{lbl}</span>
       </div>
     </div>

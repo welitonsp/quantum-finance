@@ -173,7 +173,7 @@ export default function ProactiveBriefing({ financialContext, uid, className = '
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-black text-white">Briefing Semanal IA</span>
+            <span className="text-sm font-black text-quantum-fg">Briefing Semanal IA</span>
             {!loading && briefing && (
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${cfg.badgeClass}`}>
                 <SevIcon className="inline w-3 h-3 mr-1 -mt-0.5" />
@@ -212,7 +212,7 @@ export default function ProactiveBriefing({ financialContext, uid, className = '
           <button
             onClick={e => { e.stopPropagation(); setDismissed(true); }}
             title="Dispensar"
-            className="p-1.5 rounded-lg text-quantum-fgMuted hover:text-white hover:bg-white/10 transition-all"
+            className="p-1.5 rounded-lg text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/10 transition-all"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -233,7 +233,7 @@ export default function ProactiveBriefing({ financialContext, uid, className = '
             transition={{ duration: 0.22, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
-            <div className="px-5 pb-5 pt-1 border-t border-white/5">
+            <div className="px-5 pb-5 pt-1 border-t border-quantum-border">
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-10 gap-3">
                   <div className="w-8 h-8 border-2 border-quantum-accent/30 border-t-quantum-accent rounded-full animate-spin" />
@@ -242,7 +242,7 @@ export default function ProactiveBriefing({ financialContext, uid, className = '
                   </span>
                 </div>
               ) : (
-                <div className="prose prose-invert prose-sm max-w-none prose-headings:text-white prose-headings:font-black prose-headings:text-sm prose-p:text-slate-300 prose-p:text-sm prose-p:leading-relaxed prose-strong:text-white prose-strong:font-bold prose-ul:text-slate-300 prose-li:text-sm prose-li:marker:text-quantum-accent prose-code:text-quantum-accent prose-code:bg-quantum-accentDim prose-code:px-1 prose-code:rounded prose-blockquote:border-l-quantum-accent prose-blockquote:text-slate-400">
+                <div className="prose prose-invert prose-sm max-w-none prose-headings:text-quantum-fg prose-headings:font-black prose-headings:text-sm prose-p:text-quantum-fg prose-p:text-sm prose-p:leading-relaxed prose-strong:text-quantum-fg prose-strong:font-bold prose-ul:text-quantum-fg prose-li:text-sm prose-li:marker:text-quantum-accent prose-code:text-quantum-accent prose-code:bg-quantum-accentDim prose-code:px-1 prose-code:rounded prose-blockquote:border-l-quantum-accent prose-blockquote:text-quantum-fgMuted">
                   <ReactMarkdown>{briefing ?? ''}</ReactMarkdown>
                 </div>
               )}

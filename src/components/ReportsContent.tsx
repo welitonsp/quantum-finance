@@ -58,8 +58,8 @@ export default function ReportsContent({ transactions }: Props) {
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-xl font-black text-slate-800 dark:text-white tracking-tight">Business Intelligence</h2>
-          <p className="text-xs text-slate-500 dark:text-quantum-fgMuted mt-1">Análises profundas para otimização de património.</p>
+          <h2 className="text-xl font-black text-slate-800 dark:text-quantum-fg tracking-tight">Business Intelligence</h2>
+          <p className="text-xs text-quantum-fgMuted dark:text-quantum-fgMuted mt-1">Análises profundas para otimização de património.</p>
         </div>
       </div>
 
@@ -71,7 +71,7 @@ export default function ReportsContent({ transactions }: Props) {
             className={`pb-4 text-sm md:text-base font-bold tracking-widest uppercase transition-all border-b-2 whitespace-nowrap ${
               activeTab === tab
                 ? tab === 'pareto' ? 'border-quantum-accent text-quantum-accent' : 'border-cyan-500 text-cyan-400'
-                : 'border-transparent text-quantum-fgMuted hover:text-white'
+                : 'border-transparent text-quantum-fgMuted hover:text-quantum-fg'
             }`}
           >
             {tab === 'pareto' ? 'Análise Pareto (80/20)' : 'Tendências Históricas'}
@@ -89,7 +89,7 @@ export default function ReportsContent({ transactions }: Props) {
                 <Filter className="w-6 h-6 text-quantum-accent" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white">Regra 80/20 (Princípio de Pareto)</h3>
+                <h3 className="text-lg font-bold text-quantum-fg">Regra 80/20 (Princípio de Pareto)</h3>
                 <p className="text-sm text-quantum-fgMuted mt-1 max-w-2xl">
                   Identifique os ralos de dinheiro. O gráfico mostra as despesas ordenadas da maior para a menor. A linha amarela representa a acumulação dos gastos até chegar a 100%.
                 </p>
@@ -144,9 +144,9 @@ export default function ReportsContent({ transactions }: Props) {
                       <Target className="w-4 h-4 text-quantum-red" />
                       <p className="text-xs font-bold uppercase text-quantum-red tracking-wider">Atenção Crítica</p>
                     </div>
-                    <p className="text-3xl font-black text-white">{topCategoriesCount}</p>
+                    <p className="text-3xl font-black text-quantum-fg">{topCategoriesCount}</p>
                     <p className="text-sm text-quantum-fgMuted mt-1 leading-tight">
-                      categorias são responsáveis por <span className="text-white font-bold">80%</span> de todos os seus gastos deste mês.
+                      categorias são responsáveis por <span className="text-quantum-fg font-bold">80%</span> de todos os seus gastos deste mês.
                     </p>
                   </div>
 
@@ -154,9 +154,9 @@ export default function ReportsContent({ transactions }: Props) {
                     <p className="text-xs font-bold uppercase text-quantum-fgMuted tracking-wider mb-4">Top Ralos Financeiros</p>
                     <div className="space-y-3">
                       {paretoData.filter(d => d.isTop80).map((cat, i) => (
-                        <div key={i} className="flex justify-between items-center pb-3 border-b border-white/5 last:border-0 last:pb-0">
+                        <div key={i} className="flex justify-between items-center pb-3 border-b border-quantum-border last:border-0 last:pb-0">
                           <div>
-                            <p className="text-sm font-bold text-white">{cat.name}</p>
+                            <p className="text-sm font-bold text-quantum-fg">{cat.name}</p>
                             <p className="text-[10px] text-quantum-red font-medium">{cat.pctAcumulada}% acumulado</p>
                           </div>
                           <p className="text-sm font-bold text-quantum-fgMuted">{formatCurrency(cat.valor)}</p>
@@ -169,7 +169,7 @@ export default function ReportsContent({ transactions }: Props) {
             ) : (
               <div className="text-center py-12 border-2 border-dashed border-quantum-border rounded-2xl">
                 <AlertCircle className="w-12 h-12 text-quantum-fgMuted mx-auto mb-3" />
-                <h3 className="text-lg font-bold text-white">Sem dados suficientes</h3>
+                <h3 className="text-lg font-bold text-quantum-fg">Sem dados suficientes</h3>
                 <p className="text-sm text-quantum-fgMuted">Importe mais faturas para o sistema calcular o Princípio de Pareto.</p>
               </div>
             )}

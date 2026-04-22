@@ -70,20 +70,20 @@ export const AIAssistantChat = ({ transactions, balances, isOpen, onClose }: Pro
             <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-quantum-accent/8 rounded-full blur-3xl" />
           </div>
 
-          <div className="p-4 bg-quantum-bg/80 border-b border-white/5 flex items-center justify-between relative z-10">
+          <div className="p-4 bg-quantum-bg/80 border-b border-quantum-border flex items-center justify-between relative z-10">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-quantum-accent/15 rounded-xl border border-quantum-accent/20 shadow-[0_0_12px_rgba(0,230,138,0.2)]">
                 <BrainCircuit className="w-5 h-5 text-quantum-accent" />
               </div>
               <div>
-                <h3 className="font-bold text-white leading-none tracking-wide">Quantum AI</h3>
+                <h3 className="font-bold text-quantum-fg leading-none tracking-wide">Quantum AI</h3>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-quantum-accent animate-pulse" />
                   <span className="text-xs text-quantum-accent font-medium">Auditora Activa</span>
                 </div>
               </div>
             </div>
-            <button onClick={onClose} className="p-2 text-quantum-fgMuted hover:text-white hover:bg-white/10 rounded-xl transition-colors">
+            <button onClick={onClose} className="p-2 text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/10 rounded-xl transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -98,11 +98,11 @@ export const AIAssistantChat = ({ transactions, balances, isOpen, onClose }: Pro
                 >
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-lg ${msg.role === 'user' ? 'bg-indigo-600 shadow-indigo-500/20' : 'bg-quantum-accent/20 border border-quantum-accent/30 shadow-[0_0_10px_rgba(0,230,138,0.15)]'}`}>
                     {msg.role === 'user'
-                      ? <User className="w-4 h-4 text-white" />
+                      ? <User className="w-4 h-4 text-quantum-fg" />
                       : <BrainCircuit className="w-4 h-4 text-quantum-accent" />
                     }
                   </div>
-                  <div className={`p-3 rounded-2xl max-w-[78%] text-sm leading-relaxed whitespace-pre-wrap ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-quantum-bgSecondary text-quantum-fg rounded-tl-none border border-white/5'}`}>
+                  <div className={`p-3 rounded-2xl max-w-[78%] text-sm leading-relaxed whitespace-pre-wrap ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-quantum-bgSecondary text-quantum-fg rounded-tl-none border border-quantum-border'}`}>
                     {msg.text}
                   </div>
                 </motion.div>
@@ -114,7 +114,7 @@ export const AIAssistantChat = ({ transactions, balances, isOpen, onClose }: Pro
                 <div className="w-8 h-8 rounded-full bg-quantum-accent/20 border border-quantum-accent/30 flex items-center justify-center shrink-0">
                   <BrainCircuit className="w-4 h-4 text-quantum-accent" />
                 </div>
-                <div className="p-4 bg-quantum-bgSecondary rounded-2xl rounded-tl-none border border-white/5 flex items-center gap-2">
+                <div className="p-4 bg-quantum-bgSecondary rounded-2xl rounded-tl-none border border-quantum-border flex items-center gap-2">
                   <span className="w-1.5 h-1.5 bg-quantum-accent rounded-full animate-bounce [animation-delay:0ms]" />
                   <span className="w-1.5 h-1.5 bg-quantum-accent rounded-full animate-bounce [animation-delay:150ms]" />
                   <span className="w-1.5 h-1.5 bg-quantum-accent rounded-full animate-bounce [animation-delay:300ms]" />
@@ -124,11 +124,11 @@ export const AIAssistantChat = ({ transactions, balances, isOpen, onClose }: Pro
             <div ref={messagesEndRef} />
           </div>
 
-          <form onSubmit={(e) => void handleSendMessage(e)} className="p-4 bg-quantum-bg/80 border-t border-white/5 flex gap-2 relative z-10">
+          <form onSubmit={(e) => void handleSendMessage(e)} className="p-4 bg-quantum-bg/80 border-t border-quantum-border flex gap-2 relative z-10">
             <input
               type="text" value={inputMessage} onChange={e => setInputMessage(e.target.value)}
               placeholder="Analise os meus gastos, Comandante..." disabled={isLoading}
-              className="flex-1 bg-quantum-bgSecondary border border-quantum-border rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-quantum-fgMuted focus:outline-none focus:border-quantum-accent/50 focus:shadow-[0_0_0_2px_rgba(0,230,138,0.1)] transition-all disabled:opacity-50"
+              className="flex-1 bg-quantum-bgSecondary border border-quantum-border rounded-xl px-4 py-2.5 text-sm text-quantum-fg placeholder:text-quantum-fgMuted focus:outline-none focus:border-quantum-accent/50 focus:shadow-[0_0_0_2px_rgba(0,230,138,0.1)] transition-all disabled:opacity-50"
             />
             <button type="submit" disabled={isLoading || !inputMessage.trim()}
               className="p-2.5 bg-quantum-accent/90 hover:bg-quantum-accent text-quantum-bg rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(0,230,138,0.25)] hover:shadow-[0_0_20px_rgba(0,230,138,0.4)] active:scale-95">

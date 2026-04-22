@@ -89,8 +89,8 @@ const CAT_COLORS: Record<string, string> = {
   'Impostos/Taxas': 'text-red-400    bg-red-400/10    border-red-400/20',
   'Vestuário':      'text-purple-400 bg-purple-400/10 border-purple-400/20',
   'Freelance':      'text-teal-400   bg-teal-400/10   border-teal-400/20',
-  'Diversos':       'text-quantum-fgMuted bg-white/5   border-white/10',
-  'Outros':         'text-quantum-fgMuted bg-white/5   border-white/10',
+  'Diversos':       'text-quantum-fgMuted bg-white/5   border-quantum-border',
+  'Outros':         'text-quantum-fgMuted bg-white/5   border-quantum-border',
 };
 const catClass = (cat: string | undefined): string =>
   CAT_COLORS[cat ?? 'Diversos'] ?? CAT_COLORS['Diversos']!;
@@ -104,7 +104,7 @@ const STEP_MAP: Partial<Record<ImportStatus, number>> = {
 function StepBar({ current }: { current: ImportStatus }) {
   const active = STEP_MAP[current] ?? -1;
   return (
-    <div className="flex items-center gap-1 px-6 py-3 bg-quantum-bg/50 border-b border-white/5">
+    <div className="flex items-center gap-1 px-6 py-3 bg-quantum-bg/50 border-b border-quantum-border">
       {STEPS.map((label, i) => (
         <React.Fragment key={label}>
           <div className="flex items-center gap-1.5">
@@ -157,7 +157,7 @@ function DropZone({ onFile, fileInputRef }: DropZoneProps) {
       >
         <UploadCloud className={`w-8 h-8 transition-colors ${dragging ? 'text-quantum-accent' : 'text-quantum-fgMuted'}`} />
       </motion.div>
-      <p className="font-bold text-white mb-1.5">
+      <p className="font-bold text-quantum-fg mb-1.5">
         {dragging ? 'Largar aqui!' : 'Arraste o seu extrato'}
       </p>
       <p className="text-xs text-quantum-fgMuted max-w-xs leading-relaxed">
@@ -196,7 +196,7 @@ function LoadingPanel({ status }: { status: LoadingStatus }) {
         }
       </div>
       <div>
-        <h4 className="text-sm font-black text-white tracking-widest uppercase mb-1">{msg.title}</h4>
+        <h4 className="text-sm font-black text-quantum-fg tracking-widest uppercase mb-1">{msg.title}</h4>
         <p className="text-xs text-quantum-fgMuted">{msg.sub}</p>
       </div>
     </div>
@@ -347,7 +347,7 @@ function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) 
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-quantum-bgSecondary rounded-xl p-3 text-center border border-quantum-border">
           <p className="text-[10px] text-quantum-fgMuted uppercase mb-1">Total</p>
-          <p className="text-sm font-black text-white font-mono">{items.length}</p>
+          <p className="text-sm font-black text-quantum-fg font-mono">{items.length}</p>
         </div>
         <div className="bg-quantum-accentDim border border-quantum-accent/20 rounded-xl p-3 text-center">
           <p className="text-[10px] text-quantum-accent uppercase mb-1">Entradas</p>
@@ -361,7 +361,7 @@ function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) 
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <button onClick={toggleAll} className="flex items-center gap-2 text-xs text-quantum-fgMuted hover:text-white transition-colors">
+          <button onClick={toggleAll} className="flex items-center gap-2 text-xs text-quantum-fgMuted hover:text-quantum-fg transition-colors">
             {allChecked ? <CheckSquare className="w-4 h-4 text-quantum-accent" /> : <Square className="w-4 h-4" />}
             {allChecked ? 'Desmarcar tudo' : 'Selecionar tudo'}
           </button>
@@ -412,7 +412,7 @@ function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) 
                           value={tx.category ?? ''}
                           onChange={e => { setCat(tx.id, e.target.value); setEditingId(null); }}
                           onBlur={() => setEditingId(null)}
-                          className="bg-quantum-bgSecondary border border-quantum-accent/30 rounded-lg px-1 py-0.5 text-[10px] text-white outline-none"
+                          className="bg-quantum-bgSecondary border border-quantum-accent/30 rounded-lg px-1 py-0.5 text-[10px] text-quantum-fg outline-none"
                         >
                           {ALLOWED_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
@@ -473,13 +473,13 @@ function SuccessPanel({ stats }: { stats: ImportStats }) {
         <CheckCircle2 className="w-16 h-16 text-quantum-accent relative z-10" />
       </div>
       <div>
-        <h4 className="text-lg font-black text-white mb-1">Ingestão Concluída</h4>
+        <h4 className="text-lg font-black text-quantum-fg mb-1">Ingestão Concluída</h4>
         <p className="text-xs text-quantum-fgMuted">O cofre foi atualizado com sucesso.</p>
       </div>
       <div className="flex gap-3">
         <div className="px-4 py-2.5 bg-quantum-bgSecondary rounded-xl border border-quantum-border text-center">
           <p className="text-[10px] text-quantum-fgMuted uppercase mb-1">Lidas</p>
-          <p className="text-lg font-black text-white font-mono">{stats.total}</p>
+          <p className="text-lg font-black text-quantum-fg font-mono">{stats.total}</p>
         </div>
         <div className="px-4 py-2.5 bg-quantum-accentDim border border-quantum-accent/20 rounded-xl text-center">
           <p className="text-[10px] text-quantum-accent uppercase mb-1">Novas</p>
@@ -504,7 +504,7 @@ function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void
     >
       <AlertTriangle className="w-14 h-14 text-quantum-red" />
       <div>
-        <h4 className="text-base font-bold text-white mb-2">Interferência Detetada</h4>
+        <h4 className="text-base font-bold text-quantum-fg mb-2">Interferência Detetada</h4>
         <p className="text-xs text-quantum-fgMuted bg-quantum-redDim border border-quantum-red/20 p-3 rounded-xl max-w-sm mx-auto leading-relaxed">
           {message}
         </p>
@@ -706,18 +706,18 @@ export default function ImportButton({ onImportTransactions, existingTransaction
                   status === 'preview' ? 'max-w-2xl' : 'max-w-lg'
                 }`}
               >
-              <div className="p-4 border-b border-white/5 flex items-center justify-between bg-quantum-bg/60">
+              <div className="p-4 border-b border-quantum-border flex items-center justify-between bg-quantum-bg/60">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-quantum-accent/10 rounded-xl border border-quantum-accent/20">
                     <UploadCloud className="w-5 h-5 text-quantum-accent" />
                   </div>
                   <div>
-                    <h3 className="font-black text-white text-sm tracking-wide">Ingestão Quântica</h3>
+                    <h3 className="font-black text-quantum-fg text-sm tracking-wide">Ingestão Quântica</h3>
                     <p className="text-[10px] text-quantum-fgMuted">CSV · OFX · PDF · IA Categorization</p>
                   </div>
                 </div>
                 {!(['parsing','ai_processing','importing'] as ImportStatus[]).includes(status) && (
-                  <button onClick={closeModal} className="p-2 text-quantum-fgMuted hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+                  <button onClick={closeModal} className="p-2 text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/5 rounded-xl transition-colors">
                     <X className="w-5 h-5" />
                   </button>
                 )}

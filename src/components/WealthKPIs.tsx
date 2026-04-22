@@ -36,7 +36,7 @@ export default function WealthKPIs({ metrics, loading }: Props) {
             <div className={`p-2 rounded-xl ${kpi.colorClass}`}><kpi.icon className="w-4 h-4 md:w-5 md:h-5" /></div>
           </div>
           <div>
-            <h4 className="text-xl md:text-2xl font-black text-white tracking-tight">{kpi.value}</h4>
+            <h4 className="text-xl md:text-2xl font-black text-quantum-fg tracking-tight">{kpi.value}</h4>
             <p className="text-[10px] md:text-xs text-quantum-fg mt-1 font-medium">{kpi.desc}</p>
             <p className="text-[9px] text-quantum-fgMuted mt-0.5">{kpi.ideal}</p>
           </div>

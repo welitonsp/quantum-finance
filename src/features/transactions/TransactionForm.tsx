@@ -22,8 +22,8 @@ const CAT_META: Record<string, CatMeta> = {
   'Salário':        { emoji: '💰',  color: 'from-emerald-500/20 to-emerald-600/10 border-emerald-500/30 text-emerald-300' },
   'Freelance':      { emoji: '💼',  color: 'from-teal-500/20 to-teal-600/10 border-teal-500/30 text-teal-300'           },
   'Investimento':   { emoji: '📈',  color: 'from-lime-500/20 to-lime-600/10 border-lime-500/30 text-lime-300'           },
-  'Diversos':       { emoji: '📦',  color: 'from-slate-500/20 to-slate-600/10 border-slate-500/30 text-slate-300'       },
-  'Outros':         { emoji: '•',   color: 'from-slate-500/20 to-slate-600/10 border-slate-500/30 text-slate-300'       },
+  'Diversos':       { emoji: '📦',  color: 'from-slate-500/20 to-slate-600/10 border-slate-500/30 text-quantum-fg'       },
+  'Outros':         { emoji: '•',   color: 'from-slate-500/20 to-slate-600/10 border-slate-500/30 text-quantum-fg'       },
 };
 
 function formatCurrencyDisplay(raw: string): string | null {
@@ -43,14 +43,14 @@ const panelVariants = {
 interface TypeToggleProps { value: 'entrada' | 'saida'; onChange: (v: 'entrada' | 'saida') => void }
 function TypeToggle({ value, onChange }: TypeToggleProps) {
   return (
-    <div className="flex rounded-xl overflow-hidden border border-white/10 bg-slate-900/50 p-0.5 gap-0.5">
+    <div className="flex rounded-xl overflow-hidden border border-quantum-border bg-quantum-card/50 p-0.5 gap-0.5">
       {([
         { val: 'saida'   as const, label: 'Despesa', Icon: TrendingDown, active: 'bg-red-500/20 border-red-500/40 text-red-300'           },
         { val: 'entrada' as const, label: 'Receita', Icon: TrendingUp,   active: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300' },
       ]).map(({ val, label, Icon, active }) => (
         <button
           key={val} type="button" onClick={() => onChange(val)}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-bold transition-all duration-200 border ${value === val ? `${active} shadow-sm` : 'border-transparent text-slate-500 hover:text-slate-300'}`}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-bold transition-all duration-200 border ${value === val ? `${active} shadow-sm` : 'border-transparent text-quantum-fgMuted hover:text-quantum-fg'}`}
         >
           <Icon className="w-4 h-4" />{label}
         </button>
@@ -186,7 +186,7 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
     >
       <motion.div
         variants={panelVariants} initial="hidden" animate="visible" exit="exit"
-        className="relative w-full sm:max-w-lg bg-[#0d1424] border border-white/10 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden"
+        className="relative w-full sm:max-w-lg bg-[#0d1424] border border-quantum-border rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden"
         style={{ boxShadow: '0 0 60px rgba(0,230,138,0.08), 0 25px 50px rgba(0,0,0,0.6)' }}
         onClick={e => e.stopPropagation()}
       >
@@ -205,7 +205,7 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
               {isReceita ? <TrendingUp className="w-5 h-5 text-emerald-400" /> : <TrendingDown className="w-5 h-5 text-red-400" />}
             </div>
             <div>
-              <h2 className="text-base font-bold text-white leading-tight">{isEditing ? 'Editar Transação' : 'Nova Transação'}</h2>
+              <h2 className="text-base font-bold text-quantum-fg leading-tight">{isEditing ? 'Editar Transação' : 'Nova Transação'}</h2>
               {displayAmount && (
                 <span className={`text-sm font-semibold ${isReceita ? 'text-emerald-400' : 'text-red-400'}`}>
                   {isReceita ? '+' : '-'}{displayAmount}
@@ -213,7 +213,7 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
               )}
             </div>
           </div>
-          <button type="button" onClick={onCancelEdit} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all">
+          <button type="button" onClick={onCancelEdit} className="w-8 h-8 rounded-lg flex items-center justify-center text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/10 transition-all">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -233,12 +233,12 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
 
         <form onSubmit={(e) => void handleSubmit(e)} className="px-6 pb-6 space-y-5">
           <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Tipo</label>
+            <label className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Tipo</label>
             <TypeToggle value={formData.type} onChange={v => setField('type', v)} />
           </div>
 
           <div>
-            <label className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+            <label className="flex items-center justify-between text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">
               <span className="flex items-center gap-1.5"><FileText className="w-3 h-3" /> Descrição</span>
               <span className={descLen > 80 ? 'text-amber-400' : 'text-slate-600'}>{descLen}/100</span>
             </label>
@@ -248,17 +248,17 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+              <label className="flex items-center gap-1.5 text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">
                 <DollarSign className="w-3 h-3" /> Valor (R$)
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-semibold">R$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-quantum-fgMuted text-sm font-semibold">R$</span>
                 <input type="number" step="0.01" min="0.01" name="value" value={formData.value} onChange={handleChange}
                   placeholder="0,00" className="input-quantum w-full pl-9" />
               </div>
             </div>
             <div>
-              <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+              <label className="flex items-center gap-1.5 text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">
                 <Calendar className="w-3 h-3" /> Data
               </label>
               <input type="date" name="date" value={formData.date} onChange={handleChange} className="input-quantum w-full" />
@@ -266,7 +266,7 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
           </div>
 
           <div>
-            <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+            <label className="flex items-center gap-1.5 text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">
               <Tag className="w-3 h-3" /> Categoria
               <span className="ml-auto text-slate-600 normal-case text-[10px]">
                 {CAT_META[formData.category]?.emoji} {formData.category}
@@ -290,7 +290,7 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
           </div>
 
           <p className="text-center text-[10px] text-slate-700 -mt-2">
-            Pressione <kbd className="px-1 py-0.5 bg-slate-800 rounded text-slate-500">Esc</kbd> para fechar
+            Pressione <kbd className="px-1 py-0.5 bg-quantum-bgSecondary rounded text-quantum-fgMuted">Esc</kbd> para fechar
           </p>
         </form>
       </motion.div>

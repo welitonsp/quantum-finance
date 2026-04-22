@@ -35,12 +35,12 @@ interface CategoryEntry {
 function CustomTooltip({ active, payload, label }: RechartsTooltipProps) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-slate-900/95 border border-white/10 p-3 rounded-xl shadow-2xl backdrop-blur-xl z-50">
-      <p className="text-slate-300 text-xs font-bold mb-2 uppercase">{label as string}</p>
+    <div className="bg-quantum-card/95 border border-quantum-border p-3 rounded-xl shadow-2xl backdrop-blur-xl z-50">
+      <p className="text-quantum-fg text-xs font-bold mb-2 uppercase">{label as string}</p>
       {payload.map((entry, index: number) => (
         <div key={index} className="flex items-center gap-2 text-sm font-mono">
           <span className="w-2 h-2 rounded-full" style={{ backgroundColor: (entry.color ?? (entry.payload as { fill?: string })?.fill) as string }} />
-          <span className="text-white">R$ {Number(entry.value ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+          <span className="text-quantum-fg">R$ {Number(entry.value ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
         </div>
       ))}
     </div>
@@ -85,25 +85,25 @@ export default function ReportsDashboard({ transactions, balances }: Props) {
         <div className="glass-card-quantum p-6 gradient-border-indigo flex flex-col justify-center">
           <div className="flex items-center gap-2 mb-2">
             <Target className="w-5 h-5 text-indigo-400" />
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Taxa de Poupança</h3>
+            <h3 className="text-xs font-bold text-quantum-fgMuted uppercase tracking-widest">Taxa de Poupança</h3>
           </div>
           <p className={`text-3xl font-black font-mono ${savingsRate >= 20 ? 'text-emerald-400' : savingsRate > 0 ? 'text-amber-400' : 'text-red-400'}`}>
             {savingsRate.toFixed(1)}%
           </p>
-          <p className="text-[10px] text-slate-500 uppercase mt-2">
+          <p className="text-[10px] text-quantum-fgMuted uppercase mt-2">
             {savingsRate >= 20 ? 'Excelente capacidade de retenção' : 'Atenção aos gastos excessivos'}
           </p>
         </div>
 
-        <div className="glass-card-quantum p-6 border-t-4 border-slate-700 flex flex-col justify-center">
+        <div className="glass-card-quantum p-6 border-t-4 border-quantum-border flex flex-col justify-center">
           <div className="flex items-center gap-2 mb-2">
-            <TrendingDown className="w-5 h-5 text-slate-400" />
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Custo de Vida</h3>
+            <TrendingDown className="w-5 h-5 text-quantum-fgMuted" />
+            <h3 className="text-xs font-bold text-quantum-fgMuted uppercase tracking-widest">Custo de Vida</h3>
           </div>
-          <p className="text-3xl font-black font-mono text-white">
+          <p className="text-3xl font-black font-mono text-quantum-fg">
             R$ {despesas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
-          <p className="text-[10px] text-slate-500 uppercase mt-2">Total queimado neste mês</p>
+          <p className="text-[10px] text-quantum-fgMuted uppercase mt-2">Total queimado neste mês</p>
         </div>
 
         <div className="glass-card-quantum p-6 lg:col-span-2 bg-indigo-500/5 border border-indigo-500/20">
@@ -113,13 +113,13 @@ export default function ReportsDashboard({ transactions, balances }: Props) {
           </div>
           <div className="space-y-2">
             {savingsRate < 10 && (
-              <p className="text-sm text-slate-300 flex items-start gap-2">
+              <p className="text-sm text-quantum-fg flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
-                A sua taxa de poupança está abaixo de 10%. Recomendamos reduzir despesas na categoria: <strong className="text-white">{categoryData[0]?.name ?? 'Diversos'}</strong>.
+                A sua taxa de poupança está abaixo de 10%. Recomendamos reduzir despesas na categoria: <strong className="text-quantum-fg">{categoryData[0]?.name ?? 'Diversos'}</strong>.
               </p>
             )}
             {savingsRate >= 10 && (
-              <p className="text-sm text-slate-300 flex items-start gap-2">
+              <p className="text-sm text-quantum-fg flex items-start gap-2">
                 <TrendingUp className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
                 Ótima performance! Com uma retenção de {savingsRate.toFixed(1)}%, tem margem para focar em Investimentos.
               </p>
@@ -130,7 +130,7 @@ export default function ReportsDashboard({ transactions, balances }: Props) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="glass-card-quantum p-6 h-[400px] flex flex-col">
-          <h2 className="text-sm font-bold uppercase tracking-widest text-slate-300 mb-6">Receitas vs Despesas</h2>
+          <h2 className="text-sm font-bold uppercase tracking-widest text-quantum-fg mb-6">Receitas vs Despesas</h2>
           <div className="flex-1 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={cashflowData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
@@ -147,7 +147,7 @@ export default function ReportsDashboard({ transactions, balances }: Props) {
         </div>
 
         <div className="glass-card-quantum p-6 h-[400px] flex flex-col">
-          <h2 className="text-sm font-bold uppercase tracking-widest text-slate-300 mb-6">Distribuição de Gastos</h2>
+          <h2 className="text-sm font-bold uppercase tracking-widest text-quantum-fg mb-6">Distribuição de Gastos</h2>
           {categoryData.length > 0 ? (
             <div className="flex-1 w-full relative">
               <ResponsiveContainer width="100%" height="100%">
@@ -160,12 +160,12 @@ export default function ReportsDashboard({ transactions, balances }: Props) {
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-10">
-                <span className="text-[10px] text-slate-500 uppercase tracking-widest">Total Gasto</span>
-                <span className="text-xl font-bold font-mono text-white">R$ {despesas.toLocaleString('pt-BR')}</span>
+                <span className="text-[10px] text-quantum-fgMuted uppercase tracking-widest">Total Gasto</span>
+                <span className="text-xl font-bold font-mono text-quantum-fg">R$ {despesas.toLocaleString('pt-BR')}</span>
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
+            <div className="flex-1 flex flex-col items-center justify-center text-quantum-fgMuted">
               <p className="text-2xl mb-2">📊</p>
               <p className="text-sm">Sem despesas para analisar.</p>
             </div>

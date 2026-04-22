@@ -104,13 +104,13 @@ export default function ForecastWidget({ transactions, currentMonth, currentYear
     forecastData.length > 0 && (forecastData[forecastData.length - 1]?.Agressivo ?? 0) < 0;
 
   return (
-    <div className="bg-slate-900/40 border border-white/5 backdrop-blur-sm rounded-3xl h-full flex flex-col p-4 md:p-6 shadow-xl">
+    <div className="bg-quantum-card/40 border border-quantum-border backdrop-blur-sm rounded-3xl h-full flex flex-col p-4 md:p-6 shadow-xl">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+          <h2 className="text-lg font-bold text-quantum-fg flex items-center gap-2">
             <Zap className="w-5 h-5 text-amber-400" /> Superposição Quântica
           </h2>
-          <p className="text-xs text-slate-400 mt-1">Projeção de 6 meses. Clique num cenário para focar.</p>
+          <p className="text-xs text-quantum-fgMuted mt-1">Projeção de 6 meses. Clique num cenário para focar.</p>
         </div>
       </div>
 
@@ -160,15 +160,15 @@ export default function ForecastWidget({ transactions, currentMonth, currentYear
               key={s.name}
               onClick={() => handleCollapse(s.name)}
               className={`p-3 rounded-xl border text-left transition-all duration-300 ${
-                isActive ? 'bg-slate-800 shadow-lg scale-[1.02]' : 'bg-slate-900/50 border-white/5 hover:bg-slate-800/80 opacity-70 hover:opacity-100'
+                isActive ? 'bg-quantum-bgSecondary shadow-lg scale-[1.02]' : 'bg-quantum-card/50 border-quantum-border hover:bg-quantum-bgSecondary/80 opacity-70 hover:opacity-100'
               }`}
               style={{ borderColor: isActive ? s.color : 'transparent' }}
             >
               <div className="flex items-center gap-2 mb-1">
                 <Icon className="w-4 h-4" style={{ color: s.color }} />
-                <span className="text-sm font-bold text-white">{s.name}</span>
+                <span className="text-sm font-bold text-quantum-fg">{s.name}</span>
               </div>
-              <p className="text-[10px] text-slate-400 leading-tight">{s.desc}</p>
+              <p className="text-[10px] text-quantum-fgMuted leading-tight">{s.desc}</p>
             </button>
           );
         })}

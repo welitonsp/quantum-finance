@@ -266,7 +266,7 @@ export default function Header({
           <Menu className="w-5 h-5" />
         </button>
 
-        <h2 className="text-lg md:text-xl font-black text-white tracking-wide hidden sm:block">{pageTitle}</h2>
+        <h2 className="text-lg md:text-xl font-black text-quantum-fg tracking-wide hidden sm:block">{pageTitle}</h2>
       </div>
 
       {/* Centro */}
@@ -279,18 +279,18 @@ export default function Header({
         )}
 
         <div className="flex items-center gap-1 bg-quantum-card/80 p-1.5 rounded-2xl border border-quantum-border shadow-inner">
-          <button onClick={handlePrevMonth} className="p-2 hover:bg-quantum-cardHover rounded-xl text-quantum-fgMuted hover:text-white transition-colors" aria-label="Mês anterior">
+          <button onClick={handlePrevMonth} className="p-2 hover:bg-quantum-cardHover rounded-xl text-quantum-fgMuted hover:text-quantum-fg transition-colors" aria-label="Mês anterior">
             <ChevronLeft className="w-4 md:w-5 h-4 md:h-5" />
           </button>
           <div className="flex flex-col items-center justify-center w-24 md:w-36" aria-live="polite">
-            <span className="text-xs md:text-sm font-bold text-white uppercase tracking-wider">
+            <span className="text-xs md:text-sm font-bold text-quantum-fg uppercase tracking-wider">
               {nomeMeses && currentMonth ? nomeMeses[currentMonth - 1] : 'MÊS'}
             </span>
             <span className="text-[10px] md:text-xs font-mono text-quantum-accent">
               {currentYear || new Date().getFullYear()}
             </span>
           </div>
-          <button onClick={handleNextMonth} className="p-2 hover:bg-quantum-cardHover rounded-xl text-quantum-fgMuted hover:text-white transition-colors" aria-label="Próximo mês">
+          <button onClick={handleNextMonth} className="p-2 hover:bg-quantum-cardHover rounded-xl text-quantum-fgMuted hover:text-quantum-fg transition-colors" aria-label="Próximo mês">
             <ChevronRight className="w-4 md:w-5 h-4 md:h-5" />
           </button>
         </div>
@@ -301,18 +301,18 @@ export default function Header({
         {onOpenCommandPalette && (
           <button
             onClick={onOpenCommandPalette}
-            className="hidden md:flex items-center gap-1.5 px-3 py-2 bg-quantum-card hover:bg-quantum-cardHover rounded-xl text-quantum-fgMuted hover:text-white border border-quantum-border transition-all group"
+            className="hidden md:flex items-center gap-1.5 px-3 py-2 bg-quantum-card hover:bg-quantum-cardHover rounded-xl text-quantum-fgMuted hover:text-quantum-fg border border-quantum-border transition-all group"
             title="Palete de Comandos (Ctrl+K)"
             aria-label="Abrir palete de comandos"
           >
             <Command className="w-3.5 h-3.5" />
-            <span className="text-xs font-mono text-quantum-fgMuted group-hover:text-white/70 transition-colors">⌘K</span>
+            <span className="text-xs font-mono text-quantum-fgMuted group-hover:text-quantum-fg/70 transition-colors">⌘K</span>
           </button>
         )}
 
         <button
           onClick={togglePrivacy}
-          className={`p-2.5 rounded-xl border transition-all ${isPrivacyMode ? 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30 shadow-[0_0_12px_rgba(99,102,241,0.2)]' : 'bg-quantum-card text-quantum-fgMuted border-quantum-border hover:text-white hover:border-quantum-accent/30'}`}
+          className={`p-2.5 rounded-xl border transition-all ${isPrivacyMode ? 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30 shadow-[0_0_12px_rgba(99,102,241,0.2)]' : 'bg-quantum-card text-quantum-fgMuted border-quantum-border hover:text-quantum-fg hover:border-quantum-accent/30'}`}
           title="Modo Privacidade (Alt + P)"
           aria-label={isPrivacyMode ? 'Desativar modo privacidade' : 'Ativar modo privacidade'}
         >

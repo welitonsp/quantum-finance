@@ -20,7 +20,7 @@ export default function MarketTicker() {
       <div className="flex animate-[tickerScroll_30s_linear_infinite]">
         {items.map((item, i) => (
           <div key={i} className="flex items-center gap-2 px-6 flex-shrink-0">
-            <span className="text-xs font-bold text-white font-mono">{item.symbol}</span>
+            <span className="text-xs font-bold text-quantum-fg font-mono">{item.symbol}</span>
             <span className="text-xs text-quantum-fgMuted font-mono">{item.price}</span>
             <span className={`text-xs font-bold font-mono ${item.change.startsWith('+') ? 'text-quantum-accent' : 'text-quantum-red'}`}>{item.change}</span>
           </div>

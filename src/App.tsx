@@ -64,21 +64,21 @@ interface ConfirmDeleteModalProps {
 const ConfirmDeleteModal = ({ transaction, onCancel, onConfirm }: ConfirmDeleteModalProps) => {
   if (!transaction) return null;
   return (
-    <div role="dialog" aria-modal="true" className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl border border-white/10 zoom-in-95">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-[100] flex items-center justify-center bg-quantum-bg/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-quantum-card w-full max-w-md rounded-3xl p-6 shadow-2xl border border-quantum-border zoom-in-95">
         <div className="flex items-center gap-4 mb-4">
           <div className="p-3 bg-red-500/20 text-red-500 rounded-2xl"><AlertTriangle /></div>
           <div>
-            <h3 className="text-lg font-bold text-white">Apagar Registo?</h3>
-            <p className="text-sm text-slate-400">Esta ação não pode ser desfeita.</p>
+            <h3 className="text-lg font-bold text-quantum-fg">Apagar Registo?</h3>
+            <p className="text-sm text-quantum-fgMuted">Esta ação não pode ser desfeita.</p>
           </div>
         </div>
-        <div className="bg-slate-950 p-3 rounded-xl mb-6 border border-white/5">
-          <p className="text-sm font-bold truncate text-slate-300">"{transaction.description}"</p>
+        <div className="bg-quantum-bg p-3 rounded-xl mb-6 border border-quantum-border">
+          <p className="text-sm font-bold truncate text-quantum-fg">"{transaction.description}"</p>
         </div>
         <div className="flex justify-end gap-3">
-          <button onClick={onCancel} autoFocus className="px-5 py-2.5 rounded-xl font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors">Cancelar</button>
-          <button onClick={onConfirm} className="px-5 py-2.5 rounded-xl font-bold bg-red-600 text-white hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20">Apagar</button>
+          <button onClick={onCancel} autoFocus className="px-5 py-2.5 rounded-xl font-bold text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/5 transition-colors">Cancelar</button>
+          <button onClick={onConfirm} className="px-5 py-2.5 rounded-xl font-bold bg-red-600 text-quantum-fg hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20">Apagar</button>
         </div>
       </div>
     </div>
@@ -97,12 +97,12 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren, ErrorBounda
   render() {
     if (this.state.hasError) {
       return (
-        <div className="p-8 m-4 bg-slate-900/80 border border-red-500/30 rounded-3xl flex flex-col items-center justify-center text-center backdrop-blur-md">
+        <div className="p-8 m-4 bg-quantum-card/80 border border-red-500/30 rounded-3xl flex flex-col items-center justify-center text-center backdrop-blur-md">
           <AlertTriangle className="w-16 h-16 text-red-500 mb-4 animate-pulse" />
-          <h2 className="text-xl font-bold text-white mb-2">Anomalia Detetada</h2>
+          <h2 className="text-xl font-bold text-quantum-fg mb-2">Anomalia Detetada</h2>
           <button
             onClick={() => this.setState({ hasError: false })}
-            className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-red-500/20"
+            className="px-6 py-3 bg-red-600 hover:bg-red-700 text-quantum-fg rounded-xl text-sm font-bold transition-all shadow-lg shadow-red-500/20"
           >
             Reiniciar Módulo
           </button>
@@ -204,7 +204,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
           />
         </div>
 
-        <div className="flex-1 flex flex-col w-full overflow-hidden pointer-events-auto bg-slate-950/80 backdrop-blur-sm">
+        <div className="flex-1 flex flex-col w-full overflow-hidden pointer-events-auto bg-quantum-bg/80 backdrop-blur-sm">
           <Header
             currentPage={currentPage}
             currentMonth={currentMonth}
@@ -292,7 +292,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
         onClick={() => setIsAIChatOpen(true)}
         className="fixed bottom-6 right-6 md:bottom-8 md:right-8 w-14 h-14 bg-cyan-600 hover:bg-cyan-500 rounded-2xl flex items-center justify-center shadow-lg z-50 group border border-white/20"
       >
-        <BrainCircuit className="w-7 h-7 text-white group-hover:animate-pulse" />
+        <BrainCircuit className="w-7 h-7 text-quantum-fg group-hover:animate-pulse" />
       </button>
 
       {isSettingsOpen && (
@@ -359,7 +359,7 @@ export default function App() {
 
   if (!authReady) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-cyan-400 font-bold animate-pulse uppercase">
+      <div className="flex min-h-screen items-center justify-center bg-quantum-bg text-cyan-400 font-bold animate-pulse uppercase">
         A inicializar o Quantum Finance...
       </div>
     );

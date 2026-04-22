@@ -24,7 +24,7 @@ export default function LoginScreen({ onLogin }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 flex flex-col items-center justify-center relative overflow-hidden font-sans">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-quantum-fg flex flex-col items-center justify-center relative overflow-hidden font-sans">
       <Toaster position="bottom-right" toastOptions={{ style: { background: '#1e293b', color: '#fff', borderRadius: '12px' } }} />
 
       <div className="fixed inset-0 opacity-40 pointer-events-none z-0">
@@ -35,10 +35,10 @@ export default function LoginScreen({ onLogin }: Props) {
 
       <div className="glass-card-dark p-10 max-w-md w-full mx-4 text-center relative z-10 border-t-4 border-t-cyan-500 shadow-2xl shadow-cyan-500/20">
         <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 mb-6 animate-float">
-          <Wallet className="w-10 h-10 text-white" />
+          <Wallet className="w-10 h-10 text-quantum-fg" />
         </div>
         <h1 className="text-3xl font-black gradient-text tracking-wide uppercase mb-2">Quantum Finance</h1>
-        <p className="text-sm text-slate-400 mb-8">Inteligência Artificial para as suas finanças. Entre para aceder ao seu cofre seguro.</p>
+        <p className="text-sm text-quantum-fgMuted mb-8">Inteligência Artificial para as suas finanças. Entre para aceder ao seu cofre seguro.</p>
 
         <button
           onClick={() => void handleLogin()}

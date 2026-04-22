@@ -44,7 +44,7 @@ export const CategoryBreakdown = memo(({ transactions }: Props) => {
     <div className="flex-1">
       <h3 className={`text-sm font-bold mb-4 ${type === 'income' ? 'text-emerald-400' : 'text-red-400'} uppercase tracking-wider`}>{title}</h3>
       {categories.length === 0 ? (
-        <p className="text-slate-500 text-sm text-center py-4">Nenhuma {type === 'income' ? 'receita' : 'despesa'} registrada</p>
+        <p className="text-quantum-fgMuted text-sm text-center py-4">Nenhuma {type === 'income' ? 'receita' : 'despesa'} registrada</p>
       ) : (
         <div className="flex flex-col gap-4">
           {categories.map((cat, i) => (
@@ -52,14 +52,14 @@ export const CategoryBreakdown = memo(({ transactions }: Props) => {
               <div className="flex justify-between items-center text-sm">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full" style={{ background: cat.color }} />
-                  <span className="text-slate-300">{cat.name}</span>
+                  <span className="text-quantum-fg">{cat.name}</span>
                 </div>
                 <div className="flex gap-3 items-baseline">
-                  <span className="text-xs text-slate-500 font-mono">{formatCurrency(cat.value)}</span>
-                  <span className="text-sm font-bold text-slate-200 font-mono">{cat.pct.toFixed(0)}%</span>
+                  <span className="text-xs text-quantum-fgMuted font-mono">{formatCurrency(cat.value)}</span>
+                  <span className="text-sm font-bold text-quantum-fg font-mono">{cat.pct.toFixed(0)}%</span>
                 </div>
               </div>
-              <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-2 bg-quantum-bgSecondary rounded-full overflow-hidden">
                 <div className="h-full rounded-full transition-all duration-700" style={{ width: `${cat.pct}%`, background: cat.color }} />
               </div>
             </div>
@@ -70,11 +70,11 @@ export const CategoryBreakdown = memo(({ transactions }: Props) => {
   );
 
   return (
-    <div className="bg-slate-900/40 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
+    <div className="bg-quantum-card/40 backdrop-blur-sm rounded-2xl p-6 border border-quantum-border">
       <div className="flex items-center gap-2 mb-5">
         <BarChart2 className="w-5 h-5 text-cyan-400" />
-        <h2 className="text-sm font-bold text-white uppercase tracking-widest">Distribuição por Categoria</h2>
-        <span title="Divisão de receitas e despesas por categoria."><Info className="w-4 h-4 text-slate-500 cursor-help" /></span>
+        <h2 className="text-sm font-bold text-quantum-fg uppercase tracking-widest">Distribuição por Categoria</h2>
+        <span title="Divisão de receitas e despesas por categoria."><Info className="w-4 h-4 text-quantum-fgMuted cursor-help" /></span>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {renderCategoryList(incomeCategories, '💰 Receitas', 'income')}

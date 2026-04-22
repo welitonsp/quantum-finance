@@ -62,7 +62,7 @@ export default function PortfolioChart() {
       return (
         <div className="bg-quantum-card border border-quantum-border rounded-xl p-3 shadow-xl">
           <p className="text-quantum-fgMuted text-xs mb-1">{formatDateLabel(label as number, activePeriod)}</p>
-          <p className="text-white font-mono text-lg font-bold">
+          <p className="text-quantum-fg font-mono text-lg font-bold">
             R$ {(payload[0].value ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
         </div>
@@ -75,7 +75,7 @@ export default function PortfolioChart() {
     <div className="glass-card-quantum p-6">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div>
-          <h3 className="text-lg font-bold text-white">Desempenho do Portfólio</h3>
+          <h3 className="text-lg font-bold text-quantum-fg">Desempenho do Portfólio</h3>
           <div className="flex items-center gap-2 mt-1">
             <span className={`text-sm font-mono font-bold ${isPositive ? 'text-quantum-accent' : 'text-quantum-red'}`}>
               {isPositive ? '+' : ''}{changePercent}%
@@ -91,7 +91,7 @@ export default function PortfolioChart() {
               className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
                 activePeriod.label === p.label
                   ? 'bg-quantum-accent text-quantum-bg shadow-md'
-                  : 'text-quantum-fgMuted hover:text-white'
+                  : 'text-quantum-fgMuted hover:text-quantum-fg'
               }`}
             >
               {p.label}

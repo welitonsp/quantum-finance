@@ -91,17 +91,17 @@ export default function ReportsContent({ transactions }: Props) {
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 relative z-10">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-xl font-black text-slate-800 dark:text-white tracking-tight">Business Intelligence</h2>
-          <p className="text-xs text-slate-500 mt-1">Análises profundas para otimização de património.</p>
+          <h2 className="text-xl font-black text-slate-800 dark:text-quantum-fg tracking-tight">Business Intelligence</h2>
+          <p className="text-xs text-quantum-fgMuted mt-1">Análises profundas para otimização de património.</p>
         </div>
       </div>
 
-      <div className="flex gap-4 md:gap-8 border-b border-white/10 overflow-x-auto custom-scrollbar">
+      <div className="flex gap-4 md:gap-8 border-b border-quantum-border overflow-x-auto custom-scrollbar">
         {(['pareto', 'tendencias'] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-4 text-sm font-bold tracking-widest uppercase transition-all border-b-2 whitespace-nowrap ${
             activeTab === tab
               ? tab === 'pareto' ? 'border-quantum-accent text-quantum-accent' : 'border-cyan-500 text-cyan-400'
-              : 'border-transparent text-slate-500 hover:text-white'
+              : 'border-transparent text-quantum-fgMuted hover:text-quantum-fg'
           }`}>
             {tab === 'pareto' ? 'Análise Pareto (80/20)' : 'Tendências (Em Breve)'}
           </button>
@@ -115,24 +115,24 @@ export default function ReportsContent({ transactions }: Props) {
               <div className="flex items-start gap-4">
                 <div className="p-3 bg-quantum-accent/10 rounded-2xl"><Filter className="w-6 h-6 text-quantum-accent" /></div>
                 <div>
-                  <h3 className="text-lg font-bold text-white">Regra 80/20 (Princípio de Pareto)</h3>
-                  <p className="text-sm text-slate-500 mt-1 max-w-lg">Identifique os ralos de dinheiro com precisão matemática.</p>
+                  <h3 className="text-lg font-bold text-quantum-fg">Regra 80/20 (Princípio de Pareto)</h3>
+                  <p className="text-sm text-quantum-fgMuted mt-1 max-w-lg">Identifique os ralos de dinheiro com precisão matemática.</p>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 bg-slate-900/50 p-2 rounded-2xl border border-white/5">
-                <div className="flex items-center gap-1 bg-slate-950/50 p-1 rounded-xl border border-white/5">
-                  <Calendar className="w-4 h-4 text-slate-500 ml-2" />
-                  <select value={timeFilter} onChange={e => setTimeFilter(e.target.value as TimeFilter)} className="bg-transparent text-xs font-bold text-slate-300 px-2 py-1.5 focus:outline-none cursor-pointer">
+              <div className="flex flex-wrap items-center gap-3 bg-quantum-card/50 p-2 rounded-2xl border border-quantum-border">
+                <div className="flex items-center gap-1 bg-quantum-bg/50 p-1 rounded-xl border border-quantum-border">
+                  <Calendar className="w-4 h-4 text-quantum-fgMuted ml-2" />
+                  <select value={timeFilter} onChange={e => setTimeFilter(e.target.value as TimeFilter)} className="bg-transparent text-xs font-bold text-quantum-fg px-2 py-1.5 focus:outline-none cursor-pointer">
                     <option value="30d">Últimos 30 Dias</option>
                     <option value="90d">Últimos 3 Meses</option>
                     <option value="180d">Últimos 6 Meses</option>
                     <option value="all">Todo o Histórico</option>
                   </select>
                 </div>
-                <div className="flex items-center gap-1 bg-slate-950/50 p-1 rounded-xl border border-white/5">
-                  <Scissors className="w-4 h-4 text-slate-500 ml-2" />
-                  <select value={expenseFilter} onChange={e => setExpenseFilter(e.target.value as ExpenseFilter)} className="bg-transparent text-xs font-bold text-slate-300 px-2 py-1.5 focus:outline-none cursor-pointer">
+                <div className="flex items-center gap-1 bg-quantum-bg/50 p-1 rounded-xl border border-quantum-border">
+                  <Scissors className="w-4 h-4 text-quantum-fgMuted ml-2" />
+                  <select value={expenseFilter} onChange={e => setExpenseFilter(e.target.value as ExpenseFilter)} className="bg-transparent text-xs font-bold text-quantum-fg px-2 py-1.5 focus:outline-none cursor-pointer">
                     <option value="all">Todas as Despesas</option>
                     <option value="variables">Apenas Variáveis (Cortáveis)</option>
                   </select>
@@ -176,12 +176,12 @@ export default function ReportsContent({ transactions }: Props) {
                 </div>
 
                 {showAIInsights && (
-                  <div className="mb-8 p-6 bg-slate-900/80 border border-indigo-500/30 rounded-2xl animate-in slide-in-from-top-4">
+                  <div className="mb-8 p-6 bg-quantum-card/80 border border-indigo-500/30 rounded-2xl animate-in slide-in-from-top-4">
                     <div className="flex items-center gap-3 mb-4">
                       <Sparkles className="w-5 h-5 text-indigo-400" />
                       <h4 className="font-bold text-indigo-400">Recomendações Quânticas da IA</h4>
                     </div>
-                    <ul className="space-y-3 text-sm text-slate-300">
+                    <ul className="space-y-3 text-sm text-quantum-fg">
                       {aiInsights.map((insight, i) => (
                         <li key={i} className="flex gap-3">
                           <span className="text-indigo-500 mt-0.5">•</span>
@@ -193,20 +193,20 @@ export default function ReportsContent({ transactions }: Props) {
                 )}
 
                 <div>
-                  <h4 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-quantum-fg mb-4 flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-red-500" />
                     TOP RALOS FINANCEIROS ({topCategoriesCount} categorias = {formatCurrency(top80Value)})
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {paretoData.filter(d => d.isTop80).map((item, idx) => (
-                      <div key={idx} className="flex justify-between items-center bg-slate-900/50 p-4 rounded-xl border border-red-500/20 hover:border-red-500/40 transition-colors">
+                      <div key={idx} className="flex justify-between items-center bg-quantum-card/50 p-4 rounded-xl border border-red-500/20 hover:border-red-500/40 transition-colors">
                         <div>
-                          <span className="font-bold text-white text-sm">#{item.rank} {item.name}</span>
+                          <span className="font-bold text-quantum-fg text-sm">#{item.rank} {item.name}</span>
                           <p className="text-xs text-red-400 mt-0.5">{item.pctAcumulada}% acumulado</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-mono font-bold text-white text-sm">{formatCurrency(item.valor)}</p>
-                          <p className="text-xs text-slate-400 mt-0.5">{item.pctIndividual}% do total</p>
+                          <p className="font-mono font-bold text-quantum-fg text-sm">{formatCurrency(item.valor)}</p>
+                          <p className="text-xs text-quantum-fgMuted mt-0.5">{item.pctIndividual}% do total</p>
                         </div>
                       </div>
                     ))}
@@ -214,10 +214,10 @@ export default function ReportsContent({ transactions }: Props) {
                 </div>
               </>
             ) : (
-              <div className="text-center py-12 border-2 border-dashed border-white/10 rounded-2xl">
-                <AlertCircle className="w-12 h-12 text-slate-500 mx-auto mb-3" />
-                <h3 className="text-lg font-bold text-white">Sem dados para este filtro</h3>
-                <p className="text-sm text-slate-500 mt-2">Tente alargar o período ou mudar o tipo de despesa.</p>
+              <div className="text-center py-12 border-2 border-dashed border-quantum-border rounded-2xl">
+                <AlertCircle className="w-12 h-12 text-quantum-fgMuted mx-auto mb-3" />
+                <h3 className="text-lg font-bold text-quantum-fg">Sem dados para este filtro</h3>
+                <p className="text-sm text-quantum-fgMuted mt-2">Tente alargar o período ou mudar o tipo de despesa.</p>
               </div>
             )}
           </div>

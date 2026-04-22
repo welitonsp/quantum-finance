@@ -61,7 +61,7 @@ function CardVisual({ card }: { card: CreditCardWithMetrics }) {
             <p className="text-[10px] uppercase tracking-widest font-medium" style={{ color: `${color}99` }}>
               Quantum Finance
             </p>
-            <p className="text-base font-black text-white mt-0.5">{card.name}</p>
+            <p className="text-base font-black text-quantum-fg mt-0.5">{card.name}</p>
           </div>
           <div className="p-2 rounded-xl" style={{ background: `${color}20`, border: `1px solid ${color}30` }}>
             <CreditCard className="w-5 h-5" style={{ color }} />
@@ -91,7 +91,7 @@ function CardVisual({ card }: { card: CreditCardWithMetrics }) {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <p className="text-[9px] uppercase tracking-widest text-white/30 mb-0.5">Disponível</p>
-              <p className="text-sm font-black font-mono text-white">
+              <p className="text-sm font-black font-mono text-quantum-fg">
                 R$ {metrics.disponivel.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               </p>
             </div>
@@ -208,7 +208,7 @@ function CardForm({ initial, onSave, onCancel }: CardFormProps) {
         </div>
       </div>
       <div className="flex gap-3 pt-2">
-        <button type="button" onClick={onCancel} className="flex-1 py-2.5 bg-quantum-bgSecondary border border-quantum-border text-quantum-fgMuted rounded-xl text-sm font-bold hover:text-white transition-colors">
+        <button type="button" onClick={onCancel} className="flex-1 py-2.5 bg-quantum-bgSecondary border border-quantum-border text-quantum-fgMuted rounded-xl text-sm font-bold hover:text-quantum-fg transition-colors">
           Cancelar
         </button>
         <button type="submit" className="flex-1 btn-quantum-primary">
@@ -264,7 +264,7 @@ export default function CreditCardManager({ uid, transactions = [] }: Props) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-black text-white flex items-center gap-3">
+          <h2 className="text-xl font-black text-quantum-fg flex items-center gap-3">
             <div className="p-2 bg-quantum-accentDim rounded-xl border border-quantum-accent/20">
               <CreditCard className="w-5 h-5 text-quantum-accent" />
             </div>
@@ -290,7 +290,7 @@ export default function CreditCardManager({ uid, transactions = [] }: Props) {
             exit={{ opacity: 0, height: 0 }}
             className="glass-card-quantum p-5 border border-quantum-accent/20"
           >
-            <h3 className="text-sm font-bold text-white mb-4">
+            <h3 className="text-sm font-bold text-quantum-fg mb-4">
               {editingCard ? 'Editar Cartão' : 'Adicionar Novo Cartão'}
             </h3>
             <CardForm
@@ -331,7 +331,7 @@ export default function CreditCardManager({ uid, transactions = [] }: Props) {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {alertIcon(card.metrics.alertLevel)}
-                      <span className="text-xs font-bold text-white">
+                      <span className="text-xs font-bold text-quantum-fg">
                         {card.metrics.alertLevel === 'critical' ? 'Limite Crítico'
                           : card.metrics.alertLevel === 'warning' ? 'Atenção'
                           : 'Margem Segura'}
@@ -351,21 +351,21 @@ export default function CreditCardManager({ uid, transactions = [] }: Props) {
                     </div>
                     <div className="bg-quantum-bgSecondary rounded-xl p-2.5">
                       <p className="text-[9px] text-quantum-fgMuted uppercase tracking-wider mb-1">Fecho</p>
-                      <p className="text-xs font-bold text-white">Dia {card.closingDay}</p>
+                      <p className="text-xs font-bold text-quantum-fg">Dia {card.closingDay}</p>
                     </div>
                   </div>
 
                   <div className="flex gap-2">
                     <button
                       onClick={() => { setEditingCard(card); setShowForm(false); }}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-quantum-bgSecondary border border-quantum-border rounded-xl text-xs text-quantum-fgMuted hover:text-white hover:border-quantum-accent/30 transition-all"
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-quantum-bgSecondary border border-quantum-border rounded-xl text-xs text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/30 transition-all"
                     >
                       <Edit2 className="w-3.5 h-3.5" /> Editar
                     </button>
 
                     {deletingId === card.id ? (
                       <div className="flex gap-1.5 flex-1">
-                        <button onClick={() => setDeletingId(null)} className="flex-1 py-2 bg-quantum-bgSecondary border border-quantum-border rounded-xl text-xs text-quantum-fgMuted hover:text-white transition-all">Não</button>
+                        <button onClick={() => setDeletingId(null)} className="flex-1 py-2 bg-quantum-bgSecondary border border-quantum-border rounded-xl text-xs text-quantum-fgMuted hover:text-quantum-fg transition-all">Não</button>
                         <button onClick={() => void handleDelete(card.id)} className="flex-1 py-2 bg-quantum-redDim border border-quantum-red/30 rounded-xl text-xs text-quantum-red font-bold hover:bg-quantum-red/20 transition-all">Confirmar</button>
                       </div>
                     ) : (

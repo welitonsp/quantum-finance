@@ -29,7 +29,7 @@ export function showAIFeedbackToast(description: string, category: string, durat
       <div
         className={`
           flex flex-col gap-2 max-w-xs w-full
-          bg-slate-900/95 border border-white/12 backdrop-blur-xl
+          bg-quantum-card/95 border border-quantum-border backdrop-blur-xl
           rounded-2xl px-4 py-3 shadow-2xl shadow-black/50
           transition-all duration-300
           ${t.visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}
@@ -39,16 +39,16 @@ export function showAIFeedbackToast(description: string, category: string, durat
           <span className="text-base leading-none mt-0.5" aria-hidden="true">🤖</span>
           <div className="flex-1 min-w-0">
             <p className="text-[11px] font-bold text-white/60 uppercase tracking-wider mb-0.5">IA aprendeu</p>
-            <p className="text-xs text-white font-medium leading-snug">
-              <span className="text-slate-300 font-mono">{shortDesc}</span>
-              <span className="text-slate-500 mx-1">→</span>
+            <p className="text-xs text-quantum-fg font-medium leading-snug">
+              <span className="text-quantum-fg font-mono">{shortDesc}</span>
+              <span className="text-quantum-fgMuted mx-1">→</span>
               <span className="text-cyan-400 font-bold">{category}</span>
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 pt-1 border-t border-white/8">
-          <span className="text-[10px] text-slate-500 flex-1">Esta categorização está correcta?</span>
+          <span className="text-[10px] text-quantum-fgMuted flex-1">Esta categorização está correcta?</span>
           <button
             onClick={() => {
               logFeedback(description, category, 'positive');

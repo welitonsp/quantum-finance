@@ -55,7 +55,7 @@ const CAT_COLORS: Record<string, string> = {
   'Investimento':  'text-emerald-400 bg-emerald-400/10 border-emerald-400/25',
 };
 const catClass = (cat: string | undefined): string =>
-  CAT_COLORS[cat ?? ''] ?? 'text-slate-400 bg-white/5 border-white/15';
+  CAT_COLORS[cat ?? ''] ?? 'text-quantum-fgMuted bg-white/5 border-white/15';
 
 // ─── Lógica de Merge ──────────────────────────────────────────────────────────
 function findMergeCandidate(tx: Transaction, existing: Transaction[]): Transaction | null {
@@ -102,15 +102,15 @@ function DoneScreen({ stats, onConfirm, onCancel }: DoneScreenProps) {
         <CheckCircle2 className="w-20 h-20 text-emerald-400 relative z-10" />
       </div>
       <div>
-        <h2 className="text-2xl font-black text-white mb-2">Reconciliação Concluída</h2>
-        <p className="text-sm text-slate-400">Todas as transações foram classificadas.</p>
+        <h2 className="text-2xl font-black text-quantum-fg mb-2">Reconciliação Concluída</h2>
+        <p className="text-sm text-quantum-fgMuted">Todas as transações foram classificadas.</p>
       </div>
 
       <div className="grid grid-cols-3 gap-3 w-full">
         {([
           { label: 'Aprovadas',   value: stats.approved,  color: 'text-emerald-400 border-emerald-500/25 bg-emerald-500/8' },
           { label: 'Conciliadas', value: stats.merged,    color: 'text-cyan-400    border-cyan-500/25    bg-cyan-500/8'    },
-          { label: 'Descartadas', value: stats.discarded, color: 'text-slate-400   border-white/10       bg-white/4'       },
+          { label: 'Descartadas', value: stats.discarded, color: 'text-quantum-fgMuted   border-quantum-border       bg-white/4'       },
         ] as const).map(({ label, value, color }) => (
           <div key={label} className={`rounded-2xl border p-4 ${color}`}>
             <p className="text-2xl font-black font-mono">{value}</p>
@@ -132,7 +132,7 @@ function DoneScreen({ stats, onConfirm, onCancel }: DoneScreenProps) {
         </motion.button>
         <button
           onClick={onCancel}
-          className="text-xs text-slate-500 hover:text-slate-300 transition-colors py-2"
+          className="text-xs text-quantum-fgMuted hover:text-quantum-fg transition-colors py-2"
         >
           Cancelar e descartar tudo
         </button>
@@ -231,7 +231,7 @@ export default function ReconciliationEngine({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-[60] bg-slate-950/90 backdrop-blur-2xl flex flex-col items-center justify-center p-4 overflow-hidden"
+      className="fixed inset-0 z-[60] bg-quantum-bg/90 backdrop-blur-2xl flex flex-col items-center justify-center p-4 overflow-hidden"
     >
       <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-[100px]" />
@@ -243,13 +243,13 @@ export default function ReconciliationEngine({
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-cyan-400" />
-              <span className="font-black text-white uppercase tracking-widest text-[10px]">Reconciliação</span>
+              <span className="font-black text-quantum-fg uppercase tracking-widest text-[10px]">Reconciliação</span>
             </div>
-            <span className="font-mono text-slate-400">
-              <span className="text-white font-bold">{done}</span> / {total.current}
+            <span className="font-mono text-quantum-fgMuted">
+              <span className="text-quantum-fg font-bold">{done}</span> / {total.current}
             </span>
           </div>
-          <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+          <div className="w-full h-1 bg-quantum-bgSecondary rounded-full overflow-hidden">
             <motion.div
               className="h-full bg-gradient-to-r from-cyan-500 to-cyan-400 rounded-full"
               animate={{ width: `${progress}%` }}
@@ -261,7 +261,7 @@ export default function ReconciliationEngine({
         <div className="relative w-full" style={{ minHeight: 280 }}>
           {remaining > 1 && (
             <div
-              className="absolute inset-x-4 -bottom-3 h-full rounded-3xl bg-slate-800/40 border border-white/5"
+              className="absolute inset-x-4 -bottom-3 h-full rounded-3xl bg-quantum-bgSecondary/40 border border-quantum-border"
               style={{ zIndex: 0 }}
               aria-hidden
             />
@@ -280,28 +280,28 @@ export default function ReconciliationEngine({
                 initial={CARD_ENTER}
                 animate={CARD_CENTER}
                 exit={exitVariant(exitDirRef.current)}
-                className="relative z-10 w-full bg-slate-900/80 border border-white/10 backdrop-blur-xl rounded-3xl p-6 shadow-2xl shadow-black/60 select-none"
+                className="relative z-10 w-full bg-quantum-card/80 border border-quantum-border backdrop-blur-xl rounded-3xl p-6 shadow-2xl shadow-black/60 select-none"
               >
                 <div className="flex items-center justify-between mb-5">
                   <span className={`inline-flex items-center px-3 py-1 rounded-xl border text-[11px] font-black uppercase tracking-wider ${catClass(card.category)}`}>
                     {card.category ?? 'Diversos'}
                   </span>
-                  <span className="text-[10px] font-mono text-slate-500 uppercase">
+                  <span className="text-[10px] font-mono text-quantum-fgMuted uppercase">
                     {(card as Transaction & { source?: string }).source?.toUpperCase() ?? 'IMPORT'}
                   </span>
                 </div>
                 <div className="mb-6">
-                  <p className="text-xl font-black text-white leading-tight line-clamp-3" title={card.description}>
+                  <p className="text-xl font-black text-quantum-fg leading-tight line-clamp-3" title={card.description}>
                     {card.description}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-end justify-between gap-y-3 gap-x-2 mt-2">
                   <div className="shrink-0">
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Data</p>
-                    <p className="text-sm font-mono font-bold text-slate-300">{fmtDate(card.date)}</p>
+                    <p className="text-[10px] text-quantum-fgMuted uppercase tracking-wider mb-1">Data</p>
+                    <p className="text-sm font-mono font-bold text-quantum-fg">{fmtDate(card.date)}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Valor</p>
+                    <p className="text-[10px] text-quantum-fgMuted uppercase tracking-wider mb-1">Valor</p>
                     <p
                       className={`text-xl sm:text-2xl font-black font-mono leading-none pb-1 pr-1 ${isIncome ? 'text-emerald-400' : 'text-rose-400'}`}
                       style={{ textShadow: isIncome ? '0 0 20px rgba(52,211,153,0.5)' : '0 0 20px rgba(251,113,133,0.5)' }}
@@ -363,7 +363,7 @@ export default function ReconciliationEngine({
               onClick={handleDiscard}
               onMouseEnter={() => setHint('down')}
               onMouseLeave={() => setHint(null)}
-              className="flex flex-col items-center gap-1.5 py-3.5 px-3 sm:px-5 bg-slate-800/60 hover:bg-red-500/10 border border-white/8 hover:border-red-500/25 rounded-2xl text-slate-400 hover:text-red-400 transition-all"
+              className="flex flex-col items-center gap-1.5 py-3.5 px-3 sm:px-5 bg-quantum-bgSecondary/60 hover:bg-red-500/10 border border-white/8 hover:border-red-500/25 rounded-2xl text-quantum-fgMuted hover:text-red-400 transition-all"
               title="Ignorar / Descartar (Del)"
             >
               <Trash2 className="w-4 h-4" />
@@ -389,7 +389,7 @@ export default function ReconciliationEngine({
         {!isDone && (
           <button
             onClick={onCancel}
-            className="text-[11px] text-slate-600 hover:text-slate-400 transition-colors"
+            className="text-[11px] text-slate-600 hover:text-quantum-fgMuted transition-colors"
           >
             Cancelar importação
           </button>

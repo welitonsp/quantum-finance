@@ -55,8 +55,8 @@ const CAT_STYLE: Record<string, CatStyleEntry> = {
   'Freelance':      { bg: 'bg-violet-500/10',   text: 'text-violet-400',      border: 'border-violet-500/20'  },
   'Impostos/Taxas': { bg: 'bg-red-500/10',      text: 'text-red-400',         border: 'border-red-500/20'     },
   'Vestuário':      { bg: 'bg-purple-500/10',   text: 'text-purple-400',      border: 'border-purple-500/20'  },
-  'Diversos':       { bg: 'bg-white/5',         text: 'text-quantum-fgMuted', border: 'border-white/10'       },
-  'Outros':         { bg: 'bg-white/5',         text: 'text-quantum-fgMuted', border: 'border-white/10'       },
+  'Diversos':       { bg: 'bg-white/5',         text: 'text-quantum-fgMuted', border: 'border-quantum-border'       },
+  'Outros':         { bg: 'bg-white/5',         text: 'text-quantum-fgMuted', border: 'border-quantum-border'       },
 };
 const catStyle = (cat: string): CatStyleEntry => CAT_STYLE[cat] ?? CAT_STYLE['Diversos']!;
 
@@ -91,7 +91,7 @@ function FilterChip({ label, onRemove }: FilterChipProps) {
       className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-quantum-accent/10 border border-quantum-accent/20 text-quantum-accent rounded-lg text-xs font-bold"
     >
       {label}
-      <button onClick={onRemove} className="hover:text-white transition-colors">
+      <button onClick={onRemove} className="hover:text-quantum-fg transition-colors">
         <X className="w-3 h-3" />
       </button>
     </motion.span>
@@ -413,7 +413,7 @@ export default function TransactionsManager({
               className="input-quantum pl-10 pr-8 py-2.5 text-sm"
             />
             {search && (
-              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-quantum-fgMuted hover:text-white transition-colors">
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-quantum-fgMuted hover:text-quantum-fg transition-colors">
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
@@ -428,8 +428,8 @@ export default function TransactionsManager({
                   filterType === v
                     ? v === 'entrada' ? 'bg-quantum-accentDim text-quantum-accent border border-quantum-accent/20'
                     : v === 'saida'   ? 'bg-quantum-redDim   text-quantum-red    border border-quantum-red/20'
-                    :                   'bg-quantum-cardHover text-white          border border-white/10'
-                    : 'text-quantum-fgMuted hover:text-white'
+                    :                   'bg-quantum-cardHover text-quantum-fg          border border-quantum-border'
+                    : 'text-quantum-fgMuted hover:text-quantum-fg'
                 }`}
               >
                 <Icon className="w-3 h-3" />
@@ -443,7 +443,7 @@ export default function TransactionsManager({
             className={`p-2.5 rounded-xl border transition-all shrink-0 ${
               filtersOpen || filterCat
                 ? 'bg-quantum-accentDim border-quantum-accent/30 text-quantum-accent'
-                : 'bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted hover:text-white'
+                : 'bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted hover:text-quantum-fg'
             }`}
             title="Filtros avançados"
           >
@@ -536,7 +536,7 @@ export default function TransactionsManager({
               ? 'bg-quantum-accentDim border-quantum-accent/40 text-quantum-accent'
               : someSelected
               ? 'bg-quantum-bgSecondary border-quantum-accent/20 text-quantum-accent/70'
-              : 'bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted hover:text-white hover:border-quantum-accent/20'
+              : 'bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/20'
           }`}
         >
           {allFilteredSelected
@@ -557,7 +557,7 @@ export default function TransactionsManager({
 
         <div className="w-px h-4 bg-quantum-border shrink-0" />
         <span className="text-quantum-fgMuted shrink-0">
-          <span className="font-black text-white">{stats.count}</span> registos
+          <span className="font-black text-quantum-fg">{stats.count}</span> registos
         </span>
         <div className="w-px h-3 bg-quantum-border shrink-0" />
         <span className="text-quantum-fgMuted shrink-0">
@@ -601,7 +601,7 @@ export default function TransactionsManager({
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-2">
                   <CheckSquare className="w-4 h-4 text-quantum-accent" />
-                  <span className="text-sm font-black text-white">
+                  <span className="text-sm font-black text-quantum-fg">
                     {selected.size} selecionada{selected.size > 1 ? 's' : ''}
                   </span>
                   {allTransactionsSelected && (
@@ -624,7 +624,7 @@ export default function TransactionsManager({
                     className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-xs font-bold transition-all ${
                       batchAction === 'recategorize'
                         ? 'bg-quantum-goldDim border-quantum-gold/30 text-quantum-gold'
-                        : 'bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted hover:text-white hover:border-quantum-accent/30'
+                        : 'bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/30'
                     }`}
                   >
                     <Tag className="w-3.5 h-3.5" /> Re-categorizar
@@ -632,7 +632,7 @@ export default function TransactionsManager({
 
                   <button
                     onClick={clearSelected}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-quantum-bgSecondary border border-quantum-border text-quantum-fgMuted rounded-xl text-xs font-bold hover:text-white transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-quantum-bgSecondary border border-quantum-border text-quantum-fgMuted rounded-xl text-xs font-bold hover:text-quantum-fg transition-all"
                   >
                     <X className="w-3.5 h-3.5" /> Limpar
                   </button>
@@ -650,7 +650,7 @@ export default function TransactionsManager({
                     <div className="flex flex-wrap items-center gap-3 px-3 py-2.5 bg-quantum-bg/60 border border-quantum-accent/15 rounded-xl">
                       <ShieldAlert className="w-4 h-4 text-quantum-accent shrink-0" />
                       <span className="text-xs text-quantum-fgMuted flex-1">
-                        Todos os <strong className="text-white">{filtered.length}</strong> lançamentos visíveis estão selecionados.
+                        Todos os <strong className="text-quantum-fg">{filtered.length}</strong> lançamentos visíveis estão selecionados.
                       </span>
                       <button
                         onClick={selectAllTransactions}
@@ -693,7 +693,7 @@ export default function TransactionsManager({
                     <div className="flex gap-2 justify-end">
                       <button
                         onClick={() => { setBatchAction(null); setConfirmDelete(false); }}
-                        className="px-3 py-1.5 bg-quantum-bgSecondary border border-quantum-border rounded-lg text-xs text-quantum-fgMuted hover:text-white font-bold"
+                        className="px-3 py-1.5 bg-quantum-bgSecondary border border-quantum-border rounded-lg text-xs text-quantum-fgMuted hover:text-quantum-fg font-bold"
                       >
                         Cancelar
                       </button>
@@ -735,7 +735,7 @@ export default function TransactionsManager({
                       ))}
                     </select>
                     <div className="flex gap-2 shrink-0">
-                      <button onClick={() => setBatchAction(null)} className="px-3 py-1.5 bg-quantum-bgSecondary border border-quantum-border rounded-lg text-xs text-quantum-fgMuted font-bold hover:text-white">
+                      <button onClick={() => setBatchAction(null)} className="px-3 py-1.5 bg-quantum-bgSecondary border border-quantum-border rounded-lg text-xs text-quantum-fgMuted font-bold hover:text-quantum-fg">
                         Cancelar
                       </button>
                       <button

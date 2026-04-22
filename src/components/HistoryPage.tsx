@@ -16,12 +16,12 @@ function StatPill({ icon: Icon, label, value, colorClass }: StatPillProps) {
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border bg-slate-900/60 backdrop-blur-sm ${colorClass}`}
+      className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border bg-quantum-card/60 backdrop-blur-sm ${colorClass}`}
     >
       <Icon className="w-4 h-4 shrink-0" />
       <div className="min-w-0">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 leading-none mb-0.5">{label}</p>
-        <p className="text-sm font-bold text-white truncate">{value}</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-quantum-fgMuted leading-none mb-0.5">{label}</p>
+        <p className="text-sm font-bold text-quantum-fg truncate">{value}</p>
       </div>
     </motion.div>
   );
@@ -68,9 +68,9 @@ export default function HistoryPage({
             <div className="w-8 h-8 rounded-lg bg-quantum-accent/15 flex items-center justify-center">
               <ListChecks className="w-4 h-4 text-quantum-accent" />
             </div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Movimentações</h1>
+            <h1 className="text-2xl font-bold text-quantum-fg tracking-tight">Movimentações</h1>
           </div>
-          <p className="text-sm text-slate-500 ml-10">
+          <p className="text-sm text-quantum-fgMuted ml-10">
             Gestão completa e auditoria de todos os seus lançamentos financeiros.
           </p>
         </div>
@@ -82,7 +82,7 @@ export default function HistoryPage({
             animate={{ opacity: 1 }}
             transition={{ delay: 0.1 }}
           >
-            <StatPill icon={ListChecks} label="Total"    value={`${stats.count} lançamentos`}              colorClass="border-slate-700/60" />
+            <StatPill icon={ListChecks} label="Total"    value={`${stats.count} lançamentos`}              colorClass="border-quantum-border" />
             <StatPill icon={TrendingUp} label="Entradas" value={fmt(stats.totalIn)}                         colorClass="border-emerald-500/20 text-emerald-400" />
             <StatPill icon={TrendingDown} label="Saídas" value={fmt(stats.totalOut)}                        colorClass="border-red-500/20 text-red-400" />
             <StatPill

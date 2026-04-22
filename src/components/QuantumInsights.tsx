@@ -89,19 +89,19 @@ export default function QuantumInsights({ metrics, loading }: Props) {
             <BrainCircuit className="w-6 h-6 text-quantum-purple" />
           </div>
           <div>
-            <h3 className="text-xl font-black text-white tracking-tight">Diagnóstico Quântico</h3>
+            <h3 className="text-xl font-black text-quantum-fg tracking-tight">Diagnóstico Quântico</h3>
             <p className="text-xs text-quantum-fgMuted mt-1">Análise em tempo real do seu perfil financeiro.</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 relative z-10">
           {insights.map((item, i) => (
-            <div key={i} className="flex gap-4 items-start bg-quantum-bgSecondary/60 border border-quantum-border hover:border-white/10 transition-colors p-4 rounded-2xl">
+            <div key={i} className="flex gap-4 items-start bg-quantum-bgSecondary/60 border border-quantum-border hover:border-quantum-border transition-colors p-4 rounded-2xl">
               <div className={`p-2.5 rounded-xl ${item.bg} ${item.color} shrink-0`}>
                 <item.icon className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-white mb-1.5">{item.title}</h4>
+                <h4 className="text-sm font-bold text-quantum-fg mb-1.5">{item.title}</h4>
                 <p className="text-xs text-quantum-fgMuted leading-relaxed">{item.desc}</p>
               </div>
             </div>

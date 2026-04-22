@@ -164,7 +164,7 @@ function AnomaliesPanel({ transactions, currentMonth, currentYear }: AnomaliesPa
           <div className="flex items-center gap-3">
             <AlertTriangle className="w-4 h-4 text-quantum-red shrink-0" />
             <div>
-              <p className="text-sm font-bold text-white">{a.cat}</p>
+              <p className="text-sm font-bold text-quantum-fg">{a.cat}</p>
               <p className="text-xs text-quantum-fgMuted">Média 3 meses: R$ {a.mediaHist.toFixed(2)}</p>
             </div>
           </div>
@@ -192,7 +192,7 @@ function FixedExpensesRisk({ balances, recurringTotal }: FixedExpensesRiskProps)
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <ShieldAlert className={`w-5 h-5 text-${color}`} />
-          <h4 className="text-sm font-bold text-white">Risco de Comprometimento Fixo</h4>
+          <h4 className="text-sm font-bold text-quantum-fg">Risco de Comprometimento Fixo</h4>
         </div>
         <span className={`badge-quantum-${riskPct < 35 ? 'green' : riskPct < 60 ? 'gold' : 'red'}`}>{level}</span>
       </div>
@@ -212,11 +212,11 @@ function FixedExpensesRisk({ balances, recurringTotal }: FixedExpensesRiskProps)
       <div className="grid grid-cols-2 gap-3 text-sm">
         <div className="bg-quantum-bgSecondary rounded-xl p-3">
           <p className="text-xs text-quantum-fgMuted mb-1">Fixas/Mês</p>
-          <p className="font-bold font-mono text-white">R$ {recurringTotal.toFixed(2)}</p>
+          <p className="font-bold font-mono text-quantum-fg">R$ {recurringTotal.toFixed(2)}</p>
         </div>
         <div className="bg-quantum-bgSecondary rounded-xl p-3">
           <p className="text-xs text-quantum-fgMuted mb-1">Receitas/Mês</p>
-          <p className="font-bold font-mono text-white">R$ {receitas.toFixed(2)}</p>
+          <p className="font-bold font-mono text-quantum-fg">R$ {receitas.toFixed(2)}</p>
         </div>
       </div>
     </div>
@@ -261,7 +261,7 @@ function AuditReportPanel({ transactions, balances, currentMonth, currentYear }:
             <BrainCircuit className="w-5 h-5 text-quantum-purple" />
           </div>
           <div>
-            <h4 className="text-sm font-bold text-white">Auditoria Automática</h4>
+            <h4 className="text-sm font-bold text-quantum-fg">Auditoria Automática</h4>
             <p className="text-xs text-quantum-fgMuted">Relatório CFO gerado por Gemini AI</p>
           </div>
         </div>
@@ -324,7 +324,7 @@ export default function QuantumAIPage({
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-6 relative z-10">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-black text-white mb-1 flex items-center gap-3">
+          <h1 className="text-2xl font-black text-quantum-fg mb-1 flex items-center gap-3">
             <div className="p-2 bg-quantum-purpleDim rounded-xl border border-quantum-purple/20">
               <BrainCircuit className="w-6 h-6 text-quantum-purple" />
             </div>
@@ -352,7 +352,7 @@ export default function QuantumAIPage({
         <div className="glass-card-quantum p-5">
           <div className="flex items-center gap-2 mb-4">
             <Zap className="w-5 h-5 text-quantum-red" />
-            <h3 className="text-sm font-bold text-white">Anomalias Detetadas</h3>
+            <h3 className="text-sm font-bold text-quantum-fg">Anomalias Detetadas</h3>
             <span className="text-xs text-quantum-fgMuted ml-auto">vs. média 3 meses</span>
           </div>
           <AnomaliesPanel transactions={allTransactions} currentMonth={month} currentYear={year} />
@@ -361,7 +361,7 @@ export default function QuantumAIPage({
         <div className="glass-card-quantum p-5">
           <div className="flex items-center gap-2 mb-4">
             <BarChart3 className="w-5 h-5 text-quantum-accent" />
-            <h3 className="text-sm font-bold text-white">Top Categorias do Mês</h3>
+            <h3 className="text-sm font-bold text-quantum-fg">Top Categorias do Mês</h3>
           </div>
           <div className="space-y-3">
             {topCats.length === 0 ? (

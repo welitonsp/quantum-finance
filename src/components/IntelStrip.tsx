@@ -47,7 +47,7 @@ export const IntelStrip = memo(({ savingsRate, debtRatio, goalProgress }: Props)
             <item.Icon className="w-4 h-4" />
             <span className="text-xs font-bold uppercase tracking-wide">{item.title}</span>
           </div>
-          <p className="text-sm text-slate-300 leading-relaxed">{item.body}</p>
+          <p className="text-sm text-quantum-fg leading-relaxed">{item.body}</p>
         </div>
       ))}
     </div>

@@ -106,9 +106,9 @@ function MacroSlider({ label, value, min, max, step = 1, unit, hint, onChange }:
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+        <span className="text-xs font-bold text-quantum-fg flex items-center gap-1.5">
           {label}
-          {hint && <span title={hint}><Info className="w-3 h-3 text-slate-500 cursor-help" /></span>}
+          {hint && <span title={hint}><Info className="w-3 h-3 text-quantum-fgMuted cursor-help" /></span>}
         </span>
         <span className="text-xs font-mono font-black text-cyan-400 tabular-nums">{value}{unit}</span>
       </div>
@@ -141,8 +141,8 @@ function ChartTooltip({ active, payload, label, isPrivacyMode }: ChartTooltipPro
   const p90  = payload.find((p) => p.dataKey === 'p90')?.value as number | undefined;
 
   return (
-    <div className="bg-slate-900/95 border border-white/15 backdrop-blur-xl rounded-xl px-4 py-3 shadow-2xl text-xs">
-      <p className="font-bold text-white mb-2">{label as string}</p>
+    <div className="bg-quantum-card/95 border border-white/15 backdrop-blur-xl rounded-xl px-4 py-3 shadow-2xl text-xs">
+      <p className="font-bold text-quantum-fg mb-2">{label as string}</p>
       <div className="space-y-1.5">
         {[
           { color: 'bg-cyan-400',   label: 'Otimista (P90):',   val: p90, cls: 'text-cyan-400'   },
@@ -151,7 +151,7 @@ function ChartTooltip({ active, payload, label, isPrivacyMode }: ChartTooltipPro
         ].map(({ color, label: lbl, val, cls }) => (
           <div key={lbl} className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${color}`} />
-            <span className="text-slate-400">{lbl}</span>
+            <span className="text-quantum-fgMuted">{lbl}</span>
             <span className={`font-mono font-bold ml-auto pl-3 ${cls}`}>
               {isPrivacyMode ? mask : val != null ? fmtBRLShort(val) : '—'}
             </span>
@@ -266,7 +266,7 @@ export default function SimulationCenter({ transactions, balances }: Props) {
 
   const prob = result?.probabilidadeSobrevivencia ?? null;
   const probColor = prob === null
-    ? { text: 'text-slate-400', glow: 'transparent', label: '–' }
+    ? { text: 'text-quantum-fgMuted', glow: 'transparent', label: '–' }
     : prob >= 80 ? { text: 'text-cyan-400',   glow: 'rgba(0,230,138,0.5)',  label: 'Excelente'   }
     : prob >= 60 ? { text: 'text-yellow-400', glow: 'rgba(255,184,0,0.5)',  label: 'Moderado'    }
     : prob >= 40 ? { text: 'text-orange-400', glow: 'rgba(255,100,0,0.5)',  label: 'Em Risco'    }
@@ -287,8 +287,8 @@ export default function SimulationCenter({ transactions, balances }: Props) {
             <FlaskConical className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl font-black text-white tracking-tight">Centro de Simulação</h1>
-            <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Monte Carlo · 1.000 iterações · Box-Muller</p>
+            <h1 className="text-xl font-black text-quantum-fg tracking-tight">Centro de Simulação</h1>
+            <p className="text-xs text-quantum-fgMuted uppercase tracking-wider font-medium">Monte Carlo · 1.000 iterações · Box-Muller</p>
           </div>
         </div>
         <button
@@ -304,10 +304,10 @@ export default function SimulationCenter({ transactions, balances }: Props) {
       <div className="flex flex-col xl:flex-row gap-5">
         {/* Sidebar */}
         <div className="xl:w-72 shrink-0 space-y-4">
-          <div className="bg-slate-950/90 backdrop-blur-2xl border border-white/8 rounded-2xl p-5 space-y-5">
-            <div className="flex items-center gap-2 pb-3 border-b border-white/5">
+          <div className="bg-quantum-bg/90 backdrop-blur-2xl border border-white/8 rounded-2xl p-5 space-y-5">
+            <div className="flex items-center gap-2 pb-3 border-b border-quantum-border">
               <Sliders className="w-4 h-4 text-cyan-400" />
-              <h3 className="text-xs font-black text-white uppercase tracking-widest">Ajustes Macro</h3>
+              <h3 className="text-xs font-black text-quantum-fg uppercase tracking-widest">Ajustes Macro</h3>
             </div>
             <MacroSlider label="Inflação Anual"   value={inflacao}      min={0}  max={20} unit="%"      hint="Inflação aplicada às despesas mês a mês" onChange={setInflacao} />
             <MacroSlider label="Corte de Despesas" value={corteDespesas} min={0}  max={40} unit="%"      hint="Redução percentual sobre todas as despesas" onChange={setCorteDespesas} />
@@ -315,22 +315,22 @@ export default function SimulationCenter({ transactions, balances }: Props) {
             <MacroSlider label="Horizonte"        value={meses}         min={6}  max={60} step={6} unit=" meses" hint="Número de meses simulados" onChange={setMeses} />
             <button
               onClick={() => { setInflacao(DEFAULTS.inflacao); setCorteDespesas(DEFAULTS.corteDespesas); setAumentoSalario(DEFAULTS.aumentoSalario); setMeses(DEFAULTS.meses); }}
-              className="w-full py-2 text-[11px] font-bold text-slate-500 hover:text-slate-300 border border-white/5 hover:border-white/10 rounded-xl transition-colors uppercase tracking-wider"
+              className="w-full py-2 text-[11px] font-bold text-quantum-fgMuted hover:text-quantum-fg border border-quantum-border hover:border-quantum-border rounded-xl transition-colors uppercase tracking-wider"
             >
               Restaurar Padrões
             </button>
           </div>
 
-          <div className="bg-slate-950/90 backdrop-blur-2xl border border-white/8 rounded-2xl p-5 space-y-3">
-            <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest pb-2 border-b border-white/5">Base de Cálculo</h3>
+          <div className="bg-quantum-bg/90 backdrop-blur-2xl border border-white/8 rounded-2xl p-5 space-y-3">
+            <h3 className="text-[10px] font-black text-quantum-fgMuted uppercase tracking-widest pb-2 border-b border-quantum-border">Base de Cálculo</h3>
             {([
               { label: 'Receita Mensal Média', value: stats.receitaMensalCents,  color: 'text-emerald-400' },
               { label: 'Despesa Fixa Mensal',  value: stats.despesaFixaCents,    color: 'text-red-400'     },
               { label: 'Desp. Variável Média', value: stats.mediaVariavelCents,  color: 'text-yellow-400'  },
-              { label: 'Desvio-Padrão',        value: stats.desvioVariavelCents, color: 'text-slate-400'   },
+              { label: 'Desvio-Padrão',        value: stats.desvioVariavelCents, color: 'text-quantum-fgMuted'   },
             ] as const).map(({ label, value, color }) => (
               <div key={label} className="flex items-center justify-between gap-2">
-                <span className="text-[11px] text-slate-500 truncate">{label}</span>
+                <span className="text-[11px] text-quantum-fgMuted truncate">{label}</span>
                 <span className={`text-[11px] font-mono font-bold ${color} shrink-0`}>
                   {isPrivacyMode ? '•••••' : fmtBRL(value)}
                 </span>
@@ -342,18 +342,18 @@ export default function SimulationCenter({ transactions, balances }: Props) {
         {/* Main area */}
         <div className="flex-1 space-y-4 min-w-0">
           {/* KPI */}
-          <div className="bg-slate-950/90 backdrop-blur-2xl border border-white/8 rounded-2xl p-6">
+          <div className="bg-quantum-bg/90 backdrop-blur-2xl border border-white/8 rounded-2xl p-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
               <div className="flex items-center gap-5">
                 <motion.div
                   animate={{ boxShadow: prob !== null ? [`0 0 20px ${probColor.glow}`, `0 0 40px ${probColor.glow}`, `0 0 20px ${probColor.glow}`] : 'none' }}
                   transition={{ repeat: Infinity, duration: 2.5 }}
-                  className={`p-4 rounded-2xl bg-slate-900/60 border border-white/8 ${probColor.text}`}
+                  className={`p-4 rounded-2xl bg-quantum-card/60 border border-white/8 ${probColor.text}`}
                 >
                   <ProbIcon className="w-8 h-8" />
                 </motion.div>
                 <div>
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Probabilidade de Sobrevivência</p>
+                  <p className="text-[10px] font-black text-quantum-fgMuted uppercase tracking-widest mb-1">Probabilidade de Sobrevivência</p>
                   <AnimatePresence mode="wait">
                     {isCalculating ? (
                       <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -377,10 +377,10 @@ export default function SimulationCenter({ transactions, balances }: Props) {
                   { label: 'Provável P50',   value: result?.p50Final, color: 'text-yellow-400', border: 'border-yellow-500/20', icon: TrendingUp   },
                   { label: 'Otimista P90',   value: result?.p90Final, color: 'text-cyan-400',   border: 'border-cyan-500/20',   icon: TrendingUp   },
                 ] as const).map(({ label, value, color, border, icon: Icon }) => (
-                  <div key={label} className={`bg-slate-900/60 border ${border} rounded-xl px-4 py-3 min-w-[130px]`}>
+                  <div key={label} className={`bg-quantum-card/60 border ${border} rounded-xl px-4 py-3 min-w-[130px]`}>
                     <div className="flex items-center gap-1.5 mb-1">
                       <Icon className={`w-3.5 h-3.5 ${color}`} />
-                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">{label}</span>
+                      <span className="text-[9px] font-black text-quantum-fgMuted uppercase tracking-wider">{label}</span>
                     </div>
                     <p className={`text-sm font-black font-mono ${color}`}>
                       {isCalculating ? '…' : value == null ? '–' : isPrivacyMode ? '•••••' : fmtBRL(value)}
@@ -392,13 +392,13 @@ export default function SimulationCenter({ transactions, balances }: Props) {
           </div>
 
           {/* Chart */}
-          <div className="bg-slate-950/90 backdrop-blur-2xl border border-white/8 rounded-2xl p-6">
+          <div className="bg-quantum-bg/90 backdrop-blur-2xl border border-white/8 rounded-2xl p-6">
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h3 className="text-sm font-bold text-white">Cone de Incerteza</h3>
-                <p className="text-[10px] text-slate-500 uppercase tracking-wider">{meses} meses · Distribuição P10 / P50 / P90</p>
+                <h3 className="text-sm font-bold text-quantum-fg">Cone de Incerteza</h3>
+                <p className="text-[10px] text-quantum-fgMuted uppercase tracking-wider">{meses} meses · Distribuição P10 / P50 / P90</p>
               </div>
-              <div className="hidden sm:flex items-center gap-4 text-[10px] text-slate-500">
+              <div className="hidden sm:flex items-center gap-4 text-[10px] text-quantum-fgMuted">
                 {([
                   { color: 'bg-cyan-400',   label: 'P90 Otimista'   },
                   { color: 'bg-yellow-400', label: 'P50 Provável'   },
@@ -414,7 +414,7 @@ export default function SimulationCenter({ transactions, balances }: Props) {
 
             <AnimatePresence mode="wait">
               {isCalculating || chartData.length === 0 ? (
-                <motion.div key="chart-loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-72 flex flex-col items-center justify-center gap-3 text-slate-500">
+                <motion.div key="chart-loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-72 flex flex-col items-center justify-center gap-3 text-quantum-fgMuted">
                   <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
                   <span className="text-xs uppercase tracking-widest animate-pulse">A correr {(1000).toLocaleString('pt-BR')} iterações…</span>
                 </motion.div>

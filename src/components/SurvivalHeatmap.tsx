@@ -12,7 +12,7 @@ interface RiskLevel {
 }
 
 function getRiskLevel(spent: number, avgDaily: number): RiskLevel {
-  if (spent === 0) return { key: 'clean',  color: 'bg-slate-800/60',   border: 'border-slate-700/40',   label: 'Dia Limpo' };
+  if (spent === 0) return { key: 'clean',  color: 'bg-quantum-bgSecondary/60',   border: 'border-quantum-border/40',   label: 'Dia Limpo' };
   const ratio = avgDaily > 0 ? spent / avgDaily : 1;
   if (ratio < 0.5) return { key: 'low',    color: 'bg-emerald-500/80', border: 'border-emerald-400/30', label: 'Baixo'     };
   if (ratio < 1.0) return { key: 'normal', color: 'bg-green-400/80',   border: 'border-green-300/30',   label: 'Normal'    };
@@ -53,9 +53,9 @@ function HeatTooltip({ day, spent, label, isPrivacyMode, anchorRect, containerRe
 
   return (
     <div className="absolute z-50 pointer-events-none -translate-x-1/2 -translate-y-full" style={{ left, top }}>
-      <div className="bg-slate-900/95 border border-white/15 backdrop-blur-xl rounded-xl px-3 py-2 shadow-2xl shadow-black/50 whitespace-nowrap">
-        <p className="text-[11px] font-bold text-white">{day}</p>
-        <p className="text-[11px] text-slate-300 font-mono">{formattedValue}</p>
+      <div className="bg-quantum-card/95 border border-white/15 backdrop-blur-xl rounded-xl px-3 py-2 shadow-2xl shadow-black/50 whitespace-nowrap">
+        <p className="text-[11px] font-bold text-quantum-fg">{day}</p>
+        <p className="text-[11px] text-quantum-fg font-mono">{formattedValue}</p>
         <div className="flex items-center gap-1 mt-0.5">
           <div className={`w-2 h-2 rounded-sm ${
             label === 'Dia Limpo' ? 'bg-slate-600'   :
@@ -63,9 +63,9 @@ function HeatTooltip({ day, spent, label, isPrivacyMode, anchorRect, containerRe
             label === 'Normal'    ? 'bg-green-400'   :
             label === 'Médio'     ? 'bg-yellow-400'  : 'bg-red-500'
           }`} />
-          <span className="text-[10px] text-slate-400">{label}</span>
+          <span className="text-[10px] text-quantum-fgMuted">{label}</span>
         </div>
-        <div className="absolute left-1/2 -translate-x-1/2 bottom-[-5px] w-2.5 h-2.5 bg-slate-900/95 border-r border-b border-white/15 rotate-45" />
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-[-5px] w-2.5 h-2.5 bg-quantum-card/95 border-r border-b border-white/15 rotate-45" />
       </div>
     </div>
   );
@@ -133,18 +133,18 @@ export default function SurvivalHeatmap({ transactions, currentMonth, currentYea
   if (!transactions || transactions.length === 0) return null;
 
   return (
-    <div ref={containerRef} className="relative bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-2xl p-5">
+    <div ref={containerRef} className="relative bg-quantum-card/40 backdrop-blur-xl border border-quantum-border rounded-2xl p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-lg bg-quantum-bgSecondary text-quantum-accent">
             <Flame className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white">Mapa de Calor Financeiro</h3>
-            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Padrão de gastos — mês actual</p>
+            <h3 className="text-sm font-bold text-quantum-fg">Mapa de Calor Financeiro</h3>
+            <p className="text-[10px] text-quantum-fgMuted uppercase tracking-wider">Padrão de gastos — mês actual</p>
           </div>
         </div>
-        <div className="hidden sm:flex items-center gap-2 text-[10px] text-slate-500">
+        <div className="hidden sm:flex items-center gap-2 text-[10px] text-quantum-fgMuted">
           <span>Menos</span>
           {['bg-slate-700/80','bg-emerald-500/80','bg-green-400/80','bg-yellow-400/80','bg-red-500/80'].map((c, i) => (
             <div key={i} className={`w-3 h-3 rounded-sm ${c}`} />
@@ -197,12 +197,12 @@ export default function SurvivalHeatmap({ transactions, currentMonth, currentYea
         />
       )}
 
-      <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/5 text-[10px] text-slate-500">
+      <div className="flex items-center justify-between mt-4 pt-3 border-t border-quantum-border text-[10px] text-quantum-fgMuted">
         <span>
           {days.filter(d => d.spent > 0).length} dias com gastos ·{' '}
           {days.filter(d => d.spent === 0 && d.day <= (todayDay ?? days.length)).length} dias limpos
         </span>
-        <span className="font-mono text-slate-400">
+        <span className="font-mono text-quantum-fgMuted">
           {isPrivacyMode
             ? '•••••'
             : `Total: R$ ${totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`

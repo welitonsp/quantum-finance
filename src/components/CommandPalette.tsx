@@ -176,7 +176,7 @@ export default function CommandPalette({ isOpen, onClose, isCommanderMode = fals
             key="cp-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-[200] bg-quantum-bg/60 backdrop-blur-sm"
             onClick={onClose}
             aria-hidden="true"
           />
@@ -191,7 +191,7 @@ export default function CommandPalette({ isOpen, onClose, isCommanderMode = fals
             transition={{ type: 'spring', stiffness: 380, damping: 28 }}
             className="fixed top-[15%] left-1/2 -translate-x-1/2 z-[201] w-full max-w-xl"
           >
-            <div className={`mx-4 rounded-2xl overflow-hidden backdrop-blur-xl shadow-2xl shadow-black/60 ${isCommanderMode ? 'bg-slate-900/90 border border-violet-500/40 shadow-violet-900/30' : 'bg-slate-900/80 border border-white/10'}`}>
+            <div className={`mx-4 rounded-2xl overflow-hidden backdrop-blur-xl shadow-2xl shadow-black/60 ${isCommanderMode ? 'bg-quantum-card/90 border border-violet-500/40 shadow-violet-900/30' : 'bg-quantum-card/80 border border-quantum-border'}`}>
 
               {isCommanderMode && (
                 <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 px-4 pt-3 pb-0">
@@ -203,13 +203,13 @@ export default function CommandPalette({ isOpen, onClose, isCommanderMode = fals
                     <Swords className="w-3 h-3 text-violet-400" />
                     <span className="text-[10px] font-black text-violet-300 uppercase tracking-widest">Modo Comandante</span>
                   </motion.div>
-                  <span className="text-[10px] text-slate-500">Ctrl+Shift+K</span>
+                  <span className="text-[10px] text-quantum-fgMuted">Ctrl+Shift+K</span>
                 </motion.div>
               )}
 
               <div
                 role="combobox" aria-expanded={true} aria-haspopup="listbox" aria-owns="cp-listbox"
-                className={`flex items-center gap-3 px-4 py-3.5 border-b ${isCommanderMode ? 'border-violet-500/20 mt-2' : 'border-white/8'}`}
+                className={`flex items-center gap-3 px-4 py-3.5 border-b ${isCommanderMode ? 'border-violet-500/20 mt-2' : 'border-quantum-border'}`}
               >
                 {isCommanderMode
                   ? <Swords className="w-4 h-4 text-violet-400 shrink-0" aria-hidden="true" />
@@ -225,11 +225,11 @@ export default function CommandPalette({ isOpen, onClose, isCommanderMode = fals
                   onChange={e => setQuery(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder={isCommanderMode ? 'Modo Comandante — Qual é a sua ordem?' : 'Pesquisar comandos…'}
-                  className={`flex-1 bg-transparent text-white text-sm outline-none ${isCommanderMode ? 'placeholder-violet-400/50' : 'placeholder-slate-500'}`}
+                  className={`flex-1 bg-transparent text-quantum-fg text-sm outline-none ${isCommanderMode ? 'placeholder-violet-400/50' : 'placeholder-slate-500'}`}
                   autoComplete="off" spellCheck={false}
                 />
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <kbd className={`hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-mono ${isCommanderMode ? 'bg-violet-500/10 border-violet-500/30 text-violet-400' : 'bg-white/5 border-white/10 text-slate-400'}`}>
+                  <kbd className={`hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-mono ${isCommanderMode ? 'bg-violet-500/10 border-violet-500/30 text-violet-400' : 'bg-white/5 border-quantum-border text-quantum-fgMuted'}`}>
                     <Command className="w-2.5 h-2.5" />{isCommanderMode ? '⇧K' : 'K'}
                   </kbd>
                 </div>
@@ -244,7 +244,7 @@ export default function CommandPalette({ isOpen, onClose, isCommanderMode = fals
                 ) : (
                   Array.from(groups.entries()).map(([groupName, cmds]) => (
                     <div key={groupName}>
-                      <div className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${groupName === 'Comandante' ? 'text-violet-400' : 'text-slate-500'}`}>
+                      <div className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${groupName === 'Comandante' ? 'text-violet-400' : 'text-quantum-fgMuted'}`}>
                         {groupName === 'Comandante' && <Swords className="w-3 h-3" />}
                         {groupName}
                       </div>
@@ -260,17 +260,17 @@ export default function CommandPalette({ isOpen, onClose, isCommanderMode = fals
                             role="option" aria-selected={isActive}
                             onClick={() => { cmd.action(); onClose(); }}
                             onMouseEnter={() => setFocusIdx(globalIdx)}
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${isActive ? (isCommanderMode ? 'bg-violet-500/15 text-white' : 'bg-cyan-500/15 text-white') : 'text-slate-300 hover:bg-white/5'}`}
+                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${isActive ? (isCommanderMode ? 'bg-violet-500/15 text-quantum-fg' : 'bg-cyan-500/15 text-quantum-fg') : 'text-quantum-fg hover:bg-white/5'}`}
                           >
-                            <div className={`p-1.5 rounded-lg shrink-0 ${isActive ? (isCommanderMode ? 'bg-violet-500/20 text-violet-400' : 'bg-cyan-500/20 text-cyan-400') : cmd.group === 'Comandante' ? 'bg-violet-500/10 text-violet-500' : 'bg-white/5 text-slate-400'}`}>
+                            <div className={`p-1.5 rounded-lg shrink-0 ${isActive ? (isCommanderMode ? 'bg-violet-500/20 text-violet-400' : 'bg-cyan-500/20 text-cyan-400') : cmd.group === 'Comandante' ? 'bg-violet-500/10 text-violet-500' : 'bg-white/5 text-quantum-fgMuted'}`}>
                               <Icon className="w-3.5 h-3.5" />
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-medium truncate">{cmd.label}</div>
-                              <div className="text-[11px] text-slate-500 truncate">{cmd.description}</div>
+                              <div className="text-[11px] text-quantum-fgMuted truncate">{cmd.description}</div>
                             </div>
                             {cmd.shortcut && (
-                              <kbd className="shrink-0 hidden sm:inline-flex px-1.5 py-0.5 rounded bg-white/5 border border-white/8 text-[10px] text-slate-500 font-mono">
+                              <kbd className="shrink-0 hidden sm:inline-flex px-1.5 py-0.5 rounded bg-white/5 border border-quantum-border text-[10px] text-quantum-fgMuted font-mono">
                                 {cmd.shortcut}
                               </kbd>
                             )}
@@ -282,7 +282,7 @@ export default function CommandPalette({ isOpen, onClose, isCommanderMode = fals
                 )}
               </div>
 
-              <div className="flex items-center justify-between px-4 py-2.5 border-t border-white/8 text-[10px] text-slate-600">
+              <div className="flex items-center justify-between px-4 py-2.5 border-t border-quantum-border text-[10px] text-slate-600">
                 <div className="flex items-center gap-3">
                   <span><kbd className="font-mono">↑↓</kbd> navegar</span>
                   <span><kbd className="font-mono">Enter</kbd> executar</span>

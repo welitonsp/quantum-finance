@@ -21,7 +21,7 @@ export const SparkLine = memo(({ transactions, months = 6 }: Props) => {
     return buckets.map(b => b.net);
   }, [transactions, months]);
 
-  if (pts.every(v => v === 0)) return <div className="h-9 w-[140px] flex items-center text-slate-500 text-[10px]">Sem histórico</div>;
+  if (pts.every(v => v === 0)) return <div className="h-9 w-[140px] flex items-center text-quantum-fgMuted text-[10px]">Sem histórico</div>;
 
   const W = 140, H = 36;
   const mn = Math.min(...pts), mx = Math.max(...pts), rng = mx - mn || 1;

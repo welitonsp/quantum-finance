@@ -18,8 +18,8 @@ export default function RecentInvestments() {
   return (
     <div className="glass-card-quantum p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-bold text-white">Transações Recentes</h3>
-        <button className="text-xs font-bold text-quantum-accent hover:text-white transition-colors">Ver todas</button>
+        <h3 className="text-lg font-bold text-quantum-fg">Transações Recentes</h3>
+        <button className="text-xs font-bold text-quantum-accent hover:text-quantum-fg transition-colors">Ver todas</button>
       </div>
       <div className="flex flex-col gap-3">
         {transactions.map((tx, i) => (
@@ -28,7 +28,7 @@ export default function RecentInvestments() {
               {getIcon(tx.type)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-white truncate">{tx.name}</p>
+              <p className="text-sm font-bold text-quantum-fg truncate">{tx.name}</p>
               <p className="text-xs text-quantum-fgMuted">{tx.date}</p>
             </div>
             <div className="text-right">

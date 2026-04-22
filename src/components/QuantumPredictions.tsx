@@ -40,7 +40,7 @@ export default function QuantumPredictions({ predictions = defaultPredictions }:
             <WandSparkles className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white">Previsões Quantum AI</h3>
+            <h3 className="text-lg font-bold text-quantum-fg">Previsões Quantum AI</h3>
             <p className="text-xs text-quantum-fgMuted">Modelos preditivos baseados em computação quântica</p>
           </div>
         </div>
@@ -57,7 +57,7 @@ export default function QuantumPredictions({ predictions = defaultPredictions }:
                 className="bg-quantum-bgSecondary border border-quantum-border rounded-xl p-4 transition-all hover:border-quantum-accent/40 hover:shadow-lg"
               >
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-lg font-bold text-white">{p.asset}</span>
+                  <span className="text-lg font-bold text-quantum-fg">{p.asset}</span>
                   <span className={`${signalBg} text-xs font-bold px-2.5 py-1 rounded-md flex items-center gap-1`} style={{ color: signalColor }}>
                     <Icon className="w-3 h-3" /> {p.signal}
                   </span>
@@ -70,11 +70,11 @@ export default function QuantumPredictions({ predictions = defaultPredictions }:
                   </div>
                   <div>
                     <p className="text-quantum-fgMuted text-xs">Alvo</p>
-                    <p className="font-mono font-bold text-white">{p.target}</p>
+                    <p className="font-mono font-bold text-quantum-fg">{p.target}</p>
                   </div>
                   <div className="col-span-2">
                     <p className="text-quantum-fgMuted text-xs">Prazo</p>
-                    <p className="text-white font-medium">{p.timeline}</p>
+                    <p className="text-quantum-fg font-medium">{p.timeline}</p>
                   </div>
                 </div>
 

@@ -62,7 +62,7 @@ export default function TrendsChart({ transactions }: Props) {
 
   return (
     <div className="bg-quantum-card p-4 md:p-6 rounded-3xl border border-quantum-border shadow-lg">
-      <h3 className="text-lg font-bold text-white mb-6 tracking-wide">Tendência Histórica (6 Meses)</h3>
+      <h3 className="text-lg font-bold text-quantum-fg mb-6 tracking-wide">Tendência Histórica (6 Meses)</h3>
       <div className="h-72 w-full min-h-[288px]">
         <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={288}>
           <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>

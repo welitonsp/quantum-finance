@@ -41,26 +41,26 @@ export default function TradeModal({ isOpen, onClose, assetSymbol }: Props) {
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl border border-white/10 animate-in zoom-in-95">
+      <div className="bg-quantum-card w-full max-w-md rounded-3xl p-6 shadow-2xl border border-quantum-border animate-in zoom-in-95">
 
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <h2 className="text-xl font-bold text-quantum-fg flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-cyan-400" />
             Negociar {assetSymbol ?? 'Ativo'}
           </h2>
-          <button onClick={onClose} className="p-1.5 bg-slate-800 text-slate-400 rounded-full hover:bg-slate-700 hover:text-white transition-colors">
+          <button onClick={onClose} className="p-1.5 bg-quantum-bgSecondary text-quantum-fgMuted rounded-full hover:bg-slate-700 hover:text-quantum-fg transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={(e) => void handleTrade(e)} className="space-y-5">
           <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Quantidade Simétrica</label>
+            <label className="block text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-1.5 ml-1">Quantidade Simétrica</label>
             <input
               type="number" step="0.0001" min="0"
               value={quantity} onChange={e => setQuantity(e.target.value)}
               placeholder="Ex: 0.5" autoFocus
-              className="w-full px-4 py-3 bg-slate-950 border border-white/10 rounded-xl text-white font-mono focus:outline-none focus:border-cyan-500 transition-all"
+              className="w-full px-4 py-3 bg-quantum-bg border border-quantum-border rounded-xl text-quantum-fg font-mono focus:outline-none focus:border-cyan-500 transition-all"
             />
           </div>
 
