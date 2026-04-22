@@ -16,6 +16,7 @@
     --q-fg:           #0F172A;
     --q-fg-muted:     #64748B;
     --q-success:      #00E68A;
+    --q-warning:      #F59E0B;
     --q-danger:       #FF4757;
 
     /* Glass surfaces — light */
@@ -54,6 +55,7 @@
     --q-fg:           #E8ECF4;
     --q-fg-muted:     #6B7A94;
     --q-success:      #00E68A;
+    --q-warning:      #F59E0B;
     --q-danger:       #FF4757;
 
     /* Glass surfaces — dark */

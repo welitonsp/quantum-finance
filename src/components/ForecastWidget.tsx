@@ -1,178 +1,156 @@
-import { useState, useMemo } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Zap, Target, TrendingUp, ShieldAlert, AlertTriangle, type LucideIcon } from 'lucide-react';
-import Decimal from 'decimal.js';
+import { useMemo } from 'react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, AlertCircle } from 'lucide-react';
+import { useTheme } from '../contexts/ThemeContext';
+import { formatCurrency } from '../utils/formatters';
+import { useForecast } from '../hooks/useForecast';
 import type { Transaction } from '../shared/types/transaction';
-
-interface ForecastDataPoint {
-  mes: string;
-  Base: number;
-  Pareto: number;
-  Agressivo: number;
-}
-
-interface Scenario {
-  name: string;
-  key: keyof Omit<ForecastDataPoint, 'mes'>;
-  color: string;
-  icon: LucideIcon;
-  desc: string;
-}
 
 interface Props {
   transactions: Transaction[];
-  currentMonth: number;
-  currentYear: number;
+  currentBalance: number;
 }
 
-export default function ForecastWidget({ transactions, currentMonth, currentYear }: Props) {
-  const [activeCollapse, setActiveCollapse] = useState<string | null>(null);
+function getCssVar(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
 
-  const forecastData = useMemo<ForecastDataPoint[]>(() => {
-    if (!transactions || transactions.length === 0) return [];
+export default function ForecastWidget({ transactions, currentBalance }: Props) {
+  const { theme } = useTheme();
+  const { points, finalBalance, minBalance, health } = useForecast(transactions, currentBalance);
 
-    let totalReceitas = new Decimal(0);
-    let totalDespesas = new Decimal(0);
-    let saldoAtual    = new Decimal(0);
-    const mesesSet    = new Set<string>();
+  const colors = useMemo(() => ({
+    success: getCssVar('--q-success') || '#00E68A',
+    warning: getCssVar('--q-warning') || '#F59E0B',
+    danger:  getCssVar('--q-danger')  || '#FF4757',
+    fgMuted: getCssVar('--q-fg-muted') || '#6B7A94',
+    card:    getCssVar('--q-card')    || '#131A2A',
+    border:  getCssVar('--q-border')  || '#1E2A3F',
+  }), [theme]);
 
-    transactions.forEach(t => {
-      const val = new Decimal(Math.abs(Number(t.value ?? 0)));
-      if (t.type === 'receita' || t.type === 'entrada') {
-        totalReceitas = totalReceitas.plus(val);
-        saldoAtual    = saldoAtual.plus(val);
-      } else {
-        totalDespesas = totalDespesas.plus(val);
-        saldoAtual    = saldoAtual.minus(val);
-      }
-      const dateStr = typeof t.date === 'string' ? t.date : t.createdAt ? new Date(t.createdAt as string).toISOString() : null;
-      if (dateStr) mesesSet.add(dateStr.substring(0, 7));
-    });
+  const lineColor = health === 'good' ? colors.success : health === 'warning' ? colors.warning : colors.danger;
 
-    const numMeses    = Math.max(mesesSet.size, 1);
-    const mediaReceita = totalReceitas.dividedBy(numMeses);
-    const mediaDespesa = totalDespesas.dividedBy(numMeses);
-    const fluxoBase   = mediaReceita.minus(mediaDespesa);
-    const fluxoPareto = mediaReceita.minus(mediaDespesa.times(0.8));
-    const taxaJuros   = new Decimal(0.01);
+  const chartData = useMemo(
+    () => points.map(p => ({
+      date:    p.date.slice(5),   // MM-DD
+      balance: p.balance,
+    })),
+    [points],
+  );
 
-    const data: ForecastDataPoint[] = [];
-    let saldoBase      = saldoAtual;
-    let saldoPareto    = saldoAtual;
-    let saldoAgressivo = saldoAtual;
+  const delta    = finalBalance - currentBalance;
+  const DeltaIcon = delta >= 0 ? TrendingUp : TrendingDown;
+  const deltaColor = delta >= 0 ? colors.success : colors.danger;
 
-    const nomeMeses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const healthConfig = {
+    good:    { icon: ShieldCheck,   label: 'Saudável',     cls: 'text-quantum-success border-quantum-success/30 bg-quantum-success/10' },
+    warning: { icon: AlertCircle,   label: 'Atenção',      cls: 'text-quantum-warning border-quantum-warning/30 bg-quantum-warning/10' },
+    danger:  { icon: AlertTriangle, label: 'Risco',        cls: 'text-quantum-danger  border-quantum-danger/30  bg-quantum-danger/10'  },
+  }[health];
 
-    data.push({
-      mes:       'Hoje',
-      Base:      saldoBase.toNumber(),
-      Pareto:    saldoPareto.toNumber(),
-      Agressivo: saldoAgressivo.toNumber(),
-    });
-
-    for (let i = 1; i <= 6; i++) {
-      const mesIndex = (currentMonth - 1 + i) % 12;
-      saldoBase      = saldoBase.plus(fluxoBase);
-      saldoPareto    = saldoPareto.plus(fluxoPareto);
-      const rendimento = saldoAgressivo.greaterThan(0) ? saldoAgressivo.times(taxaJuros) : new Decimal(0);
-      saldoAgressivo   = saldoAgressivo.plus(fluxoPareto).plus(rendimento);
-
-      data.push({
-        mes:       nomeMeses[mesIndex],
-        Base:      Number(saldoBase.toFixed(2)),
-        Pareto:    Number(saldoPareto.toFixed(2)),
-        Agressivo: Number(saldoAgressivo.toFixed(2)),
-      });
-    }
-
-    return data;
-  }, [transactions, currentMonth, currentYear]);
-
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-
-  const handleCollapse = (scenarioName: string) =>
-    setActiveCollapse(activeCollapse === scenarioName ? null : scenarioName);
-
-  const scenarios: Scenario[] = [
-    { name: 'Base',      key: 'Base',      color: '#F97316', icon: ShieldAlert,  desc: 'Tendência atual.'        },
-    { name: 'Pareto',    key: 'Pareto',    color: '#06B6D4', icon: Target,       desc: 'Cortando 20% gastos.'    },
-    { name: 'Agressivo', key: 'Agressivo', color: '#10B981', icon: TrendingUp,   desc: 'Pareto + 1% mês.'        },
-  ];
-
-  const todosCenarioNegativos =
-    forecastData.length > 0 && (forecastData[forecastData.length - 1]?.Agressivo ?? 0) < 0;
+  const HealthIcon = healthConfig.icon;
 
   return (
-    <div className="bg-quantum-card/40 border border-quantum-border backdrop-blur-sm rounded-3xl h-full flex flex-col p-4 md:p-6 shadow-xl">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <div className="flex flex-col gap-4 h-full">
+      {/* ── Header row ───────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-quantum-fg flex items-center gap-2">
-            <Zap className="w-5 h-5 text-amber-400" /> Superposição Quântica
-          </h2>
-          <p className="text-xs text-quantum-fgMuted mt-1">Projeção de 6 meses. Clique num cenário para focar.</p>
+          <p className="text-[10px] uppercase font-bold text-quantum-fgMuted tracking-wider mb-0.5">Saldo em 30 dias</p>
+          <p className="text-2xl font-black font-mono text-quantum-fg">
+            {formatCurrency(finalBalance)}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold ${healthConfig.cls}`}
+          >
+            <HealthIcon className="w-3.5 h-3.5" />
+            {healthConfig.label}
+          </div>
+
+          <div
+            className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold"
+            style={{ color: deltaColor }}
+          >
+            <DeltaIcon className="w-3.5 h-3.5" />
+            {delta >= 0 ? '+' : ''}{formatCurrency(delta)}
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 min-h-[220px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={forecastData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" vertical={false} />
-            <XAxis dataKey="mes" stroke="#64748B" fontSize={10} tickLine={false} axisLine={false} dy={10} />
-            <YAxis stroke="#64748B" fontSize={10} tickFormatter={(val: number) => `R$ ${(val / 1000).toFixed(0)}k`} tickLine={false} axisLine={false} />
-            <Tooltip
-              contentStyle={{ backgroundColor: '#0F172A', borderColor: '#1E293B', borderRadius: '12px', color: '#fff' }}
-              formatter={(value) => [formatCurrency(Number(value ?? 0)), 'Património Projetado']}
-            />
-            <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px', color: '#94A3B8' }} />
-            {scenarios.map((scenario) => (
-              <Line
-                key={scenario.key}
-                type="monotone"
-                dataKey={scenario.key}
-                name={scenario.name}
-                stroke={scenario.color}
-                strokeWidth={activeCollapse === scenario.name ? 4 : 2}
-                strokeOpacity={activeCollapse && activeCollapse !== scenario.name ? 0.2 : 1}
-                dot={activeCollapse === scenario.name
-                  ? { r: 6, fill: scenario.color, strokeWidth: 2, stroke: '#0F172A' }
-                  : false}
-                activeDot={{ r: 8, fill: scenario.color, stroke: '#0F172A', strokeWidth: 2 }}
-              />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      {todosCenarioNegativos && (
-        <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs font-bold text-red-400 flex items-center justify-center gap-2 animate-pulse">
+      {/* ── Danger alert ─────────────────────────────────────────── */}
+      {minBalance < 0 && (
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-quantum-danger/30 bg-quantum-danger/10 text-quantum-danger text-xs font-bold animate-pulse">
           <AlertTriangle className="w-4 h-4 shrink-0" />
-          Aviso Crítico: Todos os cenários projetam falência técnica a 6 meses.
+          Saldo mínimo projetado: {formatCurrency(minBalance)} — risco de caixa negativo.
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
-        {scenarios.map((s) => {
-          const Icon     = s.icon;
-          const isActive = activeCollapse === s.name;
-          return (
-            <button
-              key={s.name}
-              onClick={() => handleCollapse(s.name)}
-              className={`p-3 rounded-xl border text-left transition-all duration-300 ${
-                isActive ? 'bg-quantum-bgSecondary shadow-lg scale-[1.02]' : 'bg-quantum-card/50 border-quantum-border hover:bg-quantum-bgSecondary/80 opacity-70 hover:opacity-100'
-              }`}
-              style={{ borderColor: isActive ? s.color : 'transparent' }}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <Icon className="w-4 h-4" style={{ color: s.color }} />
-                <span className="text-sm font-bold text-quantum-fg">{s.name}</span>
-              </div>
-              <p className="text-[10px] text-quantum-fgMuted leading-tight">{s.desc}</p>
-            </button>
-          );
-        })}
-      </div>
+      {/* ── Chart ────────────────────────────────────────────────── */}
+      {chartData.length > 0 ? (
+        <div className="flex-1 min-h-[200px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
+              <XAxis
+                dataKey="date"
+                stroke={colors.fgMuted}
+                fontSize={9}
+                tickLine={false}
+                axisLine={false}
+                dy={8}
+                interval={Math.floor(chartData.length / 5)}
+              />
+              <YAxis
+                stroke={colors.fgMuted}
+                fontSize={9}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                  borderRadius: '10px',
+                  fontSize: '11px',
+                  color: '#E8ECF4',
+                }}
+                formatter={(value) => [formatCurrency(Number(value ?? 0)), 'Saldo']}
+                labelFormatter={(label) => `Dia ${String(label ?? '')}`}
+              />
+              {minBalance < 0 && (
+                <ReferenceLine y={0} stroke={colors.danger} strokeDasharray="4 4" strokeWidth={1} />
+              )}
+              <Line
+                type="monotone"
+                dataKey="balance"
+                stroke={lineColor}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 5, fill: lineColor, stroke: colors.card, strokeWidth: 2 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className="flex-1 flex items-center justify-center text-quantum-fgMuted text-sm">
+          Dados insuficientes para projeção.
+        </div>
+      )}
+
+      {/* ── Min balance footer ───────────────────────────────────── */}
+      {chartData.length > 0 && (
+        <div className="flex items-center justify-between text-[10px] text-quantum-fgMuted border-t border-quantum-border pt-2">
+          <span>Saldo mínimo projetado</span>
+          <span
+            className="font-bold font-mono"
+            style={{ color: minBalance < 0 ? colors.danger : colors.fgMuted }}
+          >
+            {formatCurrency(minBalance)}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

@@ -266,8 +266,7 @@ export default function DashboardContent({
           <div className="bg-quantum-card/40 backdrop-blur-sm rounded-2xl p-5 border border-quantum-border min-h-[400px]">
             <ForecastWidget
               transactions={allTransactions.length > 0 ? allTransactions : transactions}
-              currentMonth={currentMonth}
-              currentYear={currentYear}
+              currentBalance={saldo}
             />
           </div>
         </div>

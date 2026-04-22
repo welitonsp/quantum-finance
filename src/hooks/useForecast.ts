@@ -1,80 +1,37 @@
 import { useMemo } from 'react';
-import Decimal from 'decimal.js';
-import type { Transaction, RecurringTask } from '../shared/types/transaction';
+import type { Transaction } from '../shared/types/transaction';
+import { calculateForecast } from '../utils/forecastEngine';
+import { generateHash } from '../utils/hashGenerator';
+import type { ForecastResult } from '../utils/forecastEngine';
 
-export interface ForecastDataPoint {
-  date: string;
-  balance: number;
-}
+export type { ForecastResult, ForecastHealth, ForecastPoint } from '../utils/forecastEngine';
 
-export interface ForecastResult {
-  data: ForecastDataPoint[];
-  isAlert: boolean;
-  daysUntilZero: number | null;
-  projectedBalance: number;
-  dailyBurnRate: number;
-}
-
+/**
+ * Memoized forecast hook.
+ *
+ * Dependency strategy:
+ *  - `txHash`  — stable content hash; avoids re-running when the array
+ *                reference changes but content did not (prevents drift on
+ *                parent re-renders).
+ *  - `currentBalance` — scalar, always stable in memo comparison.
+ *
+ * NOTE: `transactions` is intentionally omitted from the second useMemo's
+ * dependency array. `txHash` is a faithful proxy for its content.
+ */
 export function useForecast(
   transactions: Transaction[],
   currentBalance: number,
-  recurringTasks: RecurringTask[] = []
+  days = 30,
 ): ForecastResult {
-  return useMemo(() => {
-    if (!transactions) return { data: [], isAlert: false, projectedBalance: 0, dailyBurnRate: 0, daysUntilZero: null };
+  // Content-stable hash — changes only when id/value/date actually change
+  const txHash = useMemo(
+    () => generateHash(transactions.map(t => t.id + String(t.value ?? 0) + (t.date ?? ''))),
+    [transactions],
+  );
 
-    const today = new Date();
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(today.getDate() - 30);
-
-    const recentVariableExpenses = transactions.filter(tx =>
-      tx.type === 'saida' &&
-      !tx.tags?.includes('Fixa') &&
-      new Date(String(tx.date || tx.createdAt)) >= thirtyDaysAgo
-    );
-
-    const totalVariableBurn = recentVariableExpenses.reduce((acc, tx) => acc + Number(tx.value), 0);
-    const dailyVariableBurn = totalVariableBurn / 30;
-
-    let totalMensalFixo = 0;
-    recurringTasks.forEach(task => {
-      if (task.active !== false && task.type !== 'entrada') {
-        const val = Number(task.value || 0);
-        if (task.frequency === 'mensal') totalMensalFixo += val;
-        if (task.frequency === 'anual')  totalMensalFixo += val / 12;
-      }
-    });
-    const dailyFixedBurn = totalMensalFixo / 30;
-    const totalDailyBurn = dailyVariableBurn + dailyFixedBurn;
-
-    let runningBalance = new Decimal(currentBalance || 0);
-    const forecastData: ForecastDataPoint[] = [];
-    let isAlert = false;
-    let daysUntilZero: number | null = null;
-
-    for (let i = 0; i <= 30; i++) {
-      const projDate = new Date();
-      projDate.setDate(today.getDate() + i);
-      if (i > 0) runningBalance = runningBalance.minus(totalDailyBurn);
-
-      const currentPointBalance = runningBalance.toNumber();
-      if (currentPointBalance < 0 && !isAlert) {
-        isAlert = true;
-        daysUntilZero = i;
-      }
-
-      forecastData.push({
-        date:    projDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-        balance: currentPointBalance
-      });
-    }
-
-    return {
-      data:             forecastData,
-      isAlert,
-      daysUntilZero,
-      projectedBalance: runningBalance.toNumber(),
-      dailyBurnRate:    totalDailyBurn
-    };
-  }, [transactions, currentBalance, recurringTasks]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(
+    () => calculateForecast(transactions, currentBalance, days),
+    [txHash, currentBalance, days],
+  );
 }
