@@ -1,8 +1,48 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  collection, query, orderBy, onSnapshot, limit,
+  type Timestamp,
+} from 'firebase/firestore';
+import { db } from '../shared/api/firebase/index';
 import { FirestoreService } from '../shared/services/FirestoreService';
 import type { Transaction } from '../shared/types/transaction';
 
-// ─── Tipos ────────────────────────────────────────────────────────────────────
+// ─── Constantes ───────────────────────────────────────────────────────────────
+
+const QUERY_LIMIT       = 3_000;
+const MAX_RETRIES       = 3;
+const RETRY_INTERVAL_MS = 5_000;
+
+// ─── Op Types (sem any) ───────────────────────────────────────────────────────
+
+interface AddOp {
+  type:    'add';
+  tempId:  string;
+  data:    Partial<Transaction>;
+  retries: number;
+}
+interface UpdateOp {
+  type:     'update';
+  itemId:   string;
+  data:     Partial<Transaction>;
+  previous: Transaction | undefined;
+  retries:  number;
+}
+interface DeleteOp {
+  type:     'delete';
+  itemId:   string;
+  previous: Transaction | undefined;
+  retries:  number;
+}
+interface DeleteBatchOp {
+  type:          'deleteBatch';
+  ids:           string[];
+  previousBatch: Transaction[];
+  retries:       number;
+}
+type Op = AddOp | UpdateOp | DeleteOp | DeleteBatchOp;
+
+// ─── Return Type ──────────────────────────────────────────────────────────────
 
 interface UseTransactionsReturn {
   transactions: Transaction[];
@@ -14,6 +54,34 @@ interface UseTransactionsReturn {
   update:       (id: string, data: Partial<Transaction>) => Promise<void>;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function makeTempId(): string {
+  return `__temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+}
+
+function isTemp(id: string): boolean {
+  return id.startsWith('__temp_');
+}
+
+/**
+ * Normaliza qualquer forma de timestamp (Firestore Timestamp, number ms, string ISO)
+ * para milissegundos (number).  Devolve 0 se não reconhecido.
+ */
+function toMillis(ts: Transaction['updatedAt'] | Transaction['createdAt']): number {
+  if (ts === null || ts === undefined) return 0;
+  // Firestore Timestamp — tem o método toMillis()
+  if (typeof ts === 'object' && 'toMillis' in ts) {
+    return (ts as Timestamp).toMillis();
+  }
+  if (typeof ts === 'number') return ts;
+  if (typeof ts === 'string') {
+    const parsed = Date.parse(ts);
+    return isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useTransactions(uid: string): UseTransactionsReturn {
@@ -21,7 +89,23 @@ export function useTransactions(uid: string): UseTransactionsReturn {
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState<Error | null>(null);
 
-  // ── Fetch inicial ─────────────────────────────────────────────────────────
+  // ── Fila de sync ──────────────────────────────────────────────────────────
+  const queueRef    = useRef<Op[]>([]);
+  const processing  = useRef(false);
+
+  /**
+   * tempId → item optimista ainda não confirmado.
+   * Guard de órfãos e merge do snapshot.
+   */
+  const pendingAdds = useRef(new Map<string, Transaction>());
+
+  /**
+   * IDs de itens com operação em voo (update / delete).
+   * O snapshot ignora estes IDs enquanto a op não terminar.
+   */
+  const pendingIds  = useRef(new Set<string>());
+
+  // ── onSnapshot (realtime + last-write-wins) ────────────────────────────────
   useEffect(() => {
     if (!uid) {
       setTransactions([]);
@@ -30,27 +114,181 @@ export function useTransactions(uid: string): UseTransactionsReturn {
       return;
     }
 
+    // Limpa estado de fila ao trocar de utilizador
+    queueRef.current    = [];
+    processing.current  = false;
+    pendingAdds.current = new Map();
+    pendingIds.current  = new Set();
+
     setLoading(true);
     setError(null);
 
-    FirestoreService.getTransactions(uid)
-      .then(txs => {
-        setTransactions(txs);
+    const q = query(
+      collection(db, 'users', uid, 'transactions'),
+      orderBy('createdAt', 'desc'),
+      limit(QUERY_LIMIT)
+    );
+
+    const unsub = onSnapshot(
+      q,
+      snap => {
+        const remote: Transaction[] = snap.docs.map(d => ({
+          id: d.id,
+          ...(d.data() as Omit<Transaction, 'id'>),
+        }));
+
+        setTransactions(prev => {
+          // Índice do estado local para O(1) lookup
+          const localById = new Map(prev.map(tx => [tx.id, tx]));
+
+          // ── Merge com last-write-wins ──────────────────────────────────────
+          const merged: Transaction[] = remote.map(remoteTx => {
+            // Nunca substituir itens com operação pendente (update/delete em voo)
+            if (pendingIds.current.has(remoteTx.id)) {
+              return localById.get(remoteTx.id) ?? remoteTx;
+            }
+
+            const localTx = localById.get(remoteTx.id);
+            if (!localTx) return remoteTx; // novo item remoto
+
+            // Last-write-wins: quem tem updatedAt mais recente vence
+            const remoteMs = toMillis(remoteTx.updatedAt);
+            const localMs  = toMillis(localTx.updatedAt);
+            return remoteMs > localMs ? remoteTx : localTx;
+          });
+
+          // Preserva itens optimistas (tempId) não presentes no remoto
+          const remoteIds    = new Set(remote.map(tx => tx.id));
+          const stillPending = Array.from(pendingAdds.current.values())
+            .filter(tx => !remoteIds.has(tx.id));
+
+          return [...stillPending, ...merged];
+        });
+
         setLoading(false);
-      })
-      .catch((err: unknown) => {
-        const e = err instanceof Error ? err : new Error(String(err));
-        console.error('[Firestore][getTransactions] error:', e.message);
-        setError(e);
+      },
+      err => {
+        console.error('[Firestore][onSnapshot] error:', err.message);
+        setError(err);
         setLoading(false);
-      });
+      }
+    );
+
+    return () => unsub();
   }, [uid]);
 
-  // ── ADD — Optimistic UI ───────────────────────────────────────────────────
+  // ── processQueue ───────────────────────────────────────────────────────────
+  const processQueue = useCallback(async (): Promise<void> => {
+    if (processing.current || !uid) return;
+    processing.current = true;
+
+    while (queueRef.current.length > 0) {
+      const op = queueRef.current[0]!;
+
+      // Descarta ops de add órfãos
+      if (op.type === 'add' && !pendingAdds.current.has(op.tempId)) {
+        queueRef.current.shift();
+        continue;
+      }
+
+      try {
+        switch (op.type) {
+          case 'add': {
+            // serverTimestamp() injetado pelo FirestoreService.addTransaction
+            await FirestoreService.addTransaction(uid, op.data);
+            // Remove item temporário; snapshot traz o item real com timestamps do servidor
+            pendingAdds.current.delete(op.tempId);
+            setTransactions(prev => prev.filter(tx => tx.id !== op.tempId));
+            break;
+          }
+          case 'update':
+            // updatedAt: serverTimestamp() sempre enviado pelo FirestoreService
+            await FirestoreService.updateTransaction(uid, op.itemId, op.data);
+            pendingIds.current.delete(op.itemId);
+            break;
+          case 'delete':
+            await FirestoreService.deleteTransaction(uid, op.itemId);
+            pendingIds.current.delete(op.itemId);
+            break;
+          case 'deleteBatch':
+            await FirestoreService.deleteBatchTransactions(uid, op.ids);
+            op.ids.forEach(id => pendingIds.current.delete(id));
+            break;
+        }
+        queueRef.current.shift();
+
+      } catch (err) {
+        op.retries++;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(
+          `[SyncQueue][${op.type}] erro (tentativa ${op.retries}/${MAX_RETRIES}): ${msg}`
+        );
+
+        if (op.retries >= MAX_RETRIES) {
+          console.error(`[SyncQueue][${op.type}] descartado após ${MAX_RETRIES} tentativas.`);
+
+          // Rollback + limpa pendingIds
+          if (op.type === 'add') {
+            pendingAdds.current.delete(op.tempId);
+            setTransactions(prev => prev.filter(tx => tx.id !== op.tempId));
+
+          } else if (op.type === 'update' && op.previous !== undefined) {
+            const restored = op.previous;
+            pendingIds.current.delete(op.itemId);
+            setTransactions(prev =>
+              prev.map(tx => tx.id === op.itemId ? restored : tx)
+            );
+
+          } else if (op.type === 'delete' && op.previous !== undefined) {
+            const restored = op.previous;
+            pendingIds.current.delete(op.itemId);
+            setTransactions(prev => [restored, ...prev]);
+
+          } else if (op.type === 'deleteBatch') {
+            op.ids.forEach(id => pendingIds.current.delete(id));
+            if (op.previousBatch.length > 0) {
+              const restoredBatch = op.previousBatch;
+              setTransactions(prev => [...restoredBatch, ...prev]);
+            }
+          }
+
+          queueRef.current.shift();
+        } else {
+          break; // retry no próximo trigger
+        }
+      }
+    }
+
+    processing.current = false;
+  }, [uid]);
+
+  // ── Ref estável para event listeners ──────────────────────────────────────
+  const processQueueRef = useRef(processQueue);
+  useEffect(() => { processQueueRef.current = processQueue; }, [processQueue]);
+
+  // ── Retry: online event + polling ─────────────────────────────────────────
+  useEffect(() => {
+    const trigger = (): void => { void processQueueRef.current(); };
+    window.addEventListener('online', trigger);
+    const timer = setInterval(trigger, RETRY_INTERVAL_MS);
+    return () => {
+      window.removeEventListener('online', trigger);
+      clearInterval(timer);
+    };
+  }, []);
+
+  // ── enqueue ────────────────────────────────────────────────────────────────
+  const enqueue = useCallback((op: Op): void => {
+    queueRef.current.push(op);
+    void processQueue();
+  }, [processQueue]);
+
+  // ── ADD — Optimistic + enqueue ────────────────────────────────────────────
   const add = useCallback(async (data: Partial<Transaction>): Promise<string> => {
     if (!uid) throw new Error('[useTransactions][add] UID ausente.');
 
-    const tempId: string = `__temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const now    = Date.now();
+    const tempId = makeTempId();
     const optimistic: Transaction = {
       description: '',
       value:       0,
@@ -60,104 +298,86 @@ export function useTransactions(uid: string): UseTransactionsReturn {
       ...data,
       id:        tempId,
       uid,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      // Timestamps locais para LWW até serverTimestamp() chegar via snapshot
+      createdAt: now,
+      updatedAt: now,
     };
 
-    // Passo 1 — actualiza UI imediatamente
+    pendingAdds.current.set(tempId, optimistic);
     setTransactions(prev => [optimistic, ...prev]);
+    enqueue({ type: 'add', tempId, data, retries: 0 });
 
-    try {
-      // Passo 2 — persiste no Firestore
-      const realId = await FirestoreService.addTransaction(uid, data);
+    return tempId;
+  }, [uid, enqueue]);
 
-      // Substitui ID temporário pelo ID real
-      setTransactions(prev =>
-        prev.map(tx => (tx.id === tempId ? { ...tx, id: realId } : tx))
-      );
-      return realId;
-    } catch (err) {
-      // Passo 3 — rollback
-      const e = err instanceof Error ? err : new Error(String(err));
-      console.error('[Firestore][add] error:', e.message);
-      setTransactions(prev => prev.filter(tx => tx.id !== tempId));
-      throw e;
-    }
-  }, [uid]);
-
-  // ── UPDATE — Optimistic UI ────────────────────────────────────────────────
+  // ── UPDATE — Optimistic + enqueue ─────────────────────────────────────────
   const update = useCallback(async (id: string, data: Partial<Transaction>): Promise<void> => {
     if (!uid || !id) throw new Error('[useTransactions][update] UID ou ID ausente.');
+    if (isTemp(id)) return; // aguarda confirmação do add
 
-    // Guarda snapshot anterior para rollback
+    // Regista como pendente antes do optimistic update
+    pendingIds.current.add(id);
+
     let previous: Transaction | undefined;
     setTransactions(prev => {
       previous = prev.find(tx => tx.id === id);
       return prev.map(tx =>
-        tx.id === id ? { ...tx, ...data, updatedAt: Date.now() } : tx
+        tx.id === id
+          // updatedAt local em ms; será substituído por serverTimestamp() no snapshot
+          ? { ...tx, ...data, updatedAt: Date.now() }
+          : tx
       );
     });
 
-    try {
-      await FirestoreService.updateTransaction(uid, id, data);
-    } catch (err) {
-      const e = err instanceof Error ? err : new Error(String(err));
-      console.error('[Firestore][update] error:', e.message);
-      // Rollback para o estado anterior
-      if (previous) {
-        setTransactions(prev =>
-          prev.map(tx => (tx.id === id ? previous! : tx))
-        );
-      }
-      throw e;
-    }
-  }, [uid]);
+    enqueue({ type: 'update', itemId: id, data, previous, retries: 0 });
+  }, [uid, enqueue]);
 
-  // ── REMOVE — Optimistic UI ────────────────────────────────────────────────
+  // ── REMOVE — Optimistic + enqueue ─────────────────────────────────────────
   const remove = useCallback(async (id: string): Promise<void> => {
     if (!uid || !id) throw new Error('[useTransactions][remove] UID ou ID ausente.');
 
-    let removed: Transaction | undefined;
+    if (isTemp(id)) {
+      // Cancela add pendente sem enfileirar delete
+      pendingAdds.current.delete(id);
+      setTransactions(prev => prev.filter(tx => tx.id !== id));
+      return;
+    }
+
+    pendingIds.current.add(id);
+
+    let previous: Transaction | undefined;
     setTransactions(prev => {
-      removed = prev.find(tx => tx.id === id);
+      previous = prev.find(tx => tx.id === id);
       return prev.filter(tx => tx.id !== id);
     });
 
-    try {
-      await FirestoreService.deleteTransaction(uid, id);
-    } catch (err) {
-      const e = err instanceof Error ? err : new Error(String(err));
-      console.error('[Firestore][remove] error:', e.message);
-      // Rollback — restaura a transação eliminada
-      if (removed) {
-        setTransactions(prev => [removed!, ...prev]);
-      }
-      throw e;
-    }
-  }, [uid]);
+    enqueue({ type: 'delete', itemId: id, previous, retries: 0 });
+  }, [uid, enqueue]);
 
-  // ── REMOVE BATCH — Optimistic UI ──────────────────────────────────────────
+  // ── REMOVE BATCH — Optimistic + enqueue ───────────────────────────────────
   const removeBatch = useCallback(async (ids: string[]): Promise<void> => {
     if (!uid || !ids.length) return;
 
-    const idSet = new Set(ids);
-    let removedBatch: Transaction[] = [];
+    const idSet   = new Set(ids);
+    const tempIds = ids.filter(id => isTemp(id));
+    const realIds = ids.filter(id => !isTemp(id));
 
+    // Cancela adds pendentes sem enfileirar
+    tempIds.forEach(tid => pendingAdds.current.delete(tid));
+
+    // Marca IDs reais como pendentes
+    realIds.forEach(id => pendingIds.current.add(id));
+
+    let previousBatch: Transaction[] = [];
     setTransactions(prev => {
-      removedBatch = prev.filter(tx => idSet.has(tx.id));
+      previousBatch = prev.filter(tx => idSet.has(tx.id) && !isTemp(tx.id));
       return prev.filter(tx => !idSet.has(tx.id));
     });
 
-    try {
-      await FirestoreService.deleteBatchTransactions(uid, ids);
-    } catch (err) {
-      const e = err instanceof Error ? err : new Error(String(err));
-      console.error('[Firestore][removeBatch] error:', e.message);
-      // Rollback — restaura todas as transações eliminadas
-      setTransactions(prev => [...removedBatch, ...prev]);
-      throw e;
+    if (realIds.length > 0) {
+      enqueue({ type: 'deleteBatch', ids: realIds, previousBatch, retries: 0 });
     }
-  }, [uid]);
+  }, [uid, enqueue]);
 
   return { transactions, loading, error, add, remove, removeBatch, update };
 }
