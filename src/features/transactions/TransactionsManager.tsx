@@ -363,7 +363,7 @@ export default function TransactionsManager({
     if (!ids.length || !newCat) return;
     const toastId = toast.loading(`A re-categorizar ${ids.length} transações...`);
     try {
-      await FirestoreService.batchUpdateTransactions(ids, { category: newCat });
+      await FirestoreService.batchUpdateTransactions(null, ids, { category: newCat });
       toast.success(`${ids.length} transações movidas para "${newCat}".`, { id: toastId });
       clearSelected();
       setBatchAction(null);

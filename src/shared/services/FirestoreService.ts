@@ -1,52 +1,163 @@
 import {
   collection, addDoc, updateDoc, deleteDoc, doc,
-  writeBatch, serverTimestamp, CollectionReference
+  getDocs, query, orderBy,
+  writeBatch, serverTimestamp,
+  type CollectionReference,
 } from 'firebase/firestore';
 import { db } from '../api/firebase/index';
 import type { Transaction, ImportResult } from '../types/transaction';
 
-type TransactionData = Omit<Transaction, 'id'>;
-type PartialTransactionData = Partial<TransactionData> & { amount?: number };
+// ─── Helpers de path ──────────────────────────────────────────────────────────
+
+/** Coleção de transações por utilizador (caminho canónico). */
+const txCol = (uid: string): CollectionReference =>
+  collection(db, 'users', uid, 'transactions');
+
+type PartialTx = Partial<Omit<Transaction, 'id'>>;
+
+// ─── CRUD de Transações (API pública, com uid) ────────────────────────────────
 
 export const FirestoreService = {
 
-  async saveTransaction(uid: string, transactionData: PartialTransactionData): Promise<string> {
-    if (!uid) throw new Error('UID ausente.');
-    const safeValue = Math.round(Number(transactionData.value || 0) * 100);
-    const docRef = await addDoc(collection(db, 'transactions'), {
-      ...transactionData, value: safeValue, uid,
-      createdAt: transactionData.createdAt || serverTimestamp(),
-      updatedAt: serverTimestamp()
+  /**
+   * Lê todas as transações do utilizador e devolve array ordenado (mais recente primeiro).
+   */
+  async getTransactions(uid: string): Promise<Transaction[]> {
+    if (!uid) return [];
+    try {
+      const snap = await getDocs(
+        query(txCol(uid), orderBy('createdAt', 'desc'))
+      );
+      return snap.docs.map(d => ({
+        id: d.id,
+        ...(d.data() as Omit<Transaction, 'id'>),
+      }));
+    } catch (err) {
+      // Falha de índice? Tenta sem ordenação
+      console.warn('[Firestore][getTransactions] fallback sem orderBy:', (err as Error).message);
+      const snap = await getDocs(txCol(uid));
+      return snap.docs.map(d => ({
+        id: d.id,
+        ...(d.data() as Omit<Transaction, 'id'>),
+      }));
+    }
+  },
+
+  /**
+   * Adiciona uma transação na sub-coleção do utilizador.
+   * Assume que `data.value` já está em centavos (inteiro).
+   */
+  async addTransaction(uid: string, data: PartialTx): Promise<string> {
+    if (!uid) throw new Error('[Firestore][addTransaction] UID ausente.');
+    const { id: _id, uid: _uid, createdAt: _ca, updatedAt: _ua, ...payload } = data as Partial<Transaction>;
+    const docRef = await addDoc(txCol(uid), {
+      ...payload,
+      uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
     return docRef.id;
   },
 
-  async saveAllTransactions(uid: string, transactions: PartialTransactionData[]): Promise<ImportResult> {
-    if (!uid || !transactions.length) return { added: 0, duplicates: 0, invalid: 0 };
-    const batch = writeBatch(db);
-    let added = 0, duplicates = 0, invalid = 0;
-    const cache = new Set<string>();
+  /**
+   * Atualiza campos de uma transação na sub-coleção do utilizador.
+   */
+  async updateTransaction(uid: string, id: string, data: Partial<Transaction>): Promise<void> {
+    if (!uid || !id) throw new Error('[Firestore][updateTransaction] UID ou ID ausente.');
+    const { id: _id, uid: _uid, createdAt: _ca, ...updatePayload } = data;
+    await updateDoc(doc(txCol(uid), id), {
+      ...updatePayload,
+      updatedAt: serverTimestamp(),
+    });
+  },
 
-    transactions.forEach((tx) => {
+  /**
+   * Elimina uma transação na sub-coleção do utilizador.
+   */
+  async deleteTransaction(uid: string, id: string): Promise<void> {
+    if (!uid || !id) throw new Error('[Firestore][deleteTransaction] UID ou ID ausente.');
+    await deleteDoc(doc(txCol(uid), id));
+  },
+
+  /**
+   * Elimina em batch transações na sub-coleção do utilizador.
+   */
+  async deleteBatchTransactions(uid: string, ids: string[]): Promise<void> {
+    if (!uid || !ids.length) return;
+    const batch = writeBatch(db);
+    ids.forEach(id => batch.delete(doc(txCol(uid), id)));
+    await batch.commit();
+  },
+
+  /**
+   * Atualiza em batch um campo comum (ex: categoria) em múltiplas transações.
+   * Se uid for fornecido, usa caminho por utilizador; caso contrário usa caminho legado.
+   */
+  async batchUpdateTransactions(
+    uidOrNull: string | null | undefined,
+    ids: string[],
+    updateData: Partial<Transaction>
+  ): Promise<void> {
+    if (!ids.length) return;
+    const batch = writeBatch(db);
+    const { id: _id, uid: _uid, createdAt: _ca, ...payload } = updateData as Partial<Transaction>;
+    const safePayload: Record<string, unknown> = { ...payload, updatedAt: serverTimestamp() };
+
+    ids.forEach(id => {
+      const ref = uidOrNull
+        ? doc(txCol(uidOrNull), id)
+        : doc(collection(db, 'transactions'), id);
+      batch.update(ref, safePayload);
+    });
+    await batch.commit();
+  },
+
+  // ─── Importação em Batch ────────────────────────────────────────────────────
+
+  /**
+   * Importa múltiplas transações em batch, com deduplicação por hash.
+   * Escreve em users/{uid}/transactions.
+   */
+  async saveAllTransactions(
+    uid: string,
+    transactions: Array<Partial<Transaction>>
+  ): Promise<ImportResult> {
+    if (!uid || !transactions.length) return { added: 0, duplicates: 0, invalid: 0 };
+
+    const batch  = writeBatch(db);
+    const cache  = new Set<string>();
+    let added = 0, duplicates = 0, invalid = 0;
+
+    transactions.forEach(tx => {
       const isIncome = tx.type === 'receita' || tx.type === 'entrada';
-      const rawVal = Number(tx.value ?? tx.amount ?? 0);
+      const rawVal   = Number(tx.value ?? 0);
       if (isNaN(rawVal) || rawVal === 0) { invalid++; return; }
 
-      const safeValue = Math.round(Math.abs(rawVal) * 100);
-      const txType = isIncome ? 'receita' : 'saida';
-      const category = tx.category || 'Diversos';
-      const date = tx.date || new Date().toISOString().split('T')[0];
-      const account = tx.account || 'conta_corrente';
+      // Normaliza: assume valor em reais → guarda em centavos
+      const centavos = Number.isInteger(rawVal) ? rawVal : Math.round(Math.abs(rawVal) * 100);
+      const txType   = isIncome ? 'entrada' : 'saida';
+      const category = tx.category ?? 'Outros';
+      const date     = tx.date ?? new Date().toISOString().split('T')[0];
 
-      const hashStr = `${uid}-${date}-${tx.description}-${safeValue}-${txType}`;
-      if (cache.has(hashStr)) { duplicates++; return; }
-      cache.add(hashStr);
+      const hashKey = `${date}|${tx.description ?? ''}|${centavos}|${txType}`;
+      if (cache.has(hashKey)) { duplicates++; return; }
+      cache.add(hashKey);
 
-      const docRef = doc(collection(db, 'transactions'));
+      const docRef = doc(txCol(uid));
       batch.set(docRef, {
-        uid, description: tx.description, value: safeValue, type: txType,
-        category, date, account, tags: tx.tags || [],
-        createdAt: new Date(date).getTime(), updatedAt: serverTimestamp()
+        uid,
+        description: tx.description ?? '',
+        value:       centavos,
+        type:        txType,
+        category,
+        date,
+        account:     tx.account ?? 'conta_corrente',
+        tags:        tx.tags ?? [],
+        source:      tx.source ?? 'csv',
+        fitId:       tx.fitId ?? null,
+        isRecurring: false,
+        createdAt:   serverTimestamp(),
+        updatedAt:   serverTimestamp(),
       });
       added++;
     });
@@ -55,72 +166,35 @@ export const FirestoreService = {
     return { added, duplicates, invalid };
   },
 
-  async updateTransaction(id: string, data: PartialTransactionData): Promise<void> {
-    if (!id) throw new Error('ID ausente.');
-    const updatePayload: Record<string, unknown> = { ...data, updatedAt: serverTimestamp() };
-    if (data.value !== undefined) updatePayload['value'] = Math.round(Number(data.value) * 100);
-    await updateDoc(doc(db, 'transactions', id), updatePayload);
-  },
-
-  async deleteTransaction(id: string): Promise<void> {
-    if (!id) throw new Error('ID ausente.');
-    await deleteDoc(doc(db, 'transactions', id));
-  },
-
-  async deleteBatchTransactions(ids: string[]): Promise<void> {
-    if (!ids || ids.length === 0) return;
-    const batch = writeBatch(db);
-    ids.forEach(id => batch.delete(doc(db, 'transactions', id)));
-    await batch.commit();
-  },
-
-  async batchUpdateTransactions(ids: string[], updateData: PartialTransactionData): Promise<void> {
-    if (!ids || ids.length === 0) return;
-    const batch = writeBatch(db);
-    const payload: Record<string, unknown> = { ...updateData, updatedAt: serverTimestamp() };
-    delete payload['value'];
-    ids.forEach(id => batch.update(doc(db, 'transactions', id), payload));
-    await batch.commit();
-  },
+  // ─── Recorrentes ────────────────────────────────────────────────────────────
 
   getRecurringCollection(uid?: string): CollectionReference {
     if (uid) return collection(db, 'users', uid, 'recurringTasks');
     return collection(db, 'recurring');
   },
 
-  async saveRecurringTransaction(uid: string, data: Record<string, unknown>): Promise<string> {
-    if (!uid) throw new Error('UID ausente.');
-    const safeValue = Math.round(Number(data['value'] || 0) * 100);
-    const docRef = await addDoc(collection(db, 'recurring'), {
-      ...data, value: safeValue, uid,
-      createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-    });
-    return docRef.id;
-  },
-
   async addRecurringTask(uid: string, data: Record<string, unknown>): Promise<string> {
-    if (!uid) throw new Error('UID ausente.');
+    if (!uid) throw new Error('[Firestore][addRecurringTask] UID ausente.');
     const docRef = await addDoc(collection(db, 'users', uid, 'recurringTasks'), {
-      ...data, uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+      ...data, uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
     });
     return docRef.id;
   },
 
   async updateRecurringTransaction(id: string, data: Record<string, unknown>): Promise<void> {
-    if (!id) throw new Error('ID ausente.');
-    const updatePayload: Record<string, unknown> = { ...data, updatedAt: serverTimestamp() };
-    if (data['value'] !== undefined) updatePayload['value'] = Math.round(Number(data['value']) * 100);
-    await updateDoc(doc(db, 'recurring', id), updatePayload);
+    if (!id) throw new Error('[Firestore][updateRecurringTransaction] ID ausente.');
+    const payload: Record<string, unknown> = { ...data, updatedAt: serverTimestamp() };
+    if (data['value'] !== undefined) payload['value'] = Math.round(Number(data['value']) * 100);
+    await updateDoc(doc(db, 'recurring', id), payload);
   },
 
   async deleteRecurringTask(uid: string, id: string): Promise<void> {
-    if (!id) throw new Error('ID ausente.');
+    if (!id) throw new Error('[Firestore][deleteRecurringTask] ID ausente.');
     await deleteDoc(doc(db, 'users', uid, 'recurringTasks', id));
   },
 
   async deleteRecurringTransaction(id: string): Promise<void> {
-    if (!id) throw new Error('ID ausente.');
+    if (!id) throw new Error('[Firestore][deleteRecurringTransaction] ID ausente.');
     await deleteDoc(doc(db, 'recurring', id));
   },
 };
-
