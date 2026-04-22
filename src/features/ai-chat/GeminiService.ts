@@ -139,10 +139,11 @@ export class GeminiService {
 
   // ── MOTOR 4 — Briefing Proativo por Período ───────────────────────────────
   static async generateProactiveBriefing(
-    kpis:         { totalBalance: number; totalIncome: number; totalExpense: number },
-    categoryData: { name: string; value: number }[],
-    timeRange:    string,
-    forecast?:    { projectedBalance: number; minBalance: number; health: string }
+    kpis:           { totalBalance: number; totalIncome: number; totalExpense: number },
+    categoryData:   { name: string; value: number }[],
+    timeRange:      string,
+    forecast?:      { projectedBalance: number; minBalance: number; health: string },
+    budgetContext?: string
   ): Promise<string> {
     const rangeLabel: Record<string, string> = {
       '7d': 'últimos 7 dias', '30d': 'últimos 30 dias',
@@ -165,8 +166,14 @@ export class GeminiService {
       `• Pior saldo previsto:      R$ ${forecast.minBalance.toFixed(2)}`,
       `• Saúde financeira:        ${forecast.health}`,
       ...(forecast.minBalance < 0 ? [
-        `• ⚠️ ALERTA: o modelo prevê caixa NEGATIVO. Prioridade máxima: corte de gastos imediato.`,
+        `• CRÍTICO: modelo prevê caixa NEGATIVO. Corte imediato de gastos necessário.`,
       ] : []),
+    ] : [];
+
+    const budgetBlock = budgetContext ? [
+      ``,
+      `ALERTA DE ORÇAMENTOS:`,
+      budgetContext,
     ] : [];
 
     const prompt = [
@@ -180,14 +187,17 @@ export class GeminiService {
       `• Taxa de retenção:      ${retencao}%`,
       `• Maiores categorias de gasto: ${topCats}`,
       ...forecastBlock,
+      ...budgetBlock,
       ``,
-      `REGRAS DE OURO:`,
-      `1. Se o pior saldo previsto for negativo, emita um ALERTA CRÍTICO sobre risco de caixa negativo e sugira corte na categoria de maior gasto.`,
-      `2. Caso contrário, destaque 1 ponto positivo e 1 ação concreta e específica.`,
+      `PRIORIDADE TÁTICA (ordem obrigatória):`,
+      `1. Risco de saldo negativo (Crítico) — máxima prioridade.`,
+      `2. Orçamentos excedidos (DANGER) — alerte e sugira corte na categoria específica.`,
+      `3. Orçamentos próximos do limite (WARNING) — avise e recomende cautela.`,
+      ``,
+      `REGRA DE NÃO CONTRADIÇÃO: A matemática do sistema é SOBERANA. Use os dados fornecidos apenas para explicar a situação e sugerir uma ação prática. NUNCA contradiga o estado calculado — se o saldo projetado for negativo ou o orçamento estourar, a situação NÃO está sob controle.`,
       ``,
       `Escreva um briefing financeiro executivo em português (pt-BR), em exatamente 2 ou 3 frases curtas.`,
-      `Tom: direto, encorajador e acionável.`,
-      `Não use markdown, listas, asteriscos ou emojis. Não repita os números literalmente — interprete-os.`,
+      `Tom: direto e acionável. Não use markdown, listas, asteriscos ou emojis. Não repita números literalmente — interprete-os.`,
     ].join('\n');
 
     try {

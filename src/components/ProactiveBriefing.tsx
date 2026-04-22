@@ -7,6 +7,10 @@ import {
 import { GeminiService } from '../features/ai-chat/GeminiService';
 import type { DashboardKPIs, CategoryChartPoint, TimeRange } from '../hooks/useFinancialData';
 import type { ForecastResult } from '../hooks/useForecast';
+import type { BudgetInsight } from '../hooks/useBudgets';
+
+// Safe numeric coercion — returns 0 for NaN, Infinity, null, undefined, non-numeric strings
+const safe = (v: unknown): number => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,13 +63,14 @@ interface Props {
   timeRange:    TimeRange;
   dataLoading:  boolean;
   forecast?:    ForecastResult;
+  budgets?:     BudgetInsight[];
   className?:   string;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ProactiveBriefing({
-  uid, kpis, categoryData, timeRange, dataLoading, forecast, className = '',
+  uid, kpis, categoryData, timeRange, dataLoading, forecast, budgets, className = '',
 }: Props) {
   const [briefing,  setBriefing]  = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -77,8 +82,16 @@ export default function ProactiveBriefing({
   const lastCallKey = useRef<string>('');
   const abortedRef  = useRef<boolean>(false);
 
-  // Stable key: includes forecast signals so a health-state change triggers a fresh briefing
-  const dataKey = `${timeRange}|${Math.round(kpis.totalBalance)}|${Math.round(forecast?.minBalance ?? 0)}|${forecast?.health ?? ''}`;
+  // Budget hash: only non-success items sorted deterministically by category name.
+  // Changes only when a budget crosses a status threshold — keeps anti-spam intact.
+  const budgetHash = (budgets ?? [])
+    .filter(b => b.status !== 'success')
+    .sort((a, b) => a.category.localeCompare(b.category))
+    .map(b => `${b.category}:${b.status}`)
+    .join('|');
+
+  // Stable key: timeRange + balance + forecast health + budget alert states
+  const dataKey = `${timeRange}|${Math.round(kpis.totalBalance)}|${Math.round(forecast?.minBalance ?? 0)}|${forecast?.health ?? ''}|${budgetHash}`;
 
   const fetchBriefing = useCallback(async (forced = false) => {
     if (!uid) return;
@@ -98,7 +111,31 @@ export default function ProactiveBriefing({
       const forecastPayload = forecast
         ? { projectedBalance: forecast.finalBalance, minBalance: forecast.minBalance, health: forecast.health }
         : undefined;
-      const text = await GeminiService.generateProactiveBriefing(kpis, categoryData, timeRange, forecastPayload);
+
+      // ── Budget context: dedup → filter → sort → top-3 → clamp 500 chars ──
+      const rawBudgets = budgets ?? [];
+      const dedupedBudgets = Array.from(
+        new Map(rawBudgets.map(b => [b.category, b])).values(),
+      );
+      const alertingBudgets = dedupedBudgets
+        .filter(b => b.status !== 'success')
+        .sort((a, b) => (a.status === 'danger' ? -1 : b.status === 'danger' ? 1 : 0))
+        .slice(0, 3);
+
+      const rawBudgetContext = alertingBudgets
+        .map(b =>
+          `${b.category.trim()}: ${b.status.toUpperCase()}, ` +
+          `gasto ${safe(b.spent).toFixed(2)} de ${safe(b.targetAmount).toFixed(2)}, ` +
+          `proj. ${safe(b.projectedSpend).toFixed(2)}`,
+        )
+        .join('\n')
+        .slice(0, 500); // absolute token guard
+
+      const budgetContext = rawBudgetContext.trim() || undefined; // undefined → omit block from prompt
+
+      const text = await GeminiService.generateProactiveBriefing(
+        kpis, categoryData, timeRange, forecastPayload, budgetContext,
+      );
       if (abortedRef.current) return;
       setBriefing(text);
       setExpanded(true);

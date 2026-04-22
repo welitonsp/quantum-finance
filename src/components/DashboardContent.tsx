@@ -17,6 +17,8 @@ import WealthKPIs from './WealthKPIs';
 import DashboardCharts from './DashboardCharts';
 import { calcStatus } from '../utils/dashboardUtils';
 import { useForecast } from '../hooks/useForecast';
+import { useBudgets } from '../hooks/useBudgets';
+import BudgetWidget from './BudgetWidget';
 import { HealthGauge } from './HealthGauge';
 import { SparkLine } from './SparkLine';
 import { IntelStrip } from './IntelStrip';
@@ -82,8 +84,14 @@ export default function DashboardContent({
   const receitas = moduleBalances?.geral?.receitas ?? 0;
   const despesas = moduleBalances?.geral?.despesas ?? 0;
 
+  // Shared transaction set used by both forecast and budgets
+  const txSet = allTransactions.length > 0 ? allTransactions : transactions;
+
   // Forecast driven by the full transaction set and live balance
-  const forecast = useForecast(allTransactions.length > 0 ? allTransactions : transactions, saldo);
+  const forecast = useForecast(txSet, saldo);
+
+  // Budget insights — lifted here so ProactiveBriefing and BudgetWidget share one subscription
+  const { insights: budgetInsights } = useBudgets(user?.uid ?? '', txSet);
 
   const patrimonio = saldo;
   const dividas    = 0;
@@ -170,7 +178,7 @@ export default function DashboardContent({
           <div className="flex flex-col items-end gap-3 xl:min-w-[260px]">
             <div className="flex flex-col items-end gap-1">
               <span className="text-[9px] font-bold text-quantum-fgMuted uppercase tracking-wider">Tendência 6M</span>
-              <SparkLine transactions={allTransactions.length > 0 ? allTransactions : transactions} />
+              <SparkLine transactions={txSet} />
             </div>
             <motion.button
               whileHover={{ scale: 1.02 }}
@@ -225,6 +233,7 @@ export default function DashboardContent({
           timeRange={timeRange}
           dataLoading={dashLoading}
           forecast={forecast}
+          budgets={budgetInsights}
         />
       </motion.div>
 
@@ -260,6 +269,14 @@ export default function DashboardContent({
         <SurvivalHeatmap transactions={transactions} currentMonth={currentMonth} currentYear={currentYear} />
       </motion.div>
 
+      {/* ── ORÇAMENTOS QUÂNTICOS ─────────────────────────────── */}
+      <motion.div variants={itemVariants}>
+        <BudgetWidget
+          uid={user?.uid ?? ''}
+          transactions={txSet}
+        />
+      </motion.div>
+
       {/* ── PROJEÇÃO QUÂNTICA ─────────────────────────────────── */}
       <motion.div variants={itemVariants} className="grid grid-cols-1 gap-6">
         <div className="flex flex-col gap-2">
@@ -270,7 +287,7 @@ export default function DashboardContent({
           </div>
           <div className="bg-quantum-card/40 backdrop-blur-sm rounded-2xl p-5 border border-quantum-border min-h-[400px]">
             <ForecastWidget
-              transactions={allTransactions.length > 0 ? allTransactions : transactions}
+              transactions={txSet}
               currentBalance={saldo}
             />
           </div>
