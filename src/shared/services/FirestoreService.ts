@@ -91,6 +91,7 @@ export const FirestoreService = {
 
   /**
    * Atualiza em batch um campo comum (ex: categoria) em múltiplas transações.
+   * Chunking automático de 500 operações por batch (limite Firestore).
    * Se uid for fornecido, usa caminho por utilizador; caso contrário usa caminho legado.
    */
   async batchUpdateTransactions(
@@ -99,17 +100,21 @@ export const FirestoreService = {
     updateData: Partial<Transaction>
   ): Promise<void> {
     if (!ids.length) return;
-    const batch = writeBatch(db);
     const { id: _id, uid: _uid, createdAt: _ca, ...payload } = updateData as Partial<Transaction>;
     const safePayload: Record<string, unknown> = { ...payload, updatedAt: serverTimestamp() };
 
-    ids.forEach(id => {
-      const ref = uidOrNull
-        ? doc(txCol(uidOrNull), id)
-        : doc(collection(db, 'transactions'), id);
-      batch.update(ref, safePayload);
-    });
-    await batch.commit();
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+      const chunk = ids.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach(id => {
+        const ref = uidOrNull
+          ? doc(txCol(uidOrNull), id)
+          : doc(collection(db, 'transactions'), id);
+        batch.update(ref, safePayload);
+      });
+      await batch.commit();
+    }
   },
 
   // ─── Importação em Batch ────────────────────────────────────────────────────

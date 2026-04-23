@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { ListChecks, TrendingUp, TrendingDown, Scale, type LucideIcon } from 'lucide-react';
 import TransactionsManager from '../features/transactions/TransactionsManager';
 import type { Transaction } from '../shared/types/transaction';
+import type { BulkUpdate } from '../hooks/useTransactions';
 
 interface StatPillProps {
   icon: LucideIcon;
@@ -38,6 +39,12 @@ interface Props {
   onDeleteRequest: (tx: Transaction | null) => void;
   onBatchDelete: (ids: string[]) => Promise<void>;
   onBatchImport?: (txs: Partial<Transaction>[]) => Promise<unknown> | void;
+  onBulkUpdate?: (ids: string[], updates: BulkUpdate) => Promise<void>;
+  isBulkUpdating?: boolean;
+  undoLastBulkUpdate?: () => Promise<void>;
+  isUndoing?: boolean;
+  hasUndoSnapshot?: boolean;
+  clearBulkSnapshot?: () => void;
 }
 
 export default function HistoryPage({
@@ -46,6 +53,12 @@ export default function HistoryPage({
   onEdit,
   onDeleteRequest,
   onBatchDelete,
+  onBulkUpdate,
+  isBulkUpdating = false,
+  undoLastBulkUpdate,
+  isUndoing = false,
+  hasUndoSnapshot = false,
+  clearBulkSnapshot,
 }: Props) {
   const stats = useMemo(() => {
     let totalIn = 0, totalOut = 0;
@@ -108,6 +121,12 @@ export default function HistoryPage({
           onEdit={onEdit}
           onDeleteRequest={(tx) => onDeleteRequest(tx)}
           onBatchDelete={onBatchDelete}
+          onBulkUpdate={onBulkUpdate}
+          isBulkUpdating={isBulkUpdating}
+          undoLastBulkUpdate={undoLastBulkUpdate}
+          isUndoing={isUndoing}
+          hasUndoSnapshot={hasUndoSnapshot}
+          clearBulkSnapshot={clearBulkSnapshot}
         />
       </motion.div>
     </div>

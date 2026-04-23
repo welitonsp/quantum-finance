@@ -10,10 +10,10 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
-import { FirestoreService } from '../../shared/services/FirestoreService';
 import toast from 'react-hot-toast';
 import type { Transaction } from '../../shared/types/transaction';
 import type { AllowedCategory } from '../../shared/schemas/financialSchemas';
+import type { BulkUpdate } from '../../hooks/useTransactions';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SortBy = 'date_desc' | 'date_asc' | 'value_desc' | 'value_asc' | 'cat';
@@ -39,6 +39,12 @@ interface Props {
   onEdit: (tx: Transaction) => void;
   onDeleteRequest: (tx: Transaction) => void;
   onBatchDelete: (ids: string[]) => Promise<void>;
+  onBulkUpdate?: (ids: string[], updates: BulkUpdate) => Promise<void>;
+  isBulkUpdating?: boolean;
+  undoLastBulkUpdate?: () => Promise<void>;
+  isUndoing?: boolean;
+  hasUndoSnapshot?: boolean;
+  clearBulkSnapshot?: () => void;
 }
 
 // ─── Paleta de cores por categoria ───────────────────────────────────────────
@@ -215,6 +221,11 @@ export default function TransactionsManager({
   onEdit,
   onDeleteRequest,
   onBatchDelete,
+  onBulkUpdate,
+  isBulkUpdating = false,
+  undoLastBulkUpdate,
+  isUndoing = false,
+  clearBulkSnapshot,
 }: Props) {
   const [search,        setSearch]        = useState('');
   const [filterType,    setFilterType]    = useState<FilterType>('all');
@@ -228,7 +239,13 @@ export default function TransactionsManager({
   const [newCat,        setNewCat]        = useState<AllowedCategory>(ALLOWED_CATEGORIES[0]);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const searchRef = useRef<HTMLInputElement>(null);
+  const searchRef    = useRef<HTMLInputElement>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Limpa timer de undo ao desmontar (evita clearBulkSnapshot em componente morto)
+  useEffect(() => () => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -360,17 +377,63 @@ export default function TransactionsManager({
 
   const handleBatchRecategorize = useCallback(async () => {
     const ids = Array.from(selected);
-    if (!ids.length || !newCat) return;
-    const toastId = toast.loading(`A re-categorizar ${ids.length} transações...`);
+    if (!ids.length || !newCat || !onBulkUpdate) return;
+    const loadingId = toast.loading(`A re-categorizar ${ids.length} transações...`);
     try {
-      await FirestoreService.batchUpdateTransactions(null, ids, { category: newCat });
-      toast.success(`${ids.length} transações movidas para "${newCat}".`, { id: toastId });
+      await onBulkUpdate(ids, { category: newCat });
+      toast.dismiss(loadingId);
+
+      // Limpa timer anterior se houver (nova operação sobrepõe a anterior)
+      if (undoTimerRef.current) {
+        clearTimeout(undoTimerRef.current);
+        undoTimerRef.current = null;
+      }
+
+      // Toast customizado com botão DESFAZER (10 s)
+      const capturedCount = ids.length;
+      const capturedCat   = newCat;
+      toast(
+        (t) => (
+          <div className="flex items-center gap-3 min-w-0">
+            <Check className="w-4 h-4 text-quantum-accent shrink-0" />
+            <span className="text-sm text-quantum-fg flex-1 min-w-0 truncate">
+              <strong>{capturedCount}</strong> transações → <strong>{capturedCat}</strong>
+            </span>
+            {undoLastBulkUpdate && (
+              <button
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  if (undoTimerRef.current) {
+                    clearTimeout(undoTimerRef.current);
+                    undoTimerRef.current = null;
+                  }
+                  const undoId = toast.loading('A desfazer alterações...');
+                  undoLastBulkUpdate()
+                    .then(() => toast.success('Alterações desfeitas.', { id: undoId }))
+                    .catch(() => toast.error('Falha ao desfazer. Verifique manualmente.', { id: undoId }));
+                }}
+                className="shrink-0 px-2.5 py-1 bg-quantum-accent/15 border border-quantum-accent/30 text-quantum-accent rounded-lg text-xs font-black hover:bg-quantum-accent/25 transition-colors"
+              >
+                DESFAZER
+              </button>
+            )}
+          </div>
+        ),
+        { duration: 10_000 }
+      );
+
+      // Após 10 s o toast expira → descarta snapshot (undo já não é possível)
+      undoTimerRef.current = setTimeout(() => {
+        clearBulkSnapshot?.();
+        undoTimerRef.current = null;
+      }, 10_000);
+
       clearSelected();
       setBatchAction(null);
     } catch {
-      toast.error('Falha ao re-categorizar.', { id: toastId });
+      toast.error('Falha ao re-categorizar. Tente novamente.', { id: loadingId });
     }
-  }, [selected, newCat, clearSelected]);
+  }, [selected, newCat, onBulkUpdate, undoLastBulkUpdate, clearBulkSnapshot, clearSelected]);
 
   interface ActiveFilter { label: string; clear: () => void }
   const activeFilters = (
@@ -621,7 +684,8 @@ export default function TransactionsManager({
 
                   <button
                     onClick={() => setBatchAction(a => a === 'recategorize' ? null : 'recategorize')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-xs font-bold transition-all ${
+                    disabled={isBulkUpdating || isUndoing}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                       batchAction === 'recategorize'
                         ? 'bg-quantum-goldDim border-quantum-gold/30 text-quantum-gold'
                         : 'bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/30'
@@ -740,9 +804,13 @@ export default function TransactionsManager({
                       </button>
                       <button
                         onClick={() => void handleBatchRecategorize()}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-quantum-gold text-quantum-bg rounded-lg text-xs font-black hover:opacity-90 transition-opacity"
+                        disabled={isBulkUpdating || isUndoing || !onBulkUpdate}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-quantum-gold text-quantum-bg rounded-lg text-xs font-black hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Check className="w-3.5 h-3.5" /> Aplicar
+                        {(isBulkUpdating || isUndoing)
+                          ? <><span className="w-3.5 h-3.5 border-2 border-quantum-bg/40 border-t-quantum-bg rounded-full animate-spin inline-block" /> A processar...</>
+                          : <><Check className="w-3.5 h-3.5" /> Aplicar</>
+                        }
                       </button>
                     </div>
                   </motion.div>

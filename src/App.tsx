@@ -141,7 +141,11 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
 
   const safeUID = user.uid;
 
-  const { transactions, loading, add, addBatch, remove, removeBatch, update } = useTransactions(safeUID);
+  const {
+    transactions, loading, add, addBatch, remove, removeBatch, update,
+    bulkUpdateTransactions, isBulkUpdating,
+    undoLastBulkUpdate, isUndoing, hasUndoSnapshot, clearBulkSnapshot,
+  } = useTransactions(safeUID);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
     useFinancialData(transactions, activeModule, currentMonth, currentYear);
 
@@ -269,6 +273,12 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     onDeleteRequest={setTransactionToDelete}
                     onBatchDelete={handleBatchDelete}
                     onBatchImport={handleImport}
+                    onBulkUpdate={bulkUpdateTransactions}
+                    isBulkUpdating={isBulkUpdating}
+                    undoLastBulkUpdate={undoLastBulkUpdate}
+                    isUndoing={isUndoing}
+                    hasUndoSnapshot={hasUndoSnapshot}
+                    clearBulkSnapshot={clearBulkSnapshot}
                   />
                 )}
                 {currentPage === 'reports' && (

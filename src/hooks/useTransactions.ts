@@ -5,7 +5,21 @@ import {
 } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
 import { FirestoreService } from '../shared/services/FirestoreService';
+import { AuditService } from '../shared/services/AuditService';
 import type { Transaction } from '../shared/types/transaction';
+
+// ─── Bulk Update — tipo restrito (não expõe Partial<Transaction> livre) ────────
+export type BulkUpdate = {
+  category?: string;
+};
+
+// ─── Bulk Snapshot — estado anterior para undo em memória ─────────────────────
+export type BulkSnapshot = {
+  id:          string;
+  oldCategory: string;
+  /** Categoria aplicada pelo bulk update — necessária para o log de undo (from → to). */
+  newCategory?: string;
+}[];
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -45,14 +59,20 @@ type Op = AddOp | UpdateOp | DeleteOp | DeleteBatchOp;
 // ─── Return Type ──────────────────────────────────────────────────────────────
 
 interface UseTransactionsReturn {
-  transactions: Transaction[];
-  loading:      boolean;
-  error:        Error | null;
-  add:          (data: Partial<Transaction>) => Promise<string>;
-  addBatch:     (items: Partial<Transaction>[]) => Promise<string[]>;
-  remove:       (id: string) => Promise<void>;
-  removeBatch:  (ids: string[]) => Promise<void>;
-  update:       (id: string, data: Partial<Transaction>) => Promise<void>;
+  transactions:           Transaction[];
+  loading:                boolean;
+  error:                  Error | null;
+  isBulkUpdating:         boolean;
+  isUndoing:              boolean;
+  hasUndoSnapshot:        boolean;
+  add:                    (data: Partial<Transaction>) => Promise<string>;
+  addBatch:               (items: Partial<Transaction>[]) => Promise<string[]>;
+  remove:                 (id: string) => Promise<void>;
+  removeBatch:            (ids: string[]) => Promise<void>;
+  update:                 (id: string, data: Partial<Transaction>) => Promise<void>;
+  bulkUpdateTransactions: (ids: string[], updates: BulkUpdate) => Promise<void>;
+  undoLastBulkUpdate:     () => Promise<void>;
+  clearBulkSnapshot:      () => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -86,9 +106,19 @@ function toMillis(ts: Transaction['updatedAt'] | Transaction['createdAt']): numb
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useTransactions(uid: string): UseTransactionsReturn {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading,      setLoading]      = useState(true);
-  const [error,        setError]        = useState<Error | null>(null);
+  const [transactions,   setTransactions]   = useState<Transaction[]>([]);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState<Error | null>(null);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  const [isUndoing,      setIsUndoing]      = useState(false);
+  const [hasUndoSnapshot, setHasUndoSnapshot] = useState(false);
+
+  // ── Refs para guards sem recrear callbacks ────────────────────────────────
+  const isBulkUpdatingRef  = useRef(false);
+  const isUndoingRef       = useRef(false);
+  const snapshotRef        = useRef<BulkSnapshot | null>(null);
+  /** Espelho síncrono de `transactions` para leitura dentro de callbacks. */
+  const transactionsRef    = useRef<Transaction[]>([]);
 
   // ── Fila de sync ──────────────────────────────────────────────────────────
   const queueRef    = useRef<Op[]>([]);
@@ -177,6 +207,9 @@ export function useTransactions(uid: string): UseTransactionsReturn {
 
     return () => unsub();
   }, [uid]);
+
+  // ── Mantém transactionsRef sincronizado para leitura nos callbacks ─────────
+  useEffect(() => { transactionsRef.current = transactions; }, [transactions]);
 
   // ── processQueue ───────────────────────────────────────────────────────────
   const processQueue = useCallback(async (): Promise<void> => {
@@ -416,5 +449,122 @@ export function useTransactions(uid: string): UseTransactionsReturn {
     }
   }, [uid, enqueue]);
 
-  return { transactions, loading, error, add, addBatch, remove, removeBatch, update };
+  // ── clearBulkSnapshot — exposto para o timer de 10s do toast ─────────────
+  const clearBulkSnapshot = useCallback((): void => {
+    if (!snapshotRef.current) return;
+    snapshotRef.current = null;
+    setHasUndoSnapshot(false);
+  }, []);
+
+  // ── BULK UPDATE — Snapshot → Chunking 500 → loading guard ─────────────────
+  const bulkUpdateTransactions = useCallback(async (
+    ids: string[],
+    updates: BulkUpdate
+  ): Promise<void> => {
+    if (!uid || !ids.length) return;
+
+    // Captura snapshot ANTES do update (lê ref síncrono para evitar stale closure)
+    // newCategory registada para permitir log replayable no undo (from → to)
+    const snap: BulkSnapshot = ids.reduce<BulkSnapshot>((acc, id) => {
+      const tx = transactionsRef.current.find(t => t.id === id);
+      if (tx) acc.push({ id, oldCategory: tx.category ?? 'Outros', newCategory: updates.category });
+      return acc;
+    }, []);
+
+    snapshotRef.current = snap;
+    setHasUndoSnapshot(snap.length > 0);
+
+    isBulkUpdatingRef.current = true;
+    setIsBulkUpdating(true);
+    try {
+      const CHUNK_SIZE = 500;
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const chunk = ids.slice(i, i + CHUNK_SIZE);
+        await FirestoreService.batchUpdateTransactions(uid, chunk, updates);
+      }
+
+      // Auditoria — fire-and-forget após todos os commits (nunca bloqueia UI)
+      void AuditService.logAction({
+        userId:  uid,
+        action:  'BULK_UPDATE',
+        entity:  'TRANSACTION',
+        details: `Alterou ${ids.length} transações para '${updates.category ?? ''}'`,
+        metadata: {
+          count:   ids.length,
+          changes: snap.map(s => ({ id: s.id, from: s.oldCategory, to: updates.category })),
+        },
+      });
+    } catch (err) {
+      // Update falhou — snapshot inválido, descarta
+      snapshotRef.current = null;
+      setHasUndoSnapshot(false);
+      throw err;
+    } finally {
+      isBulkUpdatingRef.current = false;
+      setIsBulkUpdating(false);
+    }
+  }, [uid]);
+
+  // ── UNDO — Reverte categorias via snapshot em memória ─────────────────────
+  const undoLastBulkUpdate = useCallback(async (): Promise<void> => {
+    // Guards via refs (sem recriação de callback)
+    if (!snapshotRef.current || isBulkUpdatingRef.current || isUndoingRef.current) return;
+    if (!uid) return;
+
+    const snap = snapshotRef.current;
+
+    // Limpa imediatamente → garante execução única (sem race condition)
+    snapshotRef.current = null;
+    setHasUndoSnapshot(false);
+
+    isUndoingRef.current = true;
+    setIsUndoing(true);
+
+    try {
+      // Agrupa por oldCategory para minimizar batches
+      const groups = new Map<string, string[]>();
+      snap.forEach(({ id, oldCategory }) => {
+        if (!groups.has(oldCategory)) groups.set(oldCategory, []);
+        groups.get(oldCategory)!.push(id);
+      });
+
+      // Aplica com chunking por grupo (reutiliza FirestoreService)
+      for (const [oldCategory, groupIds] of groups) {
+        await FirestoreService.batchUpdateTransactions(uid, groupIds, { category: oldCategory });
+      }
+
+      // Auditoria — fire-and-forget após todos os commits (nunca bloqueia UI)
+      void AuditService.logAction({
+        userId:  uid,
+        action:  'UNDO_BULK_UPDATE',
+        entity:  'TRANSACTION',
+        details: `Desfez ${snap.length} transações`,
+        metadata: {
+          count:   snap.length,
+          // from = categoria aplicada pelo bulk update; to = categoria original restaurada
+          changes: snap.map(s => ({ id: s.id, from: s.newCategory ?? 'unknown', to: s.oldCategory })),
+        },
+      });
+    } finally {
+      isUndoingRef.current = false;
+      setIsUndoing(false);
+    }
+  }, [uid]);
+
+  return {
+    transactions,
+    loading,
+    error,
+    isBulkUpdating,
+    isUndoing,
+    hasUndoSnapshot,
+    add,
+    addBatch,
+    remove,
+    removeBatch,
+    update,
+    bulkUpdateTransactions,
+    undoLastBulkUpdate,
+    clearBulkSnapshot,
+  };
 }
