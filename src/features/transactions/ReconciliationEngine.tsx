@@ -8,7 +8,6 @@ import {
   ArrowLeft, ArrowRight, Trash2, CheckCircle2, GitMerge,
   Zap, ShieldCheck, ChevronRight, Sparkles,
 } from 'lucide-react';
-import { usePrivacy } from '../../contexts/PrivacyContext';
 import type { Transaction } from '../../shared/types/transaction';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -152,8 +151,6 @@ export default function ReconciliationEngine({
   onComplete,
   onCancel,
 }: Props) {
-  const { isPrivacyMode } = usePrivacy();
-
   const [queue,    setQueue]    = useState<ImportTransaction[]>(() => [...(initialQueue ?? [])]);
   const [resolved, setResolved] = useState<ResolvedTransaction[]>([]);
   const [stats,    setStats]    = useState<Stats>({ approved: 0, merged: 0, discarded: 0 });
@@ -318,10 +315,10 @@ export default function ReconciliationEngine({
                   <div className="text-right">
                     <p className="text-[10px] text-quantum-fgMuted uppercase tracking-wider mb-1">Valor</p>
                     <p
-                      className={`text-xl sm:text-2xl font-black font-mono leading-none pb-1 pr-1 ${isIncome ? 'text-emerald-400' : 'text-rose-400'}`}
-                      style={{ textShadow: isIncome ? '0 0 20px rgba(52,211,153,0.5)' : '0 0 20px rgba(251,113,133,0.5)' }}
+                      className={`text-xl sm:text-2xl font-black font-mono leading-none pb-1 pr-1 ${isIncome ? 'text-emerald-400' : 'text-red-400'}`}
+                      style={{ textShadow: isIncome ? '0 0 20px rgba(52,211,153,0.5)' : '0 0 20px rgba(248,113,113,0.5)' }}
                     >
-                      {isPrivacyMode ? '••••••' : `${isIncome ? '+' : '-'}${fmtBRL(Number(card.value))}`}
+                      {`${isIncome ? '+' : '-'}${fmtBRL(Number(card.value))}`}
                     </p>
                   </div>
                 </div>

@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { showAIFeedbackBatch } from '../shared/lib/aiFeedbackToast';
+import { toCentavos } from '../shared/schemas/financialSchemas';
 import type { Transaction, ImportResult } from '../shared/types/transaction';
 import type { User } from 'firebase/auth';
 
@@ -23,8 +24,12 @@ export function useImportActions(
     const toastId = toast.loading('A sincronizar com o Cofre…');
 
     try {
-      // Persist via sync queue (offline-first LWW — optimistic UI imediato)
-      await addBatch(parsedData);
+      // Converte reais → centavos antes de persistir (Firestore armazena inteiros)
+      const withCentavos = parsedData.map(tx => ({
+        ...tx,
+        value: toCentavos(Number(tx.value ?? 0)),
+      }));
+      await addBatch(withCentavos);
 
       const added = parsedData.length;
       toast.success(`${added} transaç${added === 1 ? 'ão adicionada' : 'ões adicionadas'} ao cofre.`, { id: toastId });

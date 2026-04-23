@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import toast from 'react-hot-toast';
+import { toCentavos } from '../shared/schemas/financialSchemas';
 import type { Transaction } from '../shared/types/transaction';
 import type { User } from 'firebase/auth';
 
@@ -30,11 +31,15 @@ export function useTransactionActions({
 
   const handleSaveTransaction = useCallback(async (data: Partial<Transaction>) => {
     try {
+      const payload = {
+        ...data,
+        value: data.value !== undefined ? toCentavos(Number(data.value)) : undefined,
+      };
       if (transactionToEdit) {
-        await update(transactionToEdit.id, data);
+        await update(transactionToEdit.id, payload);
         toast.success('Movimentação atualizada com sucesso!');
       } else {
-        await add(data);
+        await add(payload);
         toast.success('Nova movimentação registada!');
       }
       setIsFormOpen(false);

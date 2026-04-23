@@ -60,16 +60,36 @@ function validateDate(raw: string | undefined): string | null {
   return null;
 }
 
-function parseAmount(raw: string | undefined): number | null {
-  if (!raw) return null;
-  let s = raw.replace(/"/g,'').replace(/[R$\s]/g,'').trim();
+function parseAmount(
+  raw: string | number | undefined,
+  source: 'OFX' | 'PDF' | 'CSV' | 'UNKNOWN' = 'UNKNOWN'
+): number | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
+
+  let s = raw.replace(/"/g, '').replace(/[R$]/g, '').trim();
   if (!s) return null;
+
+  if (source === 'OFX') {
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  if (source === 'PDF') {
+    // Brazilian format: dots as thousand separators, comma as decimal
+    const normalized = s.replace(/\./g, '').replace(',', '.');
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  // CSV / UNKNOWN — heuristic detection
   const neg = s.startsWith('-') || s.startsWith('(');
-  s = s.replace(/[()+-]/g,'');
-  if (/^\d{1,3}(\.\d{3})+,\d{2}$/.test(s)) s=s.replace(/\./g,'').replace(',','.');
-  else if (/^\d{1,3}(,\d{3})+\.\d{2}$/.test(s)) s=s.replace(/,/g,'');
-  else if (s.includes(',')&&!s.includes('.')) s=s.replace(',','.');
-  const val=parseFloat(s); if(isNaN(val)) return null;
+  s = s.replace(/[()+-]/g, '');
+  if (/^\d{1,3}(\.\d{3})+,\d{2}$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
+  else if (/^\d{1,3}(,\d{3})+\.\d{2}$/.test(s)) s = s.replace(/,/g, '');
+  else if (s.includes(',') && !s.includes('.')) s = s.replace(',', '.');
+  const val = parseFloat(s);
+  if (isNaN(val)) return null;
   return neg ? -Math.abs(val) : val;
 }
 
@@ -156,8 +176,8 @@ function parseOFXBuffer(buffer: ArrayBuffer): ParsedTx[] {
     if (fitId&&seenFitIds.has(fitId)) continue;
     if (fitId) seenFitIds.add(fitId);
     const amountStr=extractTag(block,'TRNAMT');
-    const amount=amountStr ? parseFloat(amountStr.replace(',','.')) : null;
-    if (amount===null||isNaN(amount)||amount===0) continue;
+    const amount=amountStr ? parseAmount(amountStr, 'OFX') : null;
+    if (amount===null||amount===0) continue;
     const date=parseOFXDate(extractTag(block,'DTPOSTED'))??new Date().toISOString().split('T')[0];
     const memo=extractTag(block,'MEMO')??extractTag(block,'NAME')??'Transação OFX';
     transactions.push({ id:fitId||crypto.randomUUID(), fitId:fitId||null, description:(memo as string).replace(/\s+/g,' ').trim(), value:Math.abs(amount), type:amount>0?'receita':'saida', date, category:'Diversos', source:'ofx' });
@@ -212,7 +232,8 @@ async function parsePDFBuffer(buffer: ArrayBuffer, password: string | null = nul
       const m=line.match(regexTx);
       if (!m) continue;
       const [,dataRaw,descricao,valorRaw,sufixo]=m;
-      const valorNum=parseFloat(valorRaw.replace(/\s/g,'').replace(/\./g,'').replace(',','.').replace(/^-/,''));
+      const parsedAmt=parseAmount(valorRaw.replace(/\s/g,''), 'PDF');
+      const valorNum=parsedAmt !== null ? Math.abs(parsedAmt) : NaN;
       const isNeg=valorRaw.includes('-')||sufixo==='D'||sufixo==='-';
       if (isNaN(valorNum)||descricao.length<3) continue;
       const dParts=dataRaw.split('/');
