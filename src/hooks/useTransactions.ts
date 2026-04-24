@@ -8,6 +8,7 @@ import { FirestoreService } from '../shared/services/FirestoreService';
 import { AuditService } from '../shared/services/AuditService';
 import type { Transaction } from '../shared/types/transaction';
 import { categorizeTransaction } from '../utils/aiCategorize';
+import { categorizeWithAI } from '../services/AICategorizationService';
 
 // ─── Bulk Update — tipo restrito (não expõe Partial<Transaction> livre) ────────
 export type BulkUpdate = {
@@ -132,6 +133,12 @@ export function useTransactions(uid: string): UseTransactionsReturn {
   const pendingAdds = useRef(new Map<string, Transaction>());
 
   /**
+   * tempId → callback disparado pelo processQueue quando o docId real está disponível.
+   * Usado para aplicar a categoria da IA após o write no Firestore.
+   */
+  const postAddCallbacks = useRef(new Map<string, (realId: string) => void>());
+
+  /**
    * IDs de itens com operação em voo (update / delete).
    * O snapshot ignora estes IDs enquanto a op não terminar.
    */
@@ -147,10 +154,11 @@ export function useTransactions(uid: string): UseTransactionsReturn {
     }
 
     // Limpa estado de fila ao trocar de utilizador
-    queueRef.current    = [];
-    processing.current  = false;
-    pendingAdds.current = new Map();
-    pendingIds.current  = new Set();
+    queueRef.current          = [];
+    processing.current        = false;
+    pendingAdds.current       = new Map();
+    pendingIds.current        = new Set();
+    postAddCallbacks.current  = new Map();
 
     setLoading(true);
     setError(null);
@@ -230,7 +238,13 @@ export function useTransactions(uid: string): UseTransactionsReturn {
         switch (op.type) {
           case 'add': {
             // serverTimestamp() injetado pelo FirestoreService.addTransaction
-            await FirestoreService.addTransaction(uid, op.data);
+            const realId = await FirestoreService.addTransaction(uid, op.data);
+            // Dispara callback de IA (se registado) com o docId real — fire-and-forget
+            const aiCb = postAddCallbacks.current.get(op.tempId);
+            if (aiCb) {
+              postAddCallbacks.current.delete(op.tempId);
+              aiCb(realId);
+            }
             // Remove item temporário; snapshot traz o item real com timestamps do servidor
             pendingAdds.current.delete(op.tempId);
             setTransactions(prev => prev.filter(tx => tx.id !== op.tempId));
@@ -264,6 +278,7 @@ export function useTransactions(uid: string): UseTransactionsReturn {
 
           // Rollback + limpa pendingIds
           if (op.type === 'add') {
+            postAddCallbacks.current.delete(op.tempId);
             pendingAdds.current.delete(op.tempId);
             setTransactions(prev => prev.filter(tx => tx.id !== op.tempId));
 
@@ -322,7 +337,7 @@ export function useTransactions(uid: string): UseTransactionsReturn {
   const add = useCallback(async (data: Partial<Transaction>): Promise<string> => {
     if (!uid) throw new Error('[useTransactions][add] UID ausente.');
 
-    // Auto-categorize only when category is absent — never overwrite a set value
+    // 1. Deterministic categorization — never overwrite a set value
     const enriched: Partial<Transaction> = { ...data };
     if (!enriched.category && enriched.description) {
       const suggested = categorizeTransaction(enriched.description, transactionsRef.current);
@@ -344,6 +359,20 @@ export function useTransactions(uid: string): UseTransactionsReturn {
       createdAt: now,
       updatedAt: now,
     };
+
+    // 2. AI fallback — only when deterministic returned nothing; fire-and-forget after Firestore write
+    if (!enriched.category && enriched.description) {
+      const desc       = enriched.description;
+      const capturedUid = uid;
+      postAddCallbacks.current.set(tempId, (realId: string) => {
+        void categorizeWithAI(desc).then(aiCat => {
+          // Guard: only update when AI returned something meaningful
+          if (aiCat && aiCat !== 'Outros') {
+            void FirestoreService.updateTransaction(capturedUid, realId, { category: aiCat });
+          }
+        });
+      });
+    }
 
     pendingAdds.current.set(tempId, optimistic);
     setTransactions(prev => [optimistic, ...prev]);
@@ -406,7 +435,7 @@ export function useTransactions(uid: string): UseTransactionsReturn {
     const optimistics: Transaction[] = [];
 
     items.forEach(data => {
-      // Auto-categorize only when category is absent — never overwrite a set value
+      // 1. Deterministic categorization — never overwrite a set value
       const enriched: Partial<Transaction> = { ...data };
       if (!enriched.category && enriched.description) {
         const suggested = categorizeTransaction(enriched.description, transactionsRef.current);
@@ -426,6 +455,20 @@ export function useTransactions(uid: string): UseTransactionsReturn {
         createdAt: now,
         updatedAt: now,
       };
+
+      // 2. AI fallback per item — concurrency controlled by AICategorizationService
+      if (!enriched.category && enriched.description) {
+        const desc        = enriched.description;
+        const capturedUid = uid;
+        postAddCallbacks.current.set(tempId, (realId: string) => {
+          void categorizeWithAI(desc).then(aiCat => {
+            if (aiCat && aiCat !== 'Outros') {
+              void FirestoreService.updateTransaction(capturedUid, realId, { category: aiCat });
+            }
+          });
+        });
+      }
+
       pendingAdds.current.set(tempId, optimistic);
       optimistics.push(optimistic);
       tempIds.push(tempId);
