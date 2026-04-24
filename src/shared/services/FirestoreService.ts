@@ -6,6 +6,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../api/firebase/index';
 import type { Transaction, ImportResult } from '../types/transaction';
+import { isIncome as checkIncome } from '../../utils/transactionUtils';
 
 // ─── Helpers de path ──────────────────────────────────────────────────────────
 
@@ -134,12 +135,12 @@ export const FirestoreService = {
     let added = 0, duplicates = 0, invalid = 0;
 
     transactions.forEach(tx => {
-      const isIncome = tx.type === 'receita' || tx.type === 'entrada';
+      const isIncome = checkIncome(tx.type ?? '');
       const rawVal   = Number(tx.value ?? 0);
       if (isNaN(rawVal) || rawVal === 0) { invalid++; return; }
 
-      // Normaliza: assume valor em reais → guarda em centavos
-      const centavos = Number.isInteger(rawVal) ? rawVal : Math.round(Math.abs(rawVal) * 100);
+      // FIX: removed unsafe cent handling
+      const centavos = Math.round(Math.abs(rawVal) * 100);
       const txType   = isIncome ? 'entrada' : 'saida';
       const category = tx.category ?? 'Outros';
       const date     = tx.date ?? new Date().toISOString().split('T')[0];
@@ -189,7 +190,7 @@ export const FirestoreService = {
   async updateRecurringTransaction(id: string, data: Record<string, unknown>): Promise<void> {
     if (!id) throw new Error('[Firestore][updateRecurringTransaction] ID ausente.');
     const payload: Record<string, unknown> = { ...data, updatedAt: serverTimestamp() };
-    if (data['value'] !== undefined) payload['value'] = Math.round(Number(data['value']) * 100);
+    if (data['value'] !== undefined) payload['value'] = Number(data['value']); // FIX: removed unsafe cent handling
     await updateDoc(doc(db, 'recurring', id), payload);
   },
 

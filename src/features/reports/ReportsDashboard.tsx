@@ -8,6 +8,7 @@ import {
 import { TrendingUp, TrendingDown, Target, BrainCircuit, AlertTriangle } from 'lucide-react';
 import Decimal from 'decimal.js';
 import type { Transaction } from '../../shared/types/transaction';
+import { isExpense } from '../../utils/transactionUtils';
 
 interface RechartsTooltipProps {
   active?: boolean;
@@ -62,7 +63,7 @@ export default function ReportsDashboard({ transactions, balances }: Props) {
   const categoryData = useMemo<CategoryEntry[]>(() => {
     const map: Record<string, number> = {};
     transactions.forEach(tx => {
-      if (tx.type === 'saida') {
+      if (isExpense(tx.type)) {
         const cat = tx.category ?? 'Diversos';
         const val = new Decimal(Math.abs(Number(tx.value)));
         map[cat] = map[cat] ? new Decimal(map[cat]).plus(val).toNumber() : val.toNumber();

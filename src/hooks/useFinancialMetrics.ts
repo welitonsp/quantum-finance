@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Decimal from 'decimal.js';
 import type { Transaction } from '../shared/types/transaction';
+import { isIncome, isExpense } from '../utils/transactionUtils';
 
 export interface FinancialMetrics {
   receita: number;
@@ -45,10 +46,10 @@ export function useFinancialMetrics(
 
       transactions.forEach(tx => {
         const valor = new Decimal(Math.abs(Number(tx.value || 0)));
-        if (tx.type === 'receita' || tx.type === 'entrada') {
+        if (isIncome(tx.type)) {
           receita = receita.plus(valor);
           ativos  = ativos.plus(valor);
-        } else if (tx.type === 'saida' || tx.type === 'despesa') {
+        } else if (isExpense(tx.type)) {
           despesa  = despesa.plus(valor);
           passivos = passivos.plus(valor);
           const cat = (tx.category || '').toLowerCase();

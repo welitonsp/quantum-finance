@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import Decimal from 'decimal.js';
 import type { Transaction, ModuleBalances, CategoryDataPoint } from '../shared/types/transaction';
-import { useTransactions } from './useTransactions';
+import { isIncome as checkIncome, isExpense as checkExpense } from '../utils/transactionUtils';
 
 interface FirestoreTimestamp { toDate: () => Date; }
 
@@ -61,7 +61,7 @@ export function useFinancialData(
       if (activeModule !== 'geral' && txAccount !== activeModule) return;
 
       const val = new Decimal(Math.abs(Number(tx.value || 0))).dividedBy(100);
-      const isIncome = tx.type === 'entrada' || tx.type === 'receita';
+      const isIncome = checkIncome(tx.type);
 
       if (isIncome) saldoAcumulado = saldoAcumulado.plus(val);
       else          saldoAcumulado = saldoAcumulado.minus(val);
@@ -90,7 +90,7 @@ export function useFinancialData(
   const categoryData = useMemo((): CategoryDataPoint[] => {
     const map: Record<string, number> = {};
     displayedTransactions.forEach(tx => {
-      if (tx.type === 'saida' || tx.type === 'despesa') {
+      if (checkExpense(tx.type)) {
         const cat = tx.category || 'Diversos';
         const current = map[cat] ? new Decimal(map[cat]) : new Decimal(0);
         const val = new Decimal(Math.abs(Number(tx.value || 0))).dividedBy(100);
@@ -165,8 +165,8 @@ const RANGE_DAYS: Record<Exclude<TimeRange, 'all'>, number> = {
   '7d': 7, '30d': 30, '90d': 90,
 };
 
-export function useDashboardData(uid: string): DashboardDataReturn {
-  const { transactions, loading } = useTransactions(uid);
+// FIX: single source of truth for transactions
+export function useDashboardData(transactions: Transaction[], loading: boolean): DashboardDataReturn {
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
 
   const filtered = useMemo(() => {
@@ -186,14 +186,14 @@ export function useDashboardData(uid: string): DashboardDataReturn {
 
     transactions.forEach(tx => {
       const val = new Decimal(Math.abs(Number(tx.value || 0))).dividedBy(100);
-      if (tx.type === 'entrada' || tx.type === 'receita') totalBalance = totalBalance.plus(val);
-      else                                                 totalBalance = totalBalance.minus(val);
+      if (checkIncome(tx.type)) totalBalance = totalBalance.plus(val);
+      else                      totalBalance = totalBalance.minus(val);
     });
 
     filtered.forEach(tx => {
       const val = new Decimal(Math.abs(Number(tx.value || 0))).dividedBy(100);
-      if (tx.type === 'entrada' || tx.type === 'receita') totalIncome  = totalIncome.plus(val);
-      else                                                 totalExpense = totalExpense.plus(val);
+      if (checkIncome(tx.type)) totalIncome  = totalIncome.plus(val);
+      else                      totalExpense = totalExpense.plus(val);
     });
 
     return {
@@ -212,8 +212,8 @@ export function useDashboardData(uid: string): DashboardDataReturn {
       const key   = d.toISOString().slice(0, 10);
       const entry = map.get(key) ?? { income: new Decimal(0), expense: new Decimal(0) };
       const val   = new Decimal(Math.abs(Number(tx.value || 0))).dividedBy(100);
-      if (tx.type === 'entrada' || tx.type === 'receita') entry.income  = entry.income.plus(val);
-      else                                                 entry.expense = entry.expense.plus(val);
+      if (checkIncome(tx.type)) entry.income  = entry.income.plus(val);
+      else                      entry.expense = entry.expense.plus(val);
       map.set(key, entry);
     });
 
@@ -230,7 +230,7 @@ export function useDashboardData(uid: string): DashboardDataReturn {
     const map = new Map<string, Decimal>();
 
     filtered.forEach(tx => {
-      if (tx.type !== 'saida' && tx.type !== 'despesa') return;
+      if (!checkExpense(tx.type)) return;
       const cat = tx.category || 'Diversos';
       map.set(cat, (map.get(cat) ?? new Decimal(0)).plus(
         new Decimal(Math.abs(Number(tx.value || 0))).dividedBy(100)

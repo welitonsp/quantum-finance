@@ -6,6 +6,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
 import type { Transaction } from '../shared/types/transaction';
+import { isExpense as checkExpense } from '../utils/transactionUtils';
 
 // ─── Public Types ─────────────────────────────────────────────────────────────
 
@@ -112,7 +113,7 @@ export function useBudgets(uid: string, transactions: Transaction[]): UseBudgets
         // Sum expenses matching category + month (case-insensitive category)
         const spent = transactions
           .filter(tx => {
-            const isExpense = tx.type === 'saida' || tx.type === 'despesa';
+            const isExpense = checkExpense(tx.type);
             const txMonth   = (tx.date ?? '').slice(0, 7);
             return isExpense && txMonth === budget.month && normCat(tx.category) === normKey;
           })

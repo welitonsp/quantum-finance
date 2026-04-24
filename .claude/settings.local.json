@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(xargs -I {} sh -c 'echo \"$\\(grep -c \"rgba\\\\|rgb\\(\" {}\\) {}\"')"
+      "Bash(xargs -I {} sh -c 'echo \"$\\(grep -c \"rgba\\\\|rgb\\(\" {}\\) {}\"')",
+      "Bash(npx tsc *)"
     ]
   }
 }

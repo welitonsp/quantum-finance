@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import ImportButton from '../features/transactions/ImportButton';
 import { usePrivacy } from '../contexts/PrivacyContext';
 import type { Transaction } from '../shared/types/transaction';
+import { isIncome, isExpense } from '../utils/transactionUtils';
 
 const PAGE_TITLES: Record<string, string> = {
   dashboard: 'Painel Central',
@@ -40,7 +41,7 @@ function BurnRateHUD({ transactions, currentMonth, currentYear }: BurnRateProps)
 
     const despesasMes = transactions
       .filter(tx => {
-        if (tx.type !== 'saida' && tx.type !== 'despesa') return false;
+        if (!isExpense(tx.type)) return false;
         const d = new Date((tx.date ?? tx.createdAt) as string);
         return d.getMonth() + 1 === currentMonth && d.getFullYear() === currentYear;
       })
@@ -116,12 +117,12 @@ function SurvivalKPIs({ transactions, currentMonth, currentYear }: SurvivalKPIsP
 
     const saldoTotal = transactions.reduce((acc, tx) => {
       const val = Math.abs(Number(tx.value ?? 0));
-      return (tx.type === 'entrada' || tx.type === 'receita') ? acc + val : acc - val;
+      return isIncome(tx.type) ? acc + val : acc - val;
     }, 0);
 
     const despesasMes = transactions
       .filter(tx => {
-        if (tx.type !== 'saida' && tx.type !== 'despesa') return false;
+        if (!isExpense(tx.type)) return false;
         const d = new Date((tx.date ?? tx.createdAt) as string);
         return d.getMonth() + 1 === currentMonth && d.getFullYear() === currentYear;
       })

@@ -7,6 +7,7 @@ import {
 import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
 import type { AllowedCategory } from '../../shared/schemas/financialSchemas';
 import type { Transaction } from '../../shared/types/transaction';
+import { isIncome } from '../../utils/transactionUtils';
 
 interface CatMeta { emoji: string; color: string }
 const CAT_META: Record<string, CatMeta> = {
@@ -133,7 +134,7 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
       setFormData({
         description: editingTransaction.description ?? '',
         value:       String(editingTransaction.value ?? ''),
-        type:        (editingTransaction.type === 'entrada' || editingTransaction.type === 'receita') ? 'entrada' : 'saida',
+        type:        isIncome(editingTransaction.type) ? 'entrada' : 'saida',
         category:    cat,
         date:        typeof editingTransaction.date === 'string'
           ? editingTransaction.date.substring(0, 10)

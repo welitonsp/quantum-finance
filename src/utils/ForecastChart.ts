@@ -1,5 +1,6 @@
 // src/utils/ForecastChart.ts — forecast engine utility
 import type { Transaction } from '../shared/types/transaction';
+import { isExpense } from './transactionUtils';
 
 interface ChartDataPoint {
   dia:       string;
@@ -24,7 +25,7 @@ export function calculateForecast(
   const diasNoMes     = new Date(currentYear, currentMonth, 0).getDate();
   const diaAtual      = isCurrentMonth ? hoje.getDate() : diasNoMes;
 
-  const despesas = transactions.filter(t => t.type === 'saida');
+  const despesas = transactions.filter(t => isExpense(t.type));
 
   const gastosPorDia = Array<number>(diasNoMes).fill(0);
   despesas.forEach(tx => {

@@ -1,5 +1,6 @@
 // Forecast Engine — Deterministic, immutable, UTC-strict, float-safe
 import type { Transaction } from '../shared/types/transaction';
+import { isIncome as isIncomeStr } from './transactionUtils';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -23,7 +24,7 @@ export interface ForecastResult {
 const round = (v: number): number => Math.round(v * 100) / 100;
 
 function isIncome(tx: Transaction): boolean {
-  return tx.type === 'entrada' || tx.type === 'receita';
+  return isIncomeStr(tx.type);
 }
 
 /** Population median of a numeric array. Returns 0 for empty input. */

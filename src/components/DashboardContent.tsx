@@ -71,6 +71,7 @@ export default function DashboardContent({
   user,
   transactions,
   allTransactions,
+  loading,
   moduleBalances,
   monthlyGoal,
   onSaveTransaction,
@@ -141,7 +142,8 @@ export default function DashboardContent({
     timeRange,
     setTimeRange,
     loading: dashLoading,
-  } = useDashboardData(user?.uid ?? '');
+  // FIX: single source of truth for transactions
+  } = useDashboardData(allTransactions, loading);
 
   return (
     <motion.div

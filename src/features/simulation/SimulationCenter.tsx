@@ -18,6 +18,7 @@ import { usePrivacy } from '../../contexts/PrivacyContext';
 import { useNavigation } from '../../contexts/NavigationContext';
 import type { Transaction } from '../../shared/types/transaction';
 import type { ModuleBalances } from '../../shared/types/transaction';
+import { isIncome } from '../../utils/transactionUtils';
 interface RechartsTooltipPayloadEntry {
   dataKey?: string | number | ((obj: unknown) => unknown);
   name?: string | number;
@@ -187,7 +188,7 @@ export default function SimulationCenter({ transactions, balances }: Props) {
       const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
       if (!byMonth[key]) byMonth[key] = { r: 0, d: 0 };
       const valCents = Math.round(Math.abs(Number(tx.value ?? 0)) * 100);
-      if (tx.type === 'entrada' || tx.type === 'receita') byMonth[key]!.r += valCents;
+      if (isIncome(tx.type)) byMonth[key]!.r += valCents;
       else byMonth[key]!.d += valCents;
     });
 

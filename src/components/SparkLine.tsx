@@ -1,5 +1,6 @@
 import { useMemo, memo } from 'react';
 import type { Transaction } from '../shared/types/transaction';
+import { isIncome } from '../utils/transactionUtils';
 
 interface Props {
   transactions: Transaction[];
@@ -16,7 +17,7 @@ export const SparkLine = memo(({ transactions, months = 6 }: Props) => {
     (transactions || []).forEach(t => {
       const d = new Date(String(t.date || t.createdAt));
       const b = buckets.find(b => b.m === d.getMonth() && b.y === d.getFullYear());
-      if (b) b.net += (t.type === 'receita' || t.type === 'entrada') ? Math.abs(t.value || 0) : -Math.abs(t.value || 0);
+      if (b) b.net += isIncome(t.type) ? Math.abs(t.value || 0) : -Math.abs(t.value || 0);
     });
     return buckets.map(b => b.net);
   }, [transactions, months]);

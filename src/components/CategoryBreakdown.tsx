@@ -2,6 +2,7 @@ import { useMemo, memo } from 'react';
 import { BarChart2, Info } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 import type { Transaction } from '../shared/types/transaction';
+import { isIncome as checkIncome } from '../utils/transactionUtils';
 
 interface Props {
   transactions: Transaction[];
@@ -20,7 +21,7 @@ export const CategoryBreakdown = memo(({ transactions }: Props) => {
     const expenseMap: Record<string, number> = {};
 
     (transactions || []).forEach(t => {
-      const isIncome = t.type === 'receita' || t.type === 'entrada';
+      const isIncome = checkIncome(t.type);
       const cat = t.category || 'Outros';
       const amount = Math.abs(t.value || 0);
       if (isIncome) incomeMap[cat] = (incomeMap[cat] || 0) + amount;

@@ -9,6 +9,7 @@ import {
   Zap, ShieldCheck, ChevronRight, Sparkles,
 } from 'lucide-react';
 import type { Transaction } from '../../shared/types/transaction';
+import { isIncome as checkIncome } from '../../utils/transactionUtils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type HintDir = 'left' | 'right' | 'down' | null;
@@ -224,7 +225,7 @@ export default function ReconciliationEngine({
   const remaining = queue.length;
   const done      = total.current - remaining;
   const progress  = total.current > 0 ? (done / total.current) * 100 : 0;
-  const isIncome  = card?.type === 'entrada' || card?.type === 'receita';
+  const isIncome  = checkIncome(card?.type ?? '');
 
   return (
     <motion.div

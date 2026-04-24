@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { Transaction } from '../shared/types/transaction';
+import { isIncome } from '../utils/transactionUtils';
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
 
@@ -27,8 +28,8 @@ export function useFinancialKPIs(transactions: Transaction[]): FinancialKPIs {
 
     for (const tx of transactions) {
       const val = Math.abs(safe(tx.value));
-      if (tx.type === 'entrada' || tx.type === 'receita') totalIncome  += val;
-      else                                                 totalExpense += val;
+      if (isIncome(tx.type)) totalIncome  += val;
+      else                   totalExpense += val;
     }
 
     const balance = totalIncome - totalExpense;

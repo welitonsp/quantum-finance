@@ -5,6 +5,7 @@ import {
 import { Target, Filter, AlertCircle } from 'lucide-react';
 import TrendsChart from '../features/reports/TrendsChart';
 import type { Transaction } from '../shared/types/transaction';
+import { isExpense } from '../utils/transactionUtils';
 
 interface Props {
   transactions: Transaction[];
@@ -27,7 +28,7 @@ export default function ReportsContent({ transactions }: Props) {
     let totalDespesas = 0;
 
     transactions.forEach(t => {
-      if (t.type === 'saida' || t.type === 'despesa') {
+      if (isExpense(t.type)) {
         const cat = t.category ?? 'Diversos';
         const val = Math.abs(Number(t.value));
         catTotals[cat] = (catTotals[cat] ?? 0) + val;

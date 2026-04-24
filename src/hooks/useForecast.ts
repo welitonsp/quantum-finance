@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import type { Transaction } from '../shared/types/transaction';
 import { calculateForecast } from '../utils/forecastEngine';
+import { isIncome as checkIncomeStr } from '../utils/transactionUtils';
 import { generateHash } from '../utils/hashGenerator';
 import type { ForecastResult, ForecastHealth, ForecastPoint } from '../utils/forecastEngine';
 
@@ -68,7 +69,7 @@ interface MCInputs {
 }
 
 function isIncomeTx(tx: Transaction): boolean {
-  return tx.type === 'entrada' || tx.type === 'receita';
+  return checkIncomeStr(tx.type);
 }
 
 function computeMCInputs(transactions: Transaction[]): MCInputs {

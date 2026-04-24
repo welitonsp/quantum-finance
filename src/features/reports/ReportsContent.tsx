@@ -5,6 +5,7 @@ import { Target, Filter, AlertCircle, Calendar, Scissors, Sparkles, AlertTriangl
 import Decimal from 'decimal.js';
 import { formatCurrency } from '../../utils/formatters';
 import type { Transaction } from '../../shared/types/transaction';
+import { isExpense } from '../../utils/transactionUtils';
 
 interface Props {
   transactions: Transaction[];
@@ -38,7 +39,7 @@ export default function ReportsContent({ transactions }: Props) {
     const agora = new Date();
 
     transactions.forEach(t => {
-      if (t.type === 'saida' || t.type === 'despesa') {
+      if (isExpense(t.type)) {
         const txDate = new Date(t.date ?? (t as Transaction & { createdAt?: string }).createdAt ?? '');
         const diffDias = (agora.getTime() - txDate.getTime()) / (1000 * 60 * 60 * 24);
 

@@ -16,6 +16,7 @@ import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
 import ReconciliationEngine from './ReconciliationEngine';
 import type { Transaction } from '../../shared/types/transaction';
 import type { AllowedCategory } from '../../shared/schemas/financialSchemas';
+import { isIncome, isExpense } from '../../utils/transactionUtils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ImportStatus =
@@ -333,8 +334,8 @@ function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) 
   const toggleAll = () => setItems(prev => prev.map(t => ({ ...t, _selected: !allChecked })));
   const setCat    = (id: string, cat: string) => setItems(prev => prev.map(t => t.id === id ? { ...t, category: cat } : t));
 
-  const totEntry = selected.filter(t => t.type === 'entrada' || t.type === 'receita').reduce((a, t) => a + (t.value as number), 0);
-  const totExit  = selected.filter(t => t.type === 'saida'   || t.type === 'despesa').reduce((a, t) => a + (t.value as number), 0);
+  const totEntry = selected.filter(t => isIncome(t.type)).reduce((a, t) => a + (t.value as number), 0);
+  const totExit  = selected.filter(t => isExpense(t.type)).reduce((a, t) => a + (t.value as number), 0);
 
   const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -563,7 +564,7 @@ export default function ImportButton({ onImportTransactions, existingTransaction
       for (const [key, cat] of Object.entries(LOCAL_DICTIONARY)) {
         if (upper.includes(key)) { tx.category = cat; found = true; break; }
       }
-      if (!found && (tx.type === 'saida' || tx.type === 'despesa')) forAI.push(tx);
+      if (!found && isExpense(tx.type)) forAI.push(tx);
     });
     return forAI;
   };

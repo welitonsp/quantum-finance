@@ -15,6 +15,7 @@ import type { Transaction } from '../../shared/types/transaction';
 import type { AllowedCategory } from '../../shared/schemas/financialSchemas';
 import type { BulkUpdate } from '../../hooks/useTransactions';
 import { auth } from '../../shared/api/firebase/auth';
+import { isIncome as checkIncome, isExpense as checkExpense } from '../../utils/transactionUtils';
 import AuditTimeline from '../../components/AuditTimeline';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -148,7 +149,7 @@ interface TransactionRowProps {
   onDelete: (tx: Transaction) => void;
 }
 const TransactionRow = React.memo(({ tx, isSelected, onToggle, onEdit, onDelete }: TransactionRowProps) => {
-  const isIncome = tx.type === 'receita' || tx.type === 'entrada';
+  const isIncome = checkIncome(tx.type);
   const cs = catStyle(tx.category ?? 'Diversos');
 
   return (
@@ -279,8 +280,8 @@ export default function TransactionsManager({
     if (filterType !== 'all') {
       list = list.filter(tx =>
         filterType === 'entrada'
-          ? (tx.type === 'entrada' || tx.type === 'receita')
-          : (tx.type === 'saida'   || tx.type === 'despesa')
+          ? checkIncome(tx.type)
+          : checkExpense(tx.type)
       );
     }
     if (filterCat) {
@@ -324,8 +325,8 @@ export default function TransactionsManager({
     let totalIn = 0, totalOut = 0;
     filtered.forEach(tx => {
       const v = Math.abs(Number(tx.value ?? 0));
-      if (tx.type === 'entrada' || tx.type === 'receita') totalIn  += v;
-      else                                                totalOut += v;
+      if (checkIncome(tx.type)) totalIn  += v;
+      else                      totalOut += v;
     });
     return { count: filtered.length, totalIn, totalOut, net: totalIn - totalOut };
   }, [filtered]);
@@ -352,8 +353,8 @@ export default function TransactionsManager({
     setSelected(new Set(
       filtered.filter(tx =>
         type === 'entrada'
-          ? (tx.type === 'entrada' || tx.type === 'receita')
-          : (tx.type === 'saida'   || tx.type === 'despesa')
+          ? checkIncome(tx.type)
+          : checkExpense(tx.type)
       ).map(t => t.id)
     ));
   }, [filtered]);
@@ -866,8 +867,8 @@ export default function TransactionsManager({
             {groups.map(group => (
               <div key={group.key || 'ungrouped'}>
                 {group.key && (() => {
-                  const gIn  = group.items.reduce((a, t) => (t.type === 'entrada' || t.type === 'receita') ? a + Math.abs(Number(t.value ?? 0)) : a, 0);
-                  const gOut = group.items.reduce((a, t) => (t.type === 'saida'   || t.type === 'despesa') ? a + Math.abs(Number(t.value ?? 0)) : a, 0);
+                  const gIn  = group.items.reduce((a, t) => checkIncome(t.type)  ? a + Math.abs(Number(t.value ?? 0)) : a, 0);
+                  const gOut = group.items.reduce((a, t) => checkExpense(t.type) ? a + Math.abs(Number(t.value ?? 0)) : a, 0);
                   return (
                     <GroupHeader
                       label={group.label}
