@@ -362,10 +362,10 @@ export function useTransactions(uid: string): UseTransactionsReturn {
 
     // 2. AI fallback — only when deterministic returned nothing; fire-and-forget after Firestore write
     if (!enriched.category && enriched.description) {
-      const desc       = enriched.description;
+      const desc        = enriched.description;
       const capturedUid = uid;
       postAddCallbacks.current.set(tempId, (realId: string) => {
-        void categorizeWithAI(desc).then(aiCat => {
+        void categorizeWithAI(desc, capturedUid).then(aiCat => {
           // Guard: only update when AI returned something meaningful
           if (aiCat && aiCat !== 'Outros') {
             void FirestoreService.updateTransaction(capturedUid, realId, { category: aiCat });
@@ -461,7 +461,7 @@ export function useTransactions(uid: string): UseTransactionsReturn {
         const desc        = enriched.description;
         const capturedUid = uid;
         postAddCallbacks.current.set(tempId, (realId: string) => {
-          void categorizeWithAI(desc).then(aiCat => {
+          void categorizeWithAI(desc, capturedUid).then(aiCat => {
             if (aiCat && aiCat !== 'Outros') {
               void FirestoreService.updateTransaction(capturedUid, realId, { category: aiCat });
             }

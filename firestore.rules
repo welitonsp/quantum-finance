@@ -1,15 +1,85 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // 🛡️ REGRA TÁTICA DE ISOLAMENTO QUÂNTICO
-    // Garante que um utilizador só pode ver, editar ou apagar os SEUS próprios dados.
-    match /{collection}/{document=**} {
-      // O utilizador só pode LER e APAGAR se o documento lhe pertencer
-      allow read, delete: if request.auth != null && resource.data.uid == request.auth.uid;
-      
-      // O utilizador só pode CRIAR ou ATUALIZAR se a informação que está a enviar contiver o seu UID
-      allow create, update: if request.auth != null && request.resource.data.uid == request.auth.uid;
+
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // count must be int in [0, 50]; allow increment by 1 OR reset to ≤1
+    function isValidUsageWrite() {
+      let c = request.resource.data.count;
+      return c is int && c >= 0 && c <= 50
+          && (c == resource.data.count + 1 || c <= 1);
+    }
+
+    function isValidSystemLog() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['type', 'detail', 'createdAt'])
+          && d.type in ['AI_CALL', 'ERROR', 'BATCH'];
+    }
+
+    // ─── User namespace ───────────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+
+      match /transactions/{txId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Audit logs — immutable after creation
+      match /audit_logs/{logId} {
+        allow read, create: if isOwner(userId);
+        allow update, delete: if false;
+      }
+
+      match /recurringTasks/{taskId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /category_learning/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /category_feedback/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // AI usage tracker — count validated to prevent abuse
+      match /usage/ai_calls {
+        allow read: if isOwner(userId);
+        // First write: count must start at 0 or 1
+        allow create: if isOwner(userId)
+            && request.resource.data.count is int
+            && request.resource.data.count <= 1;
+        // Subsequent writes: increment by 1 OR daily reset to ≤1
+        allow update: if isOwner(userId) && isValidUsageWrite();
+        allow delete: if false;
+      }
+
+      // System logs — append-only, schema-validated
+      match /system_logs/{logId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidSystemLog();
+        allow update, delete: if false;
+      }
+    }
+
+    // ─── Legacy standalone recurring collection ───────────────────────────────
+    match /recurring/{taskId} {
+      allow read, delete: if request.auth != null
+          && resource.data.uid == request.auth.uid;
+      allow create: if request.auth != null
+          && request.resource.data.uid == request.auth.uid;
+      allow update: if request.auth != null
+          && resource.data.uid == request.auth.uid
+          && request.resource.data.uid == request.auth.uid;
+    }
+
+    // ─── Deny everything else by default ─────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

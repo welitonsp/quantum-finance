@@ -9,27 +9,31 @@
  * DEPLOY:
  *   cd functions && npm install
  *   firebase deploy --only functions
- *
- * EMULADOR LOCAL (opcional, para dev sem deploy):
- *   firebase emulators:start --only functions
- *   + adicionar VITE_USE_EMULATOR=true no .env.local do cliente
  */
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret }       = require('firebase-functions/params');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const admin                  = require('firebase-admin');
 
-const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
+admin.initializeApp();
+const adminDb = admin.firestore();
 
-// ─── PII Masker server-side (segunda camada de defesa) ────────────────────────
+const GEMINI_API_KEY  = defineSecret('GEMINI_API_KEY');
+const DAILY_AI_LIMIT  = 50;
+const MAX_BATCH_SIZE  = 100;
+const MAX_PROMPT_LEN  = 4_000;
+
+// ─── PII Masker (server-side second layer of defense) ────────────────────────
+
 const CPF_RE      = /\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g;
 const CNPJ_RE     = /\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/g;
 const EMAIL_RE    = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
 const UUID_RE     = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 const PHONE_RE    = /(?:\+?55[\s-]?)?(?:\(?\d{2}\)?[\s-]?)?\b9\d{4}[\s-]?\d{4}\b/g;
-const PIX_PARA_RE = /\bpix\s+(?:para|envio|pgto|pag\.?|transf\.?)\s+[A-Za-z\u00C0-\u00FF][\w\s\u00C0-\u00FF'.]{2,39}/gi;
-const PIX_DE_RE   = /\bpix\s+(?:de|rec(?:ebido)?\.?)\s+[A-Za-z\u00C0-\u00FF][\w\s\u00C0-\u00FF'.]{2,39}/gi;
-const TRANSF_RE   = /\b(?:ted|doc)\s+(?:para|de)\s+[A-Za-z\u00C0-\u00FF][\w\s\u00C0-\u00FF'.]{2,39}/gi;
+const PIX_PARA_RE = /\bpix\s+(?:para|envio|pgto|pag\.?|transf\.?)\s+[A-Za-zÀ-ÿ][\w\sÀ-ÿ'.]{2,39}/gi;
+const PIX_DE_RE   = /\bpix\s+(?:de|rec(?:ebido)?\.?)\s+[A-Za-zÀ-ÿ][\w\sÀ-ÿ'.]{2,39}/gi;
+const TRANSF_RE   = /\b(?:ted|doc)\s+(?:para|de)\s+[A-Za-zÀ-ÿ][\w\sÀ-ÿ'.]{2,39}/gi;
 
 function maskPII(text) {
   if (!text || typeof text !== 'string') return text ?? '';
@@ -44,21 +48,63 @@ function maskPII(text) {
     .replace(TRANSF_RE,   'TRANSFERENCIA BANCARIA');
 }
 
-// ─── Rate limiting (in-memory, por UID) ───────────────────────────────────────
-const _ratemap = new Map();
-function checkRateLimit(uid, limit = 30, windowMs = 60_000) {
-  const now = Date.now();
-  const rec = _ratemap.get(uid);
-  if (!rec || now - rec.windowStart > windowMs) {
-    _ratemap.set(uid, { count: 1, windowStart: now });
-    return true;
+// ─── Persistent rate limiting (Firestore transaction — survives cold starts) ──
+
+async function checkAndIncrementRateLimit(uid) {
+  const ref   = adminDb.doc(`users/${uid}/usage/ai_calls`);
+  const nowMs = Date.now();
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  try {
+    return await adminDb.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+
+      if (!snap.exists) {
+        tx.set(ref, {
+          count:     1,
+          lastReset: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return true;
+      }
+
+      const data        = snap.data();
+      const lastResetMs = data.lastReset?.toMillis?.() ?? 0;
+
+      if (nowMs - lastResetMs > dayMs) {
+        tx.update(ref, {
+          count:     1,
+          lastReset: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return true;
+      }
+
+      if ((data.count ?? 0) >= DAILY_AI_LIMIT) return false;
+
+      tx.update(ref, { count: admin.firestore.FieldValue.increment(1) });
+      return true;
+    });
+  } catch (e) {
+    console.error('[RateLimit] Firestore transaction failed:', e.message);
+    return true; // fail open — never block on rate-limit infrastructure errors
   }
-  if (rec.count >= limit) return false;
-  rec.count++;
-  return true;
 }
 
-// ─── Helpers de análise financeira ───────────────────────────────────────────
+// ─── Structured logging ───────────────────────────────────────────────────────
+
+async function writeStructuredLog(uid, type, detail) {
+  try {
+    await adminDb.collection(`users/${uid}/system_logs`).add({
+      type,
+      detail,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    console.warn('[StructuredLog] Write failed (non-critical):', e.message);
+  }
+}
+
+// ─── Financial analysis helpers ───────────────────────────────────────────────
+
 function groupByCategory(transactions = []) {
   const map = {};
   transactions.forEach(tx => {
@@ -94,7 +140,8 @@ function buildBurnRate(transactions = [], month, year) {
   };
 }
 
-// ─── Core: chama o Gemini com um prompt completo ──────────────────────────────
+// ─── Core: Gemini call ────────────────────────────────────────────────────────
+
 async function callGemini(apiKey, fullPrompt, options = {}) {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
@@ -107,7 +154,6 @@ async function callGemini(apiKey, fullPrompt, options = {}) {
   return result.response.text();
 }
 
-// ─── Core: constrói o contexto financeiro para o prompt ──────────────────────
 function buildFinancialContext(financialContext = {}) {
   const {
     saldo = 0, entradas = 0, saidas = 0,
@@ -124,7 +170,7 @@ function buildFinancialContext(financialContext = {}) {
     .reduce((a, t) => a + Math.abs(Number(t.value || 0)), 0);
 
   const safeTx = (transactions || []).slice(0, 50).map(t => ({
-    ...t, description: maskPII(t.description)
+    ...t, description: maskPII(t.description),
   }));
 
   return `
@@ -154,18 +200,38 @@ REGRAS: Seja direto e objetivo. Foque em anomalias. Use alertas ("🔴 Alerta", 
 // FUNÇÃO 1 — Categorização em Batch
 // ═══════════════════════════════════════════════════════════════════════════════
 exports.categorizeTransactionsBatch = onCall(
-  { secrets: [GEMINI_API_KEY], region: 'southamerica-east1' },
+  { secrets: [GEMINI_API_KEY], region: 'southamerica-east1', timeoutSeconds: 30 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
-    if (!checkRateLimit(request.auth.uid)) throw new HttpsError('resource-exhausted', 'Limite de requisições atingido. Aguarde 1 minuto.');
 
+    const uid = request.auth.uid;
+
+    // Input validation
     const { transactions } = request.data;
-    if (!Array.isArray(transactions) || transactions.length === 0) return [];
+    if (!Array.isArray(transactions)) {
+      throw new HttpsError('invalid-argument', 'transactions deve ser um array.');
+    }
+    if (transactions.length === 0) return [];
+    if (transactions.length > MAX_BATCH_SIZE) {
+      throw new HttpsError('invalid-argument', `Máximo ${MAX_BATCH_SIZE} transações por lote.`);
+    }
 
-    const safeRows = transactions.map(t => ({
-      id: t.id, value: t.value,
-      description: maskPII(String(t.description || '')),
-    }));
+    // Persistent rate limit (survives cold starts)
+    const allowed = await checkAndIncrementRateLimit(uid);
+    if (!allowed) {
+      void writeStructuredLog(uid, 'ERROR', `daily AI limit reached (${DAILY_AI_LIMIT}/day) — categorization blocked`);
+      throw new HttpsError('resource-exhausted', `Limite diário de ${DAILY_AI_LIMIT} chamadas de IA atingido.`);
+    }
+
+    const safeRows = transactions
+      .filter(t => t && typeof t.id === 'string' && typeof t.description === 'string')
+      .map(t => ({
+        id:          String(t.id).slice(0, 128),
+        description: maskPII(String(t.description || '').slice(0, 256)),
+        value:       Number(t.value) || 0,
+      }));
+
+    if (!safeRows.length) return [];
 
     const prompt = `Classifique cada transação em UMA das categorias: Alimentação, Transporte, Assinaturas, Educação, Saúde, Moradia, Impostos/Taxas, Lazer, Vestuário, Salário, Freelance, Investimento, Diversos, Outros.
 Responda APENAS um array JSON: [{"id":"id","category":"Categoria"}].
@@ -174,10 +240,24 @@ Transações:\n${safeRows.map(t => `ID: ${t.id} | "${t.description}" | R$ ${t.va
     try {
       let text = await callGemini(GEMINI_API_KEY.value(), prompt, { jsonMode: true });
       text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-      return JSON.parse(text);
+
+      let parsed;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        // Gemini returned malformed JSON — safe fallback, never crash caller
+        console.warn('[categorizeTransactionsBatch] JSON parse failed, returning safe defaults');
+        void writeStructuredLog(uid, 'ERROR', 'batch categorization: malformed Gemini response');
+        return safeRows.map(t => ({ id: t.id, category: 'Outros' }));
+      }
+
+      void writeStructuredLog(uid, 'BATCH', `categorized ${safeRows.length} transactions`);
+      return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
-      console.error('Erro categorização:', e);
-      throw new HttpsError('internal', 'Falha no motor de categorização.');
+      console.error('[categorizeTransactionsBatch] Gemini call failed:', e.message);
+      void writeStructuredLog(uid, 'ERROR', `batch categorization failed: ${e.message}`);
+      // Return safe defaults instead of throwing — UI must never crash on AI failure
+      return safeRows.map(t => ({ id: t.id, category: 'Outros' }));
     }
   }
 );
@@ -189,10 +269,22 @@ exports.chatWithQuantumAI = onCall(
   { secrets: [GEMINI_API_KEY], region: 'southamerica-east1', timeoutSeconds: 60 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
-    if (!checkRateLimit(request.auth.uid)) throw new HttpsError('resource-exhausted', 'Limite de requisições atingido.');
+
+    const uid = request.auth.uid;
+
+    const allowed = await checkAndIncrementRateLimit(uid);
+    if (!allowed) {
+      void writeStructuredLog(uid, 'ERROR', `daily AI limit reached — chat blocked`);
+      throw new HttpsError('resource-exhausted', `Limite diário de ${DAILY_AI_LIMIT} chamadas de IA atingido.`);
+    }
 
     const { prompt: userMessage, financialContext = {} } = request.data;
-    if (!userMessage) throw new HttpsError('invalid-argument', 'Mensagem em falta.');
+    if (!userMessage || typeof userMessage !== 'string') {
+      throw new HttpsError('invalid-argument', 'Mensagem em falta ou inválida.');
+    }
+    if (userMessage.length > MAX_PROMPT_LEN) {
+      throw new HttpsError('invalid-argument', `Mensagem excede ${MAX_PROMPT_LEN} caracteres.`);
+    }
 
     const contextStr   = buildFinancialContext(financialContext);
     const maskedPrompt = maskPII(userMessage);
@@ -200,9 +292,11 @@ exports.chatWithQuantumAI = onCall(
 
     try {
       const reply = await callGemini(GEMINI_API_KEY.value(), fullPrompt);
+      void writeStructuredLog(uid, 'AI_CALL', 'chat request completed');
       return { reply };
     } catch (e) {
-      console.error('Erro Gemini chat:', e);
+      console.error('[chatWithQuantumAI] Gemini call failed:', e.message);
+      void writeStructuredLog(uid, 'ERROR', `chat failed: ${e.message}`);
       throw new HttpsError('internal', 'Falha no núcleo de IA.');
     }
   }
@@ -215,7 +309,14 @@ exports.generateAuditReport = onCall(
   { secrets: [GEMINI_API_KEY], region: 'southamerica-east1', timeoutSeconds: 60 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
-    if (!checkRateLimit(request.auth.uid)) throw new HttpsError('resource-exhausted', 'Limite de requisições atingido.');
+
+    const uid = request.auth.uid;
+
+    const allowed = await checkAndIncrementRateLimit(uid);
+    if (!allowed) {
+      void writeStructuredLog(uid, 'ERROR', `daily AI limit reached — audit blocked`);
+      throw new HttpsError('resource-exhausted', `Limite diário de ${DAILY_AI_LIMIT} chamadas de IA atingido.`);
+    }
 
     const financialContext = request.data?.financialContext ?? {};
     const contextStr = buildFinancialContext(financialContext);
@@ -224,9 +325,11 @@ exports.generateAuditReport = onCall(
 
     try {
       const reply = await callGemini(GEMINI_API_KEY.value(), auditPrompt);
+      void writeStructuredLog(uid, 'AI_CALL', 'audit report generated');
       return { reply };
     } catch (e) {
-      console.error('Erro Gemini audit:', e);
+      console.error('[generateAuditReport] Gemini call failed:', e.message);
+      void writeStructuredLog(uid, 'ERROR', `audit report failed: ${e.message}`);
       throw new HttpsError('internal', 'Falha no motor de auditoria.');
     }
   }
