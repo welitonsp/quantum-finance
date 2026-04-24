@@ -1,4 +1,4 @@
-import React, { useEffect, useState, lazy, Suspense } from 'react';
+import React, { useEffect, useState, lazy, Suspense, useRef, useCallback } from 'react';
 import { auth } from './shared/api/firebase/index';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import type { User } from 'firebase/auth';
@@ -136,9 +136,6 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   useEffect(() => safeStorageSet('quantum_sidebar_collapsed', isSidebarCollapsed), [isSidebarCollapsed]);
   useEffect(() => safeStorageSet('quantum_monthly_goal',      monthlyGoal),        [monthlyGoal]);
 
-  // suppress unused var warning for setActiveModule/setCurrentMonth/setCurrentYear
-  void setActiveModule; void activeModule;
-
   const safeUID = user.uid;
 
   const {
@@ -154,6 +151,19 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
     transactionToEdit, setTransactionToEdit, transactionToDelete, setTransactionToDelete,
     handleImport, handleSaveTransaction, confirmDelete, handleBatchDelete,
   } = useAppLogic(user, update, add, addBatch, remove, removeBatch);
+
+  // setActiveModule é gerido pela Sidebar; não deve ser tocado pelo fluxo de edição
+  void setActiveModule;
+
+  const openEditTransaction = useCallback((tx: Transaction) => {
+    setTransactionToEdit(tx);
+    setIsFormOpen(true);
+  }, [setTransactionToEdit, setIsFormOpen]);
+
+  const handleCloseForm = useCallback(() => {
+    setIsFormOpen(false);
+    setTransactionToEdit(null);
+  }, [setIsFormOpen, setTransactionToEdit]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -244,13 +254,14 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     monthlyGoal={monthlyGoal}
                     setMonthlyGoal={setMonthlyGoal}
                     onSaveTransaction={handleSaveTransaction}
-                    onEditTransaction={(tx: Transaction) => { setTransactionToEdit(tx); setIsFormOpen(true); }}
+                    onEditTransaction={openEditTransaction}
                     onDeleteRequest={setTransactionToDelete}
                     onBatchDelete={handleBatchDelete}
                     isFormOpen={isFormOpen}
                     setIsFormOpen={setIsFormOpen}
                     transactionToEdit={transactionToEdit}
                     setTransactionToEdit={setTransactionToEdit}
+                    onCloseForm={handleCloseForm}
                   />
                 )}
                 {currentPage === 'accounts'   && <AccountsManager   uid={safeUID} />}
@@ -269,7 +280,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                   <HistoryPage
                     transactions={displayedTransactions}
                     loading={loading}
-                    onEdit={(tx) => { setTransactionToEdit(tx); setIsFormOpen(true); }}
+                    onEdit={openEditTransaction}
                     onDeleteRequest={setTransactionToDelete}
                     onBatchDelete={handleBatchDelete}
                     onBatchImport={handleImport}

@@ -44,6 +44,7 @@ interface Props {
   setIsFormOpen: (v: boolean) => void;
   transactionToEdit: Transaction | null;
   setTransactionToEdit: (tx: Transaction | null) => void;
+  onCloseForm?: () => void;
 }
 
 const containerVariants = {
@@ -73,10 +74,12 @@ export default function DashboardContent({
   moduleBalances,
   monthlyGoal,
   onSaveTransaction,
+  onEditTransaction,
   isFormOpen,
   setIsFormOpen,
   transactionToEdit,
   setTransactionToEdit,
+  onCloseForm,
 }: Props) {
   const { currentMonth, currentYear } = useNavigation();
 
@@ -121,9 +124,13 @@ export default function DashboardContent({
   } as Record<string, string>)[color] ?? 'bg-emerald-500';
 
   const handleEditTx = useCallback((t: Transaction) => {
-    setTransactionToEdit(t);
-    setIsFormOpen(true);
-  }, [setTransactionToEdit, setIsFormOpen]);
+    if (onEditTransaction) {
+      onEditTransaction(t);
+    } else {
+      setTransactionToEdit(t);
+      setIsFormOpen(true);
+    }
+  }, [onEditTransaction, setTransactionToEdit, setIsFormOpen]);
   void handleEditTx;
 
   // ── Dashboard data hook (real-time, with timeRange) ───────────────────────
@@ -215,7 +222,7 @@ export default function DashboardContent({
           <TransactionForm
             onSave={onSaveTransaction}
             editingTransaction={transactionToEdit}
-            onCancelEdit={() => { setTransactionToEdit(null); setIsFormOpen(false); }}
+            onCancelEdit={onCloseForm ?? (() => { setTransactionToEdit(null); setIsFormOpen(false); })}
           />
         )}
       </AnimatePresence>

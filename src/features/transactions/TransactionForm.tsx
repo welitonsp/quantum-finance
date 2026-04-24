@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Save, AlertCircle, TrendingDown, TrendingUp,
-  Calendar, DollarSign, Tag, FileText, CheckCircle,
+  Calendar, DollarSign, Tag, FileText, CheckCircle, Plus,
 } from 'lucide-react';
 import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
 import type { AllowedCategory } from '../../shared/schemas/financialSchemas';
@@ -60,11 +60,15 @@ function TypeToggle({ value, onChange }: TypeToggleProps) {
 }
 
 // ─── CategoryPicker ───────────────────────────────────────────────────────────
-interface CategoryPickerProps { value: string; onChange: (v: AllowedCategory) => void }
-function CategoryPicker({ value, onChange }: CategoryPickerProps) {
+interface CategoryPickerProps {
+  value:      string;
+  onChange:   (v: string) => void;
+  categories: string[];
+}
+function CategoryPicker({ value, onChange, categories }: CategoryPickerProps) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-52 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-      {ALLOWED_CATEGORIES.map(cat => {
+      {categories.map(cat => {
         const meta     = CAT_META[cat] ?? CAT_META['Outros']!;
         const isActive = value === cat;
         return (
@@ -87,7 +91,7 @@ interface FormData {
   description: string;
   value: string;
   type: 'entrada' | 'saida';
-  category: AllowedCategory;
+  category: string;
   date: string;
 }
 
@@ -108,6 +112,12 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
     date:        new Date().toISOString().substring(0, 10),
   });
 
+  // Local category list — starts from ALLOWED_CATEGORIES; custom categories added inline
+  const [categories,  setCategories]  = useState<string[]>([...ALLOWED_CATEGORIES]);
+  const [newCatMode,  setNewCatMode]  = useState(false);
+  const [newCatName,  setNewCatName]  = useState('');
+  const newCatRef = useRef<HTMLInputElement>(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error,        setError]        = useState('');
   const [saved,        setSaved]        = useState(false);
@@ -115,17 +125,30 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
 
   useEffect(() => {
     if (editingTransaction) {
+      const cat = editingTransaction.category ?? ALLOWED_CATEGORIES[0];
+      // Pre-add category if it's custom (not in the standard list)
+      if (cat && !ALLOWED_CATEGORIES.includes(cat as AllowedCategory)) {
+        setCategories(prev => prev.includes(cat) ? prev : [...prev, cat]);
+      }
       setFormData({
         description: editingTransaction.description ?? '',
         value:       String(editingTransaction.value ?? ''),
         type:        (editingTransaction.type === 'entrada' || editingTransaction.type === 'receita') ? 'entrada' : 'saida',
-        category:    (editingTransaction.category as AllowedCategory) ?? ALLOWED_CATEGORIES[0],
+        category:    cat,
         date:        typeof editingTransaction.date === 'string'
           ? editingTransaction.date.substring(0, 10)
           : new Date().toISOString().substring(0, 10),
       });
     }
   }, [editingTransaction]);
+
+  // Focus the new-category input whenever the inline form opens
+  useEffect(() => {
+    if (newCatMode) {
+      const t = setTimeout(() => newCatRef.current?.focus(), 60);
+      return () => clearTimeout(t);
+    }
+  }, [newCatMode]);
 
   useEffect(() => {
     const t = setTimeout(() => descRef.current?.focus(), 120);
@@ -142,6 +165,17 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
     setFormData(prev => ({ ...prev, [name]: val }));
     setError('');
   }, []);
+
+  const confirmNewCategory = useCallback(() => {
+    const name = newCatName.trim();
+    if (!name) return;
+    if (!categories.includes(name)) {
+      setCategories(prev => [...prev, name]);
+    }
+    setField('category', name);
+    setNewCatName('');
+    setNewCatMode(false);
+  }, [newCatName, categories, setField]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setField(e.target.name as keyof FormData, e.target.value as FormData[keyof FormData]);
@@ -269,10 +303,71 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
             <label className="flex items-center gap-1.5 text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">
               <Tag className="w-3 h-3" /> Categoria
               <span className="ml-auto text-slate-600 normal-case text-[10px]">
-                {CAT_META[formData.category]?.emoji} {formData.category}
+                {CAT_META[formData.category]?.emoji ?? '•'} {formData.category}
               </span>
             </label>
-            <CategoryPicker value={formData.category} onChange={v => setField('category', v)} />
+            <CategoryPicker
+              value={formData.category}
+              onChange={v => setField('category', v)}
+              categories={categories}
+            />
+
+            {/* ── Nova categoria inline ──────────────────────────────── */}
+            <AnimatePresence initial={false}>
+              {newCatMode ? (
+                <motion.div
+                  key="new-cat-input"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="flex gap-2 mt-2">
+                    <input
+                      ref={newCatRef}
+                      type="text"
+                      value={newCatName}
+                      onChange={e => setNewCatName(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter')  { e.preventDefault(); confirmNewCategory(); }
+                        if (e.key === 'Escape') { e.stopPropagation(); setNewCatMode(false); setNewCatName(''); }
+                      }}
+                      placeholder="Nome da categoria…"
+                      maxLength={40}
+                      className="input-quantum flex-1 text-xs py-1.5"
+                    />
+                    <button
+                      type="button"
+                      onClick={confirmNewCategory}
+                      disabled={!newCatName.trim()}
+                      className="px-2.5 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      title="Confirmar"
+                    >
+                      <CheckCircle className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setNewCatMode(false); setNewCatName(''); }}
+                      className="px-2.5 py-1.5 rounded-lg bg-white/5 border border-quantum-border text-quantum-fgMuted hover:text-quantum-fg transition-colors"
+                      title="Cancelar"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.button
+                  key="new-cat-btn"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  type="button"
+                  onClick={() => setNewCatMode(true)}
+                  className="mt-1.5 flex items-center gap-1 text-[10px] text-quantum-accent hover:underline font-bold"
+                >
+                  <Plus className="w-3 h-3" /> Nova categoria
+                </motion.button>
+              )}
+            </AnimatePresence>
           </div>
 
           <div className="flex gap-3 pt-2">
