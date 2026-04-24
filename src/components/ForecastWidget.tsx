@@ -17,7 +17,10 @@ function getCssVar(name: string): string {
 
 export default function ForecastWidget({ transactions, currentBalance }: Props) {
   const { theme } = useTheme();
-  const { points, finalBalance, minBalance, health } = useForecast(transactions, currentBalance);
+  const {
+    points, finalBalance, minBalance, health,
+    p10, p50, p90, survivalRate, riskLevel, mcLoading,
+  } = useForecast(transactions, currentBalance);
 
   const colors = useMemo(() => ({
     success: getCssVar('--q-success') || '#00E68A',
@@ -137,6 +140,32 @@ export default function ForecastWidget({ transactions, currentBalance }: Props) 
         <div className="flex-1 flex items-center justify-center text-quantum-fgMuted text-sm">
           Dados insuficientes para projeção.
         </div>
+      )}
+
+      {/* ── Monte Carlo stats ────────────────────────────────────── */}
+      {chartData.length > 0 && (
+        mcLoading ? (
+          <div className="h-3.5 bg-quantum-border/40 rounded-full animate-pulse w-2/5" />
+        ) : (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-quantum-fgMuted border-t border-quantum-border pt-2">
+            <span>
+              Sobrevivência:{' '}
+              <span
+                className="font-bold font-mono"
+                style={{
+                  color: riskLevel === 'safe' ? colors.success
+                       : riskLevel === 'attention' ? colors.warning
+                       : colors.danger,
+                }}
+              >
+                {survivalRate}%
+              </span>
+            </span>
+            <span>P10 <span className="font-mono">{formatCurrency(p10)}</span></span>
+            <span>P50 <span className="font-mono">{formatCurrency(p50)}</span></span>
+            <span>P90 <span className="font-mono">{formatCurrency(p90)}</span></span>
+          </div>
+        )
       )}
 
       {/* ── Min balance footer ───────────────────────────────────── */}

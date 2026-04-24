@@ -9,6 +9,14 @@ import type { DashboardKPIs, CategoryChartPoint, TimeRange } from '../hooks/useF
 import type { ForecastResult } from '../hooks/useForecast';
 import type { BudgetInsight } from '../hooks/useBudgets';
 
+export interface MonteCarloData {
+  survivalRate:    number;
+  ruinProbability: number;
+  riskLevel:       'safe' | 'attention' | 'critical';
+  insight:         string;
+  mcLoading:       boolean;
+}
+
 // Safe numeric coercion — returns 0 for NaN, Infinity, null, undefined, non-numeric strings
 const safe = (v: unknown): number => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
@@ -48,29 +56,32 @@ const SEVERITY_CONFIG: Record<Severity, SeverityConfig> = {
   },
 };
 
-function calcSeverity(forecast: ForecastResult | undefined): Severity {
+function calcSeverity(forecast: ForecastResult | undefined, riskLevel?: MonteCarloData['riskLevel']): Severity {
   if (forecast?.minBalance !== undefined && forecast.minBalance < 0) return 'critical';
   if (forecast?.health === 'warning') return 'warning';
+  if (riskLevel === 'critical') return 'critical';
+  if (riskLevel === 'attention') return 'warning';
   return 'ok';
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
-  uid:          string;
-  kpis:         DashboardKPIs;
-  categoryData: CategoryChartPoint[];
-  timeRange:    TimeRange;
-  dataLoading:  boolean;
-  forecast?:    ForecastResult;
-  budgets?:     BudgetInsight[];
-  className?:   string;
+  uid:             string;
+  kpis:            DashboardKPIs;
+  categoryData:    CategoryChartPoint[];
+  timeRange:       TimeRange;
+  dataLoading:     boolean;
+  forecast?:       ForecastResult;
+  budgets?:        BudgetInsight[];
+  monteCarloData?: MonteCarloData;
+  className?:      string;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ProactiveBriefing({
-  uid, kpis, categoryData, timeRange, dataLoading, forecast, budgets, className = '',
+  uid, kpis, categoryData, timeRange, dataLoading, forecast, budgets, monteCarloData, className = '',
 }: Props) {
   const [briefing,  setBriefing]  = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -163,11 +174,13 @@ export default function ProactiveBriefing({
   }, [dataKey, dataLoading]);
 
   // ── Render guards ─────────────────────────────────────────────────────────
+  const hasMCContent = monteCarloData !== undefined;
+
   if (dismissed) return null;
   if (errored)   return null;  // silent failure — don't break UX
-  if (!aiLoading && !briefing) return null;
+  if (!aiLoading && !briefing && !hasMCContent) return null;
 
-  const severity = calcSeverity(forecast);
+  const severity = calcSeverity(forecast, monteCarloData?.riskLevel);
   const cfg      = SEVERITY_CONFIG[severity];
   const SevIcon  = cfg.icon;
 
@@ -263,9 +276,49 @@ export default function ProactiveBriefing({
                   <div className="h-3.5 bg-quantum-border/60 rounded-full animate-pulse w-4/6" />
                 </div>
               ) : (
-                <p className="text-sm text-quantum-fg leading-relaxed pt-2">
-                  {briefing}
-                </p>
+                <div className="space-y-3 pt-2">
+                  {briefing && (
+                    <p className="text-sm text-quantum-fg leading-relaxed">{briefing}</p>
+                  )}
+
+                  {monteCarloData && (
+                    monteCarloData.mcLoading ? (
+                      <p className="text-xs text-quantum-fgMuted italic">
+                        Coletando dados para ativar previsões...
+                      </p>
+                    ) : monteCarloData.insight ? (
+                      <div className="rounded-xl border border-quantum-border/60 bg-quantum-bg/40 p-3 space-y-2">
+                        <p className="text-[10px] uppercase font-bold text-quantum-fgMuted tracking-wider">
+                          Previsão Monte Carlo · 30 dias
+                        </p>
+                        <p className="text-sm text-quantum-fg leading-relaxed">
+                          {monteCarloData.insight}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-quantum-fgMuted pt-1">
+                          <span>
+                            Sobrevivência:{' '}
+                            <span
+                              className="font-bold"
+                              style={{
+                                color: monteCarloData.riskLevel === 'safe'      ? '#00E68A'
+                                     : monteCarloData.riskLevel === 'attention' ? '#F59E0B'
+                                     : '#FF4757',
+                              }}
+                            >
+                              {monteCarloData.survivalRate}%
+                            </span>
+                          </span>
+                          <span>
+                            Risco de negativo:{' '}
+                            <span className="font-bold text-red-400">
+                              {monteCarloData.ruinProbability}%
+                            </span>
+                          </span>
+                        </div>
+                      </div>
+                    ) : null
+                  )}
+                </div>
               )}
             </div>
           </motion.div>

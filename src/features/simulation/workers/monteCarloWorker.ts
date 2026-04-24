@@ -144,14 +144,132 @@ function runMonteCarloSimulation(config: MonteCarloRequest): Omit<MonteCarloSucc
   };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// FORECAST MONTE CARLO — contrato 30-day / 1 000 sims / PRNG determinístico
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface ForecastMonteCarloRequest {
+  type:           'forecast';
+  jobId:          string;
+  currentBalance: number;
+  burnRate:       number;       // daily average expense
+  expectedIncome: number;       // daily average income
+  volatility:     number;       // daily std-dev of expenses
+}
+
+export interface ForecastMonteCarloResult {
+  type:            'forecast';
+  jobId:           string;
+  success:         boolean;
+  p5:              number;
+  p10:             number;
+  p50:             number;
+  p90:             number;
+  p95:             number;
+  survivalRate:    number;      // % of sims ending > 0
+  ruinProbability: number;      // % of sims ending ≤ 0
+  error?:          string;
+}
+
+// Lehmer MINSTD — deterministic, period ≈ 2.1 B, seed reset per call
+function runForecastMonteCarlo(
+  req: ForecastMonteCarloRequest,
+): Omit<ForecastMonteCarloResult, 'type' | 'jobId'> {
+  const { currentBalance, burnRate, expectedIncome, volatility } = req;
+
+  // Safe volatility — never 0 (would collapse the distribution)
+  const finalVol = volatility === 0 ? 10 : volatility;
+
+  // Seeded PRNG — reset to 42 every call for full determinism
+  let seed = 42;
+  const rnd = (): number => {
+    seed = (seed * 16807) % 2147483647;
+    return seed / 2147483647;
+  };
+
+  // Box-Muller with clamp [-3, 3] (eliminates extreme outliers)
+  const normalClamped = (): number => {
+    const u1   = rnd() || Number.EPSILON; // guard against log(0)
+    const u2   = rnd();
+    const z    = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    return Math.max(-3, Math.min(3, z));
+  };
+
+  const finals: number[] = [];
+
+  for (let sim = 0; sim < 1_000; sim++) {
+    let balance = currentBalance;
+    for (let day = 0; day < 30; day++) {
+      const expense = burnRate + normalClamped() * finalVol;
+      balance += expectedIncome - expense;
+    }
+    if (Number.isFinite(balance) && !Number.isNaN(balance)) {
+      finals.push(balance);
+    }
+  }
+
+  // Degenerate case — return neutral estimate
+  if (!finals.length) {
+    return {
+      success: true,
+      p5: currentBalance, p10: currentBalance, p50: currentBalance,
+      p90: currentBalance, p95: currentBalance,
+      survivalRate: 50, ruinProbability: 50,
+    };
+  }
+
+  finals.sort((a, b) => a - b);
+  const n   = finals.length;
+  const pct = (p: number): number => finals[Math.min(Math.floor(n * p), n - 1)] ?? 0;
+
+  const survivors    = finals.filter(v => v > 0).length;
+  const survivalRate = Math.round((survivors / n) * 100);
+
+  return {
+    success: true,
+    p5:  pct(0.05),
+    p10: pct(0.10),
+    p50: pct(0.50),
+    p90: pct(0.90),
+    p95: pct(0.95),
+    survivalRate,
+    ruinProbability: 100 - survivalRate,
+  };
+}
+
 // ─── Message Handler ─────────────────────────────────────────────────────────
-ctx.onmessage = (event: MessageEvent<MonteCarloRequest>) => {
+
+type IncomingMessage = MonteCarloRequest | ForecastMonteCarloRequest;
+
+ctx.onmessage = (event: MessageEvent<IncomingMessage>) => {
+  const data = event.data;
+
+  // ── Forecast branch (new, 30-day daily simulation) ─────────────────────────
+  if ('type' in data && data.type === 'forecast') {
+    const req = data as ForecastMonteCarloRequest;
+    try {
+      const result   = runForecastMonteCarlo(req);
+      const response: ForecastMonteCarloResult = { type: 'forecast', jobId: req.jobId, ...result };
+      ctx.postMessage(response);
+    } catch (err) {
+      const response: ForecastMonteCarloResult = {
+        type: 'forecast', jobId: req.jobId, success: false,
+        error: err instanceof Error ? err.message : 'Erro no forecast MC.',
+        p5: 0, p10: 0, p50: 0, p90: 0, p95: 0,
+        survivalRate: 50, ruinProbability: 50,
+      };
+      ctx.postMessage(response);
+    }
+    return;
+  }
+
+  // ── Legacy branch (SimulationCenter — monthly, multi-year) ─────────────────
   try {
-    const result = runMonteCarloSimulation(event.data);
+    const result   = runMonteCarloSimulation(data as MonteCarloRequest);
     const response: MonteCarloSuccess = { success: true, ...result };
     ctx.postMessage(response);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Erro no engine Monte Carlo.';
+    const message  = err instanceof Error ? err.message : 'Erro no engine Monte Carlo.';
     const response: MonteCarloFailure = { success: false, error: message };
     ctx.postMessage(response);
   }

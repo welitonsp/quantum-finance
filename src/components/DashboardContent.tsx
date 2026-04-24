@@ -240,6 +240,13 @@ export default function DashboardContent({
           dataLoading={dashLoading}
           forecast={forecast}
           budgets={budgetInsights}
+          monteCarloData={{
+            survivalRate:    forecast.survivalRate,
+            ruinProbability: forecast.ruinProbability,
+            riskLevel:       forecast.riskLevel,
+            insight:         forecast.insight,
+            mcLoading:       forecast.mcLoading,
+          }}
         />
       </motion.div>
 
