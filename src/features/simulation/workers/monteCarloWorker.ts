@@ -3,9 +3,14 @@
  * ──────────────────────────────────────────────────────────────────────────────
  * Roda em thread separada. A Main Thread permanece fluída enquanto este worker
  * processa milhares de iterações de simulação de fluxo de caixa.
+ *
+ * O motor puro (30d / 1 000 sims / seed determinístico) vive em
+ * forecastMonteCarlo.ts para ser testável sem contexto Worker.
  */
 
 /// <reference lib="webworker" />
+
+import { runMonteCarloSimulation as runForecast30d } from '../forecastMonteCarlo';
 
 // Dedicated Worker global scope
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
@@ -171,70 +176,16 @@ export interface ForecastMonteCarloResult {
   error?:          string;
 }
 
-// Lehmer MINSTD — deterministic, period ≈ 2.1 B, seed reset per call
+// Delegate to the pure engine — no PRNG / math logic lives here
 function runForecastMonteCarlo(
   req: ForecastMonteCarloRequest,
 ): Omit<ForecastMonteCarloResult, 'type' | 'jobId'> {
-  const { currentBalance, burnRate, expectedIncome, volatility } = req;
-
-  // Safe volatility — never 0 (would collapse the distribution)
-  const finalVol = volatility === 0 ? 10 : volatility;
-
-  // Seeded PRNG — reset to 42 every call for full determinism
-  let seed = 42;
-  const rnd = (): number => {
-    seed = (seed * 16807) % 2147483647;
-    return seed / 2147483647;
-  };
-
-  // Box-Muller with clamp [-3, 3] (eliminates extreme outliers)
-  const normalClamped = (): number => {
-    const u1   = rnd() || Number.EPSILON; // guard against log(0)
-    const u2   = rnd();
-    const z    = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-    return Math.max(-3, Math.min(3, z));
-  };
-
-  const finals: number[] = [];
-
-  for (let sim = 0; sim < 1_000; sim++) {
-    let balance = currentBalance;
-    for (let day = 0; day < 30; day++) {
-      const expense = burnRate + normalClamped() * finalVol;
-      balance += expectedIncome - expense;
-    }
-    if (Number.isFinite(balance) && !Number.isNaN(balance)) {
-      finals.push(balance);
-    }
-  }
-
-  // Degenerate case — return neutral estimate
-  if (!finals.length) {
-    return {
-      success: true,
-      p5: currentBalance, p10: currentBalance, p50: currentBalance,
-      p90: currentBalance, p95: currentBalance,
-      survivalRate: 50, ruinProbability: 50,
-    };
-  }
-
-  finals.sort((a, b) => a - b);
-  const n   = finals.length;
-  const pct = (p: number): number => finals[Math.min(Math.floor(n * p), n - 1)] ?? 0;
-
-  const survivors    = finals.filter(v => v > 0).length;
-  const survivalRate = Math.round((survivors / n) * 100);
-
-  return {
-    success: true,
-    p5:  pct(0.05),
-    p10: pct(0.10),
-    p50: pct(0.50),
-    p90: pct(0.90),
-    p95: pct(0.95),
-    survivalRate,
-    ruinProbability: 100 - survivalRate,
-  };
+  return runForecast30d({
+    currentBalance: req.currentBalance,
+    burnRate:       req.burnRate,
+    expectedIncome: req.expectedIncome,
+    volatility:     req.volatility,
+  });
 }
 
 // ─── Message Handler ─────────────────────────────────────────────────────────
