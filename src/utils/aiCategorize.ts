@@ -1,5 +1,75 @@
 // Batch AI categorization via GeminiService (Cloud Functions — API key never exposed)
 import { GeminiService } from '../features/ai-chat/GeminiService';
+import type { Transaction } from '../shared/types/transaction';
+
+// ─── Deterministic categorization (no external AI) ───────────────────────────
+
+const normalize = (text: string): string =>
+  text
+    .toLowerCase()
+    .replace(/\d+/g, '')
+    .replace(/[^\w\s]/g, '')
+    .trim();
+
+const KEYWORDS: Record<string, string> = {
+  uber:     'Transporte',
+  ifood:    'Alimentação',
+  pix:      'Transferência',
+  mercado:  'Alimentação',
+  gasolina: 'Transporte',
+};
+
+function topCategory(catMap: Map<string, number>): string {
+  let top = '';
+  let max = 0;
+  for (const [cat, count] of catMap) {
+    if (count > max) { max = count; top = cat; }
+  }
+  return top;
+}
+
+/**
+ * Returns the most likely category for a description based on transaction history
+ * and keyword fallback. Returns undefined when no match is found.
+ * Never mutates caller data — only call when tx.category is absent.
+ */
+export function categorizeTransaction(
+  description: string,
+  history: Transaction[]
+): string | undefined {
+  if (!description?.trim()) return undefined;
+  const normalized = normalize(description);
+  if (!normalized) return undefined;
+
+  // Build frequency map in one pass — O(n)
+  const freq = new Map<string, Map<string, number>>();
+  for (const tx of history) {
+    if (!tx.description || !tx.category) continue;
+    const key = normalize(tx.description);
+    if (!key) continue;
+    let catMap = freq.get(key);
+    if (!catMap) { catMap = new Map(); freq.set(key, catMap); }
+    catMap.set(tx.category, (catMap.get(tx.category) ?? 0) + 1);
+  }
+
+  // 1. Exact match
+  const exact = freq.get(normalized);
+  if (exact) return topCategory(exact);
+
+  // 2. Partial match (substring in either direction)
+  for (const [key, catMap] of freq) {
+    if (normalized.includes(key) || key.includes(normalized)) {
+      return topCategory(catMap);
+    }
+  }
+
+  // 3. Keyword fallback
+  for (const [kw, cat] of Object.entries(KEYWORDS)) {
+    if (normalized.includes(kw)) return cat;
+  }
+
+  return undefined;
+}
 
 /**
  * Sends an array of UNIQUE descriptions to the AI in a single batch request.

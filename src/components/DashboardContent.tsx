@@ -22,6 +22,7 @@ import BudgetWidget from './BudgetWidget';
 import { HealthGauge } from './HealthGauge';
 import { SparkLine } from './SparkLine';
 import { IntelStrip } from './IntelStrip';
+import KPICards from './KPICards';
 import type { Transaction, ModuleBalances, CategoryDataPoint } from '../shared/types/transaction';
 import type { TimeRange } from '../hooks/useFinancialData';
 
@@ -222,6 +223,11 @@ export default function DashboardContent({
       {/* ── INTEL STRIP ───────────────────────────────────────── */}
       <motion.div variants={itemVariants}>
         <IntelStrip savingsRate={savingsRate} debtRatio={debtRatio} goalProgress={goalProgress} />
+      </motion.div>
+
+      {/* ── KPI CARDS — receita, despesa, saldo, projeção ─────── */}
+      <motion.div variants={itemVariants}>
+        <KPICards transactions={transactions} />
       </motion.div>
 
       {/* ── BRIEFING IA — acima dos gráficos ──────────────────── */}

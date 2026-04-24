@@ -6,7 +6,7 @@ import {
   Search, Filter, Trash2, Edit3, ArrowUpRight, ArrowDownRight,
   CheckSquare, Square, MinusSquare, X, SlidersHorizontal,
   TrendingUp, TrendingDown, Minus, Tag, ArrowUpDown,
-  Layers, RotateCcw, AlertTriangle, Check, ShieldAlert,
+  Layers, RotateCcw, AlertTriangle, Check, ShieldAlert, History,
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
@@ -14,6 +14,8 @@ import toast from 'react-hot-toast';
 import type { Transaction } from '../../shared/types/transaction';
 import type { AllowedCategory } from '../../shared/schemas/financialSchemas';
 import type { BulkUpdate } from '../../hooks/useTransactions';
+import { auth } from '../../shared/api/firebase/auth';
+import AuditTimeline from '../../components/AuditTimeline';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SortBy = 'date_desc' | 'date_asc' | 'value_desc' | 'value_asc' | 'cat';
@@ -45,6 +47,8 @@ interface Props {
   isUndoing?: boolean;
   hasUndoSnapshot?: boolean;
   clearBulkSnapshot?: () => void;
+  /** UID do utilizador autenticado. Fallback automático para auth.currentUser. */
+  uid?: string;
 }
 
 // ─── Paleta de cores por categoria ───────────────────────────────────────────
@@ -226,13 +230,16 @@ export default function TransactionsManager({
   undoLastBulkUpdate,
   isUndoing = false,
   clearBulkSnapshot,
+  uid,
 }: Props) {
+  const effectiveUid = uid ?? auth.currentUser?.uid ?? '';
   const [search,        setSearch]        = useState('');
   const [filterType,    setFilterType]    = useState<FilterType>('all');
   const [filterCat,     setFilterCat]     = useState('');
   const [sortBy,        setSortBy]        = useState<SortBy>('date_desc');
   const [groupBy,       setGroupBy]       = useState<GroupByOption>('date');
   const [filtersOpen,   setFiltersOpen]   = useState(false);
+  const [auditOpen,     setAuditOpen]     = useState(false);
 
   const [selected,      setSelected]      = useState<Set<string>>(new Set());
   const [batchAction,   setBatchAction]   = useState<BatchAction>(null);
@@ -511,6 +518,15 @@ export default function TransactionsManager({
             title="Filtros avançados"
           >
             <SlidersHorizontal className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={() => setAuditOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-quantum-border bg-quantum-bgSecondary text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/20 transition-all shrink-0 text-xs font-bold"
+            title="Histórico de ações"
+          >
+            <History className="w-4 h-4" />
+            <span className="hidden sm:inline">Histórico</span>
           </button>
         </div>
 
@@ -820,6 +836,13 @@ export default function TransactionsManager({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ═══ AUDIT TIMELINE DRAWER ═══════════════════════════════════════════ */}
+      <AuditTimeline
+        uid={effectiveUid}
+        open={auditOpen}
+        onClose={() => setAuditOpen(false)}
+      />
 
       {/* ═══ LISTA DE TRANSAÇÕES ════════════════════════════════════════════ */}
       <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-1 custom-scrollbar">

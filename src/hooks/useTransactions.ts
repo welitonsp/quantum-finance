@@ -7,6 +7,7 @@ import { db } from '../shared/api/firebase/index';
 import { FirestoreService } from '../shared/services/FirestoreService';
 import { AuditService } from '../shared/services/AuditService';
 import type { Transaction } from '../shared/types/transaction';
+import { categorizeTransaction } from '../utils/aiCategorize';
 
 // ─── Bulk Update — tipo restrito (não expõe Partial<Transaction> livre) ────────
 export type BulkUpdate = {
@@ -321,6 +322,13 @@ export function useTransactions(uid: string): UseTransactionsReturn {
   const add = useCallback(async (data: Partial<Transaction>): Promise<string> => {
     if (!uid) throw new Error('[useTransactions][add] UID ausente.');
 
+    // Auto-categorize only when category is absent — never overwrite a set value
+    const enriched: Partial<Transaction> = { ...data };
+    if (!enriched.category && enriched.description) {
+      const suggested = categorizeTransaction(enriched.description, transactionsRef.current);
+      if (suggested) enriched.category = suggested;
+    }
+
     const now    = Date.now();
     const tempId = makeTempId();
     const optimistic: Transaction = {
@@ -329,7 +337,7 @@ export function useTransactions(uid: string): UseTransactionsReturn {
       type:        'saida',
       category:    'Outros',
       date:        new Date().toISOString().slice(0, 10),
-      ...data,
+      ...enriched,
       id:        tempId,
       uid,
       // Timestamps locais para LWW até serverTimestamp() chegar via snapshot
@@ -339,7 +347,7 @@ export function useTransactions(uid: string): UseTransactionsReturn {
 
     pendingAdds.current.set(tempId, optimistic);
     setTransactions(prev => [optimistic, ...prev]);
-    enqueue({ type: 'add', tempId, data, retries: 0 });
+    enqueue({ type: 'add', tempId, data: enriched, retries: 0 });
 
     return tempId;
   }, [uid, enqueue]);
@@ -398,6 +406,13 @@ export function useTransactions(uid: string): UseTransactionsReturn {
     const optimistics: Transaction[] = [];
 
     items.forEach(data => {
+      // Auto-categorize only when category is absent — never overwrite a set value
+      const enriched: Partial<Transaction> = { ...data };
+      if (!enriched.category && enriched.description) {
+        const suggested = categorizeTransaction(enriched.description, transactionsRef.current);
+        if (suggested) enriched.category = suggested;
+      }
+
       const tempId: string = makeTempId();
       const optimistic: Transaction = {
         description: '',
@@ -405,7 +420,7 @@ export function useTransactions(uid: string): UseTransactionsReturn {
         type:        'saida',
         category:    'Outros',
         date:        new Date().toISOString().slice(0, 10),
-        ...data,
+        ...enriched,
         id:        tempId,
         uid,
         createdAt: now,
@@ -415,7 +430,7 @@ export function useTransactions(uid: string): UseTransactionsReturn {
       optimistics.push(optimistic);
       tempIds.push(tempId);
       // Push directly to avoid N processQueue triggers; one call below handles all
-      queueRef.current.push({ type: 'add', tempId, data, retries: 0 });
+      queueRef.current.push({ type: 'add', tempId, data: enriched, retries: 0 });
     });
 
     setTransactions(prev => [...optimistics, ...prev]);
