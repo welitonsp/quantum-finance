@@ -107,7 +107,10 @@ function toMillis(ts: Transaction['updatedAt'] | Transaction['createdAt']): numb
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useTransactions(uid: string): UseTransactionsReturn {
+export function useTransactions(
+  uid: string,
+  userRules: import('./useCategoryRules').UserCategoryRule[] = []
+): UseTransactionsReturn {
   const [transactions,   setTransactions]   = useState<Transaction[]>([]);
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState<Error | null>(null);
@@ -341,7 +344,8 @@ export function useTransactions(uid: string): UseTransactionsReturn {
     // 1. Deterministic categorization — never overwrite a set value
     const enriched: Partial<Transaction> = { ...data };
     if (!enriched.category && enriched.description) {
-      const suggested = categorizeTransaction(enriched.description, transactionsRef.current);
+      // FIX P0.1: regras do usuário aplicadas antes do histórico/dicionário
+      const suggested = categorizeTransaction(enriched.description, transactionsRef.current, userRules);
       if (suggested) enriched.category = suggested;
     }
 
@@ -439,7 +443,8 @@ export function useTransactions(uid: string): UseTransactionsReturn {
       // 1. Deterministic categorization — never overwrite a set value
       const enriched: Partial<Transaction> = { ...data };
       if (!enriched.category && enriched.description) {
-        const suggested = categorizeTransaction(enriched.description, transactionsRef.current);
+        // FIX P0.1: regras do usuário aplicadas antes do histórico/dicionário
+      const suggested = categorizeTransaction(enriched.description, transactionsRef.current, userRules);
         if (suggested) enriched.category = suggested;
       }
 

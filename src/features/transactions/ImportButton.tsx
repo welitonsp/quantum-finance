@@ -65,6 +65,7 @@ interface Props {
   onImportTransactions: (txs: ParsedTransaction[]) => Promise<ImportResult | void>;
   uid?:                  string;
   existingTransactions?: Transaction[];
+  userRules?:            import('../../hooks/useCategoryRules').UserCategoryRule[];
 }
 
 
@@ -509,7 +510,7 @@ function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void
 }
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
-export default function ImportButton({ onImportTransactions, existingTransactions = [] }: Props) {
+export default function ImportButton({ onImportTransactions, existingTransactions = [], userRules }: Props) {
   const [isOpen,              setIsOpen]              = useState(false);
   const [status,              setStatus]              = useState<ImportStatus>('idle');
   const [errorMessage,        setErrorMessage]        = useState('');
@@ -551,13 +552,24 @@ export default function ImportButton({ onImportTransactions, existingTransaction
     txs.forEach(tx => {
       const upper = tx.description.toUpperCase();
       let found = false;
-      for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
-        for (const kw of keywords) {
+      // FIX P0.1: regras do usuário têm prioridade sobre dicionário
+      for (const rule of (userRules ?? [])) {
+        for (const kw of rule.keywords) {
           if (upper.includes(kw.toUpperCase())) {
-            tx.category = category as AllowedCategory; found = true; break;
+            tx.category = rule.category as AllowedCategory; found = true; break;
           }
         }
         if (found) break;
+      }
+      if (!found) {
+        for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+          for (const kw of keywords) {
+            if (upper.includes(kw.toUpperCase())) {
+              tx.category = category as AllowedCategory; found = true; break;
+            }
+          }
+          if (found) break;
+        }
       }
       if (!found && isExpense(tx.type)) forAI.push(tx);
     });

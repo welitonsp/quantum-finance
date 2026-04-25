@@ -174,9 +174,9 @@ export const FirestoreService = {
 
   // ─── Recorrentes ────────────────────────────────────────────────────────────
 
-  getRecurringCollection(uid?: string): CollectionReference {
-    if (uid) return collection(db, 'users', uid, 'recurringTasks');
-    return collection(db, 'recurring');
+  getRecurringCollection(uid: string): CollectionReference {
+    if (!uid) throw new Error('[Firestore][getRecurringCollection] UID obrigatório.');
+    return collection(db, 'users', uid, 'recurringTasks');
   },
 
   async addRecurringTask(uid: string, data: Record<string, unknown>): Promise<string> {

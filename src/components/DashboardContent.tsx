@@ -104,8 +104,9 @@ export default function DashboardContent({
   // Budget insights — lifted here so ProactiveBriefing and BudgetWidget share one subscription
   const { insights: budgetInsights } = useBudgets(user?.uid ?? '', txSet);
 
-  const patrimonio = saldo;
-  const dividas    = 0;
+  // FIX P0.2: usar valores reais de moduleBalances (PR 1 conectou via useFinancialData)
+  const patrimonio = moduleBalances?.geral?.patrimonio ?? saldo;
+  const dividas    = moduleBalances?.geral?.dividas    ?? 0;
   const metaEcon   = typeof monthlyGoal === 'object' && monthlyGoal !== null ? (monthlyGoal.percent ?? 20) : 20;
 
   const st = useMemo(

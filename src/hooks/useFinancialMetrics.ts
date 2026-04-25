@@ -3,6 +3,16 @@ import Decimal from 'decimal.js';
 import type { Transaction, Account } from '../shared/types/transaction';
 import { isIncome, isExpense } from '../utils/transactionUtils';
 
+function isInMonth(tx: { date?: string; createdAt?: unknown }, month: number, year: number): boolean {
+  const raw = tx.date ?? '';
+  if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw)) {
+    const txMonth = Number(raw.slice(5, 7));
+    const txYear  = Number(raw.slice(0, 4));
+    return txMonth === month && txYear === year;
+  }
+  return false;
+}
+
 export interface FinancialMetrics {
   receita: number;
   despesa: number;
@@ -44,6 +54,8 @@ export function useFinancialMetrics(
       const categoriasFixas = ['moradia','assinaturas','educação','impostos','impostos/taxas','saúde'];
 
       transactions.forEach(tx => {
+        // FIX P0.3: receita/despesa/custoFixo são MENSAIS, não lifetime
+        if (!isInMonth(tx, currentMonth, currentYear)) return;
         const valor = new Decimal(Math.abs(Number(tx.value || 0)));
         if (isIncome(tx.type)) {
           receita = receita.plus(valor);

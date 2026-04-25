@@ -4,6 +4,7 @@ import {
   type Timestamp,
 } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
+import { GeminiService } from '../features/ai-chat/GeminiService';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -32,17 +33,25 @@ interface QueueEntry {
 }
 const waiting: QueueEntry[] = [];
 
-// ─── Internal: mock AI execution ─────────────────────────────────────────────
-// Replace runMockAI body with a real AI call (e.g., GeminiService) when ready.
+// ─── Internal: AI execution via Gemini Cloud Function ────────────────────────
 
-function runMockAI(): Promise<string> {
-  const delay = 300 + Math.random() * 200; // simulates 300–500ms network latency
-  return new Promise<string>(resolve => setTimeout(() => resolve('Outros'), delay));
+async function runRealAI(description: string): Promise<string> {
+  try {
+    const result = await GeminiService.categorizeTransactionsBatch([
+      { id: '__single__', description }
+    ]);
+    const cat = result?.[0]?.category;
+    // FIX P1.7: usa Gemini real via Cloud Function (não mais mock)
+    return (typeof cat === 'string' && cat.trim()) ? cat : 'Outros';
+  } catch {
+    // Nunca propagar erro — fail-safe é 'Outros'
+    return 'Outros';
+  }
 }
 
 async function execute(entry: QueueEntry): Promise<void> {
   try {
-    const cat = await runMockAI();
+    const cat = await runRealAI(entry.key);
     cache.set(entry.key, cat);
     entry.resolve(cat); // resolve wrapper handles inFlight cleanup + logging
   } finally {

@@ -6,7 +6,8 @@
       "Bash(echo \"TSC_EXIT:$?\")",
       "Bash(npx jest *)",
       "Bash([ -f \"c:/quantum-finance/src/components/$f\" ])",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "Bash(firebase deploy *)"
     ]
   }
 }

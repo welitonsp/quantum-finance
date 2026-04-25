@@ -12,6 +12,7 @@ import { useTransactions } from './hooks/useTransactions';
 import { useFinancialData } from './hooks/useFinancialData';
 import { useAccounts } from './hooks/useAccounts';
 import { useRecurring } from './hooks/useRecurring';
+import { useCategoryRules } from './hooks/useCategoryRules';
 import { useAppLogic } from './hooks/useAppLogic';
 
 import Sidebar from './components/Sidebar';
@@ -140,11 +141,13 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
 
   const safeUID = user.uid;
 
+  // FIX P0.1: regras do usuário aplicadas em add/addBatch via useTransactions
+  const { asUserRules: userCategoryRules } = useCategoryRules(safeUID);
   const {
     transactions, loading, add, addBatch, remove, removeBatch, update,
     bulkUpdateTransactions, isBulkUpdating,
     undoLastBulkUpdate, isUndoing, hasUndoSnapshot, clearBulkSnapshot,
-  } = useTransactions(safeUID);
+  } = useTransactions(safeUID, userCategoryRules);
   const { accounts } = useAccounts(safeUID);
   const { recurringTasks } = useRecurring(safeUID);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
@@ -240,6 +243,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
             user={user}
             transactions={transactions}
             handleImport={handleImport}
+            userRules={userCategoryRules}
             onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
           />
 

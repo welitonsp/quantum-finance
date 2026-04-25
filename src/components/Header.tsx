@@ -219,6 +219,7 @@ interface HeaderProps {
   user: { uid?: string } | null;
   transactions: Transaction[];
   handleImport: (txs: Partial<Transaction>[]) => Promise<unknown> | void;
+  userRules?: import('../hooks/useCategoryRules').UserCategoryRule[];
   onOpenCommandPalette?: () => void;
 }
 
@@ -239,6 +240,7 @@ export default function Header({
   user,
   transactions,
   handleImport,
+  userRules,
   onOpenCommandPalette,
 }: HeaderProps) {
   const { isPrivacyMode, togglePrivacy } = usePrivacy();
@@ -330,7 +332,7 @@ export default function Header({
         {currentPage === 'dashboard' && (
           <>
             <div className="hidden xl:block">
-              <ImportButton onImportTransactions={async (txs) => { await handleImport(txs as Partial<Transaction>[]); }} uid={user?.uid} existingTransactions={transactions} />
+              <ImportButton onImportTransactions={async (txs) => { await handleImport(txs as Partial<Transaction>[]); }} uid={user?.uid} existingTransactions={transactions} userRules={userRules} />
             </div>
             <button
               onClick={() => setIsFormOpen(!isFormOpen)}

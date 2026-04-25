@@ -2,6 +2,7 @@
 import { GeminiService } from '../features/ai-chat/GeminiService';
 import type { Transaction } from '../shared/types/transaction';
 import { CATEGORY_KEYWORDS } from '../shared/data/categoryKeywords';
+import type { UserCategoryRule } from '../hooks/useCategoryRules';
 
 // ─── Deterministic categorization (no external AI) ───────────────────────────
 
@@ -29,11 +30,23 @@ function topCategory(catMap: Map<string, number>): string {
  */
 export function categorizeTransaction(
   description: string,
-  history: Transaction[]
+  history: Transaction[],
+  userRules: UserCategoryRule[] = []
 ): string | undefined {
   if (!description?.trim()) return undefined;
   const normalized = normalize(description);
   if (!normalized) return undefined;
+
+  // FIX P0.1: Regras do usuário > histórico > dicionário
+  if (userRules.length > 0) {
+    for (const rule of userRules) {
+      for (const kw of rule.keywords) {
+        if (normalized.includes(kw.toLowerCase())) {
+          return rule.category;
+        }
+      }
+    }
+  }
 
   // Build frequency map in one pass — O(n)
   const freq = new Map<string, Map<string, number>>();

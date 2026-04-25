@@ -56,7 +56,7 @@ export async function parseOFX(file: File): Promise<ParsedTransaction[]> {
     const date = parseOFXDate(dateRaw) ?? new Date().toISOString().split('T')[0];
 
     const memo = extractTag(block, 'MEMO') ?? extractTag(block, 'NAME') ?? 'Transação OFX';
-    const type = amount > 0 ? 'receita' : 'saida';
+    const type = amount > 0 ? 'entrada' : 'saida';
 
     transactions.push({
       id:          fitId || crypto.randomUUID(),

@@ -38,14 +38,6 @@ service cloud.firestore {
         allow read, write: if isOwner(userId);
       }
 
-      match /category_learning/{docId} {
-        allow read, write: if isOwner(userId);
-      }
-
-      match /category_feedback/{docId} {
-        allow read, write: if isOwner(userId);
-      }
-
       // AI usage tracker — count validated to prevent abuse
       match /usage/ai_calls {
         allow read: if isOwner(userId);
