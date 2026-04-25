@@ -7,7 +7,10 @@
       "Bash(npx jest *)",
       "Bash([ -f \"c:/quantum-finance/src/components/$f\" ])",
       "Bash(npx vite *)",
-      "Bash(firebase deploy *)"
+      "Bash(firebase deploy *)",
+      "Bash(firebase firestore:rules --check)",
+      "Bash(npx firebase-tools *)",
+      "Bash(npx vitest *)"
     ]
   }
 }
