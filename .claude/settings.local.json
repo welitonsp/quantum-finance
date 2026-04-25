@@ -4,7 +4,9 @@
       "Bash(xargs -I {} sh -c 'echo \"$\\(grep -c \"rgba\\\\|rgb\\(\" {}\\) {}\"')",
       "Bash(npx tsc *)",
       "Bash(echo \"TSC_EXIT:$?\")",
-      "Bash(npx jest *)"
+      "Bash(npx jest *)",
+      "Bash([ -f \"c:/quantum-finance/src/components/$f\" ])",
+      "Bash(npx vite *)"
     ]
   }
 }

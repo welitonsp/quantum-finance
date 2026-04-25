@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Flame } from 'lucide-react';
 import { usePrivacy } from '../contexts/PrivacyContext';
 import type { Transaction } from '../shared/types/transaction';
+import { isExpense } from '../utils/transactionUtils';
 
 interface RiskLevel {
   key: string;
@@ -99,7 +100,7 @@ export default function SurvivalHeatmap({ transactions, currentMonth, currentYea
     const spendByDay: Record<number, number> = {};
 
     (transactions ?? []).forEach(tx => {
-      if (tx.type !== 'saida' && tx.type !== 'despesa') return;
+      if (!isExpense(tx.type)) return;
       const d = new Date((tx.date ?? tx.createdAt) as string);
       if (d.getMonth() + 1 !== currentMonth || d.getFullYear() !== currentYear) return;
       const key = d.getDate();

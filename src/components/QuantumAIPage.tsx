@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { GeminiService } from '../features/ai-chat/GeminiService';
 import type { Transaction, ModuleBalances } from '../shared/types/transaction';
+import { isExpense, isIncome } from '../utils/transactionUtils';
 
 interface Props {
   transactions?: Transaction[];
@@ -31,7 +32,7 @@ interface Anomaly { cat: string; totalAtual: number; mediaHist: number; desvio: 
 function groupByCategory(transactions: Transaction[]): CatTotal[] {
   const map: Record<string, number> = {};
   transactions.forEach(tx => {
-    if (tx.type !== 'saida' && tx.type !== 'despesa') return;
+    if (!isExpense(tx.type)) return;
     const cat = tx.category ?? 'Outros';
     map[cat] = (map[cat] ?? 0) + Math.abs(Number(tx.value ?? 0));
   });
@@ -43,17 +44,17 @@ function calcBurnMetrics(transactions: Transaction[], currentMonth: number, curr
   const diaAtual  = hoje.getDate();
   const diasNoMes = new Date(currentYear, currentMonth, 0).getDate();
 
-  const filter = (types: string[]) =>
+  const filterByPredicate = (predicate: (type: string) => boolean) =>
     transactions
       .filter(tx => {
-        if (!types.includes(tx.type ?? '')) return false;
+        if (!predicate(tx.type ?? '')) return false;
         const d = new Date((tx.date ?? tx.createdAt) as string);
         return d.getMonth() + 1 === currentMonth && d.getFullYear() === currentYear;
       })
       .reduce((acc, tx) => acc + Math.abs(Number(tx.value ?? 0)), 0);
 
-  const despesasMes   = filter(['saida', 'despesa']);
-  const receitasMes   = filter(['entrada', 'receita']);
+  const despesasMes   = filterByPredicate(isExpense);
+  const receitasMes   = filterByPredicate(isIncome);
   const ritmoDiario   = diaAtual > 0 ? despesasMes / diaAtual : 0;
   const projecaoFinal = ritmoDiario * diasNoMes;
 
@@ -118,7 +119,7 @@ function AnomaliesPanel({ transactions, currentMonth, currentYear }: AnomaliesPa
 
     const catAtual: Record<string, number> = {};
     transactions.forEach(tx => {
-      if (tx.type !== 'saida' && tx.type !== 'despesa') return;
+      if (!isExpense(tx.type)) return;
       const d = new Date((tx.date ?? tx.createdAt) as string);
       if (d.getMonth() + 1 !== currentMonth || d.getFullYear() !== currentYear) return;
       const cat = tx.category ?? 'Outros';
@@ -128,7 +129,7 @@ function AnomaliesPanel({ transactions, currentMonth, currentYear }: AnomaliesPa
     const catMedia: Record<string, number> = {};
     mesesAnteriores.forEach(({ month, year }) => {
       transactions.forEach(tx => {
-        if (tx.type !== 'saida' && tx.type !== 'despesa') return;
+        if (!isExpense(tx.type)) return;
         const d = new Date((tx.date ?? tx.createdAt) as string);
         if (d.getMonth() + 1 !== month || d.getFullYear() !== year) return;
         const cat = tx.category ?? 'Outros';

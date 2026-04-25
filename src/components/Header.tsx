@@ -16,8 +16,6 @@ const PAGE_TITLES: Record<string, string> = {
   wallet:    'Carteira',
   accounts:  'As Minhas Contas',
   cards:     'Cartões de Crédito',
-  portfolio: 'Portfólio',
-  markets:   'Mercados',
   quantum:   'Quantum AI',
   recurring: 'Despesas Recorrentes',
 };

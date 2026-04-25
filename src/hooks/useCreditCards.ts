@@ -5,6 +5,7 @@ import {
 import { db } from '../shared/api/firebase/index';
 import { toCentavos, fromCentavos } from '../shared/schemas/financialSchemas';
 import type { CreditCard, CreditCardWithMetrics, CardMetrics, Transaction } from '../shared/types/transaction';
+import { isExpense } from '../utils/transactionUtils';
 
 function calcCardMetrics(card: CreditCard, transactions: Transaction[]): CardMetrics {
   const hoje     = new Date();
@@ -22,7 +23,7 @@ function calcCardMetrics(card: CreditCard, transactions: Transaction[]): CardMet
   const faturaAtual = transactions
     .filter(tx => {
       if (tx.cardId !== card.id) return false;
-      if (tx.type !== 'saida' && tx.type !== 'despesa') return false;
+      if (!isExpense(tx.type)) return false;
       const d = new Date(String(tx.date || tx.createdAt));
       return d >= inicioFatura && d <= fimFatura;
     })
