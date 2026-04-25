@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import Decimal from 'decimal.js';
-import type { Transaction } from '../shared/types/transaction';
+import type { Transaction, Account } from '../shared/types/transaction';
 import { isIncome, isExpense } from '../utils/transactionUtils';
 
 export interface FinancialMetrics {
@@ -26,20 +26,19 @@ export function useFinancialMetrics(
   uid: string,
   transactions: Transaction[],
   currentMonth: number,
-  currentYear: number
+  currentYear: number,
+  accounts: Account[] = [],
+  recurringMonthlyTotal: number = 0
 ): UseFinancialMetricsReturn {
   const [loadingMetrics, setLoadingMetrics] = useState(true);
   const [error, setError]                   = useState<Error | null>(null);
 
-  const metrics = useMemo((): FinancialMetrics | null => {
-    if (!uid || !transactions || transactions.length === 0) {
-      setLoadingMetrics(false);
-      return null;
-    }
+  // FIX A: useMemo puro — sem setState interno (viola React 19 concurrent rendering)
+  const metricsResult = useMemo((): { data: FinancialMetrics | null; err: Error | null } => {
+    if (!uid || !transactions || transactions.length === 0) return { data: null, err: null };
 
     try {
       let receita = new Decimal(0), despesa = new Decimal(0);
-      let ativos  = new Decimal(0), passivos = new Decimal(0);
       let custoFixoMensal = new Decimal(0);
 
       const categoriasFixas = ['moradia','assinaturas','educação','impostos','impostos/taxas','saúde'];
@@ -48,42 +47,60 @@ export function useFinancialMetrics(
         const valor = new Decimal(Math.abs(Number(tx.value || 0)));
         if (isIncome(tx.type)) {
           receita = receita.plus(valor);
-          ativos  = ativos.plus(valor);
         } else if (isExpense(tx.type)) {
-          despesa  = despesa.plus(valor);
-          passivos = passivos.plus(valor);
+          despesa = despesa.plus(valor);
           const cat = (tx.category || '').toLowerCase();
           if (categoriasFixas.includes(cat)) custoFixoMensal = custoFixoMensal.plus(valor);
         }
       });
 
-      const patrimonioLiquido = ativos.minus(passivos);
+      // FIX B: ativos/passivos reais baseados em contas (balance em reais, não centavos)
+      let ativos = 0, passivos = 0;
+      accounts.forEach(acc => {
+        const v = Number(acc.balance) || 0;
+        if (['corrente', 'poupanca', 'investimento'].includes(acc.type)) ativos += v;
+        if (['cartao', 'divida'].includes(acc.type))                     passivos += Math.abs(v);
+      });
+
+      const patrimonioLiquido = ativos - passivos;
       const taxaPoupanca      = receita.greaterThan(0)
         ? receita.minus(despesa).dividedBy(receita).times(100)
         : new Decimal(0);
+      const endividamento  = (ativos + passivos) > 0
+        ? (passivos / (ativos + passivos)) * 100
+        : 0;
+      const comprometimento = receita.greaterThan(0)
+        ? (recurringMonthlyTotal / receita.toNumber()) * 100
+        : 0;
       const reservaMeses = custoFixoMensal.greaterThan(0)
-        ? ativos.dividedBy(custoFixoMensal)
-        : new Decimal(0);
+        ? ativos / custoFixoMensal.toNumber()
+        : 0;
 
-      setLoadingMetrics(false);
       return {
-        receita:          receita.toNumber(),
-        despesa:          despesa.toNumber(),
-        ativos:           ativos.toNumber(),
-        passivos:         passivos.toNumber(),
-        patrimonioLiquido: patrimonioLiquido.toNumber(),
-        custoFixoMensal:  custoFixoMensal.toNumber(),
-        taxaPoupanca:     taxaPoupanca.toDecimalPlaces(2).toNumber(),
-        endividamento:    0,
-        comprometimento:  0,
-        reservaMeses:     reservaMeses.toDecimalPlaces(1).toNumber(),
+        data: {
+          receita:           receita.toNumber(),
+          despesa:           despesa.toNumber(),
+          ativos,
+          passivos,
+          patrimonioLiquido,
+          custoFixoMensal:   custoFixoMensal.toNumber(),
+          taxaPoupanca:      taxaPoupanca.toDecimalPlaces(2).toNumber(),
+          endividamento,
+          comprometimento,
+          reservaMeses:      Number(reservaMeses.toFixed(1)),
+        },
+        err: null,
       };
     } catch (err) {
-      setError(err instanceof Error ? err : new Error('Erro ao calcular métricas quânticas.'));
-      setLoadingMetrics(false);
-      return null;
+      return { data: null, err: err instanceof Error ? err : new Error('Erro ao calcular métricas quânticas.') };
     }
-  }, [uid, transactions, currentMonth, currentYear]);
+  }, [uid, transactions, currentMonth, currentYear, accounts, recurringMonthlyTotal]);
 
-  return { metrics, loadingMetrics, error };
+  // FIX A: sincroniza estado fora do memo
+  useEffect(() => {
+    setLoadingMetrics(false);
+    setError(metricsResult.err);
+  }, [metricsResult]);
+
+  return { metrics: metricsResult.data, loadingMetrics, error };
 }

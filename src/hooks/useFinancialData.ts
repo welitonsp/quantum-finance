@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import Decimal from 'decimal.js';
-import type { Transaction, ModuleBalances, CategoryDataPoint } from '../shared/types/transaction';
+import type { Transaction, Account, ModuleBalances, CategoryDataPoint } from '../shared/types/transaction';
 import { isIncome as checkIncome, isExpense as checkExpense } from '../utils/transactionUtils';
 
 interface FirestoreTimestamp { toDate: () => Date; }
@@ -32,7 +32,8 @@ export function useFinancialData(
   transactions: Transaction[],
   activeModule: string,
   currentMonth: number,
-  currentYear: number
+  currentYear: number,
+  accounts: Account[] = []
 ): FinancialDataReturn {
 
   const displayedTransactions = useMemo(() => {
@@ -76,16 +77,26 @@ export function useFinancialData(
       }
     });
 
+    // FIX C: saldo inclui saldo de abertura das contas; patrimônio usa contas reais
+    const openingBalance = accounts.reduce((sum, acc) => sum + (Number(acc.balance) || 0), 0);
+
+    let ativos = 0, passivos = 0;
+    accounts.forEach(acc => {
+      const v = Number(acc.balance) || 0;
+      if (['corrente', 'poupanca', 'investimento'].includes(acc.type)) ativos += v;
+      if (['cartao', 'divida'].includes(acc.type))                     passivos += Math.abs(v);
+    });
+
     return {
       geral: {
-        saldo:     saldoAcumulado.toNumber(),
+        saldo:     saldoAcumulado.plus(new Decimal(openingBalance)).toNumber(),
         receitas:  receitasMes.toNumber(),
         despesas:  despesasMes.toNumber(),
-        patrimonio: saldoAcumulado.toNumber(),
-        dividas:   0
+        patrimonio: ativos - passivos,
+        dividas:   passivos,
       }
     };
-  }, [transactions, activeModule, currentMonth, currentYear]);
+  }, [transactions, activeModule, currentMonth, currentYear, accounts]);
 
   const categoryData = useMemo((): CategoryDataPoint[] => {
     const map: Record<string, number> = {};

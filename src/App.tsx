@@ -10,6 +10,7 @@ import { usePrivacy } from './contexts/PrivacyContext';
 import { NavigationProvider, useNavigation } from './contexts/NavigationContext';
 import { useTransactions } from './hooks/useTransactions';
 import { useFinancialData } from './hooks/useFinancialData';
+import { useAccounts } from './hooks/useAccounts';
 import { useAppLogic } from './hooks/useAppLogic';
 
 import Sidebar from './components/Sidebar';
@@ -143,8 +144,9 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
     bulkUpdateTransactions, isBulkUpdating,
     undoLastBulkUpdate, isUndoing, hasUndoSnapshot, clearBulkSnapshot,
   } = useTransactions(safeUID);
+  const { accounts } = useAccounts(safeUID);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
-    useFinancialData(transactions, activeModule, currentMonth, currentYear);
+    useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts);
 
   const {
     isAIChatOpen, setIsAIChatOpen, isFormOpen, setIsFormOpen, isSettingsOpen, setIsSettingsOpen,
