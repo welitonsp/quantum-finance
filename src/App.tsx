@@ -11,6 +11,7 @@ import { NavigationProvider, useNavigation } from './contexts/NavigationContext'
 import { useTransactions } from './hooks/useTransactions';
 import { useFinancialData } from './hooks/useFinancialData';
 import { useAccounts } from './hooks/useAccounts';
+import { useRecurring } from './hooks/useRecurring';
 import { useAppLogic } from './hooks/useAppLogic';
 
 import Sidebar from './components/Sidebar';
@@ -145,6 +146,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
     undoLastBulkUpdate, isUndoing, hasUndoSnapshot, clearBulkSnapshot,
   } = useTransactions(safeUID);
   const { accounts } = useAccounts(safeUID);
+  const { recurringTasks } = useRecurring(safeUID);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
     useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts);
 
@@ -264,6 +266,8 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     transactionToEdit={transactionToEdit}
                     setTransactionToEdit={setTransactionToEdit}
                     onCloseForm={handleCloseForm}
+                    accounts={accounts}
+                    recurringTasks={recurringTasks}
                   />
                 )}
                 {currentPage === 'accounts'   && <AccountsManager   uid={safeUID} />}

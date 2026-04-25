@@ -1,6 +1,7 @@
 // Batch AI categorization via GeminiService (Cloud Functions — API key never exposed)
 import { GeminiService } from '../features/ai-chat/GeminiService';
 import type { Transaction } from '../shared/types/transaction';
+import { CATEGORY_KEYWORDS } from '../shared/data/categoryKeywords';
 
 // ─── Deterministic categorization (no external AI) ───────────────────────────
 
@@ -11,13 +12,6 @@ const normalize = (text: string): string =>
     .replace(/[^\w\s]/g, '')
     .trim();
 
-const KEYWORDS: Record<string, string> = {
-  uber:     'Transporte',
-  ifood:    'Alimentação',
-  pix:      'Transferência',
-  mercado:  'Alimentação',
-  gasolina: 'Transporte',
-};
 
 function topCategory(catMap: Map<string, number>): string {
   let top = '';
@@ -64,8 +58,10 @@ export function categorizeTransaction(
   }
 
   // 3. Keyword fallback
-  for (const [kw, cat] of Object.entries(KEYWORDS)) {
-    if (normalized.includes(kw)) return cat;
+  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    for (const kw of keywords) {
+      if (normalized.includes(kw.toLowerCase())) return category;
+    }
   }
 
   return undefined;

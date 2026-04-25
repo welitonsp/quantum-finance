@@ -23,7 +23,9 @@ import { HealthGauge } from './HealthGauge';
 import { SparkLine } from './SparkLine';
 import { IntelStrip } from './IntelStrip';
 import KPICards from './KPICards';
-import type { Transaction, ModuleBalances, CategoryDataPoint } from '../shared/types/transaction';
+import type { Transaction, ModuleBalances, CategoryDataPoint, Account, RecurringTask } from '../shared/types/transaction';
+import { useFinancialMetrics } from '../hooks/useFinancialMetrics';
+import QuantumInsights from './QuantumInsights';
 import type { TimeRange } from '../hooks/useFinancialData';
 
 interface Props {
@@ -45,6 +47,8 @@ interface Props {
   transactionToEdit: Transaction | null;
   setTransactionToEdit: (tx: Transaction | null) => void;
   onCloseForm?: () => void;
+  accounts: Account[];
+  recurringTasks: RecurringTask[];
 }
 
 const containerVariants = {
@@ -81,6 +85,8 @@ export default function DashboardContent({
   transactionToEdit,
   setTransactionToEdit,
   onCloseForm,
+  accounts,
+  recurringTasks,
 }: Props) {
   const { currentMonth, currentYear } = useNavigation();
 
@@ -108,6 +114,26 @@ export default function DashboardContent({
   );
 
   const { status, color, rec, score, savingsRate, debtRatio, goalProgress } = st;
+
+  const recurringMonthlyTotal = useMemo(() => {
+    return (recurringTasks ?? [])
+      .filter(t => t.active !== false)
+      .reduce((sum, t) => {
+        const v = Number(t.value) || 0;
+        if (t.frequency === 'mensal') return sum + v;
+        if (t.frequency === 'anual')  return sum + (v / 12);
+        return sum;
+      }, 0);
+  }, [recurringTasks]);
+
+  const { metrics, loadingMetrics } = useFinancialMetrics(
+    user?.uid ?? '',
+    allTransactions,
+    currentMonth,
+    currentYear,
+    accounts,
+    recurringMonthlyTotal,
+  );
 
   const StatusIcon  = status === 'CRÍTICO' ? AlertTriangle : status === 'ATENÇÃO' ? Activity : CheckCircle2;
   const incomeDelta = receitas > 0 ? ((receitas - despesas) / receitas * 100) : 0;
@@ -238,6 +264,8 @@ export default function DashboardContent({
       <motion.div variants={itemVariants}>
         <KPICards transactions={transactions} />
       </motion.div>
+
+      <QuantumInsights metrics={metrics} loading={loadingMetrics} />
 
       {/* ── BRIEFING IA — acima dos gráficos ──────────────────── */}
       <motion.div variants={itemVariants}>

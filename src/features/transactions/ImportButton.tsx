@@ -12,7 +12,8 @@ import toast from 'react-hot-toast';
 
 import { useParserWorker } from '../../shared/lib/useParserWorker';
 import { batchCategorizeDescriptions } from '../../utils/aiCategorize';
-import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
+import { ALLOWED_CATEGORIES, transactionSchema } from '../../shared/schemas/financialSchemas';
+import { CATEGORY_KEYWORDS } from '../../shared/data/categoryKeywords';
 import ReconciliationEngine from './ReconciliationEngine';
 import type { Transaction } from '../../shared/types/transaction';
 import type { AllowedCategory } from '../../shared/schemas/financialSchemas';
@@ -66,17 +67,6 @@ interface Props {
   existingTransactions?: Transaction[];
 }
 
-// ─── Dicionário local ─────────────────────────────────────────────────────────
-const LOCAL_DICTIONARY: Record<string, AllowedCategory> = {
-  'UBER': 'Transporte', '99APP': 'Transporte', 'POSTO': 'Transporte', 'SHELL': 'Transporte',
-  'IFOOD': 'Alimentação', 'MCDONALDS': 'Alimentação', 'BURGER': 'Alimentação',
-  'SUPERMERCADO': 'Alimentação', 'CARREFOUR': 'Alimentação', 'EXTRA': 'Alimentação',
-  'NETFLIX': 'Assinaturas', 'SPOTIFY': 'Assinaturas', 'AMAZON': 'Assinaturas',
-  'SALARIO': 'Salário', 'PAGTO SALARIO': 'Salário',
-  'RENDIMENTO': 'Investimento', 'DIVIDENDO': 'Investimento',
-  'FARMACIA': 'Saúde', 'DROGASIL': 'Saúde', 'HOSPITAL': 'Saúde',
-  'ESCOLA': 'Educação', 'FACULDADE': 'Educação', 'CURSO': 'Educação',
-};
 
 const CAT_COLORS: Record<string, string> = {
   'Alimentação':    'text-amber-400  bg-amber-400/10  border-amber-400/20',
@@ -561,8 +551,13 @@ export default function ImportButton({ onImportTransactions, existingTransaction
     txs.forEach(tx => {
       const upper = tx.description.toUpperCase();
       let found = false;
-      for (const [key, cat] of Object.entries(LOCAL_DICTIONARY)) {
-        if (upper.includes(key)) { tx.category = cat; found = true; break; }
+      for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+        for (const kw of keywords) {
+          if (upper.includes(kw.toUpperCase())) {
+            tx.category = category as AllowedCategory; found = true; break;
+          }
+        }
+        if (found) break;
       }
       if (!found && isExpense(tx.type)) forAI.push(tx);
     });
@@ -654,7 +649,35 @@ export default function ImportButton({ onImportTransactions, existingTransaction
   const handleConfirmImport = useCallback(async (selectedTxs: ParsedTransaction[]) => {
     setStatus('importing');
     try {
-      const result = await onImportTransactions(selectedTxs);
+      const validated: Partial<Transaction>[] = [];
+      let invalidCount = 0;
+
+      for (const tx of selectedTxs) {
+        const cleanTx = { ...tx };
+        delete (cleanTx as any)._selected;       // eslint-disable-line @typescript-eslint/no-explicit-any
+        delete (cleanTx as any)._aiCategorized;  // eslint-disable-line @typescript-eslint/no-explicit-any
+        delete (cleanTx as any).id;              // eslint-disable-line @typescript-eslint/no-explicit-any
+
+        const zodResult = transactionSchema.safeParse(cleanTx);
+        if (zodResult.success) {
+          validated.push(cleanTx);
+        } else {
+          invalidCount++;
+          console.warn('[Import] Transação rejeitada:', cleanTx, zodResult.error.issues);
+        }
+      }
+
+      if (invalidCount > 0) {
+        toast.error(`${invalidCount} transação(ões) inválida(s) ignorada(s).`);
+      }
+
+      if (validated.length === 0) {
+        toast.error('Nenhuma transação válida para importar.');
+        setStatus('idle');
+        return;
+      }
+
+      const result = await onImportTransactions(validated as ParsedTransaction[]);
       const added      = result?.added      ?? selectedTxs.length;
       const duplicates = result?.duplicates ?? stats.duplicates;
       setStats(prev => ({ ...prev, added, duplicates }));

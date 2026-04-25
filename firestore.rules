@@ -66,17 +66,6 @@ service cloud.firestore {
       }
     }
 
-    // ─── Legacy standalone recurring collection ───────────────────────────────
-    match /recurring/{taskId} {
-      allow read, delete: if request.auth != null
-          && resource.data.uid == request.auth.uid;
-      allow create: if request.auth != null
-          && request.resource.data.uid == request.auth.uid;
-      allow update: if request.auth != null
-          && resource.data.uid == request.auth.uid
-          && request.resource.data.uid == request.auth.uid;
-    }
-
     // ─── Deny everything else by default ─────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;

@@ -9,6 +9,7 @@ import { AuditService } from '../shared/services/AuditService';
 import type { Transaction } from '../shared/types/transaction';
 import { categorizeTransaction } from '../utils/aiCategorize';
 import { categorizeWithAI } from '../services/AICategorizationService';
+import toast from 'react-hot-toast';
 
 // ─── Bulk Update — tipo restrito (não expõe Partial<Transaction> livre) ────────
 export type BulkUpdate = {
@@ -25,8 +26,7 @@ export type BulkSnapshot = {
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
-const QUERY_LIMIT       = 3_000;
-const MAX_RETRIES       = 3;
+const MAX_RETRIES       = 5;
 const RETRY_INTERVAL_MS = 5_000;
 
 // ─── Op Types (sem any) ───────────────────────────────────────────────────────
@@ -166,7 +166,7 @@ export function useTransactions(uid: string): UseTransactionsReturn {
     const q = query(
       collection(db, 'users', uid, 'transactions'),
       orderBy('createdAt', 'desc'),
-      limit(QUERY_LIMIT)
+      limit(500)
     );
 
     const unsub = onSnapshot(
@@ -275,6 +275,7 @@ export function useTransactions(uid: string): UseTransactionsReturn {
 
         if (op.retries >= MAX_RETRIES) {
           console.error(`[SyncQueue][${op.type}] descartado após ${MAX_RETRIES} tentativas.`);
+          toast.error('Falha persistente ao sincronizar. Verifique sua conexão.');
 
           // Rollback + limpa pendingIds
           if (op.type === 'add') {

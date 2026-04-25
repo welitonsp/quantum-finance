@@ -187,20 +187,9 @@ export const FirestoreService = {
     return docRef.id;
   },
 
-  async updateRecurringTransaction(id: string, data: Record<string, unknown>): Promise<void> {
-    if (!id) throw new Error('[Firestore][updateRecurringTransaction] ID ausente.');
-    const payload: Record<string, unknown> = { ...data, updatedAt: serverTimestamp() };
-    if (data['value'] !== undefined) payload['value'] = Number(data['value']); // FIX: removed unsafe cent handling
-    await updateDoc(doc(db, 'recurring', id), payload);
-  },
-
   async deleteRecurringTask(uid: string, id: string): Promise<void> {
     if (!id) throw new Error('[Firestore][deleteRecurringTask] ID ausente.');
     await deleteDoc(doc(db, 'users', uid, 'recurringTasks', id));
   },
 
-  async deleteRecurringTransaction(id: string): Promise<void> {
-    if (!id) throw new Error('[Firestore][deleteRecurringTransaction] ID ausente.');
-    await deleteDoc(doc(db, 'recurring', id));
-  },
 };

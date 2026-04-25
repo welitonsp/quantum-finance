@@ -4,7 +4,7 @@ import Decimal from 'decimal.js';
 export const ALLOWED_CATEGORIES = [
   'Alimentação', 'Transporte', 'Assinaturas', 'Educação', 'Saúde',
   'Moradia', 'Impostos/Taxas', 'Lazer', 'Vestuário', 'Salário',
-  'Freelance', 'Investimento', 'Diversos', 'Outros'
+  'Freelance', 'Investimento', 'Diversos', 'Outros', 'Importado'
 ] as const;
 
 export type AllowedCategory = typeof ALLOWED_CATEGORIES[number];

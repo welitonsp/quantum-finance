@@ -1,14 +1,16 @@
 // src/features/reports/ReportsContent.tsx
 import { useState, useMemo } from 'react';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { ComposedChart, BarChart, Bar, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Target, Filter, AlertCircle, Calendar, Scissors, Sparkles, AlertTriangle } from 'lucide-react';
 import Decimal from 'decimal.js';
 import { formatCurrency } from '../../utils/formatters';
-import type { Transaction } from '../../shared/types/transaction';
+import type { Transaction, Account } from '../../shared/types/transaction';
 import { isExpense } from '../../utils/transactionUtils';
+import { calcPareto, calcPatrimonyEvolution } from '../../utils/reportEngine';
 
 interface Props {
   transactions: Transaction[];
+  accounts?:    Account[];
 }
 
 interface ParetoItem {
@@ -25,7 +27,7 @@ type ExpenseFilter = 'all' | 'variables';
 
 const CATEGORIAS_FIXAS = ['Moradia', 'Assinaturas', 'Educação', 'Impostos/Taxas', 'Saúde'];
 
-export default function ReportsContent({ transactions }: Props) {
+export default function ReportsContent({ transactions, accounts }: Props) {
   const [activeTab,      setActiveTab]      = useState<'pareto' | 'tendencias'>('pareto');
   const [timeFilter,     setTimeFilter]     = useState<TimeFilter>('30d');
   const [expenseFilter,  setExpenseFilter]  = useState<ExpenseFilter>('all');
@@ -87,6 +89,12 @@ export default function ReportsContent({ transactions }: Props) {
       `Foco Tático: Reduzir 20% em "${topCategory.name}" gera uma economia de ${formatCurrency(topCategory.valor * 0.2)}.`,
     ];
   }, [paretoData, topCategoriesCount, top80Value]);
+
+  const reportParetoData = useMemo(() => calcPareto(transactions), [transactions]);
+  const patrimonyData    = useMemo(
+    () => calcPatrimonyEvolution(transactions, accounts ?? []),
+    [transactions, accounts],
+  );
 
   return (
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 relative z-10">
@@ -226,9 +234,35 @@ export default function ReportsContent({ transactions }: Props) {
       )}
 
       {activeTab === 'tendencias' && (
-        <div className="text-center py-20 text-quantum-fgMuted">
-          <Target className="w-12 h-12 mx-auto mb-4 opacity-30" />
-          <p className="font-bold">Tendências Históricas — Em Breve</p>
+        <div className="space-y-6 animate-in slide-in-from-bottom-4">
+          <div className="bg-quantum-card p-5 rounded-2xl border border-quantum-border">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-quantum-fgMuted mb-4">
+              Evolução Patrimonial (6 meses)
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={patrimonyData}>
+                <XAxis dataKey="monthLabel" stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v: number) => `R$${v >= 1000 ? (v/1000).toFixed(1)+'k' : v}`} />
+                <Tooltip contentStyle={{ backgroundColor: '#131A2A', borderColor: '#1E2A3F', borderRadius: '12px', color: '#fff' }} />
+                <Area type="monotone" dataKey="patrimonio" stroke="#6366F1" fill="#6366F1" fillOpacity={0.15} strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="bg-quantum-card p-5 rounded-2xl border border-quantum-border">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-quantum-fgMuted mb-4">
+              Pareto 80/20 — Despesas
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={reportParetoData}>
+                <XAxis dataKey="category" stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ backgroundColor: '#131A2A', borderColor: '#1E2A3F', borderRadius: '12px', color: '#fff' }} />
+                <Bar dataKey="total" radius={[6, 6, 0, 0]} maxBarSize={60}
+                  fill="#EF4444" fillOpacity={0.7} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
     </div>
