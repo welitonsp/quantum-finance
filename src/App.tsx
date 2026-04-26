@@ -306,6 +306,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                 {currentPage === 'reports' && (
                   <ReportsContent
                     transactions={displayedTransactions}
+                    accounts={accounts}
                   />
                 )}
                 {currentPage === 'simulation' && (
