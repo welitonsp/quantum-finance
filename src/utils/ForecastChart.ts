@@ -18,9 +18,10 @@ interface ForecastResult {
 export function calculateForecast(
   transactions: Transaction[],
   currentMonth: number,
-  currentYear:  number
+  currentYear:  number,
+  now: Date = new Date(),
 ): ForecastResult {
-  const hoje          = new Date();
+  const hoje          = now;
   const isCurrentMonth = hoje.getMonth() + 1 === currentMonth && hoje.getFullYear() === currentYear;
   const diasNoMes     = new Date(currentYear, currentMonth, 0).getDate();
   const diaAtual      = isCurrentMonth ? hoje.getDate() : diasNoMes;
