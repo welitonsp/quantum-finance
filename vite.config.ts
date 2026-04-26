@@ -81,10 +81,10 @@ export default defineConfig({
       // o que mantém a média global baixa. Subir gradualmente conforme PR plan.
       // Meta Q3-2026: lines 80, functions 80, branches 70.
       thresholds: {
-        lines:      10,
-        functions:  10,
-        branches:    5,
-        statements: 10,
+        lines:     13,    // PR 11.D: +3pp com computeFinancialMetrics testado (baseline 13.16%)
+        functions: 10,    // mantido — sobe no PR 12 quando services testados
+        branches:  5,     // mantido — sobe no PR 12
+        statements: 12,   // PR 11.D: +2pp alinhado com statements baseline (12.13%)
       },
     },
   },

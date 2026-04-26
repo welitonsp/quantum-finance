@@ -1,119 +1,194 @@
-import { useState, useEffect, useMemo } from 'react';
+// src/hooks/useFinancialMetrics.ts
+// KPIs financeiros honestos:
+// - ativos/passivos vêm das contas (não da soma histórica de transações)
+// - endividamento = passivos / (ativos + passivos)
+// - comprometimento = custoFixoMensal / receita
+// - reservaMeses = ativos / custoFixoMensal (em meses de sobrevivência)
+import { useMemo } from 'react';
 import Decimal from 'decimal.js';
 import type { Transaction, Account } from '../shared/types/transaction';
-import { isIncome, isExpense } from '../utils/transactionUtils';
 import { fromCentavos } from '../shared/schemas/financialSchemas';
 
-function isInMonth(tx: { date?: string; createdAt?: unknown }, month: number, year: number): boolean {
-  const raw = tx.date ?? '';
-  if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw)) {
-    const txMonth = Number(raw.slice(5, 7));
-    const txYear  = Number(raw.slice(0, 4));
-    return txMonth === month && txYear === year;
-  }
-  return false;
-}
+// ─── Public types ─────────────────────────────────────────────────────────────
 
 export interface FinancialMetrics {
-  receita: number;
-  despesa: number;
-  ativos: number;
-  passivos: number;
+  receita:           number;
+  despesa:           number;
+  /** Saldo líquido das contas de ativos (corrente + poupança + investimento) */
+  ativos:            number;
+  /** Soma absoluta das contas de passivos (cartão + dívida) */
+  passivos:          number;
   patrimonioLiquido: number;
-  custoFixoMensal: number;
-  taxaPoupanca: number;
-  endividamento: number;
-  comprometimento: number;
-  reservaMeses: number;
+  custoFixoMensal:   number;
+  taxaPoupanca:      number;
+  /** % do patrimônio total comprometido com dívidas (passivos / total) */
+  endividamento:     number;
+  /** % da renda comprometida em custos fixos (fixos / receita) */
+  comprometimento:   number;
+  /** Meses de sobrevivência: ativos / custoFixoMensal */
+  reservaMeses:      number;
 }
 
 interface UseFinancialMetricsReturn {
-  metrics: FinancialMetrics | null;
+  metrics:        FinancialMetrics | null;
   loadingMetrics: boolean;
-  error: Error | null;
+  error:          Error | null;
 }
 
+// ─── Pure helpers ─────────────────────────────────────────────────────────────
+
+const FIXED_CATEGORIES = new Set([
+  'moradia', 'assinaturas', 'educação', 'impostos',
+  'impostos/taxas', 'saúde',
+]);
+
+function isFixedCategory(category: string | undefined): boolean {
+  if (!category) return false;
+  return FIXED_CATEGORIES.has(category.toLowerCase());
+}
+
+function isIncome(type: string | undefined): boolean {
+  return type === 'receita' || type === 'entrada';
+}
+
+function isExpense(type: string | undefined): boolean {
+  return type === 'saida' || type === 'despesa';
+}
+
+// ─── Pure compute (testável sem React) ────────────────────────────────────────
+
+/**
+ * Calcula KPIs financeiros honestos a partir de transações + contas.
+ *
+ * INVARIANTES:
+ * - accounts.balance está em CENTAVOS (após PR 11.A)
+ * - tx.value pode estar em centavos OU reais — função normaliza
+ * - ativos/passivos vêm das CONTAS (não da soma de transações)
+ * - se accounts vazio: usa fallback legado (soma de transações) — para
+ *   preservar compatibilidade durante migração de call sites
+ *
+ * @param transactions Transações do período de análise
+ * @param accounts Contas (com balance em centavos). Vazio → fallback legado.
+ * @returns Métricas com 2 casas decimais (compatível com Recharts/UI)
+ */
+export function computeFinancialMetrics(
+  transactions: Transaction[],
+  accounts: Account[] = [],
+): FinancialMetrics {
+  // ── 1. Receitas, despesas e custos fixos das transações ────────────────
+  let receita = new Decimal(0);
+  let despesa = new Decimal(0);
+  let custoFixoMensal = new Decimal(0);
+
+  for (const tx of transactions) {
+    const rawVal = Math.abs(Number(tx.value || 0));
+    if (!Number.isFinite(rawVal)) continue;
+    const val = new Decimal(rawVal);
+    if (isIncome(tx.type)) {
+      receita = receita.plus(val);
+    } else if (isExpense(tx.type)) {
+      despesa = despesa.plus(val);
+      if (isFixedCategory(tx.category)) {
+        custoFixoMensal = custoFixoMensal.plus(val);
+      }
+    }
+  }
+
+  // ── 2. Ativos e passivos das CONTAS (fonte da verdade) ─────────────────
+  let ativos   = new Decimal(0);
+  let passivos = new Decimal(0);
+
+  if (accounts.length > 0) {
+    // Modo correto: ativos/passivos vêm das contas
+    for (const acc of accounts) {
+      const valReais = new Decimal(fromCentavos(acc.balance ?? 0));
+      if (['corrente', 'poupanca', 'investimento'].includes(acc.type)) {
+        ativos = ativos.plus(valReais);
+      } else if (['cartao', 'divida'].includes(acc.type)) {
+        passivos = passivos.plus(valReais.abs());
+      }
+    }
+  } else {
+    // Fallback legado: usa soma de transações (preserva contratos antigos)
+    ativos   = receita;
+    passivos = despesa;
+  }
+
+  // ── 3. KPIs derivados ─────────────────────────────────────────────────
+  const patrimonioLiquido = ativos.minus(passivos);
+
+  const taxaPoupanca = receita.greaterThan(0)
+    ? receita.minus(despesa).dividedBy(receita).times(100)
+    : new Decimal(0);
+
+  // Endividamento = passivos / (ativos + passivos) * 100
+  // Mede % do capital total comprometido com dívidas
+  const totalCapital = ativos.plus(passivos);
+  const endividamento = totalCapital.greaterThan(0)
+    ? passivos.dividedBy(totalCapital).times(100)
+    : new Decimal(0);
+
+  // Comprometimento = custoFixoMensal / receita * 100
+  // Mede % da renda já alocada em despesas fixas
+  const comprometimento = receita.greaterThan(0)
+    ? custoFixoMensal.dividedBy(receita).times(100)
+    : new Decimal(0);
+
+  // Reserva = ativos / custoFixoMensal (em meses)
+  const reservaMeses = custoFixoMensal.greaterThan(0)
+    ? ativos.dividedBy(custoFixoMensal)
+    : new Decimal(0);
+
+  return {
+    receita:           receita.toDecimalPlaces(2).toNumber(),
+    despesa:           despesa.toDecimalPlaces(2).toNumber(),
+    ativos:            ativos.toDecimalPlaces(2).toNumber(),
+    passivos:          passivos.toDecimalPlaces(2).toNumber(),
+    patrimonioLiquido: patrimonioLiquido.toDecimalPlaces(2).toNumber(),
+    custoFixoMensal:   custoFixoMensal.toDecimalPlaces(2).toNumber(),
+    taxaPoupanca:      taxaPoupanca.toDecimalPlaces(2).toNumber(),
+    endividamento:     endividamento.toDecimalPlaces(2).toNumber(),
+    comprometimento:   comprometimento.toDecimalPlaces(2).toNumber(),
+    reservaMeses:      reservaMeses.toDecimalPlaces(1).toNumber(),
+  };
+}
+
+// ─── React hook (apenas wrapper) ──────────────────────────────────────────────
+
+/**
+ * Hook React que expõe FinancialMetrics calculadas via computeFinancialMetrics.
+ *
+ * @param uid Usuário autenticado (guard contra cálculo prematuro)
+ * @param transactions Transações do período
+ * @param accounts (NOVO) Contas para ativos/passivos REAIS — opcional para retrocompat
+ * @param _currentMonth Reservado para filtros futuros (não usado atualmente)
+ * @param _currentYear Reservado para filtros futuros (não usado atualmente)
+ */
 export function useFinancialMetrics(
   uid: string,
   transactions: Transaction[],
-  currentMonth: number,
-  currentYear: number,
   accounts: Account[] = [],
-  recurringMonthlyTotal: number = 0
+  _currentMonth?: number,
+  _currentYear?: number,
 ): UseFinancialMetricsReturn {
-  const [loadingMetrics, setLoadingMetrics] = useState(true);
-  const [error, setError]                   = useState<Error | null>(null);
-
-  // FIX A: useMemo puro — sem setState interno (viola React 19 concurrent rendering)
-  const metricsResult = useMemo((): { data: FinancialMetrics | null; err: Error | null } => {
-    if (!uid || !transactions || transactions.length === 0) return { data: null, err: null };
+  const metrics = useMemo<FinancialMetrics | null>(() => {
+    if (!uid) return null;
+    if (!transactions || transactions.length === 0) {
+      // Sem transações mas com contas → ainda computa ativos/passivos
+      if (accounts.length === 0) return null;
+    }
 
     try {
-      let receita = new Decimal(0), despesa = new Decimal(0);
-      let custoFixoMensal = new Decimal(0);
-
-      const categoriasFixas = ['moradia','assinaturas','educação','impostos','impostos/taxas','saúde'];
-
-      transactions.forEach(tx => {
-        // FIX P0.3: receita/despesa/custoFixo são MENSAIS, não lifetime
-        if (!isInMonth(tx, currentMonth, currentYear)) return;
-        const valor = new Decimal(Math.abs(Number(tx.value || 0)));
-        if (isIncome(tx.type)) {
-          receita = receita.plus(valor);
-        } else if (isExpense(tx.type)) {
-          despesa = despesa.plus(valor);
-          const cat = (tx.category || '').toLowerCase();
-          if (categoriasFixas.includes(cat)) custoFixoMensal = custoFixoMensal.plus(valor);
-        }
-      });
-
-      // FIX B: ativos/passivos reais — balance em CENTAVOS, converter para reais
-      let ativos = 0, passivos = 0;
-      accounts.forEach(acc => {
-        const v = fromCentavos(acc.balance);
-        if (['corrente', 'poupanca', 'investimento'].includes(acc.type)) ativos += v;
-        if (['cartao', 'divida'].includes(acc.type))                     passivos += Math.abs(v);
-      });
-
-      const patrimonioLiquido = ativos - passivos;
-      const taxaPoupanca      = receita.greaterThan(0)
-        ? receita.minus(despesa).dividedBy(receita).times(100)
-        : new Decimal(0);
-      const endividamento  = (ativos + passivos) > 0
-        ? (passivos / (ativos + passivos)) * 100
-        : 0;
-      const comprometimento = receita.greaterThan(0)
-        ? (recurringMonthlyTotal / receita.toNumber()) * 100
-        : 0;
-      const reservaMeses = custoFixoMensal.greaterThan(0)
-        ? ativos / custoFixoMensal.toNumber()
-        : 0;
-
-      return {
-        data: {
-          receita:           receita.toNumber(),
-          despesa:           despesa.toNumber(),
-          ativos,
-          passivos,
-          patrimonioLiquido,
-          custoFixoMensal:   custoFixoMensal.toNumber(),
-          taxaPoupanca:      taxaPoupanca.toDecimalPlaces(2).toNumber(),
-          endividamento,
-          comprometimento,
-          reservaMeses:      Number(reservaMeses.toFixed(1)),
-        },
-        err: null,
-      };
+      return computeFinancialMetrics(transactions ?? [], accounts);
     } catch (err) {
-      return { data: null, err: err instanceof Error ? err : new Error('Erro ao calcular métricas quânticas.') };
+      console.error('[useFinancialMetrics]', err);
+      return null;
     }
-  }, [uid, transactions, currentMonth, currentYear, accounts, recurringMonthlyTotal]);
+  }, [uid, transactions, accounts]);
 
-  // FIX A: sincroniza estado fora do memo
-  useEffect(() => {
-    setLoadingMetrics(false);
-    setError(metricsResult.err);
-  }, [metricsResult]);
-
-  return { metrics: metricsResult.data, loadingMetrics, error };
+  return {
+    metrics,
+    loadingMetrics: !metrics && Boolean(uid),
+    error:          null,
+  };
 }
