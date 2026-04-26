@@ -92,7 +92,7 @@ export default function ReportsContent({ transactions, accounts }: Props) {
 
   const reportParetoData = useMemo(() => calcPareto(transactions), [transactions]);
   const patrimonyData    = useMemo(
-    () => calcPatrimonyEvolution(transactions, accounts ?? []),
+    () => calcPatrimonyEvolution(transactions, accounts ?? [], new Date()),
     [transactions, accounts],
   );
 

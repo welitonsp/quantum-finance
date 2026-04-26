@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Decimal from 'decimal.js';
 import type { Transaction, Account } from '../shared/types/transaction';
 import { isIncome, isExpense } from '../utils/transactionUtils';
+import { fromCentavos } from '../shared/schemas/financialSchemas';
 
 function isInMonth(tx: { date?: string; createdAt?: unknown }, month: number, year: number): boolean {
   const raw = tx.date ?? '';
@@ -66,10 +67,10 @@ export function useFinancialMetrics(
         }
       });
 
-      // FIX B: ativos/passivos reais baseados em contas (balance em reais, não centavos)
+      // FIX B: ativos/passivos reais — balance em CENTAVOS, converter para reais
       let ativos = 0, passivos = 0;
       accounts.forEach(acc => {
-        const v = Number(acc.balance) || 0;
+        const v = fromCentavos(acc.balance);
         if (['corrente', 'poupanca', 'investimento'].includes(acc.type)) ativos += v;
         if (['cartao', 'divida'].includes(acc.type))                     passivos += Math.abs(v);
       });

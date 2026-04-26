@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import Decimal from 'decimal.js';
 import type { Transaction, Account, ModuleBalances, CategoryDataPoint } from '../shared/types/transaction';
 import { isIncome as checkIncome, isExpense as checkExpense } from '../utils/transactionUtils';
+import { fromCentavos } from '../shared/schemas/financialSchemas';
 
 interface FirestoreTimestamp { toDate: () => Date; }
 
@@ -78,11 +79,12 @@ export function useFinancialData(
     });
 
     // FIX C: saldo inclui saldo de abertura das contas; patrimônio usa contas reais
-    const openingBalance = accounts.reduce((sum, acc) => sum + (Number(acc.balance) || 0), 0);
+    // balance vem em CENTAVOS do useAccounts — converter para reais antes de somar
+    const openingBalance = accounts.reduce((sum, acc) => sum + fromCentavos(acc.balance), 0);
 
     let ativos = 0, passivos = 0;
     accounts.forEach(acc => {
-      const v = Number(acc.balance) || 0;
+      const v = fromCentavos(acc.balance);
       if (['corrente', 'poupanca', 'investimento'].includes(acc.type)) ativos += v;
       if (['cartao', 'divida'].includes(acc.type))                     passivos += Math.abs(v);
     });

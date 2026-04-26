@@ -4,6 +4,7 @@ import { Plus, Building2, PiggyBank, TrendingUp, CreditCard, Landmark, Trash2, W
 import { useAccounts } from '../../hooks/useAccounts';
 import Decimal from 'decimal.js';
 import { formatCurrency } from '../../utils/formatters';
+import { fromCentavos } from '../../shared/schemas/financialSchemas';
 import type { Account } from '../../shared/types/transaction';
 
 type AccountType = 'corrente' | 'poupanca' | 'investimento' | 'cartao' | 'divida';
@@ -26,11 +27,12 @@ export default function AccountsManager({ uid }: Props) {
     let passivos  = new Decimal(0);
 
     accounts.forEach(acc => {
-      const val = new Decimal(acc.balance ?? 0);
+      // balance vem em CENTAVOS — converte para reais ANTES de somar com Decimal
+      const valReais = new Decimal(fromCentavos(acc.balance ?? 0));
       if (['corrente', 'poupanca', 'investimento'].includes(acc.type)) {
-        ativos = ativos.plus(val);
+        ativos = ativos.plus(valReais);
       } else if (['cartao', 'divida'].includes(acc.type)) {
-        passivos = passivos.plus(val.abs());
+        passivos = passivos.plus(valReais.abs());
       }
     });
 
@@ -161,7 +163,7 @@ export default function AccountsManager({ uid }: Props) {
               <div className="relative z-10 mt-2">
                 <p className="text-xs text-quantum-fgMuted mb-1">Saldo Atual</p>
                 <p className={`text-xl font-black tracking-tight ${acc.balance < 0 ? 'text-red-500 dark:text-red-400' : 'text-quantum-fg'}`}>
-                  {formatCurrency(acc.balance)}
+                  {formatCurrency(fromCentavos(acc.balance))}
                 </p>
               </div>
             </div>

@@ -1,4 +1,5 @@
 import type { Timestamp } from 'firebase/firestore';
+import type { Centavos } from './money';
 
 export type TransactionType = 'entrada' | 'saida' | 'receita' | 'despesa';
 
@@ -46,7 +47,18 @@ export interface Account {
   id: string;
   name: string;
   type: 'corrente' | 'poupanca' | 'investimento' | 'cartao' | 'divida';
-  balance: number;
+  /**
+   * Saldo em CENTAVOS inteiros após normalização pelo useAccounts.
+   * NUNCA acessar diretamente para display — use fromCentavos().
+   * Documentos legados (sem schemaVersion) são auto-convertidos no hook.
+   */
+  balance: Centavos;
+  /**
+   * Versão do schema deste documento. Documentos v2+ guardam balance em
+   * centavos. Documentos sem este campo são legacy (balance em reais float)
+   * e são normalizados em memória pelo useAccounts.
+   */
+  schemaVersion?: 2;
   createdAt?: Timestamp | number | null;
   updatedAt?: Timestamp | number | null;
 }
