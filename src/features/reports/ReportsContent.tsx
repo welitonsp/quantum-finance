@@ -100,7 +100,7 @@ export default function ReportsContent({ transactions, accounts }: Props) {
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 relative z-10">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-xl font-black text-slate-800 dark:text-quantum-fg tracking-tight">Business Intelligence</h2>
+          <h2 className="text-xl font-black text-quantum-fg tracking-tight">Business Intelligence</h2>
           <p className="text-xs text-quantum-fgMuted mt-1">Análises profundas para otimização de património.</p>
         </div>
       </div>
@@ -112,7 +112,7 @@ export default function ReportsContent({ transactions, accounts }: Props) {
               ? tab === 'pareto' ? 'border-quantum-accent text-quantum-accent' : 'border-cyan-500 text-cyan-400'
               : 'border-transparent text-quantum-fgMuted hover:text-quantum-fg'
           }`}>
-            {tab === 'pareto' ? 'Análise Pareto (80/20)' : 'Tendências (Em Breve)'}
+            {tab === 'pareto' ? 'Análise Pareto (80/20)' : 'Tendências'}
           </button>
         ))}
       </div>

@@ -20,6 +20,7 @@ import Header from './components/Header';
 import LoginScreen from './components/LoginScreen';
 import QuantumBackground from './components/QuantumBackground';
 import DashboardContent from './components/DashboardContent';
+import TransactionForm from './features/transactions/TransactionForm';
 import CategorySettings from './components/CategorySettings';
 import type { Transaction } from './shared/types/transaction';
 
@@ -350,6 +351,13 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
           />
         </Suspense>
       </ErrorBoundary>
+      {isFormOpen && (
+        <TransactionForm
+          onSave={handleSaveTransaction}
+          editingTransaction={transactionToEdit}
+          onCancelEdit={handleCloseForm}
+        />
+      )}
     </div>
   );
 };

@@ -42,13 +42,13 @@ export default function BudgetProgress({ totalExpenses, monthlyGoal, onSetGoal }
           <div className="flex items-center gap-3">
             <div className={`p-2.5 rounded-xl bg-white dark:bg-quantum-bgSecondary border border-slate-200 dark:border-quantum-border shadow-sm dark:shadow-none ${textColor} transition-colors`}><Icon className="w-5 h-5" /></div>
             <div>
-              <h3 className="text-lg font-bold text-slate-800 dark:text-quantum-fg uppercase tracking-wider flex items-center gap-2 transition-colors">
+              <h3 className="text-lg font-bold text-quantum-fg uppercase tracking-wider flex items-center gap-2 transition-colors">
                 Teto de Gastos {monthlyGoal === 0 && <Sparkles className="w-4 h-4 text-cyan-500 dark:text-cyan-400 animate-pulse" />}
               </h3>
               <p className="text-xs text-quantum-fgMuted dark:text-quantum-fgMuted">{monthlyGoal > 0 ? 'Monitorização ativa do seu orçamento.' : 'Defina uma meta para ativar a IA.'}</p>
             </div>
           </div>
-          <button onClick={onSetGoal} className="px-4 py-2 bg-slate-100 dark:bg-quantum-bgSecondary/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-quantum-fg text-xs font-bold uppercase tracking-widest rounded-xl transition-all border border-slate-200 dark:border-quantum-border hover:border-cyan-500/50 shadow-sm dark:shadow-none whitespace-nowrap">
+          <button onClick={onSetGoal} className="px-4 py-2 bg-slate-100 dark:bg-quantum-bgSecondary/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-quantum-fg text-xs font-bold uppercase tracking-widest rounded-xl transition-all border border-slate-200 dark:border-quantum-border hover:border-cyan-500/50 shadow-sm dark:shadow-none whitespace-nowrap">
             {monthlyGoal > 0 ? 'Ajustar Limite' : 'Definir Limite'}
           </button>
         </div>
@@ -57,7 +57,7 @@ export default function BudgetProgress({ totalExpenses, monthlyGoal, onSetGoal }
             <div className="flex justify-between items-end mb-2">
               <span className={`text-2xl font-black tracking-tight ${textColor} transition-colors`}>{percentage.toFixed(1)}%</span>
               <div className="text-right">
-                <span className="text-slate-800 dark:text-quantum-fg font-black block transition-colors">R$ {totalExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span className="text-quantum-fg font-black block transition-colors">R$ {totalExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                 <span className="text-quantum-fgMuted text-xs font-bold">de R$ {monthlyGoal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
             </div>

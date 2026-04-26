@@ -77,7 +77,7 @@ export default function AccountsManager({ uid }: Props) {
       {accountToDelete && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-quantum-card w-full max-w-sm rounded-3xl p-6 shadow-2xl border dark:border-quantum-border animate-in zoom-in-95">
-            <h3 className="text-lg font-bold dark:text-quantum-fg mb-2">Apagar "{accountToDelete.name}"?</h3>
+            <h3 className="text-lg font-bold text-quantum-fg mb-2">Apagar "{accountToDelete.name}"?</h3>
             <p className="text-sm text-quantum-fgMuted mb-6">
               Esta ação remove a conta da visão, mas <strong>não apaga</strong> as transações associadas.
             </p>
@@ -97,7 +97,7 @@ export default function AccountsManager({ uid }: Props) {
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-xl font-black text-slate-800 dark:text-quantum-fg tracking-tight">As Suas Contas</h2>
+          <h2 className="text-xl font-black text-quantum-fg tracking-tight">As Suas Contas</h2>
           <p className="text-xs text-quantum-fgMuted dark:text-quantum-fgMuted mt-1">Gira o seu património e veja a sua evolução real.</p>
         </div>
         <button
@@ -117,11 +117,11 @@ export default function AccountsManager({ uid }: Props) {
         </div>
         <div className="bg-white dark:bg-quantum-card/50 p-5 rounded-2xl border border-slate-200 dark:border-quantum-border shadow-sm">
           <p className="text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-1">Total de Ativos</p>
-          <p className="text-2xl font-black text-slate-800 dark:text-quantum-fg">{formatCurrency(totalAtivos)}</p>
+          <p className="text-2xl font-black text-quantum-fg">{formatCurrency(totalAtivos)}</p>
         </div>
         <div className="bg-white dark:bg-quantum-card/50 p-5 rounded-2xl border border-slate-200 dark:border-quantum-border shadow-sm">
           <p className="text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-1">Total de Passivos</p>
-          <p className="text-2xl font-black text-slate-800 dark:text-quantum-fg">{formatCurrency(totalPassivos)}</p>
+          <p className="text-2xl font-black text-quantum-fg">{formatCurrency(totalPassivos)}</p>
         </div>
       </div>
 
@@ -130,7 +130,7 @@ export default function AccountsManager({ uid }: Props) {
       ) : accounts.length === 0 ? (
         <div className="bg-white dark:bg-quantum-card/30 border-2 border-dashed border-slate-200 dark:border-quantum-border rounded-3xl p-10 text-center">
           <Wallet className="w-12 h-12 mx-auto text-quantum-fg dark:text-slate-700 mb-4" />
-          <h3 className="text-lg font-bold text-slate-700 dark:text-quantum-fg">Nenhuma conta encontrada</h3>
+          <h3 className="text-lg font-bold text-quantum-fg">Nenhuma conta encontrada</h3>
           <p className="text-sm text-quantum-fgMuted mt-2">Comece por adicionar a sua conta à ordem ou os seus investimentos.</p>
         </div>
       ) : (
@@ -146,7 +146,7 @@ export default function AccountsManager({ uid }: Props) {
                     {getIcon(acc.type)}
                   </div>
                   <div>
-                    <h4 className="font-bold text-slate-800 dark:text-quantum-fg text-sm leading-tight">{acc.name}</h4>
+                    <h4 className="font-bold text-quantum-fg text-sm leading-tight">{acc.name}</h4>
                     <p className="text-[10px] uppercase font-bold text-quantum-fgMuted tracking-wider mt-0.5">{acc.type}</p>
                   </div>
                 </div>
@@ -160,7 +160,7 @@ export default function AccountsManager({ uid }: Props) {
               </div>
               <div className="relative z-10 mt-2">
                 <p className="text-xs text-quantum-fgMuted mb-1">Saldo Atual</p>
-                <p className={`text-xl font-black tracking-tight ${acc.balance < 0 ? 'text-red-500 dark:text-red-400' : 'text-slate-800 dark:text-quantum-fg'}`}>
+                <p className={`text-xl font-black tracking-tight ${acc.balance < 0 ? 'text-red-500 dark:text-red-400' : 'text-quantum-fg'}`}>
                   {formatCurrency(acc.balance)}
                 </p>
               </div>
@@ -173,7 +173,7 @@ export default function AccountsManager({ uid }: Props) {
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-quantum-card/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
           <div className="bg-white dark:bg-quantum-card w-full max-w-md rounded-3xl p-6 relative z-10 shadow-2xl border dark:border-quantum-border animate-in zoom-in-95 duration-200">
-            <h3 className="text-lg font-bold text-slate-800 dark:text-quantum-fg mb-6">Nova Conta</h3>
+            <h3 className="text-lg font-bold text-quantum-fg mb-6">Nova Conta</h3>
             <form onSubmit={e => void handleSave(e)} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-2">Nome da Instituição</label>

@@ -6,8 +6,9 @@ import {
   Search, Filter, Trash2, Edit3, ArrowUpRight, ArrowDownRight,
   CheckSquare, Square, MinusSquare, X, SlidersHorizontal,
   TrendingUp, TrendingDown, Minus, Tag, ArrowUpDown,
-  Layers, RotateCcw, AlertTriangle, Check, ShieldAlert, History,
+  Layers, RotateCcw, AlertTriangle, Check, ShieldAlert, History, Download,
 } from 'lucide-react';
+import { transactionsToCSV, downloadCSV } from '../../utils/exportCSV';
 import { formatCurrency } from '../../utils/formatters';
 import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
 import toast from 'react-hot-toast';
@@ -528,6 +529,19 @@ export default function TransactionsManager({
           >
             <History className="w-4 h-4" />
             <span className="hidden sm:inline">Histórico</span>
+          </button>
+
+          <button
+            onClick={() => {
+              const csv = transactionsToCSV(filtered);
+              const date = new Date().toISOString().slice(0, 10);
+              downloadCSV(`quantum-finance-transacoes-${date}.csv`, csv);
+            }}
+            className="flex items-center gap-2 px-3 py-2 bg-quantum-card border border-quantum-border rounded-xl text-xs font-bold text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/40 transition-all"
+            title="Exportar transações filtradas como CSV"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Exportar CSV
           </button>
         </div>
 

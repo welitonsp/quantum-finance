@@ -245,17 +245,6 @@ export default function DashboardContent({
         </div>
       </motion.div>
 
-      {/* ── FORMULÁRIO ────────────────────────────────────────── */}
-      <AnimatePresence>
-        {isFormOpen && (
-          <TransactionForm
-            onSave={onSaveTransaction}
-            editingTransaction={transactionToEdit}
-            onCancelEdit={onCloseForm ?? (() => { setTransactionToEdit(null); setIsFormOpen(false); })}
-          />
-        )}
-      </AnimatePresence>
-
       {/* ── INTEL STRIP ───────────────────────────────────────── */}
       <motion.div variants={itemVariants}>
         <IntelStrip savingsRate={savingsRate} debtRatio={debtRatio} goalProgress={goalProgress} />
