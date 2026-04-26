@@ -1,0 +1,18 @@
+# Global fallback
+* @welitonsp
+
+# Financial engines — precision-sensitive
+src/utils/forecastEngine.ts @welitonsp
+src/utils/reportEngine.ts @welitonsp
+src/hooks/useFinancialKPIs.ts @welitonsp
+src/hooks/useAccounts.ts @welitonsp
+src/shared/types/money.ts @welitonsp
+src/shared/schemas/financialSchemas.ts @welitonsp
+
+# Security — PII and Firestore rules
+src/shared/lib/piiMasker.ts @welitonsp
+firestore.rules @welitonsp
+
+# CI/CD
+.github/workflows/ @welitonsp
+.github/CODEOWNERS @welitonsp
