@@ -68,6 +68,7 @@ export default defineConfig({
         'src/shared/types/**/*.ts',
         'src/shared/schemas/**/*.ts',
         'src/shared/lib/**/*.ts',
+        'src/shared/services/**/*.ts',
         'src/utils/**/*.ts',
         'src/hooks/**/*.ts',
       ],
@@ -81,10 +82,10 @@ export default defineConfig({
       // o que mantém a média global baixa. Subir gradualmente conforme PR plan.
       // Meta Q3-2026: lines 80, functions 80, branches 70.
       thresholds: {
-        lines:     13,    // PR 11.D: +3pp com computeFinancialMetrics testado (baseline 13.16%)
-        functions: 10,    // mantido — sobe no PR 12 quando services testados
-        branches:  5,     // mantido — sobe no PR 12
-        statements: 12,   // PR 11.D: +2pp alinhado com statements baseline (12.13%)
+        lines:     14,    // PR 12.A: +1pp com services testados (baseline 14.98%)
+        functions: 12,    // PR 12.A: +2pp com FirestoreService/AuditService (baseline 13.58%)
+        branches:  7,     // PR 12.A: +2pp (baseline 12.66%)
+        statements: 13,   // PR 12.A: +1pp (baseline 14.05%)
       },
     },
   },
