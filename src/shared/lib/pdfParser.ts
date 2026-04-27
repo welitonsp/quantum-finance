@@ -1,6 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import type { ParsedTransaction } from '../types/transaction';
+import { toCentavos } from '../types/money';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
@@ -91,6 +92,7 @@ export const parsePDF = async (file: File, password: string | null = null): Prom
         const isNegative = valorRaw.includes('-') || sufixo === 'D' || sufixo === '-';
 
         if (isNaN(valorNum) || descricao.length < 3) continue;
+        const valueCents = toCentavos(valorNum);
 
         const dParts = dataRaw.split('/');
         let ano: string | number = dParts.length === 3 ? dParts[2] : faturaYear;
@@ -102,6 +104,8 @@ export const parsePDF = async (file: File, password: string | null = null): Prom
           date:        `${ano}-${dParts[1].padStart(2, '0')}-${dParts[0].padStart(2, '0')}`,
           description: descricao.substring(0, 50).trim(),
           value:       valorNum,
+          value_cents: valueCents,
+          schemaVersion: 2,
           type:        isCartao ? (isNegative ? 'entrada' : 'saida') : (isNegative ? 'saida' : 'entrada'),
           account:     isCartao ? 'cartao_credito' : 'conta_corrente',
           category:    'Importado',

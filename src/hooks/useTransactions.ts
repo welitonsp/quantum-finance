@@ -7,6 +7,7 @@ import { db } from '../shared/api/firebase/index';
 import { FirestoreService } from '../shared/services/FirestoreService';
 import { AuditService } from '../shared/services/AuditService';
 import type { Transaction } from '../shared/types/transaction';
+import { fromCentavos, toCentavos, type Centavos } from '../shared/types/money';
 import { categorizeTransaction } from '../utils/aiCategorize';
 import { categorizeWithAI } from '../services/AICategorizationService';
 import toast from 'react-hot-toast';
@@ -85,6 +86,34 @@ function makeTempId(): string {
 
 function isTemp(id: string): boolean {
   return id.startsWith('__temp_');
+}
+
+function getTxCentavos(tx: Partial<Transaction>): Centavos {
+  const amount = tx.value_cents !== undefined
+    ? tx.value_cents
+    : toCentavos(tx.value ?? 0);
+
+  return amount;
+}
+
+function normalizeTransaction(tx: Transaction): Transaction {
+  const value_cents = getTxCentavos(tx);
+  return {
+    ...tx,
+    value_cents,
+    value: tx.value ?? fromCentavos(value_cents),
+    schemaVersion: tx.schemaVersion ?? 2,
+  };
+}
+
+function normalizeWriteData(data: Partial<Transaction>): Partial<Transaction> {
+  const value_cents = getTxCentavos(data);
+  return {
+    ...data,
+    value_cents,
+    value: data.value ?? fromCentavos(value_cents),
+    schemaVersion: data.schemaVersion ?? 2,
+  };
 }
 
 /**
@@ -175,7 +204,7 @@ export function useTransactions(
     const unsub = onSnapshot(
       q,
       snap => {
-        const remote: Transaction[] = snap.docs.map(d => ({
+        const remote: Transaction[] = snap.docs.map(d => normalizeTransaction({
           id: d.id,
           ...(d.data() as Omit<Transaction, 'id'>),
         }));
@@ -342,7 +371,7 @@ export function useTransactions(
     if (!uid) throw new Error('[useTransactions][add] UID ausente.');
 
     // 1. Deterministic categorization — never overwrite a set value
-    const enriched: Partial<Transaction> = { ...data };
+    const enriched: Partial<Transaction> = normalizeWriteData(data);
     if (!enriched.category && enriched.description) {
       // FIX P0.1: regras do usuário aplicadas antes do histórico/dicionário
       const suggested = categorizeTransaction(enriched.description, transactionsRef.current, userRules);
@@ -391,6 +420,10 @@ export function useTransactions(
     if (!uid || !id) throw new Error('[useTransactions][update] UID ou ID ausente.');
     if (isTemp(id)) return; // aguarda confirmação do add
 
+    const normalizedData = data.value !== undefined || data.value_cents !== undefined
+      ? normalizeWriteData(data)
+      : data;
+
     // Regista como pendente antes do optimistic update
     pendingIds.current.add(id);
 
@@ -400,12 +433,12 @@ export function useTransactions(
       return prev.map(tx =>
         tx.id === id
           // updatedAt local em ms; será substituído por serverTimestamp() no snapshot
-          ? { ...tx, ...data, updatedAt: Date.now() }
+          ? { ...tx, ...normalizedData, updatedAt: Date.now() }
           : tx
       );
     });
 
-    enqueue({ type: 'update', itemId: id, data, previous, retries: 0 });
+    enqueue({ type: 'update', itemId: id, data: normalizedData, previous, retries: 0 });
   }, [uid, enqueue]);
 
   // ── REMOVE — Optimistic + enqueue ─────────────────────────────────────────
@@ -441,7 +474,7 @@ export function useTransactions(
 
     items.forEach(data => {
       // 1. Deterministic categorization — never overwrite a set value
-      const enriched: Partial<Transaction> = { ...data };
+      const enriched: Partial<Transaction> = normalizeWriteData(data);
       if (!enriched.category && enriched.description) {
         // FIX P0.1: regras do usuário aplicadas antes do histórico/dicionário
       const suggested = categorizeTransaction(enriched.description, transactionsRef.current, userRules);

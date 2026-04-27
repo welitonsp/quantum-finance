@@ -11,8 +11,11 @@ export type AllowedCategory =
 export interface Transaction {
   id: string;
   description: string;
-  /** Valor em centavos quando vindo do Firestore; em reais quando decriptado para UI */
-  value: number;
+  /** Legacy value, historically stored either as reais float or integer cents. Prefer value_cents. */
+  value?: number;
+  /** Canonical money amount in integer cents. */
+  value_cents?: Centavos;
+  schemaVersion?: number;
   type: TransactionType;
   category: AllowedCategory | string;
   date: string;

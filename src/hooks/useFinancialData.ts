@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import Decimal from 'decimal.js';
 import type { Transaction, Account, ModuleBalances, CategoryDataPoint } from '../shared/types/transaction';
 import { isIncome as checkIncome, isExpense as checkExpense } from '../utils/transactionUtils';
-import { fromCentavos } from '../shared/schemas/financialSchemas';
+import { fromCentavos, toCentavos } from '../shared/types/money';
 
 interface FirestoreTimestamp { toDate: () => Date; }
 
@@ -17,6 +17,14 @@ function resolveDate(raw: unknown): Date | null {
   }
   const d = new Date(raw as string | number);
   return isNaN(d.getTime()) ? null : d;
+}
+
+function txValueReais(tx: Transaction): number {
+  const amount = tx.value_cents !== undefined
+    ? tx.value_cents
+    : toCentavos(tx.value ?? 0);
+
+  return fromCentavos(amount);
 }
 
 // ─── Existing hook (kept for App.tsx compatibility) ──────────────────────────
@@ -62,7 +70,7 @@ export function useFinancialData(
       const txAccount = tx.account || 'conta_corrente';
       if (activeModule !== 'geral' && txAccount !== activeModule) return;
 
-      const val = new Decimal(Math.abs(Number(tx.value || 0))).dividedBy(100);
+      const val = new Decimal(Math.abs(txValueReais(tx)));
       const isIncome = checkIncome(tx.type);
 
       if (isIncome) saldoAcumulado = saldoAcumulado.plus(val);
@@ -106,7 +114,7 @@ export function useFinancialData(
       if (checkExpense(tx.type)) {
         const cat = tx.category || 'Diversos';
         const current = map[cat] ? new Decimal(map[cat]) : new Decimal(0);
-        const val = new Decimal(Math.abs(Number(tx.value || 0))).dividedBy(100);
+        const val = new Decimal(Math.abs(txValueReais(tx)));
         map[cat] = current.plus(val).toNumber();
       }
     });
@@ -124,14 +132,14 @@ export function useFinancialData(
   const allTransactionsDecrypted = useMemo(() => {
     return (transactions || []).map(tx => ({
       ...tx,
-      value: new Decimal(Number(tx.value || 0)).dividedBy(100).toNumber()
+      value: txValueReais(tx)
     }));
   }, [transactions]);
 
   const displayedTransactionsDecrypted = useMemo(() => {
     return (displayedTransactions || []).map(tx => ({
       ...tx,
-      value: new Decimal(Number(tx.value || 0)).dividedBy(100).toNumber()
+      value: txValueReais(tx)
     }));
   }, [displayedTransactions]);
 
@@ -198,13 +206,13 @@ export function useDashboardData(transactions: Transaction[], loading: boolean):
     let totalExpense = new Decimal(0);
 
     transactions.forEach(tx => {
-      const val = new Decimal(Math.abs(Number(tx.value || 0))).dividedBy(100);
+      const val = new Decimal(Math.abs(txValueReais(tx)));
       if (checkIncome(tx.type)) totalBalance = totalBalance.plus(val);
       else                      totalBalance = totalBalance.minus(val);
     });
 
     filtered.forEach(tx => {
-      const val = new Decimal(Math.abs(Number(tx.value || 0))).dividedBy(100);
+      const val = new Decimal(Math.abs(txValueReais(tx)));
       if (checkIncome(tx.type)) totalIncome  = totalIncome.plus(val);
       else                      totalExpense = totalExpense.plus(val);
     });
@@ -224,7 +232,7 @@ export function useDashboardData(transactions: Transaction[], loading: boolean):
       if (!d) return;
       const key   = d.toISOString().slice(0, 10);
       const entry = map.get(key) ?? { income: new Decimal(0), expense: new Decimal(0) };
-      const val   = new Decimal(Math.abs(Number(tx.value || 0))).dividedBy(100);
+      const val   = new Decimal(Math.abs(txValueReais(tx)));
       if (checkIncome(tx.type)) entry.income  = entry.income.plus(val);
       else                      entry.expense = entry.expense.plus(val);
       map.set(key, entry);
@@ -246,7 +254,7 @@ export function useDashboardData(transactions: Transaction[], loading: boolean):
       if (!checkExpense(tx.type)) return;
       const cat = tx.category || 'Diversos';
       map.set(cat, (map.get(cat) ?? new Decimal(0)).plus(
-        new Decimal(Math.abs(Number(tx.value || 0))).dividedBy(100)
+        new Decimal(Math.abs(txValueReais(tx)))
       ));
     });
 

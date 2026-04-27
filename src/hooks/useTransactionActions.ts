@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { toCentavos } from '../shared/schemas/financialSchemas';
+import { toCentavos } from '../shared/types/money';
 import type { Transaction } from '../shared/types/transaction';
 import type { User } from 'firebase/auth';
 
@@ -33,7 +33,8 @@ export function useTransactionActions({
     try {
       const payload = {
         ...data,
-        value: data.value !== undefined ? toCentavos(Number(data.value)) : undefined,
+        value_cents: data.value_cents ?? (data.value !== undefined ? toCentavos(data.value) : undefined),
+        schemaVersion: data.schemaVersion ?? 2,
       };
       if (transactionToEdit) {
         await update(transactionToEdit.id, payload);
