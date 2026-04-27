@@ -1,46 +1,46 @@
+import Decimal from 'decimal.js';
 import { describe, it, expect, expectTypeOf } from 'vitest';
-import { toCentavosTyped, type Centavos } from './money';
+import { fromCentavos, toCentavos, toCentavosTyped, type Centavos } from './money';
 
-describe('Money — Centavos (branded type)', () => {
-  describe('toCentavosTyped — arredondamento bancário', () => {
-    it('trunca/arredonda para inteiro (ROUND_HALF_AWAY_FROM_ZERO via Math.round)', () => {
-      expect(toCentavosTyped(1050)).toBe(1050);
-      expect(toCentavosTyped(1050.4)).toBe(1050);
-      expect(toCentavosTyped(1050.5)).toBe(1051);
-      expect(toCentavosTyped(1050.6)).toBe(1051);
+describe('Money - Centavos', () => {
+  describe('toCentavos', () => {
+    it('converte reais number para centavos inteiros com ROUND_HALF_UP', () => {
+      expect(toCentavos(10.5)).toBe(1050);
+      expect(toCentavos(10.004)).toBe(1000);
+      expect(toCentavos(10.005)).toBe(1001);
+      expect(toCentavos(10.006)).toBe(1001);
     });
 
-    it('aceita zero e valores negativos preservando o sinal', () => {
-      expect(toCentavosTyped(0)).toBe(0);
-      // Math.round(-0) === -0 — documentamos a semântica IEEE-754
-      expect(Object.is(toCentavosTyped(-0), -0) || Object.is(toCentavosTyped(-0), 0)).toBe(true);
-      expect(toCentavosTyped(-1050.7)).toBe(-1051);
+    it('aceita string e Decimal sem drift de ponto flutuante', () => {
+      expect(toCentavos('0.10')).toBe(10);
+      expect(toCentavos(new Decimal('0.29').plus('0.01'))).toBe(30);
     });
 
-    it('lida com floats clássicos problemáticos', () => {
-      // Math.round(0.1 + 0.2 = 0.30000000000000004) = 0
-      expect(toCentavosTyped(0.1 + 0.2)).toBe(0);
-      // 0.1 * 100 = 10.000000000000002 → 10
-      expect(toCentavosTyped(0.1 * 100)).toBe(10);
+    it('preserva sinal para estornos ou ajustes negativos', () => {
+      expect(toCentavos(-10.5)).toBe(-1050);
+      expect(toCentavos('-10.005')).toBe(-1001);
     });
 
-    it('é idempotente quando recebe um Centavos já arredondado', () => {
-      const c = toCentavosTyped(500);
-      expect(toCentavosTyped(c)).toBe(c);
-    });
-
-    it('retorna o tipo de marca Centavos (branded)', () => {
-      const val = toCentavosTyped(250);
+    it('retorna o tipo branded Centavos', () => {
+      const val = toCentavos(2.5);
       expectTypeOf(val).toEqualTypeOf<Centavos>();
-      // Garante que um number cru NÃO é atribuível a Centavos sem cast
-      // @ts-expect-error — number não é atribuível a Centavos sem toCentavosTyped
-      const _bad: Centavos = 250;
-      void _bad;
+      // @ts-expect-error number cru nao e atribuivel a Centavos sem conversao
+      const bad: Centavos = 250;
+      void bad;
     });
+  });
 
-    it('não explode em valores extremos', () => {
-      expect(toCentavosTyped(Number.MAX_SAFE_INTEGER)).toBe(Number.MAX_SAFE_INTEGER);
-      expect(Number.isFinite(toCentavosTyped(1e15))).toBe(true);
+  describe('fromCentavos', () => {
+    it('converte centavos inteiros para reais de exibicao', () => {
+      expect(fromCentavos(1050 as Centavos)).toBe(10.5);
+      expect(fromCentavos(1001 as Centavos)).toBe(10.01);
+      expect(fromCentavos(-1001 as Centavos)).toBe(-10.01);
+    });
+  });
+
+  describe('toCentavosTyped', () => {
+    it('mantem compatibilidade delegando para toCentavos', () => {
+      expect(toCentavosTyped(12.34)).toBe(1234);
     });
   });
 });
