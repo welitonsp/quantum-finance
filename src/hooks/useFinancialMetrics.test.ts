@@ -76,6 +76,23 @@ describe('computeFinancialMetrics — cálculos básicos', () => {
     expect(m.comprometimento).toBe(0);
     expect(m.reservaMeses).toBe(0);
   });
+
+  it('filtra receitas e despesas pelo mes/ano selecionado', () => {
+    const txs: Transaction[] = [
+      mkTx({ id: '1', value: 5000, type: 'receita', category: 'Salario', date: '2026-04-10' }),
+      mkTx({ id: '2', value: 1200, type: 'despesa', category: 'Moradia', date: '2026-04-15' }),
+      mkTx({ id: '3', value: 9000, type: 'receita', category: 'Salario', date: '2026-03-10' }),
+      mkTx({ id: '4', value: 4000, type: 'despesa', category: 'Moradia', date: '2025-04-15' }),
+    ];
+
+    const m = computeFinancialMetrics(txs, [], 4, 2026);
+
+    expect(m.receita).toBe(5000);
+    expect(m.despesa).toBe(1200);
+    expect(m.custoFixoMensal).toBe(1200);
+    expect(m.ativos).toBe(5000);
+    expect(m.passivos).toBe(1200);
+  });
 });
 
 // ─── Suite 2: ativos/passivos das CONTAS (correto) ────────────────────────────

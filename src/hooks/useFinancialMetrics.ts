@@ -55,6 +55,18 @@ function isExpense(type: string | undefined): boolean {
   return type === 'saida' || type === 'despesa';
 }
 
+function txMatchesPeriod(tx: Transaction, currentMonth?: number, currentYear?: number): boolean {
+  if (!currentMonth || !currentYear) return true;
+
+  const rawDate = tx.date || tx.createdAt;
+  if (!rawDate) return false;
+
+  const txDate = rawDate instanceof Date ? rawDate : new Date(String(rawDate));
+  if (Number.isNaN(txDate.getTime())) return false;
+
+  return txDate.getMonth() + 1 === currentMonth && txDate.getFullYear() === currentYear;
+}
+
 // ─── Pure compute (testável sem React) ────────────────────────────────────────
 
 /**
@@ -74,6 +86,8 @@ function isExpense(type: string | undefined): boolean {
 export function computeFinancialMetrics(
   transactions: Transaction[],
   accounts: Account[] = [],
+  currentMonth?: number,
+  currentYear?: number,
 ): FinancialMetrics {
   // ── 1. Receitas, despesas e custos fixos das transações ────────────────
   let receita = new Decimal(0);
@@ -81,6 +95,8 @@ export function computeFinancialMetrics(
   let custoFixoMensal = new Decimal(0);
 
   for (const tx of transactions) {
+    if (!txMatchesPeriod(tx, currentMonth, currentYear)) continue;
+
     const rawVal = Math.abs(Number(tx.value || 0));
     if (!Number.isFinite(rawVal)) continue;
     const val = new Decimal(rawVal);
@@ -161,15 +177,15 @@ export function computeFinancialMetrics(
  * @param uid Usuário autenticado (guard contra cálculo prematuro)
  * @param transactions Transações do período
  * @param accounts (NOVO) Contas para ativos/passivos REAIS — opcional para retrocompat
- * @param _currentMonth Reservado para filtros futuros (não usado atualmente)
- * @param _currentYear Reservado para filtros futuros (não usado atualmente)
+ * @param currentMonth Mes selecionado para KPIs transacionais (1-12)
+ * @param currentYear Ano selecionado para KPIs transacionais
  */
 export function useFinancialMetrics(
   uid: string,
   transactions: Transaction[],
   accounts: Account[] = [],
-  _currentMonth?: number,
-  _currentYear?: number,
+  currentMonth?: number,
+  currentYear?: number,
 ): UseFinancialMetricsReturn {
   const metrics = useMemo<FinancialMetrics | null>(() => {
     if (!uid) return null;
@@ -179,12 +195,12 @@ export function useFinancialMetrics(
     }
 
     try {
-      return computeFinancialMetrics(transactions ?? [], accounts);
+      return computeFinancialMetrics(transactions ?? [], accounts, currentMonth, currentYear);
     } catch (err) {
       console.error('[useFinancialMetrics]', err);
       return null;
     }
-  }, [uid, transactions, accounts]);
+  }, [uid, transactions, accounts, currentMonth, currentYear]);
 
   return {
     metrics,
