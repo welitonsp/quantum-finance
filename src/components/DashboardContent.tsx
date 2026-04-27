@@ -89,6 +89,7 @@ export default function DashboardContent({
   recurringTasks,
 }: Props) {
   const { currentMonth, currentYear } = useNavigation();
+  void recurringTasks;
 
   // ── Hero metrics from existing moduleBalances prop ────────────────────────
   const saldo    = moduleBalances?.geral?.saldo    ?? 0;
@@ -116,24 +117,12 @@ export default function DashboardContent({
 
   const { status, color, rec, score, savingsRate, debtRatio, goalProgress } = st;
 
-  const recurringMonthlyTotal = useMemo(() => {
-    return (recurringTasks ?? [])
-      .filter(t => t.active !== false)
-      .reduce((sum, t) => {
-        const v = Number(t.value) || 0;
-        if (t.frequency === 'mensal') return sum + v;
-        if (t.frequency === 'anual')  return sum + (v / 12);
-        return sum;
-      }, 0);
-  }, [recurringTasks]);
-
   const { metrics, loadingMetrics } = useFinancialMetrics(
     user?.uid ?? '',
     allTransactions,
+    accounts,
     currentMonth,
     currentYear,
-    accounts,
-    recurringMonthlyTotal,
   );
 
   const StatusIcon  = status === 'CRÍTICO' ? AlertTriangle : status === 'ATENÇÃO' ? Activity : CheckCircle2;

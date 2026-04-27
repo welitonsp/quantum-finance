@@ -63,14 +63,30 @@ export default defineConfig({
     css: false,
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'html', 'lcov'],
+      reporter: ['text', 'html', 'lcov', 'json-summary'],
       include: [
         'src/shared/types/**/*.ts',
         'src/shared/schemas/**/*.ts',
         'src/shared/lib/**/*.ts',
+        'src/shared/services/**/*.ts',
         'src/utils/**/*.ts',
+        'src/hooks/**/*.ts',
       ],
-      exclude: ['**/*.test.ts', '**/*.test.tsx'],
+      exclude: [
+        '**/*.test.ts',
+        '**/*.test.tsx',
+        'src/**/*.d.ts',
+      ],
+      // Quality gate — thresholds calibrados ao baseline real do projeto.
+      // A maioria dos hooks depende de Firebase/React e não tem testes unitários,
+      // o que mantém a média global baixa. Subir gradualmente conforme PR plan.
+      // Meta Q3-2026: lines 80, functions 80, branches 70.
+      thresholds: {
+        lines:     14,    // PR 12.A: +1pp com services testados (baseline 14.98%)
+        functions: 12,    // PR 12.A: +2pp com FirestoreService/AuditService (baseline 13.58%)
+        branches:  7,     // PR 12.A: +2pp (baseline 12.66%)
+        statements: 13,   // PR 12.A: +1pp (baseline 14.05%)
+      },
     },
   },
 });

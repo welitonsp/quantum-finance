@@ -47,10 +47,17 @@ function utcDateStr(base: Date, deltaDays = 0): string {
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
+/**
+ * @param transactions  Transações históricas
+ * @param currentBalance Saldo atual em reais
+ * @param days          Horizonte em dias (default 30)
+ * @param now           Data de referência — injectável para testes. Default: new Date()
+ */
 export function calculateForecast(
   transactions: Transaction[],
   currentBalance: number,
   days = 30,
+  now: Date = new Date(),
 ): ForecastResult {
   const EMPTY: ForecastResult = {
     points:       [],
@@ -118,7 +125,6 @@ export function calculateForecast(
   const recurringKeys = new Set(recurringMeta.keys());
 
   // ── 3. Net run rate — last 30 days, excluding recurrings ──────────────────
-  const now       = new Date();
   const todayStr  = utcDateStr(now);
   const cutoffStr = utcDateStr(now, -30);
 

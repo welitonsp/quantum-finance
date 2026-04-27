@@ -72,6 +72,11 @@ service cloud.firestore {
         allow read, write: if isOwner(userId);
       }
 
+      // Legacy sub-collection — explicitly denied after migration to recurringTasks (P1-#6)
+      match /recurring/{taskId} {
+        allow read, write: if false;
+      }
+
       // AI usage tracker — count validated to prevent abuse
       match /usage/ai_calls {
         allow read: if isOwner(userId);

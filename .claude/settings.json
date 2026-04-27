@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit -m ' *)",
+      "Bash(npm test *)",
+      "Bash(npx eslint *)",
+      "Bash(grep -v \"//\")"
+    ]
+  }
+}
