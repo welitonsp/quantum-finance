@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  CreditCard, Plus, Trash2, Edit2, X, CheckCircle,
+  CreditCard, Plus, Trash2, Edit2, CheckCircle,
   AlertTriangle, ShieldAlert,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -383,9 +383,6 @@ export default function CreditCardManager({ uid, transactions = [] }: Props) {
           </AnimatePresence>
         </div>
       )}
-
-      {/* Suppress unused import */}
-      {false && <X />}
     </div>
   );
 }

@@ -26,6 +26,7 @@ export default function ForecastWidget({ transactions, currentBalance }: Props) 
     success: getCssVar('--q-success') || '#00E68A',
     warning: getCssVar('--q-warning') || '#F59E0B',
     danger:  getCssVar('--q-danger')  || '#FF4757',
+    fg:      getCssVar('--q-fg')       || '#E8ECF4',
     fgMuted: getCssVar('--q-fg-muted') || '#6B7A94',
     card:    getCssVar('--q-card')    || '#131A2A',
     border:  getCssVar('--q-border')  || '#1E2A3F',
@@ -117,7 +118,7 @@ export default function ForecastWidget({ transactions, currentBalance }: Props) 
                   borderColor: colors.border,
                   borderRadius: '10px',
                   fontSize: '11px',
-                  color: '#E8ECF4',
+                  color: colors.fg,
                 }}
                 formatter={(value) => [formatCurrency(Number(value ?? 0)), 'Saldo']}
                 labelFormatter={(label) => `Dia ${String(label ?? '')}`}

@@ -57,7 +57,7 @@ reconciliation  (portal React, fora do modal principal)
   │  (utilizador confirma ou resolve conflitos)
   ▼
 importing
-  │  (addBatch → fila LWW → Firestore)
+  │  (LedgerService → hash idempotente → Firestore)
   ▼
 success ──── (auto-close após 3s) ──▶  idle
 
@@ -77,7 +77,7 @@ success ──── (auto-close após 3s) ──▶  idle
        │                          (pdfjs-dist para PDF)
        │
        │  1. Deduplicação local
-       │     hash = `${date}-${Math.round(value*100)}-${desc.slice(0,12)}`
+       │     previewKey = `${date}-${value_cents}-${desc.slice(0,12)}`
        │
        │  2. Dicionário local (O(n) lookup, zero latência)
        │     "IFOOD" → Alimentação, "NETFLIX" → Assinaturas ...
@@ -103,7 +103,7 @@ success ──── (auto-close após 3s) ──▶  idle
        ▼
 ┌─────────────────────┐
 │  useTransactions    │
-│  .addBatch()        │  → optimistic UI (tempId) + fila LWW → Firestore
+│ saveAllTransactions │  → LedgerService.importTransactions → Firestore
 └─────────────────────┘
 ```
 
@@ -117,7 +117,9 @@ success ──── (auto-close após 3s) ──▶  idle
 | `src/shared/lib/pdfParser.ts` | Parser PDF standalone (usado também fora do Worker quando necessário) |
 | `src/utils/aiCategorize.ts` | Batch categorization: extrai descrições únicas, chama GeminiService, devolve mapa desc→cat |
 | `src/features/transactions/ReconciliationEngine.tsx` | UI de reconciliação: diff card, edição inline, badge `IA` nos itens categorizados |
-| `src/shared/schemas/financialSchemas.ts` | Zod schema de validação + helpers `toCentavos` / `fromCentavos` |
+| `src/shared/schemas/financialSchemas.ts` | Zod schemas estritos para transações, contas, recorrências e cartões |
+| `src/shared/services/LedgerService.ts` | Ledger idempotente, hash SHA-256 e auditoria transacional |
+| `src/shared/services/FirestoreService.ts` | DTOs explícitos e delegação de importação para o LedgerService |
 
 ---
 
@@ -159,16 +161,25 @@ date = `${ano}-${dParts[1].padStart(2, '0')}-${dParts[0].padStart(2, '0')}`;
 
 > **Regra:** `date` na interface é sempre a **data da compra**. O `billingPeriod` é um artefato interno do parser, nunca persiste no Firestore.
 
-### Deduplicação
+### Idempotência e Deduplicação
 
-O algoritmo de deduplicação usa um hash triplo para tolerar pequenas variações de formatação vindas de bancos diferentes:
+O preview executa uma deduplicação local leve para reduzir ruído na UI. A garantia de produção fica no `LedgerService`, que gera SHA-256 determinístico e grava a transação em `users/{uid}/transactions/{hash}`.
 
 ```typescript
-// ImportButton.tsx → deduplicate()
-const hash = `${date.substring(0,10)}-${Math.round(value * 100)}-${desc.substring(0,12).toLowerCase().trim()}`;
+hashInput = {
+  uid,
+  date,
+  description: normalizeLedgerDescription(description),
+  value_cents,
+  type,
+  source,
+  fitId,
+  accountId,
+  account,
+};
 ```
 
-Dois hashes são gerados por transação existente (com valor em centavos e valor arredondado) para absorver diferenças de ponto flutuante entre exportações.
+Importações não usam `addDoc`: ID aleatório quebra retry idempotente e permite duplicatas. Quando o hash já existe, o fluxo conta duplicata e preserva o `createdAt` original.
 
 ### Categorização em Duas Camadas
 
@@ -180,7 +191,7 @@ Transação nova
 │ Dicionário local │ ─── Sim ──▶│ category = "Alimenta" │
 │ (28 keywords)   │            │  (sem custo de API)   │
 └────────┬────────┘            └──────────────────────┘
-         │ Não (type === 'saida' ou 'despesa')
+         │ Não (type === 'saida')
          ▼
 ┌─────────────────┐
 │ forAI[]         │  acumula até ter todas as txs do arquivo
@@ -226,11 +237,11 @@ Um import é considerado **bem-sucedido** quando todos os seguintes critérios s
 
 | # | Critério | Como verificar |
 |---|---|---|
-| F1 | **Integridade de valor:** A soma dos `value` de todas as transações importadas deve bater com o total impresso na fatura/extrato | Comparar `SuccessPanel.stats.total` com soma calculada na `PreviewPanel` |
+| F1 | **Integridade de valor:** A soma dos `value_cents` de todas as transações importadas deve bater com o total impresso na fatura/extrato | Comparar `SuccessPanel.stats.total` com soma calculada em centavos na `PreviewPanel` |
 | F2 | **Zero duplicatas:** Nenhuma transação já existente no Firestore é reinserida | `stats.duplicates > 0` aciona o toast `"Todos os registos já existem"` |
 | F3 | **1 request de IA por arquivo:** O `batchCategorizeDescriptions` é chamado no máximo uma vez por `processFile()` | Verificar no Network tab: apenas 1 chamada a `chatWithQuantumAI` |
 | F4 | **Datas corretas em PDFs:** Transações de dezembro numa fatura de janeiro devem ter `year = faturaYear - 1` | Inspecionar o campo `date` nas transações extraídas de faturas com year-crossing |
-| F5 | **Deduplicação cross-encoding:** O mesmo lançamento exportado em CSV e em OFX não gera duplicata | Hash triplo `date-centavos-desc12` coincide nos dois formatos |
+| F5 | **Deduplicação cross-encoding:** O mesmo lançamento exportado em CSV e em OFX não gera duplicata | Hash SHA-256 normalizado pelo `LedgerService` coincide nos dois formatos quando os dados canônicos coincidem |
 | F6 | **Categorias válidas:** Toda transação importada tem `category` pertencente a `ALLOWED_CATEGORIES` ou `'Importado'` | Sem erros de validação Zod no `transactionSchema` |
 
 ### Critérios de Performance
@@ -240,18 +251,18 @@ Um import é considerado **bem-sucedido** quando todos os seguintes critérios s
 | P1 | Parsing de CSV/OFX (500 linhas) concluído sem bloquear UI | < 200 ms (Web Worker) |
 | P2 | Parsing de PDF (12 páginas) concluído sem bloquear UI | < 2 s (Web Worker + pdfjs) |
 | P3 | Batch AI (50 descrições únicas) respondido | < 4 s (Cloud Function cold start incluso) |
-| P4 | `addBatch` com 200 transações não bloqueia UI | < 100 ms (optimistic update imediato) |
+| P4 | Importação de 200 transações respeita chunk seguro e não bloqueia UI | < 100 ms no preview; gravação assíncrona via `LedgerService` |
 
 ---
 
 ## 💡 Exemplo de Saída — Contrato JSON
 
-Este é o formato exato da interface `ParsedTransaction` que o parser entrega à `ReconciliationEngine` e, subsequentemente, ao `addBatch` do `useTransactions`.
+Este é o formato exato da interface `ParsedTransaction` que o parser entrega à `ReconciliationEngine` e, subsequentemente, ao `LedgerService` via `FirestoreService.saveAllTransactions`.
 
 ```typescript
 // Definição TypeScript (src/features/transactions/ImportButton.tsx)
 interface ParsedTransaction extends Omit<Transaction, 'id'> {
-  id:              string;   // UUID gerado pelo parser
+  id:              string;   // ID determinístico de preview; não é a identidade final no Firestore
   _selected?:      boolean;  // UI-only: seleção na PreviewPanel (stripped antes do sync)
   _aiCategorized?: boolean;  // UI-only: exibe badge "IA" na ReconciliationEngine (stripped antes do sync)
 }
@@ -261,10 +272,12 @@ interface ParsedTransaction extends Omit<Transaction, 'id'> {
 
 ```json
 {
-  "id":             "3f7a1c2e-8b4d-4e9f-a012-bc3456789def",
+  "id":             "pdf:1:0:2026-01-15:4790",
   "date":           "2026-01-15",
   "description":    "IFOOD*RESTAURANTE SABOR",
   "value":          47.90,
+  "value_cents":    4790,
+  "schemaVersion":  2,
   "type":           "saida",
   "category":       "Alimentação",
   "source":         "pdf",
@@ -282,7 +295,9 @@ interface ParsedTransaction extends Omit<Transaction, 'id'> {
   "date":           "2026-03-10",
   "description":    "PIX RECEBIDO CLIENTE XYZ",
   "value":          1500.00,
-  "type":           "receita",
+  "value_cents":    150000,
+  "schemaVersion":  2,
+  "type":           "entrada",
   "category":       "Freelance",
   "source":         "ofx",
   "_aiCategorized": true
@@ -293,10 +308,12 @@ interface ParsedTransaction extends Omit<Transaction, 'id'> {
 
 ```json
 {
-  "id":             "a9b2c3d4-1111-2222-3333-444455556666",
+  "id":             "csv:1:2026-02-28:8950:DROGASIL FARMACIA",
   "date":           "2026-02-28",
   "description":    "DROGASIL FARMACIA 0242",
   "value":          89.50,
+  "value_cents":    8950,
+  "schemaVersion":  2,
   "type":           "saida",
   "category":       "Saúde",
   "source":         "csv",
@@ -308,18 +325,20 @@ interface ParsedTransaction extends Omit<Transaction, 'id'> {
 
 | Campo | Tipo | Invariante |
 |---|---|---|
-| `id` | `string` | UUID v4 (crypto.randomUUID) para CSV/PDF; `fitId` para OFX quando disponível |
+| `id` | `string` | Identidade temporária de preview. A identidade final é o hash SHA-256 gerado pelo `LedgerService` |
 | `date` | `string` | Sempre `YYYY-MM-DD`. Nunca contém a data de vencimento da fatura — sempre a data da compra |
 | `description` | `string` | Truncada a 50 chars no PDF; sem truncagem em CSV/OFX |
-| `value` | `number` | Sempre positivo, em reais (float). A conversão para centavos ocorre no `addBatch` via `toCentavos()` |
-| `type` | `'entrada' \| 'saida' \| 'receita' \| 'despesa'` | Em PDFs de cartão: `saida` para débitos, `entrada` para estornos (lógica invertida em relação ao extrato bancário) |
+| `value_cents` | `number` | Fonte canônica, inteiro positivo em centavos |
+| `value` | `number` | Campo de display temporário em reais; nunca é fonte de cálculo |
+| `schemaVersion` | `2` | Obrigatório para gravação financeira crítica |
+| `type` | `'entrada' \| 'saida'` | Em PDFs de cartão: `saida` para débitos, `entrada` para estornos (lógica invertida em relação ao extrato bancário) |
 | `category` | `AllowedCategory \| 'Importado'` | `'Importado'` é o fallback do PDF parser quando a IA não responde |
 | `source` | `'csv' \| 'ofx' \| 'pdf'` | Rastreabilidade de origem para auditoria |
 | `fitId` | `string \| null` | Exclusivo de OFX. Usado como `id` e para deduplicação nativa do formato |
 | `_aiCategorized` | `boolean` | `true` apenas quando a IA (não o dicionário local) definiu a categoria. Stripped antes do Firestore |
 | `_selected` | `boolean` | Estado UI da `PreviewPanel`. Stripped antes do Firestore |
 
-> **Campos NOT presentes na saída:** `uid`, `createdAt`, `updatedAt` são injetados pelo `addBatch` durante a gravação no Firestore, nunca pelo parser.
+> **Campos NOT presentes na saída:** `uid`, `createdAt`, `updatedAt` são controlados pelo servidor/Firestore e nunca pelo parser.
 
 ---
 
@@ -340,7 +359,7 @@ interface ParsedTransaction extends Omit<Transaction, 'id'> {
 | **Refinamento do prompt de categorização** | Incluir contexto do utilizador (categorias mais usadas, histórico de palavras-chave) no prompt do Gemini | Acurácia da IA sobe de ~75% para ~90% estimado |
 | **Importação em lote (múltiplos ficheiros)** | Fila de processamento com `Promise.allSettled`, exibindo progresso global | Permite importar 12 faturas de uma vez no onboarding |
 | **Parser de PDF estruturado (OFD/CNAB240)** | Suporte a formatos bancários estruturados (CNAB 240/400) usados por bancos corporativos | Elimina necessidade de regex para extratos Bradesco/Itaú empresarial |
-| **Validação pós-import com Zod** | Passar cada `ParsedTransaction` pelo `transactionSchema` antes de entregar à `ReconciliationEngine` | Captura erros de parsing silenciosos antes de chegarem ao Firestore |
+| **Snapshots de importação** | Materializar totais por arquivo/processamento para auditoria operacional | Facilita reconciliação com extratos originais |
 
 ### Longo prazo
 

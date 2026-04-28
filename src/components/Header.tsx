@@ -7,7 +7,8 @@ import { motion } from 'framer-motion';
 import ImportButton from '../features/transactions/ImportButton';
 import { usePrivacy } from '../contexts/PrivacyContext';
 import type { Transaction } from '../shared/types/transaction';
-import { isIncome, isExpense } from '../utils/transactionUtils';
+import { getTransactionAbsCentavos, isIncome, isExpense } from '../utils/transactionUtils';
+import { fromCentavos } from '../shared/types/money';
 
 const PAGE_TITLES: Record<string, string> = {
   dashboard: 'Painel Central',
@@ -43,9 +44,9 @@ function BurnRateHUD({ transactions, currentMonth, currentYear }: BurnRateProps)
         const d = new Date((tx.date ?? tx.createdAt) as string);
         return d.getMonth() + 1 === currentMonth && d.getFullYear() === currentYear;
       })
-      .reduce((acc, tx) => acc + Math.abs(Number(tx.value ?? 0)), 0);
+      .reduce((acc, tx) => acc + getTransactionAbsCentavos(tx), 0);
 
-    const ritmoDiario = diaAtual > 0 ? despesasMes / diaAtual : 0;
+    const ritmoDiario = diaAtual > 0 ? fromCentavos(Math.round(despesasMes / diaAtual)) : 0;
     const pct         = Math.round((diaAtual / diasNoMes) * 100);
     return { burnRate: ritmoDiario, percentDoMes: pct };
   }, [transactions, currentMonth, currentYear]);
@@ -114,7 +115,7 @@ function SurvivalKPIs({ transactions, currentMonth, currentYear }: SurvivalKPIsP
     const diasRestantes  = Math.max(diasNoMes - diaAtual, 1);
 
     const saldoTotal = transactions.reduce((acc, tx) => {
-      const val = Math.abs(Number(tx.value ?? 0));
+      const val = getTransactionAbsCentavos(tx);
       return isIncome(tx.type) ? acc + val : acc - val;
     }, 0);
 
@@ -124,15 +125,15 @@ function SurvivalKPIs({ transactions, currentMonth, currentYear }: SurvivalKPIsP
         const d = new Date((tx.date ?? tx.createdAt) as string);
         return d.getMonth() + 1 === currentMonth && d.getFullYear() === currentYear;
       })
-      .reduce((acc, tx) => acc + Math.abs(Number(tx.value ?? 0)), 0);
+      .reduce((acc, tx) => acc + getTransactionAbsCentavos(tx), 0);
 
-    const ritmoDiario  = diaAtual > 0 ? despesasMes / diaAtual : 0;
+    const ritmoDiario  = diaAtual > 0 ? Math.round(despesasMes / diaAtual) : 0;
     const d2zVal: number | null = ritmoDiario > 0
       ? Math.floor(saldoTotal / ritmoDiario)
       : saldoTotal > 0 ? Infinity : null;
 
     const safeDias      = diasRestantes > 0 ? diasRestantes : 1;
-    const liberdadeVal  = saldoTotal / safeDias;
+    const liberdadeVal  = fromCentavos(Math.round(saldoTotal / safeDias));
 
     return { d2z: d2zVal, liberdadeDiaria: liberdadeVal };
   }, [transactions, currentMonth, currentYear]);
@@ -210,6 +211,7 @@ interface HeaderProps {
   handleNextMonth: () => void;
   nomeMeses: string[];
   theme: string;
+  resolvedTheme: 'light' | 'dark';
   toggleTheme: () => void;
   isSidebarCollapsed: boolean;
   setIsSidebarCollapsed: (v: boolean) => void;
@@ -231,6 +233,7 @@ export default function Header({
   handleNextMonth,
   nomeMeses,
   theme,
+  resolvedTheme,
   toggleTheme,
   isSidebarCollapsed,
   setIsSidebarCollapsed,
@@ -323,10 +326,10 @@ export default function Header({
         <button
           onClick={toggleTheme}
           className="p-2.5 bg-quantum-card hover:bg-quantum-cardHover rounded-xl text-quantum-fgMuted hover:text-quantum-accent border border-quantum-border transition-all"
-          title={theme === 'dark' ? 'Ativar Modo Claro' : 'Ativar Modo Escuro'}
-          aria-label={theme === 'dark' ? 'Ativar Modo Claro' : 'Ativar Modo Escuro'}
+          title={theme === 'system' ? 'Tema do sistema ativo' : resolvedTheme === 'dark' ? 'Ativar Modo Claro' : 'Ativar Modo Sistema'}
+          aria-label={theme === 'system' ? 'Tema do sistema ativo' : resolvedTheme === 'dark' ? 'Ativar Modo Claro' : 'Ativar Modo Sistema'}
         >
-          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          {resolvedTheme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
 
         {currentPage === 'dashboard' && (

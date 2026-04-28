@@ -1,7 +1,9 @@
 import type { Timestamp } from 'firebase/firestore';
 import type { Centavos } from './money';
 
-export type TransactionType = 'entrada' | 'saida' | 'receita' | 'despesa';
+export type CanonicalTransactionType = 'entrada' | 'saida';
+export type LegacyTransactionType = 'receita' | 'despesa';
+export type TransactionType = CanonicalTransactionType | LegacyTransactionType;
 
 export type AllowedCategory =
   | 'Alimentação' | 'Transporte' | 'Assinaturas' | 'Educação' | 'Saúde'
@@ -11,7 +13,7 @@ export type AllowedCategory =
 export interface Transaction {
   id: string;
   description: string;
-  /** Legacy value, historically stored either as reais float or integer cents. Prefer value_cents. */
+  /** Legacy display value. Never use as the canonical source for calculations. */
   value?: number;
   /** Canonical money amount in integer cents. */
   value_cents?: Centavos;
@@ -20,11 +22,15 @@ export interface Transaction {
   category: AllowedCategory | string;
   date: string;
   account?: string;
+  accountId?: string;
   cardId?: string;
   isRecurring?: boolean;
   tags?: string[];
   source?: 'csv' | 'ofx' | 'pdf' | 'manual';
   fitId?: string | null;
+  importHash?: string;
+  isDeleted?: boolean;
+  deletedAt?: Timestamp | number | string | null;
   uid?: string;
   createdAt?: Timestamp | number | string | null;
   updatedAt?: Timestamp | number | string | null;
@@ -38,6 +44,7 @@ export interface RecurringTask {
   id: string;
   uid?: string;
   description: string;
+  value_cents?: Centavos;
   value: number;
   category: AllowedCategory | string;
   dueDay: number;
@@ -115,6 +122,19 @@ export interface ImportResult {
   added: number;
   duplicates: number;
   invalid: number;
+}
+
+export interface SummarySnapshot {
+  uid: string;
+  period: string;
+  schemaVersion: 2;
+  totalIncomeCents: Centavos;
+  totalExpenseCents: Centavos;
+  netCashflowCents: Centavos;
+  assetBalanceCents: Centavos;
+  liabilityBalanceCents: Centavos;
+  transactionCount: number;
+  generatedAt?: Timestamp | number | string | null;
 }
 
 export interface UserCategory {

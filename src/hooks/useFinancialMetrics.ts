@@ -7,7 +7,8 @@
 import { useMemo } from 'react';
 import Decimal from 'decimal.js';
 import type { Transaction, Account } from '../shared/types/transaction';
-import { fromCentavos, toCentavos, type Centavos } from '../shared/types/money';
+import { fromCentavos, type Centavos } from '../shared/types/money';
+import { getTransactionCentavos } from '../utils/transactionUtils';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -56,11 +57,7 @@ function isExpense(type: string | undefined): boolean {
 }
 
 function getTxCentavos(tx: Transaction): Centavos {
-  const amount = tx.value_cents !== undefined
-    ? tx.value_cents
-    : toCentavos(tx.value ?? 0);
-
-  return amount;
+  return getTransactionCentavos(tx) ?? (0 as Centavos);
 }
 
 function txMatchesPeriod(tx: Transaction, currentMonth?: number, currentYear?: number): boolean {
@@ -82,7 +79,7 @@ function txMatchesPeriod(tx: Transaction, currentMonth?: number, currentYear?: n
  *
  * INVARIANTES:
  * - accounts.balance está em CENTAVOS (após PR 11.A)
- * - tx.value pode estar em centavos OU reais — função normaliza
+ * - tx.value_cents é a fonte canônica; value legado só é aceito em docs pre-v2
  * - ativos/passivos vêm das CONTAS (não da soma de transações)
  * - se accounts vazio: usa fallback legado (soma de transações) — para
  *   preservar compatibilidade durante migração de call sites

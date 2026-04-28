@@ -1,6 +1,7 @@
 // Forecast Engine — Deterministic, immutable, UTC-strict, float-safe
 import type { Transaction } from '../shared/types/transaction';
 import { isIncome as isIncomeStr } from './transactionUtils';
+import { addCentavos, absCentavos, fromCentavos, toCentavos, type Centavos } from '../shared/types/money';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -20,11 +21,12 @@ export interface ForecastResult {
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
-/** Float-safe rounding to cents. Applied at every accumulation step. */
-const round = (v: number): number => Math.round(v * 100) / 100;
-
 function isIncome(tx: Transaction): boolean {
   return isIncomeStr(tx.type);
+}
+
+function txCentavos(tx: Transaction): Centavos | null {
+  return tx.value_cents !== undefined ? absCentavos(tx.value_cents) : null;
 }
 
 /** Population median of a numeric array. Returns 0 for empty input. */
@@ -59,10 +61,11 @@ export function calculateForecast(
   days = 30,
   now: Date = new Date(),
 ): ForecastResult {
+  const currentBalanceCents = toCentavos(currentBalance);
   const EMPTY: ForecastResult = {
     points:       [],
-    finalBalance: currentBalance,
-    minBalance:   currentBalance,
+    finalBalance: fromCentavos(currentBalanceCents),
+    minBalance:   fromCentavos(currentBalanceCents),
     health:       'good',
   };
 
@@ -80,10 +83,12 @@ export function calculateForecast(
 
   sorted.forEach(tx => {
     if (!tx.date) return;
+    const cents = txCentavos(tx);
+    if (cents === null) return;
     const key = `${tx.description ?? ''}\x00${tx.type}`;
     const entry = groups.get(key) ?? { dates: [], lastValue: 0 };
     entry.dates.push(tx.date);
-    entry.lastValue = Math.abs(Number(tx.value ?? 0));
+    entry.lastValue = cents;
     groups.set(key, entry);
   });
 
@@ -138,7 +143,8 @@ export function calculateForecast(
   const expenseVals: number[] = [];
 
   recent.forEach(tx => {
-    const v = Math.abs(Number(tx.value ?? 0));
+    const v = txCentavos(tx);
+    if (v === null) return;
     if (isIncome(tx)) incomeVals.push(v);
     else              expenseVals.push(v);
   });
@@ -153,7 +159,7 @@ export function calculateForecast(
   const totalInc = filteredInc.reduce((a, b) => a + b, 0);
   const totalExp = filteredExp.reduce((a, b) => a + b, 0);
 
-  const netRunRate = round(totalInc / 30 - totalExp / 30);
+  const netRunRate = Math.round((totalInc - totalExp) / 30);
 
   // ── 4. Recurring projection map — date → net signed delta ─────────────────
   //    Performance: single map, no intermediate arrays
@@ -164,7 +170,7 @@ export function calculateForecast(
     if (avgInterval <= 0) return;
 
     // Anchor: next occurrence after last known date
-    let cursor = new Date(lastDate + 'T00:00:00Z');
+    const cursor = new Date(lastDate + 'T00:00:00Z');
     cursor.setUTCDate(cursor.getUTCDate() + avgInterval);
 
     while (true) {
@@ -172,7 +178,7 @@ export function calculateForecast(
       if (dateStr > endStr) break;
       // PROJECTION GUARD: future only
       if (dateStr > todayStr) {
-        recurringMap[dateStr] = round((recurringMap[dateStr] ?? 0) + signedValue);
+        recurringMap[dateStr] = (recurringMap[dateStr] ?? 0) + signedValue;
       }
       cursor.setUTCDate(cursor.getUTCDate() + avgInterval);
     }
@@ -180,23 +186,24 @@ export function calculateForecast(
 
   // ── 5. Day-by-day projection ───────────────────────────────────────────────
   const points: ForecastPoint[] = [];
-  let balance    = currentBalance;
-  let minBalance = currentBalance;
+  let balanceCents = currentBalanceCents;
+  let minBalanceCents = currentBalanceCents;
 
   for (let i = 1; i <= days; i++) {
     const dateStr = utcDateStr(now, i);
-    balance    = round(balance + netRunRate + (recurringMap[dateStr] ?? 0));
-    minBalance = Math.min(minBalance, balance);
-    points.push({ date: dateStr, balance });
+    balanceCents = addCentavos(balanceCents, netRunRate, recurringMap[dateStr] ?? 0);
+    minBalanceCents = Math.min(minBalanceCents, balanceCents) as Centavos;
+    points.push({ date: dateStr, balance: fromCentavos(balanceCents) });
   }
 
-  const finalBalance = balance;
+  const finalBalance = fromCentavos(balanceCents);
+  const minBalance = fromCentavos(minBalanceCents);
 
   // ── 6. Health — deterministic priority ────────────────────────────────────
   let health: ForecastHealth;
-  if (minBalance < 0 || finalBalance < 0) {
+  if (minBalanceCents < 0 || balanceCents < 0) {
     health = 'danger';
-  } else if (finalBalance >= currentBalance) {
+  } else if (balanceCents >= currentBalanceCents) {
     health = 'good';
   } else {
     health = 'warning';

@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react';
 import Decimal from 'decimal.js';
 import type { Transaction, Account, ModuleBalances, CategoryDataPoint } from '../shared/types/transaction';
 import { isIncome as checkIncome, isExpense as checkExpense } from '../utils/transactionUtils';
-import { fromCentavos, toCentavos } from '../shared/types/money';
+import { getTransactionCentavos } from '../utils/transactionUtils';
+import { fromCentavos, type Centavos } from '../shared/types/money';
 
 interface FirestoreTimestamp { toDate: () => Date; }
 
@@ -12,19 +13,19 @@ function resolveDate(raw: unknown): Date | null {
     return (raw as FirestoreTimestamp).toDate();
   }
   if (typeof raw === 'string' && !raw.includes('T')) {
-    const [y, m, d] = raw.split('T')[0].split('-');
+    const [y = '1970', m = '1', d = '1'] = raw.split('T')[0]?.split('-') ?? [];
     return new Date(Number(y), Number(m) - 1, Number(d) || 1);
   }
   const d = new Date(raw as string | number);
   return isNaN(d.getTime()) ? null : d;
 }
 
-function txValueReais(tx: Transaction): number {
-  const amount = tx.value_cents !== undefined
-    ? tx.value_cents
-    : toCentavos(tx.value ?? 0);
+function txValueCents(tx: Transaction): Centavos {
+  return getTransactionCentavos(tx) ?? (0 as Centavos);
+}
 
-  return fromCentavos(amount);
+function txValueReais(tx: Transaction): number {
+  return fromCentavos(txValueCents(tx));
 }
 
 // ─── Existing hook (kept for App.tsx compatibility) ──────────────────────────
@@ -70,7 +71,7 @@ export function useFinancialData(
       const txAccount = tx.account || 'conta_corrente';
       if (activeModule !== 'geral' && txAccount !== activeModule) return;
 
-      const val = new Decimal(Math.abs(txValueReais(tx)));
+      const val = new Decimal(Math.abs(txValueCents(tx)));
       const isIncome = checkIncome(tx.type);
 
       if (isIncome) saldoAcumulado = saldoAcumulado.plus(val);
@@ -88,22 +89,22 @@ export function useFinancialData(
 
     // FIX C: saldo inclui saldo de abertura das contas; patrimônio usa contas reais
     // balance vem em CENTAVOS do useAccounts — converter para reais antes de somar
-    const openingBalance = accounts.reduce((sum, acc) => sum + fromCentavos(acc.balance), 0);
+    const openingBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
 
     let ativos = 0, passivos = 0;
     accounts.forEach(acc => {
-      const v = fromCentavos(acc.balance);
+      const v = acc.balance;
       if (['corrente', 'poupanca', 'investimento'].includes(acc.type)) ativos += v;
-      if (['cartao', 'divida'].includes(acc.type))                     passivos += Math.abs(v);
+      if (['cartao', 'divida'].includes(acc.type)) passivos += Math.abs(v);
     });
 
     return {
       geral: {
-        saldo:     saldoAcumulado.plus(new Decimal(openingBalance)).toNumber(),
-        receitas:  receitasMes.toNumber(),
-        despesas:  despesasMes.toNumber(),
-        patrimonio: ativos - passivos,
-        dividas:   passivos,
+        saldo:      fromCentavos(saldoAcumulado.plus(new Decimal(openingBalance)).toNumber()),
+        receitas:   fromCentavos(receitasMes.toNumber()),
+        despesas:   fromCentavos(despesasMes.toNumber()),
+        patrimonio: fromCentavos(ativos - passivos),
+        dividas:    fromCentavos(passivos),
       }
     };
   }, [transactions, activeModule, currentMonth, currentYear, accounts]);
@@ -114,7 +115,7 @@ export function useFinancialData(
       if (checkExpense(tx.type)) {
         const cat = tx.category || 'Diversos';
         const current = map[cat] ? new Decimal(map[cat]) : new Decimal(0);
-        const val = new Decimal(Math.abs(txValueReais(tx)));
+        const val = new Decimal(Math.abs(txValueCents(tx)));
         map[cat] = current.plus(val).toNumber();
       }
     });
@@ -122,8 +123,8 @@ export function useFinancialData(
     const colors = ['#ef4444','#06b6d4','#a855f7','#f59e0b','#10b981','#3b82f6','#f43f5e'];
     return Object.keys(map).map((name, idx) => ({
       name,
-      value: map[name],
-      color: colors[idx % colors.length]
+      value: fromCentavos(map[name] ?? 0),
+      color: colors[idx % colors.length] ?? colors[0]!
     })).sort((a, b) => b.value - a.value);
   }, [displayedTransactions]);
 
@@ -206,21 +207,21 @@ export function useDashboardData(transactions: Transaction[], loading: boolean):
     let totalExpense = new Decimal(0);
 
     transactions.forEach(tx => {
-      const val = new Decimal(Math.abs(txValueReais(tx)));
+      const val = new Decimal(Math.abs(txValueCents(tx)));
       if (checkIncome(tx.type)) totalBalance = totalBalance.plus(val);
       else                      totalBalance = totalBalance.minus(val);
     });
 
     filtered.forEach(tx => {
-      const val = new Decimal(Math.abs(txValueReais(tx)));
+      const val = new Decimal(Math.abs(txValueCents(tx)));
       if (checkIncome(tx.type)) totalIncome  = totalIncome.plus(val);
       else                      totalExpense = totalExpense.plus(val);
     });
 
     return {
-      totalBalance: totalBalance.toNumber(),
-      totalIncome:  totalIncome.toNumber(),
-      totalExpense: totalExpense.toNumber(),
+      totalBalance: fromCentavos(totalBalance.toNumber()),
+      totalIncome:  fromCentavos(totalIncome.toNumber()),
+      totalExpense: fromCentavos(totalExpense.toNumber()),
     };
   }, [transactions, filtered]);
 
@@ -232,7 +233,7 @@ export function useDashboardData(transactions: Transaction[], loading: boolean):
       if (!d) return;
       const key   = d.toISOString().slice(0, 10);
       const entry = map.get(key) ?? { income: new Decimal(0), expense: new Decimal(0) };
-      const val   = new Decimal(Math.abs(txValueReais(tx)));
+      const val   = new Decimal(Math.abs(txValueCents(tx)));
       if (checkIncome(tx.type)) entry.income  = entry.income.plus(val);
       else                      entry.expense = entry.expense.plus(val);
       map.set(key, entry);
@@ -241,8 +242,8 @@ export function useDashboardData(transactions: Transaction[], loading: boolean):
     return Array.from(map.entries())
       .map(([date, { income, expense }]) => ({
         date,
-        income:  income.toNumber(),
-        expense: expense.toNumber(),
+        income:  fromCentavos(income.toNumber()),
+        expense: fromCentavos(expense.toNumber()),
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [filtered]);
@@ -254,12 +255,12 @@ export function useDashboardData(transactions: Transaction[], loading: boolean):
       if (!checkExpense(tx.type)) return;
       const cat = tx.category || 'Diversos';
       map.set(cat, (map.get(cat) ?? new Decimal(0)).plus(
-        new Decimal(Math.abs(txValueReais(tx)))
+        new Decimal(Math.abs(txValueCents(tx)))
       ));
     });
 
     return Array.from(map.entries())
-      .map(([name, val]) => ({ name, value: val.toNumber() }))
+      .map(([name, val]) => ({ name, value: fromCentavos(val.toNumber()) }))
       .sort((a, b) => b.value - a.value);
   }, [filtered]);
 

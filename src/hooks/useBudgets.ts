@@ -2,11 +2,13 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   collection, query, orderBy, onSnapshot,
   addDoc, deleteDoc, updateDoc, doc,
+  serverTimestamp,
   type Timestamp,
 } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
 import type { Transaction } from '../shared/types/transaction';
-import { isExpense as checkExpense } from '../utils/transactionUtils';
+import { getTransactionAbsCentavos, isExpense as checkExpense } from '../utils/transactionUtils';
+import { fromCentavos, toCentavos } from '../shared/types/money';
 
 // ─── Public Types ─────────────────────────────────────────────────────────────
 
@@ -88,7 +90,7 @@ export function useBudgets(uid: string, transactions: Transaction[]): UseBudgets
           return {
             id:           d.id,
             category:     String(r['category'] ?? ''),
-            targetAmount: Number(r['targetAmount'] ?? 0),
+            targetAmount: fromCentavos(Number(r['targetAmount'] ?? 0)),
             period:       'monthly' as const,
             month:        String(r['month'] ?? currentMonthStr()),
             createdAt:    typeof ts === 'number'
@@ -117,7 +119,7 @@ export function useBudgets(uid: string, transactions: Transaction[]): UseBudgets
             const txMonth   = (tx.date ?? '').slice(0, 7);
             return isExpense && txMonth === budget.month && normCat(tx.category) === normKey;
           })
-          .reduce((sum, tx) => sum + Math.abs(Number(tx.value ?? 0)), 0);
+          .reduce((sum, tx) => sum + fromCentavos(getTransactionAbsCentavos(tx)), 0);
 
         // Zero-division guard: if targetAmount is 0, treat as 1 for ratio calc only
         const safeTarget     = budget.targetAmount > 0 ? budget.targetAmount : 1;
@@ -144,7 +146,13 @@ export function useBudgets(uid: string, transactions: Transaction[]): UseBudgets
   // ── CRUD ──────────────────────────────────────────────────────────────────
   const addBudget = useCallback(async (data: Omit<Budget, 'id' | 'createdAt'>) => {
     if (!uid) return;
-    await addDoc(collection(db, 'users', uid, 'budgets'), { ...data, createdAt: Date.now() });
+    await addDoc(collection(db, 'users', uid, 'budgets'), {
+      ...data,
+      targetAmount: toCentavos(data.targetAmount),
+      schemaVersion: 2,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
   }, [uid]);
 
   const removeBudget = useCallback(async (id: string) => {
@@ -154,7 +162,9 @@ export function useBudgets(uid: string, transactions: Transaction[]): UseBudgets
 
   const updateBudget = useCallback(async (id: string, data: Partial<Omit<Budget, 'id'>>) => {
     if (!uid) return;
-    await updateDoc(doc(db, 'users', uid, 'budgets', id), { ...data });
+    const payload: Record<string, unknown> = { ...data, updatedAt: serverTimestamp() };
+    if (data.targetAmount !== undefined) payload['targetAmount'] = toCentavos(data.targetAmount);
+    await updateDoc(doc(db, 'users', uid, 'budgets', id), payload);
   }, [uid]);
 
   return { budgets, insights, loading, addBudget, removeBudget, updateBudget };

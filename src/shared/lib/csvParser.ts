@@ -1,5 +1,5 @@
 import type { ParsedTransaction } from '../types/transaction';
-import { toCentavos } from '../types/money';
+import { fromCentavos, toCentavos, type Centavos } from '../types/money';
 
 function readFileAsText(file: File, encoding = 'utf-8'): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -27,50 +27,47 @@ function validateDate(raw: string | undefined): string | null {
   const s = raw.replace(/"/g, '').trim();
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-    const d = new Date(s + 'T00:00:00');
-    return isNaN(d.getTime()) ? null : s;
+    const d = new Date(s + 'T00:00:00Z');
+    return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s ? s : null;
   }
   if (/^\d{8}$/.test(s)) {
     const iso = `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`;
-    const d = new Date(iso + 'T00:00:00');
-    return isNaN(d.getTime()) ? null : iso;
+    const d = new Date(iso + 'T00:00:00Z');
+    return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso ? iso : null;
   }
-  const ptBR = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  const ptBR = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
   if (ptBR) {
-    const [, dd, mm, yyyy] = ptBR;
+    const [, dd = '', mm = '', yyyy = ''] = ptBR;
     const iso = `${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
-    const d = new Date(iso + 'T00:00:00');
-    if (!isNaN(d.getTime()) && d.getMonth() + 1 === Number(mm)) return iso;
+    const d = new Date(iso + 'T00:00:00Z');
+    if (!isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso) return iso;
   }
-  const altISO = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  const altISO = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
   if (altISO) {
-    const [, yyyy, mm, dd] = altISO;
+    const [, yyyy = '', mm = '', dd = ''] = altISO;
     const iso = `${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
-    const d = new Date(iso + 'T00:00:00');
-    return isNaN(d.getTime()) ? null : iso;
+    const d = new Date(iso + 'T00:00:00Z');
+    return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso ? iso : null;
   }
   return null;
 }
 
-function parseAmount(raw: string | undefined): number | null {
+function parseAmountCents(raw: string | undefined): Centavos | null {
   if (!raw) return null;
-  let s = raw.replace(/"/g, '').replace(/[R$\s]/g, '').trim();
+  const s = raw.replace(/"/g, '').trim();
   if (!s) return null;
 
   const negative = s.startsWith('-') || s.startsWith('(');
-  s = s.replace(/[()+-]/g, '');
-
-  if (/^\d{1,3}(\.\d{3})+,\d{2}$/.test(s)) {
-    s = s.replace(/\./g, '').replace(',', '.');
-  } else if (/^\d{1,3}(,\d{3})+\.\d{2}$/.test(s)) {
-    s = s.replace(/,/g, '');
-  } else if (s.includes(',') && !s.includes('.')) {
-    s = s.replace(',', '.');
+  try {
+    const cents = toCentavos(s);
+    return negative ? (-Math.abs(cents) as Centavos) : cents;
+  } catch {
+    return null;
   }
+}
 
-  const val = parseFloat(s);
-  if (isNaN(val)) return null;
-  return negative ? -Math.abs(val) : val;
+function normalizeDescription(raw: string): string {
+  return raw.replace(/\s+/g, ' ').trim();
 }
 
 function normalizeHeader(h: string): string {
@@ -127,8 +124,9 @@ export async function getCSVHeaders(file: File): Promise<CSVHeaders> {
   const lines     = text.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 1) throw new Error('Ficheiro CSV vazio.');
 
-  const separator  = detectSeparator(lines[0]);
-  const headers    = splitLine(lines[0], separator);
+  const firstLine = lines[0] ?? '';
+  const separator  = detectSeparator(firstLine);
+  const headers    = splitLine(firstLine, separator);
   const previewRows = lines.slice(1, 4).map(l => splitLine(l, separator));
   const autoMap    = autoDetectColumns(headers);
 
@@ -145,31 +143,30 @@ export async function parseCSVWithMapping(file: File, mapping: ColumnMapping): P
   const lines     = text.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) throw new Error('O CSV está vazio ou não tem dados válidos.');
 
-  const separator = detectSeparator(lines[0]);
+  const firstLine = lines[0] ?? '';
+  const separator = detectSeparator(firstLine);
   const transactions: ParsedTransaction[] = [];
   const errors: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const fields = splitLine(lines[i], separator);
+    const fields = splitLine(lines[i] ?? '', separator);
 
     const date   = validateDate(fields[dateIdx]);
-    const amount = parseAmount(fields[valueIdx]);
-    const desc   = (fields[descIdx] || '').trim() || `Linha ${i + 1}`;
+    const amountCents = parseAmountCents(fields[valueIdx]);
+    const desc   = normalizeDescription(fields[descIdx] || '') || `Linha ${i + 1}`;
 
     if (!date)          { errors.push(`Linha ${i+1}: data inválida ("${fields[dateIdx]}")`); continue; }
-    if (amount === null){ errors.push(`Linha ${i+1}: valor inválido ("${fields[valueIdx]}")`); continue; }
-    if (amount === 0)   { continue; }
-
-    const amountCents = toCentavos(Math.abs(amount));
+    if (amountCents === null){ errors.push(`Linha ${i+1}: valor inválido ("${fields[valueIdx]}")`); continue; }
+    if (amountCents === 0)   { continue; }
 
     transactions.push({
-      id:          crypto.randomUUID(),
+      id:          `csv:${i}:${date}:${Math.abs(amountCents)}:${desc.slice(0, 24)}`,
       date,
       description: desc,
-      value:       Math.abs(amount),
-      value_cents: amountCents,
+      value:       fromCentavos(Math.abs(amountCents)),
+      value_cents: Math.abs(amountCents) as Centavos,
       schemaVersion: 2,
-      type:        amount > 0 ? 'entrada' : 'saida',
+      type:        amountCents > 0 ? 'entrada' : 'saida',
       category:    'Diversos',
       source:      'csv',
     });
@@ -195,8 +192,9 @@ export async function parseCSV(file: File): Promise<ParsedTransaction[]> {
   const lines     = text.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) throw new Error('O CSV está vazio ou não tem dados válidos.');
 
-  const separator = detectSeparator(lines[0]);
-  const rawHeaders = splitLine(lines[0], separator);
+  const firstLine = lines[0] ?? '';
+  const separator = detectSeparator(firstLine);
+  const rawHeaders = splitLine(firstLine, separator);
   const { dateIdx, descIdx, valueIdx } = autoDetectColumns(rawHeaders);
 
   if (dateIdx === -1 || descIdx === -1 || valueIdx === -1) {

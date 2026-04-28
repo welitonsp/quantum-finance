@@ -5,6 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
 import { GeminiService } from '../features/ai-chat/GeminiService';
+import { ALLOWED_CATEGORIES } from '../shared/schemas/financialSchemas';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,12 @@ interface QueueEntry {
 }
 const waiting: QueueEntry[] = [];
 
+function safeCategory(category: string | undefined): string {
+  return ALLOWED_CATEGORIES.includes(category as (typeof ALLOWED_CATEGORIES)[number])
+    ? category!
+    : 'Outros';
+}
+
 // ─── Internal: AI execution via Gemini Cloud Function ────────────────────────
 
 async function runRealAI(description: string): Promise<string> {
@@ -41,8 +48,7 @@ async function runRealAI(description: string): Promise<string> {
       { id: '__single__', description }
     ]);
     const cat = result?.[0]?.category;
-    // FIX P1.7: usa Gemini real via Cloud Function (não mais mock)
-    return (typeof cat === 'string' && cat.trim()) ? cat : 'Outros';
+    return safeCategory(typeof cat === 'string' ? cat.trim() : undefined);
   } catch {
     // Nunca propagar erro — fail-safe é 'Outros'
     return 'Outros';

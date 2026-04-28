@@ -8,7 +8,8 @@ import {
 import { TrendingUp, TrendingDown, Target, BrainCircuit, AlertTriangle } from 'lucide-react';
 import Decimal from 'decimal.js';
 import type { Transaction } from '../../shared/types/transaction';
-import { isExpense } from '../../utils/transactionUtils';
+import { getTransactionAbsCentavos, isExpense } from '../../utils/transactionUtils';
+import { fromCentavos } from '../../shared/types/money';
 
 interface RechartsTooltipProps {
   active?: boolean;
@@ -65,7 +66,7 @@ export default function ReportsDashboard({ transactions, balances }: Props) {
     transactions.forEach(tx => {
       if (isExpense(tx.type)) {
         const cat = tx.category ?? 'Diversos';
-        const val = new Decimal(Math.abs(Number(tx.value)));
+        const val = new Decimal(fromCentavos(getTransactionAbsCentavos(tx)));
         map[cat] = map[cat] ? new Decimal(map[cat]).plus(val).toNumber() : val.toNumber();
       }
     });

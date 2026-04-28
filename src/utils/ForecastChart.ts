@@ -1,6 +1,7 @@
 // src/utils/ForecastChart.ts — forecast engine utility
 import type { Transaction } from '../shared/types/transaction';
-import { isExpense } from './transactionUtils';
+import { getTransactionAbsCentavos, isExpense } from './transactionUtils';
+import { fromCentavos } from '../shared/types/money';
 
 interface ChartDataPoint {
   dia:       string;
@@ -33,7 +34,7 @@ export function calculateForecast(
     const dataTx = new Date(tx.date ?? (tx as Transaction & { createdAt?: string }).createdAt ?? '');
     const dia    = dataTx.getDate();
     if (dia >= 1 && dia <= diasNoMes) {
-      gastosPorDia[dia - 1] = (gastosPorDia[dia - 1] ?? 0) + Number(tx.value ?? 0);
+      gastosPorDia[dia - 1] = (gastosPorDia[dia - 1] ?? 0) + getTransactionAbsCentavos(tx);
     }
   });
 
@@ -44,7 +45,7 @@ export function calculateForecast(
     const dia = i + 1;
     if (dia <= diaAtual) {
       acumuladoReal += gastosPorDia[i] ?? 0;
-      chartData.push({ dia: String(dia), real: Number(acumuladoReal.toFixed(2)), projetado: null });
+      chartData.push({ dia: String(dia), real: fromCentavos(Math.round(acumuladoReal)), projetado: null });
     } else {
       chartData.push({ dia: String(dia), real: null, projetado: null });
     }
@@ -56,18 +57,18 @@ export function calculateForecast(
   let acumuladoProjetado = acumuladoReal;
   if (isCurrentMonth && diaAtual < diasNoMes) {
     const lastPoint = chartData[diaAtual - 1];
-    if (lastPoint) lastPoint.projetado = Number(acumuladoReal.toFixed(2));
+    if (lastPoint) lastPoint.projetado = fromCentavos(Math.round(acumuladoReal));
     for (let i = diaAtual; i < diasNoMes; i++) {
       acumuladoProjetado += burnRateDiario;
       const point = chartData[i];
-      if (point) point.projetado = Number(acumuladoProjetado.toFixed(2));
+      if (point) point.projetado = fromCentavos(Math.round(acumuladoProjetado));
     }
   }
 
   return {
     dadosGrafico:  chartData,
-    gastoAtual:    acumuladoReal,
-    projecaoFinal,
-    ritmoDiario:   burnRateDiario,
+    gastoAtual:    fromCentavos(Math.round(acumuladoReal)),
+    projecaoFinal: fromCentavos(Math.round(projecaoFinal)),
+    ritmoDiario:   fromCentavos(Math.round(burnRateDiario)),
   };
 }
