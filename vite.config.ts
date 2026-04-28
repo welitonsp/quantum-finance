@@ -3,6 +3,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+function normalizePath(id: string): string {
+  return id.replace(/\\/g, '/');
+}
+
 export default defineConfig({
   plugins: [
     react(),
@@ -42,12 +46,42 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom'],
-          'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/functions'],
-          'vendor-charts': ['chart.js', 'react-chartjs-2', 'recharts'],
-          'vendor-utils': ['decimal.js', 'zod', '@tanstack/react-query'],
-          'vendor-pdfjs': ['pdfjs-dist'],
+        manualChunks(id) {
+          const normalizedId = normalizePath(id);
+
+          if (!normalizedId.includes('/node_modules/')) {
+            return undefined;
+          }
+
+          if (normalizedId.includes('/node_modules/firebase/')) {
+            return 'vendor-firebase';
+          }
+
+          if (
+            normalizedId.includes('/node_modules/recharts/') ||
+            normalizedId.includes('/node_modules/chart.js/') ||
+            normalizedId.includes('/node_modules/react-chartjs-2/') ||
+            normalizedId.includes('/node_modules/d3-')
+          ) {
+            return 'vendor-charts';
+          }
+
+          if (
+            normalizedId.includes('/node_modules/decimal.js') ||
+            normalizedId.includes('/node_modules/zod/') ||
+            normalizedId.includes('/node_modules/@tanstack/react-query/')
+          ) {
+            return 'vendor-utils';
+          }
+
+          if (
+            normalizedId.includes('/node_modules/framer-motion/') ||
+            normalizedId.includes('/node_modules/lucide-react/')
+          ) {
+            return 'vendor-ui';
+          }
+
+          return undefined;
         },
       },
     },
