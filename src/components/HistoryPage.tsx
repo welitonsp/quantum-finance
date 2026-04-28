@@ -4,6 +4,8 @@ import { ListChecks, TrendingUp, TrendingDown, Scale, type LucideIcon } from 'lu
 import TransactionsManager from '../features/transactions/TransactionsManager';
 import type { Transaction } from '../shared/types/transaction';
 import type { BulkUpdate } from '../hooks/useTransactions';
+import { getTransactionAbsCentavos, isIncome } from '../utils/transactionUtils';
+import { fromCentavos } from '../shared/types/money';
 
 interface StatPillProps {
   icon: LucideIcon;
@@ -63,9 +65,9 @@ export default function HistoryPage({
   const stats = useMemo(() => {
     let totalIn = 0, totalOut = 0;
     transactions.forEach(tx => {
-      const v = (Number(tx.value) || 0) / 100;
-      if (tx.type === 'entrada' || tx.type === 'receita') totalIn  += v;
-      else                                                  totalOut += v;
+      const v = fromCentavos(getTransactionAbsCentavos(tx));
+      if (isIncome(tx.type)) totalIn += v;
+      else                   totalOut += v;
     });
     return { count: transactions.length, totalIn, totalOut, net: totalIn - totalOut };
   }, [transactions]);

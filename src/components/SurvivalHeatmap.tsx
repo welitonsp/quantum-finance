@@ -3,7 +3,8 @@ import { motion } from 'framer-motion';
 import { Flame } from 'lucide-react';
 import { usePrivacy } from '../contexts/PrivacyContext';
 import type { Transaction } from '../shared/types/transaction';
-import { isExpense } from '../utils/transactionUtils';
+import { getTransactionAbsCentavos, isExpense } from '../utils/transactionUtils';
+import { fromCentavos } from '../shared/types/money';
 
 interface RiskLevel {
   key: string;
@@ -104,7 +105,7 @@ export default function SurvivalHeatmap({ transactions, currentMonth, currentYea
       const d = new Date((tx.date ?? tx.createdAt) as string);
       if (d.getMonth() + 1 !== currentMonth || d.getFullYear() !== currentYear) return;
       const key = d.getDate();
-      spendByDay[key] = (spendByDay[key] ?? 0) + Math.abs(Number(tx.value ?? 0));
+      spendByDay[key] = (spendByDay[key] ?? 0) + fromCentavos(getTransactionAbsCentavos(tx));
     });
 
     let total = 0;

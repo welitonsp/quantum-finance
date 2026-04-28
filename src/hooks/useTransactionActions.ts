@@ -31,11 +31,12 @@ export function useTransactionActions({
 
   const handleSaveTransaction = useCallback(async (data: Partial<Transaction>) => {
     try {
-      const payload = {
-        ...data,
-        value_cents: data.value_cents ?? (data.value !== undefined ? toCentavos(data.value) : undefined),
-        schemaVersion: data.schemaVersion ?? 2,
-      };
+      const payload: Partial<Transaction> = { ...data, schemaVersion: data.schemaVersion ?? 2 };
+      if (data.value_cents !== undefined) {
+        payload.value_cents = data.value_cents;
+      } else if (data.value !== undefined) {
+        payload.value_cents = toCentavos(data.value);
+      }
       if (transactionToEdit) {
         await update(transactionToEdit.id, payload);
         toast.success('Movimentação atualizada com sucesso!');

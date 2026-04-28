@@ -3,6 +3,8 @@ import { Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import Decimal from 'decimal.js';
 import type { Transaction } from '../../shared/types/transaction';
+import { getTransactionAbsCentavos } from '../../utils/transactionUtils';
+import { fromCentavos } from '../../shared/types/money';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -23,7 +25,7 @@ export default function CategoryPieChart({ transactions }: Props) {
   transactions.forEach(t => {
     const category = t.category ?? 'Sem categoria';
     const current  = categoryTotals[category] ? new Decimal(categoryTotals[category]) : new Decimal(0);
-    categoryTotals[category] = current.plus(new Decimal(t.value ?? 0)).toNumber();
+    categoryTotals[category] = current.plus(new Decimal(fromCentavos(getTransactionAbsCentavos(t)))).toNumber();
   });
 
   const data = {

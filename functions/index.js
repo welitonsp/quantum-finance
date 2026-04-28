@@ -23,6 +23,11 @@ const GEMINI_API_KEY  = defineSecret('GEMINI_API_KEY');
 const DAILY_AI_LIMIT  = 50;
 const MAX_BATCH_SIZE  = 100;
 const MAX_PROMPT_LEN  = 4_000;
+const ALLOWED_CATEGORIES = new Set([
+  'Alimentação', 'Transporte', 'Assinaturas', 'Educação', 'Saúde',
+  'Moradia', 'Impostos/Taxas', 'Lazer', 'Vestuário', 'Salário',
+  'Freelance', 'Investimento', 'Diversos', 'Outros', 'Importado',
+]);
 
 // ─── PII Masker (server-side second layer of defense) ────────────────────────
 
@@ -46,6 +51,25 @@ function maskPII(text) {
     .replace(PIX_PARA_RE, 'PIX ENVIADO')
     .replace(PIX_DE_RE,   'PIX RECEBIDO')
     .replace(TRANSF_RE,   'TRANSFERENCIA BANCARIA');
+}
+
+function toSafeCents(value) {
+  if (Number.isSafeInteger(value)) return Math.abs(value);
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.abs(Math.round(value * 100));
+  return 0;
+}
+
+function txCents(tx = {}) {
+  if (Number.isSafeInteger(tx.value_cents)) return Math.abs(tx.value_cents);
+  return toSafeCents(tx.value);
+}
+
+function centsToReais(cents) {
+  return (Number.isSafeInteger(cents) ? cents : 0) / 100;
+}
+
+function safeCategory(category) {
+  return ALLOWED_CATEGORIES.has(category) ? category : 'Outros';
 }
 
 // ─── Persistent rate limiting (Firestore transaction — survives cold starts) ──
@@ -110,12 +134,12 @@ function groupByCategory(transactions = []) {
   transactions.forEach(tx => {
     if (tx.type !== 'saida' && tx.type !== 'despesa') return;
     const cat = tx.category || 'Outros';
-    map[cat] = (map[cat] || 0) + Math.abs(Number(tx.value || 0));
+    map[cat] = (map[cat] || 0) + txCents(tx);
   });
   return Object.entries(map)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 6)
-    .map(([cat, total]) => `- ${cat}: R$ ${total.toFixed(2)}`)
+    .map(([cat, total]) => `- ${safeCategory(cat)}: R$ ${centsToReais(total).toFixed(2)}`)
     .join('\n');
 }
 
@@ -129,12 +153,12 @@ function buildBurnRate(transactions = [], month, year) {
       const d = new Date(tx.date || '');
       return d.getMonth() + 1 === month && d.getFullYear() === year;
     })
-    .reduce((a, tx) => a + Math.abs(Number(tx.value || 0)), 0);
-  const ritmo = dia > 0 ? despesas / dia : 0;
+    .reduce((a, tx) => a + txCents(tx), 0);
+  const ritmo = dia > 0 ? Math.round(despesas / dia) : 0;
   return {
-    gastoAtual:    despesas.toFixed(2),
-    ritmoDiario:   ritmo.toFixed(2),
-    projecaoFinal: (ritmo * diasNoMes).toFixed(2),
+    gastoAtual:    centsToReais(despesas).toFixed(2),
+    ritmoDiario:   centsToReais(ritmo).toFixed(2),
+    projecaoFinal: centsToReais(ritmo * diasNoMes).toFixed(2),
     diasRestantes: diasNoMes - dia,
     mesDecorrido:  Math.round((dia / diasNoMes) * 100),
   };
@@ -167,7 +191,7 @@ function buildFinancialContext(financialContext = {}) {
 
   const totalRec = (recurringTasks || [])
     .filter(t => t.active !== false && t.type !== 'entrada')
-    .reduce((a, t) => a + Math.abs(Number(t.value || 0)), 0);
+    .reduce((a, t) => a + txCents(t), 0);
 
   const safeTx = (transactions || []).slice(0, 50).map(t => ({
     ...t, description: maskPII(t.description),
@@ -183,13 +207,13 @@ Gasto atual: R$ ${burn.gastoAtual} | Ritmo: R$ ${burn.ritmoDiario}/dia
 Projeção fim do mês: R$ ${burn.projecaoFinal} | Dias restantes: ${burn.diasRestantes} | Mês: ${burn.mesDecorrido}%
 
 === RECORRENTES ===
-Total fixo: R$ ${totalRec.toFixed(2)} | Risco: ${entradas > 0 ? ((totalRec / entradas) * 100).toFixed(1) : 'N/A'}% das receitas
+Total fixo: R$ ${centsToReais(totalRec).toFixed(2)} | Risco: ${entradas > 0 ? ((centsToReais(totalRec) / entradas) * 100).toFixed(1) : 'N/A'}% das receitas
 
 === TOP CATEGORIAS DE DESPESA ===
 ${groupByCategory(transactions)}
 
 === ÚLTIMAS TRANSAÇÕES (PII anonimizada) ===
-${safeTx.map(t => `[${t.date}] ${t.type === 'entrada' ? '+' : '-'} R$ ${Number(t.value || 0).toFixed(2)} | ${t.category} | ${t.description}`).join('\n')}
+${safeTx.map(t => `[${t.date}] ${t.type === 'entrada' ? '+' : '-'} R$ ${centsToReais(txCents(t)).toFixed(2)} | ${safeCategory(t.category)} | ${t.description}`).join('\n')}
 `;
 }
 
@@ -228,14 +252,14 @@ exports.categorizeTransactionsBatch = onCall(
       .map(t => ({
         id:          String(t.id).slice(0, 128),
         description: maskPII(String(t.description || '').slice(0, 256)),
-        value:       Number(t.value) || 0,
+        value_cents: txCents(t),
       }));
 
     if (!safeRows.length) return [];
 
     const prompt = `Classifique cada transação em UMA das categorias: Alimentação, Transporte, Assinaturas, Educação, Saúde, Moradia, Impostos/Taxas, Lazer, Vestuário, Salário, Freelance, Investimento, Diversos, Outros.
 Responda APENAS um array JSON: [{"id":"id","category":"Categoria"}].
-Transações:\n${safeRows.map(t => `ID: ${t.id} | "${t.description}" | R$ ${t.value}`).join('\n')}`;
+Transações:\n${safeRows.map(t => `ID: ${t.id} | "${t.description}" | R$ ${centsToReais(t.value_cents).toFixed(2)}`).join('\n')}`;
 
     try {
       let text = await callGemini(GEMINI_API_KEY.value(), prompt, { jsonMode: true });
@@ -251,8 +275,14 @@ Transações:\n${safeRows.map(t => `ID: ${t.id} | "${t.description}" | R$ ${t.va
         return safeRows.map(t => ({ id: t.id, category: 'Outros' }));
       }
 
+      const byId = new Map(Array.isArray(parsed)
+        ? parsed
+            .filter(item => item && typeof item.id === 'string')
+            .map(item => [String(item.id), safeCategory(String(item.category || 'Outros'))])
+        : []);
+
       void writeStructuredLog(uid, 'BATCH', `categorized ${safeRows.length} transactions`);
-      return Array.isArray(parsed) ? parsed : [];
+      return safeRows.map(t => ({ id: t.id, category: byId.get(t.id) || 'Outros' }));
     } catch (e) {
       console.error('[categorizeTransactionsBatch] Gemini call failed:', e.message);
       void writeStructuredLog(uid, 'ERROR', `batch categorization failed: ${e.message}`);

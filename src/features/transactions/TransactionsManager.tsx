@@ -16,7 +16,8 @@ import type { Transaction } from '../../shared/types/transaction';
 import type { AllowedCategory } from '../../shared/schemas/financialSchemas';
 import type { BulkUpdate } from '../../hooks/useTransactions';
 import { auth } from '../../shared/api/firebase/auth';
-import { isIncome as checkIncome, isExpense as checkExpense } from '../../utils/transactionUtils';
+import { getTransactionAbsCentavos, isIncome as checkIncome, isExpense as checkExpense } from '../../utils/transactionUtils';
+import { fromCentavos } from '../../shared/types/money';
 import AuditTimeline from '../../components/AuditTimeline';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -43,12 +44,12 @@ interface Props {
   onEdit: (tx: Transaction) => void;
   onDeleteRequest: (tx: Transaction) => void;
   onBatchDelete: (ids: string[]) => Promise<void>;
-  onBulkUpdate?: (ids: string[], updates: BulkUpdate) => Promise<void>;
-  isBulkUpdating?: boolean;
-  undoLastBulkUpdate?: () => Promise<void>;
-  isUndoing?: boolean;
-  hasUndoSnapshot?: boolean;
-  clearBulkSnapshot?: () => void;
+  onBulkUpdate?: ((ids: string[], updates: BulkUpdate) => Promise<void>) | undefined;
+  isBulkUpdating?: boolean | undefined;
+  undoLastBulkUpdate?: (() => Promise<void>) | undefined;
+  isUndoing?: boolean | undefined;
+  hasUndoSnapshot?: boolean | undefined;
+  clearBulkSnapshot?: (() => void) | undefined;
   /** UID do utilizador autenticado. Fallback automático para auth.currentUser. */
   uid?: string;
 }
@@ -196,7 +197,7 @@ const TransactionRow = React.memo(({ tx, isSelected, onToggle, onEdit, onDelete 
       <p className={`font-mono font-black text-sm shrink-0 ${
         isIncome ? 'text-quantum-accent' : 'text-quantum-fg'
       }`}>
-        {isIncome ? '+' : '-'}{formatCurrency(Math.abs(Number(tx.value ?? 0)))}
+        {isIncome ? '+' : '-'}{formatCurrency(fromCentavos(getTransactionAbsCentavos(tx)))}
       </p>
 
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
@@ -292,8 +293,8 @@ export default function TransactionsManager({
     return [...list].sort((a, b) => {
       if (sortBy === 'date_desc')  return (b.date ?? '').localeCompare(a.date ?? '');
       if (sortBy === 'date_asc')   return (a.date ?? '').localeCompare(b.date ?? '');
-      if (sortBy === 'value_desc') return Math.abs(Number(b.value)) - Math.abs(Number(a.value));
-      if (sortBy === 'value_asc')  return Math.abs(Number(a.value)) - Math.abs(Number(b.value));
+      if (sortBy === 'value_desc') return getTransactionAbsCentavos(b) - getTransactionAbsCentavos(a);
+      if (sortBy === 'value_asc')  return getTransactionAbsCentavos(a) - getTransactionAbsCentavos(b);
       if (sortBy === 'cat')        return (a.category ?? '').localeCompare(b.category ?? '');
       return 0;
     });
@@ -311,7 +312,7 @@ export default function TransactionsManager({
       map.get(key)!.push(tx);
     });
 
-    let keys = [...map.keys()];
+    const keys = [...map.keys()];
     if (groupBy === 'date')     keys.sort((a, b) => b.localeCompare(a));
     if (groupBy === 'category') keys.sort();
 
@@ -325,7 +326,7 @@ export default function TransactionsManager({
   const stats = useMemo(() => {
     let totalIn = 0, totalOut = 0;
     filtered.forEach(tx => {
-      const v = Math.abs(Number(tx.value ?? 0));
+      const v = fromCentavos(getTransactionAbsCentavos(tx));
       if (checkIncome(tx.type)) totalIn  += v;
       else                      totalOut += v;
     });
@@ -343,7 +344,8 @@ export default function TransactionsManager({
 
   const toggleOne = useCallback((id: string) => setSelected(s => {
     const n = new Set(s);
-    n.has(id) ? n.delete(id) : n.add(id);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
     return n;
   }), []);
 
@@ -881,8 +883,8 @@ export default function TransactionsManager({
             {groups.map(group => (
               <div key={group.key || 'ungrouped'}>
                 {group.key && (() => {
-                  const gIn  = group.items.reduce((a, t) => checkIncome(t.type)  ? a + Math.abs(Number(t.value ?? 0)) : a, 0);
-                  const gOut = group.items.reduce((a, t) => checkExpense(t.type) ? a + Math.abs(Number(t.value ?? 0)) : a, 0);
+                  const gIn  = group.items.reduce((a, t) => checkIncome(t.type)  ? a + fromCentavos(getTransactionAbsCentavos(t)) : a, 0);
+                  const gOut = group.items.reduce((a, t) => checkExpense(t.type) ? a + fromCentavos(getTransactionAbsCentavos(t)) : a, 0);
                   return (
                     <GroupHeader
                       label={group.label}

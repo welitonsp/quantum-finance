@@ -1,7 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import type { ParsedTransaction } from '../types/transaction';
-import { toCentavos } from '../types/money';
+import { fromCentavos, toCentavos, type Centavos } from '../types/money';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
@@ -41,12 +41,12 @@ export const parsePDF = async (file: File, password: string | null = null): Prom
 
       const vencimentoMatch = firstPageText.match(/Vencimento:\s*\d{2}\/(\d{2})\/(\d{4})/i);
       if (vencimentoMatch) {
-        faturaMonth = parseInt(vencimentoMatch[1], 10);
-        faturaYear  = parseInt(vencimentoMatch[2], 10);
+        faturaMonth = parseInt(vencimentoMatch[1] ?? String(faturaMonth), 10);
+        faturaYear  = parseInt(vencimentoMatch[2] ?? String(faturaYear), 10);
       }
     } catch { console.warn('Erro ao ler cabeçalho.'); }
 
-    const regexTransacao = /(?:^|[^0-9])([0-3]\d\/[0-1]\d(?:\/\d{4})?)\s+(.+?)\s+(-?\s?\d{1,3}(?:[.\s]\d{3})*,\d{2})\s*([DC\-])?(?:\s.*)?$/i;
+    const regexTransacao = /(?:^|[^0-9])([0-3]\d\/[0-1]\d(?:\/\d{4})?)\s+(.+?)\s+(-?\s?\d{1,3}(?:[.\s]\d{3})*,\d{2})\s*([DC-])?(?:\s.*)?$/i;
     const transactions: ParsedTransaction[] = [];
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
@@ -57,20 +57,20 @@ export const parsePDF = async (file: File, password: string | null = null): Prom
 
       const items = textContent.items.filter(item => 'str' in item && item.str && item.str.trim());
 
-      const leftCol  = items.filter(i => ('transform' in i) && i.transform[4] < midX);
-      const rightCol = items.filter(i => ('transform' in i) && i.transform[4] >= midX);
+      const leftCol  = items.filter(i => ('transform' in i) && ((i.transform[4] ?? 0) < midX));
+      const rightCol = items.filter(i => ('transform' in i) && ((i.transform[4] ?? 0) >= midX));
 
       type TextItem = { str: string; transform: number[] };
 
       const buildLines = (colItems: typeof items): string[] => {
         const sorted = (colItems as TextItem[]).sort((a, b) =>
-          Math.round(b.transform[5]) - Math.round(a.transform[5]) || a.transform[4] - b.transform[4]
+          Math.round(b.transform[5] ?? 0) - Math.round(a.transform[5] ?? 0) || (a.transform[4] ?? 0) - (b.transform[4] ?? 0)
         );
         const lines: string[] = [];
         let currentLine: string[] = [];
         let lastY: number | null = null;
         for (const item of sorted) {
-          const y = Math.round(item.transform[5]);
+          const y = Math.round(item.transform[5] ?? 0);
           if (lastY === null || Math.abs(y - lastY) <= 6) currentLine.push(item.str.trim());
           else { lines.push(currentLine.join(' ')); currentLine = [item.str.trim()]; }
           lastY = y;
@@ -85,30 +85,38 @@ export const parsePDF = async (file: File, password: string | null = null): Prom
         const match = line.match(regexTransacao);
         if (!match) continue;
 
-        const [, dataRaw, descricao, valorRaw, sufixo] = match;
-        const valorNum = parseFloat(
-          valorRaw.replace(/\s/g, '').replace(/\./g, '').replace(',', '.').replace(/^-/, '')
-        );
+        const [, dataRaw = '', descricao = '', valorRaw = '', sufixo] = match;
         const isNegative = valorRaw.includes('-') || sufixo === 'D' || sufixo === '-';
-
-        if (isNaN(valorNum) || descricao.length < 3) continue;
-        const valueCents = toCentavos(valorNum);
+        let valueCents: Centavos;
+        try {
+          valueCents = toCentavos(valorRaw.replace(/\s/g, '').replace(/^-/, ''));
+        } catch {
+          continue;
+        }
+        if (valueCents === 0 || descricao.length < 3) continue;
+        valueCents = Math.abs(valueCents) as Centavos;
 
         const dParts = dataRaw.split('/');
-        let ano: string | number = dParts.length === 3 ? dParts[2] : faturaYear;
+        let ano: string | number = dParts.length === 3 ? dParts[2] ?? faturaYear : faturaYear;
         if (dParts.length === 2 && dParts[1] === '12' && faturaMonth <= 3) ano = faturaYear - 1;
         else if (dParts.length === 2 && dParts[1] === '01' && faturaMonth >= 11) ano = faturaYear + 1;
+        const monthPart = dParts[1] ?? '';
+        const dayPart = dParts[0] ?? '';
+        const date = `${ano}-${monthPart.padStart(2, '0')}-${dayPart.padStart(2, '0')}`;
+        const parsedDate = new Date(`${date}T00:00:00Z`);
+        if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date) continue;
 
         transactions.push({
-          id:          crypto.randomUUID(),
-          date:        `${ano}-${dParts[1].padStart(2, '0')}-${dParts[0].padStart(2, '0')}`,
+          id:          `pdf:${pageNum}:${transactions.length}:${date}:${valueCents}`,
+          date,
           description: descricao.substring(0, 50).trim(),
-          value:       valorNum,
+          value:       fromCentavos(valueCents),
           value_cents: valueCents,
           schemaVersion: 2,
           type:        isCartao ? (isNegative ? 'entrada' : 'saida') : (isNegative ? 'saida' : 'entrada'),
           account:     isCartao ? 'cartao_credito' : 'conta_corrente',
           category:    'Importado',
+          source:      'pdf',
         });
       }
     }

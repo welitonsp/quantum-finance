@@ -1,0 +1,47 @@
+name: Security
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Secret Hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Block real env files
+        run: |
+          if git ls-files --error-unmatch .env >/dev/null 2>&1; then
+            echo "::error::.env real está versionado. Remova do Git e mantenha apenas .env.example."
+            exit 1
+          fi
+
+      - name: Block public Gemini env variable
+        run: |
+          pattern="VITE_""GEMINI_API_KEY"
+          matches="$(git grep -n -- "$pattern" -- ':!node_modules/**' ':!dist/**' ':!coverage/**' || true)"
+          if [ -n "$matches" ]; then
+            echo "$matches"
+            echo "::error::Chave Gemini pública com prefixo VITE encontrada em arquivos versionáveis."
+            exit 1
+          fi
+
+      - name: Scan common secret patterns
+        run: |
+          matches="$(git grep -n -E \
+            '(AIza[0-9A-Za-z_-]{35}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|OPENAI_API_KEY|FIREBASE_PRIVATE_KEY)' \
+            -- ':!node_modules/**' ':!dist/**' ':!coverage/**' ':!.github/workflows/security.yml' ':!package-lock.json' || true)"
+          if [ -n "$matches" ]; then
+            echo "$matches"
+            echo "::error::Possível segredo encontrado em arquivo versionável."
+            exit 1
+          fi

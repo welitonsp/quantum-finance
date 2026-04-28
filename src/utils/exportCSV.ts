@@ -1,4 +1,6 @@
 import type { Transaction } from '../shared/types/transaction';
+import { getTransactionAbsCentavos } from './transactionUtils';
+import { fromCentavos } from '../shared/types/money';
 
 /** Escapa valor para célula CSV: envolve em aspas se contém vírgula, aspas ou quebra de linha. */
 function escapeCSV(val: unknown): string {
@@ -13,8 +15,7 @@ export function transactionsToCSV(transactions: Transaction[]): string {
   const rows = transactions.map(tx => [
     tx.date ?? '',
     tx.description ?? '',
-    // Valor em reais (vinha em centavos no Firestore, mas useTransactions já normaliza)
-    (Math.abs(Number(tx.value ?? 0)) / 100).toFixed(2).replace('.', ','),
+    fromCentavos(getTransactionAbsCentavos(tx)).toFixed(2).replace('.', ','),
     tx.type === 'entrada' || tx.type === 'receita' ? 'Receita' : 'Despesa',
     tx.category ?? 'Outros',
     tx.account ?? '',

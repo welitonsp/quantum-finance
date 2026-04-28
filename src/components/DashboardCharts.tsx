@@ -144,7 +144,7 @@ export default function DashboardCharts({ timelineData, categoryData }: Props) {
                 {categoryData.map((_, idx) => (
                   <Cell
                     key={`cell-${idx}`}
-                    fill={pieColors[idx % pieColors.length]}
+                    fill={pieColors[idx % pieColors.length] ?? colors.success}
                     stroke={colors.card}
                     strokeWidth={2}
                   />

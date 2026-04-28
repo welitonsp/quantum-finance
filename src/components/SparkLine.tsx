@@ -1,6 +1,7 @@
 import { useMemo, memo } from 'react';
 import type { Transaction } from '../shared/types/transaction';
-import { isIncome } from '../utils/transactionUtils';
+import { getTransactionAbsCentavos, isIncome } from '../utils/transactionUtils';
+import { fromCentavos } from '../shared/types/money';
 
 interface Props {
   transactions: Transaction[];
@@ -17,7 +18,10 @@ export const SparkLine = memo(({ transactions, months = 6 }: Props) => {
     (transactions || []).forEach(t => {
       const d = new Date(String(t.date || t.createdAt));
       const b = buckets.find(b => b.m === d.getMonth() && b.y === d.getFullYear());
-      if (b) b.net += isIncome(t.type) ? Math.abs(t.value || 0) : -Math.abs(t.value || 0);
+      if (b) {
+        const value = fromCentavos(getTransactionAbsCentavos(t));
+        b.net += isIncome(t.type) ? value : -value;
+      }
     });
     return buckets.map(b => b.net);
   }, [transactions, months]);
@@ -33,8 +37,10 @@ export const SparkLine = memo(({ transactions, months = 6 }: Props) => {
   }).join(' ');
 
   const lx = W;
-  const ly = H - 4 - ((pts[pts.length - 1] - mn) / rng) * (H - 8);
-  const rising = pts.length > 1 ? pts[pts.length - 1] >= pts[pts.length - 2] : true;
+  const last = pts[pts.length - 1] ?? 0;
+  const prev = pts[pts.length - 2] ?? last;
+  const ly = H - 4 - ((last - mn) / rng) * (H - 8);
+  const rising = pts.length > 1 ? last >= prev : true;
   const C = rising ? '#10b981' : '#f87171';
 
   return (

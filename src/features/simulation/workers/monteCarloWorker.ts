@@ -55,11 +55,21 @@ export interface MonteCarloFailure {
 
 export type MonteCarloResponse = MonteCarloSuccess | MonteCarloFailure;
 
+// ─── Gerador determinístico — evita Math.random em simulações financeiras ────
+function makePrng(seed: number): () => number {
+  let state = seed % 2147483647;
+  if (state <= 0) state += 2147483646;
+  return () => {
+    state = (state * 16807) % 2147483647;
+    return state / 2147483647;
+  };
+}
+
 // ─── Gerador Gaussiano — Transformação Box-Muller ────────────────────────────
-function gaussianRandom(): number {
+function gaussianRandom(rnd: () => number): number {
   let u = 0, v = 0;
-  while (u === 0) u = Math.random();
-  while (v === 0) v = Math.random();
+  while (u === 0) u = rnd();
+  while (v === 0) v = rnd();
   return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
 }
 
@@ -85,6 +95,7 @@ function runMonteCarloSimulation(config: MonteCarloRequest): Omit<MonteCarloSucc
   const receitaAjustada = Math.round(receitaMensalCents  * salarioMultiplier);
   const despFixaAjust   = Math.round(despesaFixaCents    * corteMultiplier);
   const mediaVarAjust   = Math.round(mediaVariavelCents  * corteMultiplier);
+  const rnd             = makePrng(20260428);
 
   const paths: Int32Array[] = [];
 
@@ -98,7 +109,7 @@ function runMonteCarloSimulation(config: MonteCarloRequest): Omit<MonteCarloSucc
       const despFixaInfl = Math.round(despFixaAjust  * infFator);
       const mediaVarInfl = Math.round(mediaVarAjust  * infFator);
 
-      const ruido     = gaussianRandom();
+      const ruido     = gaussianRandom(rnd);
       const variaveis = Math.max(0, Math.round(mediaVarInfl + ruido * desvioVariavelCents));
 
       saldo = saldo + receitaAjustada - despFixaInfl - variaveis;
@@ -112,16 +123,16 @@ function runMonteCarloSimulation(config: MonteCarloRequest): Omit<MonteCarloSucc
   const sortBuffer = new Int32Array(iteracoes);
 
   for (let m = 0; m <= meses; m++) {
-    for (let i = 0; i < iteracoes; i++) sortBuffer[i] = paths[i][m];
+    for (let i = 0; i < iteracoes; i++) sortBuffer[i] = paths[i]?.[m] ?? 0;
     sortBuffer.sort();
 
     const idxP10 = Math.floor(iteracoes * 0.10);
     const idxP50 = Math.floor(iteracoes * 0.50);
     const idxP90 = Math.floor(iteracoes * 0.90);
 
-    const p10 = sortBuffer[idxP10];
-    const p50 = sortBuffer[idxP50];
-    const p90 = sortBuffer[idxP90];
+    const p10 = sortBuffer[idxP10] ?? 0;
+    const p50 = sortBuffer[idxP50] ?? 0;
+    const p90 = sortBuffer[idxP90] ?? 0;
 
     chartData.push({
       month:      m,
@@ -135,16 +146,17 @@ function runMonteCarloSimulation(config: MonteCarloRequest): Omit<MonteCarloSucc
 
   let sobreviveram = 0;
   for (let i = 0; i < iteracoes; i++) {
-    if (paths[i][meses] > 0) sobreviveram++;
+    if ((paths[i]?.[meses] ?? 0) > 0) sobreviveram++;
   }
   const probabilidadeSobrevivencia = Math.round((sobreviveram / iteracoes) * 100);
+  const finalPoint = chartData[meses] ?? { p10: 0, p50: 0, p90: 0 };
 
   return {
     chartData,
     probabilidadeSobrevivencia,
-    p10Final: chartData[meses].p10,
-    p50Final: chartData[meses].p50,
-    p90Final: chartData[meses].p90,
+    p10Final: finalPoint.p10,
+    p50Final: finalPoint.p50,
+    p90Final: finalPoint.p90,
     meses,
   };
 }

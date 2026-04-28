@@ -5,7 +5,7 @@ import {
 import { db } from '../shared/api/firebase/index';
 import { toCentavos, fromCentavos } from '../shared/schemas/financialSchemas';
 import type { CreditCard, CreditCardWithMetrics, CardMetrics, Transaction } from '../shared/types/transaction';
-import { isExpense } from '../utils/transactionUtils';
+import { getTransactionAbsCentavos, isExpense } from '../utils/transactionUtils';
 
 function calcCardMetrics(card: CreditCard, transactions: Transaction[]): CardMetrics {
   const hoje     = new Date();
@@ -27,7 +27,7 @@ function calcCardMetrics(card: CreditCard, transactions: Transaction[]): CardMet
       const d = new Date(String(tx.date || tx.createdAt));
       return d >= inicioFatura && d <= fimFatura;
     })
-    .reduce((acc, tx) => acc + Math.abs(Number(tx.value || 0)), 0);
+    .reduce((acc, tx) => acc + fromCentavos(getTransactionAbsCentavos(tx)), 0);
 
   const limitVal    = fromCentavos(card.limit);
   const disponivel  = Math.max(limitVal - faturaAtual, 0);
@@ -96,6 +96,8 @@ export function useCreditCards(uid: string, transactions: Transaction[] = []): U
     const docRef = await addDoc(ref, {
       ...data,
       limit:     toCentavos(data.limit),
+      active:    data.active ?? true,
+      schemaVersion: 2,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -106,6 +108,7 @@ export function useCreditCards(uid: string, transactions: Transaction[] = []): U
     if (!uid || !id) return;
     const payload: Record<string, unknown> = { ...data, updatedAt: serverTimestamp() };
     if (data.limit !== undefined) payload['limit'] = toCentavos(data.limit);
+    payload['schemaVersion'] = 2;
     await updateDoc(doc(db, 'users', uid, 'creditCards', id), payload);
   }, [uid]);
 

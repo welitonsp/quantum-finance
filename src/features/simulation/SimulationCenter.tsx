@@ -18,7 +18,8 @@ import { usePrivacy } from '../../contexts/PrivacyContext';
 import { useNavigation } from '../../contexts/NavigationContext';
 import type { Transaction } from '../../shared/types/transaction';
 import type { ModuleBalances } from '../../shared/types/transaction';
-import { isIncome } from '../../utils/transactionUtils';
+import { getTransactionAbsCentavos, isIncome } from '../../utils/transactionUtils';
+import { toCentavos } from '../../shared/types/money';
 interface RechartsTooltipPayloadEntry {
   dataKey?: string | number | ((obj: unknown) => unknown);
   name?: string | number;
@@ -154,7 +155,7 @@ function ChartTooltip({ active, payload, label, isPrivacyMode }: ChartTooltipPro
             <div className={`w-2 h-2 rounded-full ${color}`} />
             <span className="text-quantum-fgMuted">{lbl}</span>
             <span className={`font-mono font-bold ml-auto pl-3 ${cls}`}>
-              {isPrivacyMode ? mask : val != null ? fmtBRLShort(val) : '—'}
+              {isPrivacyMode ? mask : val !== null && val !== undefined ? fmtBRLShort(val) : '—'}
             </span>
           </div>
         ))}
@@ -187,7 +188,8 @@ export default function SimulationCenter({ transactions, balances }: Props) {
       const d   = new Date(tx.date ?? (tx as Transaction & { createdAt?: string }).createdAt ?? '');
       const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
       if (!byMonth[key]) byMonth[key] = { r: 0, d: 0 };
-      const valCents = Math.round(Math.abs(Number(tx.value ?? 0)) * 100);
+      if (tx.value_cents === undefined) return;
+      const valCents = getTransactionAbsCentavos(tx);
       if (isIncome(tx.type)) byMonth[key]!.r += valCents;
       else byMonth[key]!.d += valCents;
     });
@@ -207,7 +209,7 @@ export default function SimulationCenter({ transactions, balances }: Props) {
     };
   }, [transactions]);
 
-  const saldoCents = Math.round((balances?.geral?.saldo ?? 0) * 100);
+  const saldoCents = toCentavos(balances?.geral?.saldo ?? 0);
 
   useEffect(() => {
     const worker = new MonteCarloWorker() as Worker;
@@ -384,7 +386,7 @@ export default function SimulationCenter({ transactions, balances }: Props) {
                       <span className="text-[9px] font-black text-quantum-fgMuted uppercase tracking-wider">{label}</span>
                     </div>
                     <p className={`text-sm font-black font-mono ${color}`}>
-                      {isCalculating ? '…' : value == null ? '–' : isPrivacyMode ? '•••••' : fmtBRL(value)}
+                      {isCalculating ? '…' : value === null || value === undefined ? '–' : isPrivacyMode ? '•••••' : fmtBRL(value)}
                     </p>
                   </div>
                 ))}

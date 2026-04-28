@@ -8,6 +8,7 @@ import { FirestoreService } from '../shared/services/FirestoreService';
 import { AuditService } from '../shared/services/AuditService';
 import type { Transaction } from '../shared/types/transaction';
 import { fromCentavos, toCentavos, type Centavos } from '../shared/types/money';
+import { getTransactionCentavos } from '../utils/transactionUtils';
 import { categorizeTransaction } from '../utils/aiCategorize';
 import { categorizeWithAI } from '../services/AICategorizationService';
 import toast from 'react-hot-toast';
@@ -89,11 +90,7 @@ function isTemp(id: string): boolean {
 }
 
 function getTxCentavos(tx: Partial<Transaction>): Centavos {
-  const amount = tx.value_cents !== undefined
-    ? tx.value_cents
-    : toCentavos(tx.value ?? 0);
-
-  return amount;
+  return getTransactionCentavos(tx) ?? toCentavos(0);
 }
 
 function normalizeTransaction(tx: Transaction): Transaction {
@@ -101,19 +98,16 @@ function normalizeTransaction(tx: Transaction): Transaction {
   return {
     ...tx,
     value_cents,
-    value: tx.value ?? fromCentavos(value_cents),
+    value: fromCentavos(value_cents),
     schemaVersion: tx.schemaVersion ?? 2,
   };
 }
 
 function normalizeWriteData(data: Partial<Transaction>): Partial<Transaction> {
   const value_cents = getTxCentavos(data);
-  return {
-    ...data,
-    value_cents,
-    value: data.value ?? fromCentavos(value_cents),
-    schemaVersion: data.schemaVersion ?? 2,
-  };
+  const { value: _legacyValue, ...rest } = data;
+  void _legacyValue;
+  return { ...rest, value_cents, schemaVersion: 2 };
 }
 
 /**
@@ -207,7 +201,7 @@ export function useTransactions(
         const remote: Transaction[] = snap.docs.map(d => normalizeTransaction({
           id: d.id,
           ...(d.data() as Omit<Transaction, 'id'>),
-        }));
+        })).filter(tx => tx.isDeleted !== true && !tx.deletedAt);
 
         setTransactions(prev => {
           // Índice do estado local para O(1) lookup
@@ -380,9 +374,11 @@ export function useTransactions(
 
     const now    = Date.now();
     const tempId = makeTempId();
+    const optimisticCentavos = getTxCentavos(enriched);
     const optimistic: Transaction = {
       description: '',
-      value:       0,
+      value:       fromCentavos(optimisticCentavos),
+      value_cents: optimisticCentavos,
       type:        'saida',
       category:    'Outros',
       date:        new Date().toISOString().slice(0, 10),
@@ -482,9 +478,11 @@ export function useTransactions(
       }
 
       const tempId: string = makeTempId();
+      const optimisticCentavos = getTxCentavos(enriched);
       const optimistic: Transaction = {
         description: '',
-        value:       0,
+        value:       fromCentavos(optimisticCentavos),
+        value_cents: optimisticCentavos,
         type:        'saida',
         category:    'Outros',
         date:        new Date().toISOString().slice(0, 10),
@@ -564,7 +562,11 @@ export function useTransactions(
     // newCategory registada para permitir log replayable no undo (from → to)
     const snap: BulkSnapshot = ids.reduce<BulkSnapshot>((acc, id) => {
       const tx = transactionsRef.current.find(t => t.id === id);
-      if (tx) acc.push({ id, oldCategory: tx.category ?? 'Outros', newCategory: updates.category });
+      if (tx) {
+        const item: BulkSnapshot[number] = { id, oldCategory: tx.category ?? 'Outros' };
+        if (updates.category !== undefined) item.newCategory = updates.category;
+        acc.push(item);
+      }
       return acc;
     }, []);
 
@@ -588,7 +590,7 @@ export function useTransactions(
         details: `Alterou ${ids.length} transações para '${updates.category ?? ''}'`,
         metadata: {
           count:   ids.length,
-          changes: snap.map(s => ({ id: s.id, from: s.oldCategory, to: updates.category })),
+          changes: snap.map(s => ({ id: s.id, from: s.oldCategory, to: updates.category ?? 'Outros' })),
         },
       });
     } catch (err) {

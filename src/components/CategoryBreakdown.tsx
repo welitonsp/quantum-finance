@@ -2,7 +2,8 @@ import { useMemo, memo } from 'react';
 import { BarChart2, Info } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 import type { Transaction } from '../shared/types/transaction';
-import { isIncome as checkIncome } from '../utils/transactionUtils';
+import { getTransactionAbsCentavos, isIncome as checkIncome } from '../utils/transactionUtils';
+import { fromCentavos } from '../shared/types/money';
 
 interface Props {
   transactions: Transaction[];
@@ -23,7 +24,7 @@ export const CategoryBreakdown = memo(({ transactions }: Props) => {
     (transactions || []).forEach(t => {
       const isIncome = checkIncome(t.type);
       const cat = t.category || 'Outros';
-      const amount = Math.abs(t.value || 0);
+      const amount = fromCentavos(getTransactionAbsCentavos(t));
       if (isIncome) incomeMap[cat] = (incomeMap[cat] || 0) + amount;
       else          expenseMap[cat] = (expenseMap[cat] || 0) + amount;
     });
@@ -36,7 +37,7 @@ export const CategoryBreakdown = memo(({ transactions }: Props) => {
       Object.entries(map)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 5)
-        .map(([name, value], i) => ({ name, value, pct: (value / total) * 100, color: colors[i % colors.length] }));
+        .map(([name, value], i) => ({ name, value, pct: (value / total) * 100, color: colors[i % colors.length] ?? colors[0]! }));
 
     return { incomeCategories: process(incomeMap, incomeTotal), expenseCategories: process(expenseMap, expenseTotal) };
   }, [transactions]);
