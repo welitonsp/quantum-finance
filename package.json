@@ -10,8 +10,9 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "test": "vitest",
+    "test:run": "vitest run --pool=threads --maxWorkers=1",
     "test:ui": "vitest --ui",
-    "coverage": "vitest run --coverage",
+    "coverage": "vitest run --coverage --pool=threads --maxWorkers=1",
     "deploy": "npm run build && firebase deploy --only hosting"
   },
   "dependencies": {
