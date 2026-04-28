@@ -203,7 +203,7 @@ export function useForecast(
   );
 
   // Deterministic forecast — synchronous, O(n), never blocks
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   const deterministic = useMemo(
     () => calculateForecast(transactions, currentBalance, days),
     [txHash, currentBalance, days],
@@ -212,7 +212,7 @@ export function useForecast(
   // Monte Carlo inputs — recalculate only when transaction content changes
   const mcInputs: MCInputs = useMemo(
     () => computeMCInputs(transactions),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     [txHash],
   );
 
@@ -291,7 +291,7 @@ export function useForecast(
       worker.terminate();
       workerRef.current = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);  
 
   // ── Debounced trigger — fires 400 ms after inputs settle ─────────────────
   useEffect(() => {
