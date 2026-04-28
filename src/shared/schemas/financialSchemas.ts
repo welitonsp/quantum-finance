@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import Decimal from 'decimal.js';
+import {
+  toCentavos as toCentavosMoney,
+  fromCentavos as fromCentavosMoney,
+  type Centavos,
+} from '../types/money';
 
 export const ALLOWED_CATEGORIES = [
   'Alimentação', 'Transporte', 'Assinaturas', 'Educação', 'Saúde',
@@ -45,20 +50,14 @@ export function validateTransaction(data: unknown) {
   return transactionSchema.safeParse(data);
 }
 
-export const toCentavos = (val: number | string | null | undefined): number => {
-  if (val === null || val === undefined || val === '') return 0;
-  return new Decimal(String(val))
-    .times(100)
-    .toDecimalPlaces(0, Decimal.ROUND_HALF_UP)
-    .toNumber();
+export const toCentavos = (val: number | string | Decimal | null | undefined): Centavos => {
+  if (val === null || val === undefined || val === '') return 0 as Centavos;
+  return toCentavosMoney(val);
 };
 
-export const fromCentavos = (val: number | null | undefined): number => {
+export const fromCentavos = (val: Centavos | number | null | undefined): number => {
   if (val === null || val === undefined) return 0;
-  return new Decimal(String(val))
-    .dividedBy(100)
-    .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
-    .toNumber();
+  return fromCentavosMoney(val);
 };
 
 export const creditCardSchema = z.object({

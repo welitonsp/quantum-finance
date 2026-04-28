@@ -1,4 +1,5 @@
 import type { ParsedTransaction } from '../types/transaction';
+import { toCentavos } from '../types/money';
 
 function readFileAsText(file: File, encoding = 'utf-8'): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -159,11 +160,15 @@ export async function parseCSVWithMapping(file: File, mapping: ColumnMapping): P
     if (amount === null){ errors.push(`Linha ${i+1}: valor inválido ("${fields[valueIdx]}")`); continue; }
     if (amount === 0)   { continue; }
 
+    const amountCents = toCentavos(Math.abs(amount));
+
     transactions.push({
       id:          crypto.randomUUID(),
       date,
       description: desc,
       value:       Math.abs(amount),
+      value_cents: amountCents,
+      schemaVersion: 2,
       type:        amount > 0 ? 'entrada' : 'saida',
       category:    'Diversos',
       source:      'csv',

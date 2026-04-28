@@ -1,5 +1,6 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { FirestoreService } from './FirestoreService';
+import { toCentavos } from '../types/money';
 
 // ─── Hoisted mocks (vi.hoisted runs before vi.mock) ───────────────────────────
 
@@ -127,18 +128,21 @@ describe('FirestoreService.saveAllTransactions', () => {
     const tx = mkPartialTx({ value: 12.5, type: 'saida' });
     await FirestoreService.saveAllTransactions('uid1', [tx]);
     const [, data] = mockBatchSet.mock.calls[0] as [unknown, Record<string, unknown>];
-    expect(data.value).toBe(1250);  // 12.5 * 100 = 1250 centavos
+    expect(data.value).toBe(12.5);
+    expect(data.value_cents).toBe(1250);
+    expect(data.schemaVersion).toBe(2);
   });
 
   it('TODO PR12.B: rawVal inteiro ≥ 100 é multiplicado por 100 novamente (bug heurística centavos)', async () => {
     // Se o input já chegar em centavos (ex: 10000 = R$100,00), o código trata
     // como 10000 reais e multiplica → 1_000_000 centavos. Corrigir em PR12.B
     // com heurística isInteger (valor inteiro e ≥ 1000 → provavelmente centavos).
-    const tx = mkPartialTx({ value: 10_000 });  // 10000 reais OU 10000 centavos?
+    const tx = mkPartialTx({ value_cents: toCentavos(100), value: undefined });
     await FirestoreService.saveAllTransactions('uid1', [tx]);
     const [, data] = mockBatchSet.mock.calls[0] as [unknown, Record<string, unknown>];
     // Comportamento ATUAL (incorreto para inputs já em centavos):
-    expect(data.value).toBe(1_000_000); // TODO PR12.B: devia ser 10_000 se input era centavos
+    expect(data.value_cents).toBe(10_000);
+    expect(data.value).toBe(100);
   });
 });
 

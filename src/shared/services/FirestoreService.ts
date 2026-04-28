@@ -6,6 +6,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../api/firebase/index';
 import type { Transaction, ImportResult } from '../types/transaction';
+import { fromCentavos, toCentavos, type Centavos } from '../types/money';
 import { isIncome as checkIncome } from '../../utils/transactionUtils';
 
 // ─── Helpers de path ──────────────────────────────────────────────────────────
@@ -15,6 +16,22 @@ const txCol = (uid: string): CollectionReference =>
   collection(db, 'users', uid, 'transactions');
 
 type PartialTx = Partial<Omit<Transaction, 'id'>>;
+
+function txCentavos(tx: Partial<Transaction>): Centavos {
+  return tx.value_cents !== undefined
+    ? tx.value_cents
+    : toCentavos(tx.value ?? 0);
+}
+
+function withMoneyPayload<T extends Partial<Transaction>>(tx: T): T & Pick<Transaction, 'value_cents' | 'schemaVersion'> {
+  const value_cents = txCentavos(tx);
+  return {
+    ...tx,
+    value_cents,
+    value: tx.value ?? fromCentavos(value_cents),
+    schemaVersion: tx.schemaVersion ?? 2,
+  };
+}
 
 // ─── CRUD de Transações (API pública, com uid) ────────────────────────────────
 
@@ -50,7 +67,7 @@ export const FirestoreService = {
    */
   async addTransaction(uid: string, data: PartialTx): Promise<string> {
     if (!uid) throw new Error('[Firestore][addTransaction] UID ausente.');
-    const { id: _id, uid: _uid, createdAt: _ca, updatedAt: _ua, ...payload } = data as Partial<Transaction>;
+    const { id: _id, uid: _uid, createdAt: _ca, updatedAt: _ua, ...payload } = withMoneyPayload(data as Partial<Transaction>);
     const docRef = await addDoc(txCol(uid), {
       ...payload,
       uid,
@@ -65,7 +82,10 @@ export const FirestoreService = {
    */
   async updateTransaction(uid: string, id: string, data: Partial<Transaction>): Promise<void> {
     if (!uid || !id) throw new Error('[Firestore][updateTransaction] UID ou ID ausente.');
-    const { id: _id, uid: _uid, createdAt: _ca, ...updatePayload } = data;
+    const normalized = data.value !== undefined || data.value_cents !== undefined
+      ? withMoneyPayload(data)
+      : data;
+    const { id: _id, uid: _uid, createdAt: _ca, ...updatePayload } = normalized;
     await updateDoc(doc(txCol(uid), id), {
       ...updatePayload,
       updatedAt: serverTimestamp(),
@@ -136,11 +156,8 @@ export const FirestoreService = {
 
     transactions.forEach(tx => {
       const isIncome = checkIncome(tx.type ?? '');
-      const rawVal   = Number(tx.value ?? 0);
-      if (isNaN(rawVal) || rawVal === 0) { invalid++; return; }
-
-      // FIX: removed unsafe cent handling
-      const centavos = Math.round(Math.abs(rawVal) * 100);
+      const centavos = txCentavos(tx);
+      if (Number.isNaN(Number(centavos)) || Number(centavos) === 0) { invalid++; return; }
       const txType   = isIncome ? 'entrada' : 'saida';
       const category = tx.category ?? 'Outros';
       const date     = tx.date ?? new Date().toISOString().split('T')[0];
@@ -153,7 +170,9 @@ export const FirestoreService = {
       batch.set(docRef, {
         uid,
         description: tx.description ?? '',
-        value:       centavos,
+        value:       tx.value ?? fromCentavos(centavos),
+        value_cents: centavos,
+        schemaVersion: 2,
         type:        txType,
         category,
         date,

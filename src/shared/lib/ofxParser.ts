@@ -1,4 +1,5 @@
 import type { ParsedTransaction } from '../types/transaction';
+import { toCentavos } from '../types/money';
 
 function readFileAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -57,12 +58,15 @@ export async function parseOFX(file: File): Promise<ParsedTransaction[]> {
 
     const memo = extractTag(block, 'MEMO') ?? extractTag(block, 'NAME') ?? 'Transação OFX';
     const type = amount > 0 ? 'entrada' : 'saida';
+    const amountCents = toCentavos(Math.abs(amount));
 
     transactions.push({
       id:          fitId || crypto.randomUUID(),
       fitId:       fitId || null,
       description: (memo as string).replace(/\s+/g, ' ').trim(),
       value:       Math.abs(amount),
+      value_cents: amountCents,
+      schemaVersion: 2,
       type,
       date,
       category:    'Diversos',

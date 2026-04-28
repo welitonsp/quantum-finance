@@ -7,7 +7,7 @@
 import { useMemo } from 'react';
 import Decimal from 'decimal.js';
 import type { Transaction, Account } from '../shared/types/transaction';
-import { fromCentavos } from '../shared/schemas/financialSchemas';
+import { fromCentavos, toCentavos, type Centavos } from '../shared/types/money';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -55,6 +55,14 @@ function isExpense(type: string | undefined): boolean {
   return type === 'saida' || type === 'despesa';
 }
 
+function getTxCentavos(tx: Transaction): Centavos {
+  const amount = tx.value_cents !== undefined
+    ? tx.value_cents
+    : toCentavos(tx.value ?? 0);
+
+  return amount;
+}
+
 function txMatchesPeriod(tx: Transaction, currentMonth?: number, currentYear?: number): boolean {
   if (!currentMonth || !currentYear) return true;
 
@@ -97,9 +105,10 @@ export function computeFinancialMetrics(
   for (const tx of transactions) {
     if (!txMatchesPeriod(tx, currentMonth, currentYear)) continue;
 
-    const rawVal = Math.abs(Number(tx.value || 0));
+    const amount = getTxCentavos(tx);
+    const rawVal = Number(amount);
     if (!Number.isFinite(rawVal)) continue;
-    const val = new Decimal(rawVal);
+    const val = new Decimal(Math.abs(rawVal));
     if (isIncome(tx.type)) {
       receita = receita.plus(val);
     } else if (isExpense(tx.type)) {
@@ -117,11 +126,11 @@ export function computeFinancialMetrics(
   if (accounts.length > 0) {
     // Modo correto: ativos/passivos vêm das contas
     for (const acc of accounts) {
-      const valReais = new Decimal(fromCentavos(acc.balance ?? 0));
+      const val = new Decimal(acc.balance ?? 0);
       if (['corrente', 'poupanca', 'investimento'].includes(acc.type)) {
-        ativos = ativos.plus(valReais);
+        ativos = ativos.plus(val);
       } else if (['cartao', 'divida'].includes(acc.type)) {
-        passivos = passivos.plus(valReais.abs());
+        passivos = passivos.plus(val.abs());
       }
     }
   } else {
@@ -156,12 +165,12 @@ export function computeFinancialMetrics(
     : new Decimal(0);
 
   return {
-    receita:           receita.toDecimalPlaces(2).toNumber(),
-    despesa:           despesa.toDecimalPlaces(2).toNumber(),
-    ativos:            ativos.toDecimalPlaces(2).toNumber(),
-    passivos:          passivos.toDecimalPlaces(2).toNumber(),
-    patrimonioLiquido: patrimonioLiquido.toDecimalPlaces(2).toNumber(),
-    custoFixoMensal:   custoFixoMensal.toDecimalPlaces(2).toNumber(),
+    receita:           fromCentavos(receita.toNumber()),
+    despesa:           fromCentavos(despesa.toNumber()),
+    ativos:            fromCentavos(ativos.toNumber()),
+    passivos:          fromCentavos(passivos.toNumber()),
+    patrimonioLiquido: fromCentavos(patrimonioLiquido.toNumber()),
+    custoFixoMensal:   fromCentavos(custoFixoMensal.toNumber()),
     taxaPoupanca:      taxaPoupanca.toDecimalPlaces(2).toNumber(),
     endividamento:     endividamento.toDecimalPlaces(2).toNumber(),
     comprometimento:   comprometimento.toDecimalPlaces(2).toNumber(),

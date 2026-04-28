@@ -1,6 +1,7 @@
 // src/utils/formatters.test.ts
 import { describe, it, expect } from 'vitest';
 import { formatCurrency, formatPercent } from './formatters';
+import { toCentavos } from '../shared/types/money';
 
 describe('Fábrica de Formatação (UI)', () => {
   it('deve formatar valores monetários para o padrão BRL (R$)', () => {
@@ -28,5 +29,10 @@ describe('Fábrica de Formatação (UI)', () => {
   it('deve proteger percentagens contra valores nulos', () => {
     expect(formatPercent(null)).toBe('0.0%');
     expect(formatPercent(undefined, 2)).toBe('0.00%');
+  });
+
+  it('deve formatar centavos canonicos sem alterar a UI', () => {
+    const formatted = formatCurrency(toCentavos(1500.5), { cents: true }).replace(/\s/g, ' ');
+    expect(formatted).toMatch(/R\$\s?1\.500,50/);
   });
 });

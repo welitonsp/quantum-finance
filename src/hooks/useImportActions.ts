@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { showAIFeedbackBatch } from '../shared/lib/aiFeedbackToast';
-import { toCentavos } from '../shared/schemas/financialSchemas';
+import { fromCentavos, toCentavos } from '../shared/types/money';
 import type { Transaction, ImportResult } from '../shared/types/transaction';
 import type { User } from 'firebase/auth';
 
@@ -27,7 +27,9 @@ export function useImportActions(
       // Converte reais → centavos antes de persistir (Firestore armazena inteiros)
       const withCentavos = parsedData.map(tx => ({
         ...tx,
-        value: toCentavos(Number(tx.value ?? 0)),
+        value_cents: tx.value_cents ?? toCentavos(tx.value ?? 0),
+        value: tx.value ?? fromCentavos(tx.value_cents ?? toCentavos(0)),
+        schemaVersion: tx.schemaVersion ?? 2,
       }));
       await addBatch(withCentavos);
 
