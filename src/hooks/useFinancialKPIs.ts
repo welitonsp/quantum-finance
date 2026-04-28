@@ -46,7 +46,7 @@ export function computeKPIs(transactions: Transaction[], now: Date): FinancialKP
 export function useFinancialKPIs(transactions: Transaction[], now?: Date): FinancialKPIs {
   return useMemo(
     () => computeKPIs(transactions, now ?? new Date()),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     [transactions, now],
   );
 }

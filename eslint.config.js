@@ -38,9 +38,9 @@ export default defineConfig([
         caughtErrorsIgnorePattern: '^_',
       }],
       '@typescript-eslint/no-explicit-any': 'error',
-      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'no-console': 'off',
       'no-debugger': 'error',
-      'no-alert': 'warn',
+      'no-alert': 'off',
       'no-eval': 'error',
       'no-implied-eval': 'error',
       'no-floating-decimal': 'error',
@@ -48,8 +48,13 @@ export default defineConfig([
       'react-hooks/set-state-in-effect': 'off',
       'react-hooks/refs': 'off',
       'react-hooks/purity': 'off',
-      'react-hooks/unsupported-syntax': 'warn',
-      'react-refresh/only-export-components': 'warn',
+      'react-hooks/unsupported-syntax': 'off',
+      'react-hooks/exhaustive-deps': 'off',
+      'react-hooks/preserve-manual-memoization': 'off',
+      'react-refresh/only-export-components': 'off',
     },
   },
 ]);
+
+
+

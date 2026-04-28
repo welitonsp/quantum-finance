@@ -656,7 +656,7 @@ export default function ImportButton({ onImportTransactions, existingTransaction
       setErrorMessage(err.message || 'Falha desconhecida ao processar o ficheiro.');
       setStatus('error');
     }
-  }, [deduplicate, parseFile, parseFileWithMapping]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [deduplicate, parseFile, parseFileWithMapping]);  
 
   const handleConfirmImport = useCallback(async (selectedTxs: ParsedTransaction[]) => {
     setStatus('importing');
@@ -731,7 +731,7 @@ export default function ImportButton({ onImportTransactions, existingTransaction
       setErrorMessage(err.message || 'Falha ao guardar as transações. Tente novamente.');
       setStatus('error');
     }
-  }, [onImportTransactions, stats.duplicates]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [onImportTransactions, stats.duplicates]);  
 
   const handleApplyMapping = useCallback((mapping: ColumnMapping) => {
     if (colMapState?.file) void processFile(colMapState.file, mapping);

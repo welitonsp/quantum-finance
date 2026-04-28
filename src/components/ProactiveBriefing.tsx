@@ -170,7 +170,7 @@ export default function ProactiveBriefing({
 
     return () => { abortedRef.current = true; };
     // fetchBriefing captured via dataKey dependency chain — stable via useCallback
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [dataKey, dataLoading]);
 
   // ── Render guards ─────────────────────────────────────────────────────────

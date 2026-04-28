@@ -117,7 +117,7 @@ export default function CommandPalette({ isOpen, onClose, isCommanderMode = fals
   const allCommands = useMemo<CommandItem[]>(() => {
     const base = buildCommands({ navigate, togglePrivacy, isPrivacyMode });
     return isCommanderMode ? [...COMMANDER_COMMANDS, ...base] : base;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [isPrivacyMode, isCommanderMode]);
 
   const filtered = useMemo<CommandItem[]>(() => {
