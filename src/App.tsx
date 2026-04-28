@@ -355,6 +355,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
       </ErrorBoundary>
       {isFormOpen && (
         <TransactionForm
+          uid={safeUID}
           onSave={handleSaveTransaction}
           editingTransaction={transactionToEdit}
           onCancelEdit={handleCloseForm}

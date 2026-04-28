@@ -60,6 +60,11 @@ interface DeleteBatchOp {
 }
 type Op = AddOp | UpdateOp | DeleteOp | DeleteBatchOp;
 
+interface PendingAddResolver {
+  resolve: (realId: string) => void;
+  reject: (error: Error) => void;
+}
+
 // ─── Return Type ──────────────────────────────────────────────────────────────
 
 interface UseTransactionsReturn {
@@ -105,9 +110,106 @@ function normalizeTransaction(tx: Transaction): Transaction {
 
 function normalizeWriteData(data: Partial<Transaction>): Partial<Transaction> {
   const value_cents = getTxCentavos(data);
-  const { value: _legacyValue, ...rest } = data;
+  const {
+    id: _id,
+    uid: _uid,
+    value: _legacyValue,
+    createdAt: _createdAt,
+    updatedAt: _updatedAt,
+    deletedAt: _deletedAt,
+    importHash: _importHash,
+    isDeleted: _isDeleted,
+    ...rest
+  } = data;
+  void _id;
+  void _uid;
   void _legacyValue;
+  void _createdAt;
+  void _updatedAt;
+  void _deletedAt;
+  void _importHash;
+  void _isDeleted;
   return { ...rest, value_cents, schemaVersion: 2 };
+}
+
+function setIfDefined<K extends keyof Transaction>(
+  target: Partial<Transaction>,
+  key: K,
+  value: Transaction[K] | undefined,
+): void {
+  if (value !== undefined) {
+    target[key] = value;
+  }
+}
+
+function buildUpdateWriteData(current: Transaction | undefined, data: Partial<Transaction>): Partial<Transaction> {
+  const base: Partial<Transaction> = {};
+  if (current) {
+    base.description = current.description;
+    base.value_cents = getTxCentavos(current);
+    base.schemaVersion = 2;
+    base.type = current.type;
+    base.category = current.category;
+    base.date = current.date;
+    base.source = current.source ?? 'manual';
+    setIfDefined(base, 'account', current.account);
+    setIfDefined(base, 'accountId', current.accountId);
+    setIfDefined(base, 'cardId', current.cardId);
+    setIfDefined(base, 'fitId', current.fitId);
+    setIfDefined(base, 'tags', current.tags);
+    setIfDefined(base, 'isRecurring', current.isRecurring);
+  }
+
+  const incomingCentavos = data.value !== undefined || data.value_cents !== undefined
+    ? getTxCentavos(data)
+    : getTxCentavos(base);
+  return normalizeWriteData({
+    ...base,
+    ...data,
+    value_cents: incomingCentavos,
+    source: data.source ?? base.source ?? 'manual',
+  });
+}
+
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function getErrorCode(err: unknown): string | undefined {
+  return typeof err === 'object' && err !== null && 'code' in err
+    ? String((err as { code?: unknown }).code ?? '')
+    : undefined;
+}
+
+function shouldRetrySyncError(err: unknown): boolean {
+  const code = getErrorCode(err);
+  const message = getErrorMessage(err).toLowerCase();
+  if (code?.includes('permission-denied') || message.includes('permission')) return false;
+  if (message.includes('transação inválida') || message.includes('atualização inválida')) return false;
+  if (message.includes('invalid') || message.includes('inválid')) return false;
+  return true;
+}
+
+function userFacingSyncError(err: unknown): Error {
+  const code = getErrorCode(err);
+  const message = getErrorMessage(err);
+  const lower = message.toLowerCase();
+
+  if (code?.includes('permission-denied') || lower.includes('permission')) {
+    return new Error('A movimentação foi recusada pelas regras do Firebase. Verifique campos proibidos no payload.');
+  }
+  if (code?.includes('unavailable') || lower.includes('network') || lower.includes('offline')) {
+    return new Error('Falha de conexão. A movimentação não foi confirmada.');
+  }
+  if (lower.includes('transação inválida') || lower.includes('inválid')) {
+    return new Error(message);
+  }
+  return new Error(message || 'Falha ao confirmar a movimentação no Firestore.');
+}
+
+function debugSync(message: string, details?: Record<string, unknown>): void {
+  if (!import.meta.env.DEV) return;
+  console.warn(`[useTransactions] ${message}`, details ?? {});
 }
 
 /**
@@ -163,6 +265,7 @@ export function useTransactions(
    * Usado para aplicar a categoria da IA após o write no Firestore.
    */
   const postAddCallbacks = useRef(new Map<string, (realId: string) => void>());
+  const pendingAddResolvers = useRef(new Map<string, PendingAddResolver>());
 
   /**
    * IDs de itens com operação em voo (update / delete).
@@ -185,6 +288,7 @@ export function useTransactions(
     pendingAdds.current       = new Map();
     pendingIds.current        = new Set();
     postAddCallbacks.current  = new Map();
+    pendingAddResolvers.current = new Map();
 
     setLoading(true);
     setError(null);
@@ -256,6 +360,8 @@ export function useTransactions(
 
       // Descarta ops de add órfãos
       if (op.type === 'add' && !pendingAdds.current.has(op.tempId)) {
+        pendingAddResolvers.current.get(op.tempId)?.reject(new Error('Movimentação otimista cancelada antes da confirmação.'));
+        pendingAddResolvers.current.delete(op.tempId);
         queueRef.current.shift();
         continue;
       }
@@ -264,7 +370,22 @@ export function useTransactions(
         switch (op.type) {
           case 'add': {
             // serverTimestamp() injetado pelo FirestoreService.addTransaction
+            debugSync('iniciando gravação de nova movimentação', {
+              uid,
+              tempId: op.tempId,
+              path: `users/${uid}/transactions`,
+              payload: {
+                type: op.data.type,
+                category: op.data.category,
+                date: op.data.date,
+                source: op.data.source ?? 'manual',
+                value_cents: op.data.value_cents,
+                schemaVersion: op.data.schemaVersion ?? 2,
+                hasDescription: Boolean(op.data.description),
+              },
+            });
             const realId = await FirestoreService.addTransaction(uid, op.data);
+            debugSync('gravação confirmada', { uid, tempId: op.tempId, realId });
             // Dispara callback de IA (se registado) com o docId real — fire-and-forget
             const aiCb = postAddCallbacks.current.get(op.tempId);
             if (aiCb) {
@@ -273,11 +394,30 @@ export function useTransactions(
             }
             // Remove item temporário; snapshot traz o item real com timestamps do servidor
             pendingAdds.current.delete(op.tempId);
+            pendingAddResolvers.current.get(op.tempId)?.resolve(realId);
+            pendingAddResolvers.current.delete(op.tempId);
             setTransactions(prev => prev.filter(tx => tx.id !== op.tempId));
             break;
           }
           case 'update':
             // updatedAt: serverTimestamp() sempre enviado pelo FirestoreService
+            debugSync('iniciando atualização de movimentação', {
+              uid,
+              id: op.itemId,
+              operation: 'update',
+              removesLegacyFields: true,
+              path: `users/${uid}/transactions/${op.itemId}`,
+              payload: {
+                keys: Object.keys(op.data).sort(),
+                type: op.data.type,
+                category: op.data.category,
+                date: op.data.date,
+                source: op.data.source,
+                value_cents: op.data.value_cents,
+                schemaVersion: op.data.schemaVersion,
+                hasDescription: Boolean(op.data.description),
+              },
+            });
             await FirestoreService.updateTransaction(uid, op.itemId, op.data);
             pendingIds.current.delete(op.itemId);
             break;
@@ -294,18 +434,29 @@ export function useTransactions(
 
       } catch (err) {
         op.retries++;
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = getErrorMessage(err);
+        debugSync('erro na gravação/sync', {
+          uid,
+          opType: op.type,
+          attempt: op.retries,
+          code: getErrorCode(err),
+          message: msg,
+        });
         console.error(
           `[SyncQueue][${op.type}] erro (tentativa ${op.retries}/${MAX_RETRIES}): ${msg}`
         );
 
-        if (op.retries >= MAX_RETRIES) {
+        if (op.retries >= MAX_RETRIES || !shouldRetrySyncError(err)) {
           console.error(`[SyncQueue][${op.type}] descartado após ${MAX_RETRIES} tentativas.`);
-          toast.error('Falha persistente ao sincronizar. Verifique sua conexão.');
+          const finalError = userFacingSyncError(err);
+          const hasAwaiter = op.type === 'add' && pendingAddResolvers.current.has(op.tempId);
+          if (!hasAwaiter) toast.error(finalError.message);
 
           // Rollback + limpa pendingIds
           if (op.type === 'add') {
             postAddCallbacks.current.delete(op.tempId);
+            pendingAddResolvers.current.get(op.tempId)?.reject(finalError);
+            pendingAddResolvers.current.delete(op.tempId);
             pendingAdds.current.delete(op.tempId);
             setTransactions(prev => prev.filter(tx => tx.id !== op.tempId));
 
@@ -406,9 +557,11 @@ export function useTransactions(
 
     pendingAdds.current.set(tempId, optimistic);
     setTransactions(prev => [optimistic, ...prev]);
-    enqueue({ type: 'add', tempId, data: enriched, retries: 0 });
 
-    return tempId;
+    return new Promise<string>((resolve, reject) => {
+      pendingAddResolvers.current.set(tempId, { resolve, reject });
+      enqueue({ type: 'add', tempId, data: enriched, retries: 0 });
+    });
   }, [uid, enqueue]);
 
   // ── UPDATE — Optimistic + enqueue ─────────────────────────────────────────
@@ -416,16 +569,15 @@ export function useTransactions(
     if (!uid || !id) throw new Error('[useTransactions][update] UID ou ID ausente.');
     if (isTemp(id)) return; // aguarda confirmação do add
 
-    const normalizedData = data.value !== undefined || data.value_cents !== undefined
-      ? normalizeWriteData(data)
-      : data;
+    const current = transactionsRef.current.find(tx => tx.id === id);
+    const normalizedData = buildUpdateWriteData(current, data);
 
     // Regista como pendente antes do optimistic update
     pendingIds.current.add(id);
 
     let previous: Transaction | undefined;
     setTransactions(prev => {
-      previous = prev.find(tx => tx.id === id);
+      previous = current ?? prev.find(tx => tx.id === id);
       return prev.map(tx =>
         tx.id === id
           // updatedAt local em ms; será substituído por serverTimestamp() no snapshot

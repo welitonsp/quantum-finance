@@ -72,7 +72,7 @@ service cloud.firestore {
       return isValidTransactionBase(data)
           && data.createdAt == resource.data.createdAt
           && data.updatedAt == request.time
-          && !changed.hasAny(['createdAt', 'uid', 'id', 'importHash'])
+          && !changed.hasAny(['createdAt', 'importHash'])
           && !('uid' in data)
           && !('id' in data)
           && !('value' in data)
@@ -167,6 +167,40 @@ service cloud.firestore {
           && isStringSized(data.category, 1, 80);
     }
 
+    function categoryAllowedKeys() {
+      return [
+        'name', 'normalizedName', 'type', 'color', 'icon',
+        'isDefault', 'isActive', 'createdAt', 'updatedAt'
+      ];
+    }
+
+    function isValidUserCategoryBase(data) {
+      return data.keys().hasAll([
+            'name', 'normalizedName', 'type', 'color',
+            'isDefault', 'isActive', 'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly(categoryAllowedKeys())
+          && isStringSized(data.name, 1, 80)
+          && isStringSized(data.normalizedName, 1, 80)
+          && data.type in ['entrada', 'saida', 'ambos']
+          && isStringSized(data.color, 1, 40)
+          && (!('icon' in data) || isStringSized(data.icon, 1, 40))
+          && data.isDefault is bool
+          && data.isActive is bool;
+    }
+
+    function isValidUserCategoryCreate() {
+      return isValidUserCategoryBase(request.resource.data)
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+    }
+
+    function isValidUserCategoryUpdate() {
+      return isValidUserCategoryBase(request.resource.data)
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt == request.time;
+    }
+
     function isValidCreditCard(data) {
       return data.keys().hasAll(['name', 'limit', 'closingDay', 'dueDay', 'active', 'schemaVersion', 'createdAt', 'updatedAt'])
           && data.keys().hasOnly(['name', 'limit', 'closingDay', 'dueDay', 'color', 'active', 'schemaVersion', 'createdAt', 'updatedAt'])
@@ -226,6 +260,13 @@ service cloud.firestore {
         allow create: if isOwner(userId) && isValidCategoryRule(request.resource.data);
         allow update: if isOwner(userId) && isValidCategoryRule(request.resource.data);
         allow delete: if isOwner(userId);
+      }
+
+      match /categories/{categoryId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidUserCategoryCreate();
+        allow update: if isOwner(userId) && isValidUserCategoryUpdate();
+        allow delete: if false;
       }
 
       match /creditCards/{cardId} {

@@ -1,13 +1,14 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Save, AlertCircle, TrendingDown, TrendingUp,
   Calendar, DollarSign, Tag, FileText, CheckCircle, Plus,
 } from 'lucide-react';
 import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
-import type { AllowedCategory } from '../../shared/schemas/financialSchemas';
 import type { Transaction } from '../../shared/types/transaction';
 import { isIncome } from '../../utils/transactionUtils';
+import { useCategories } from '../../hooks/useCategories';
+import { normalizeCategoryName, type UserCategory } from '../../shared/schemas/categorySchemas';
 
 interface CatMeta { emoji: string; color: string }
 const CAT_META: Record<string, CatMeta> = {
@@ -64,25 +65,66 @@ function TypeToggle({ value, onChange }: TypeToggleProps) {
 interface CategoryPickerProps {
   value:      string;
   onChange:   (v: string) => void;
-  categories: string[];
+  categories: UserCategory[];
+  search: string;
+  onSearchChange: (value: string) => void;
 }
-function CategoryPicker({ value, onChange, categories }: CategoryPickerProps) {
+function CategoryPicker({ value, onChange, categories, search, onSearchChange }: CategoryPickerProps) {
+  const normalizedSearch = normalizeCategoryName(search);
+  const visibleCategories = categories.filter(category =>
+    !normalizedSearch || category.normalizedName.includes(normalizedSearch),
+  );
+  const selectedCategory = categories.find(category => category.name === value);
+  const selectedAlreadyVisible = visibleCategories.some(category => category.name === value);
+  const displayCategories = selectedCategory && !selectedAlreadyVisible
+    ? [selectedCategory, ...visibleCategories]
+    : visibleCategories;
+
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-52 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-      {categories.map(cat => {
-        const meta     = CAT_META[cat] ?? CAT_META['Outros']!;
-        const isActive = value === cat;
-        return (
+    <div className="space-y-2">
+      <div className="relative">
+        <input
+          type="search"
+          value={search}
+          onChange={e => onSearchChange(e.target.value)}
+          placeholder="Buscar categoria..."
+          className="input-quantum w-full pr-9 text-xs py-2"
+        />
+        {search && (
           <button
-            key={cat} type="button" onClick={() => onChange(cat)}
-            className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-all duration-150 bg-gradient-to-br ${meta.color} ${isActive ? 'ring-2 ring-offset-1 ring-offset-slate-900 ring-white/20 scale-[1.03] shadow-md' : 'opacity-60 hover:opacity-90'}`}
+            type="button"
+            onClick={() => onSearchChange('')}
+            title="Limpar busca de categoria"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/10 transition-colors"
           >
-            <span className="text-sm leading-none">{meta.emoji}</span>
-            <span className="truncate">{cat}</span>
-            {isActive && <CheckCircle className="w-3 h-3 ml-auto shrink-0" />}
+            <X className="w-3.5 h-3.5" />
           </button>
-        );
-      })}
+        )}
+      </div>
+
+      {displayCategories.length > 0 ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-52 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+          {displayCategories.map(cat => {
+            const meta     = CAT_META[cat.name] ?? CAT_META['Outros']!;
+            const icon     = cat.icon ?? meta.emoji;
+            const isActive = value === cat.name;
+            return (
+              <button
+                key={cat.id ?? cat.normalizedName} type="button" onClick={() => onChange(cat.name)}
+                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-all duration-150 bg-gradient-to-br ${meta.color} ${isActive ? 'ring-2 ring-offset-1 ring-offset-slate-900 ring-white/20 scale-[1.03] shadow-md' : 'opacity-60 hover:opacity-90'}`}
+              >
+                <span className="text-sm leading-none">{icon}</span>
+                <span className="truncate">{cat.name}</span>
+                {isActive && <CheckCircle className="w-3 h-3 ml-auto shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="rounded-lg border border-quantum-border bg-white/[0.03] px-3 py-4 text-center text-xs text-quantum-fgMuted">
+          Nenhuma categoria encontrada.
+        </div>
+      )}
     </div>
   );
 }
@@ -97,13 +139,20 @@ interface FormData {
 }
 
 interface Props {
+  uid: string;
   onSave: (tx: Partial<Transaction>) => Promise<void>;
   editingTransaction: Transaction | null;
   onCancelEdit: () => void;
 }
 
-export default function TransactionForm({ onSave, editingTransaction, onCancelEdit }: Props) {
+export default function TransactionForm({ uid, onSave, editingTransaction, onCancelEdit }: Props) {
   const isEditing = Boolean(editingTransaction);
+  const {
+    categories,
+    loading: loadingCategories,
+    error: categoriesError,
+    addCategory,
+  } = useCategories(uid);
 
   const [formData, setFormData] = useState<FormData>({
     description: '',
@@ -113,10 +162,9 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
     date:        new Date().toISOString().substring(0, 10),
   });
 
-  // Local category list — starts from ALLOWED_CATEGORIES; custom categories added inline
-  const [categories,  setCategories]  = useState<string[]>([...ALLOWED_CATEGORIES]);
   const [newCatMode,  setNewCatMode]  = useState(false);
   const [newCatName,  setNewCatName]  = useState('');
+  const [categorySearch, setCategorySearch] = useState('');
   const newCatRef = useRef<HTMLInputElement>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -124,13 +172,37 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
   const [saved,        setSaved]        = useState(false);
   const descRef = useRef<HTMLInputElement>(null);
 
+  const filteredCategories = useMemo(() => {
+    const allowed = categories.filter(category =>
+      category.type === 'ambos' || category.type === formData.type,
+    );
+
+    if (
+      formData.category &&
+      !allowed.some(category => category.name === formData.category)
+    ) {
+      return [
+        ...allowed,
+        {
+          id: `legacy-${formData.category}`,
+          uid,
+          name: formData.category,
+          normalizedName: formData.category.toLowerCase(),
+          type: 'ambos' as const,
+          color: '#64748b',
+          icon: CAT_META[formData.category]?.emoji ?? '•',
+          isDefault: false,
+          isActive: true,
+        },
+      ];
+    }
+
+    return allowed;
+  }, [categories, formData.category, formData.type, uid]);
+
   useEffect(() => {
     if (editingTransaction) {
       const cat = editingTransaction.category ?? ALLOWED_CATEGORIES[0];
-      // Pre-add category if it's custom (not in the standard list)
-      if (cat && !ALLOWED_CATEGORIES.includes(cat as AllowedCategory)) {
-        setCategories(prev => prev.includes(cat) ? prev : [...prev, cat]);
-      }
       setFormData({
         description: editingTransaction.description ?? '',
         value:       String(editingTransaction.value ?? ''),
@@ -167,16 +239,34 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
     setError('');
   }, []);
 
-  const confirmNewCategory = useCallback(() => {
+  const handleTypeChange = useCallback((type: 'entrada' | 'saida') => {
+    setFormData(prev => {
+      const current = categories.find(category => category.name === prev.category);
+      if (current && (current.type === 'ambos' || current.type === type)) {
+        return { ...prev, type };
+      }
+
+      const firstCompatible = categories.find(category =>
+        category.type === 'ambos' || category.type === type,
+      );
+      return { ...prev, type, category: firstCompatible?.name ?? prev.category };
+    });
+    setError('');
+  }, [categories]);
+
+  const confirmNewCategory = useCallback(async () => {
     const name = newCatName.trim();
     if (!name) return;
-    if (!categories.includes(name)) {
-      setCategories(prev => [...prev, name]);
+    try {
+      const created = await addCategory(name, formData.type);
+      setField('category', created.name);
+      setCategorySearch('');
+      setNewCatName('');
+      setNewCatMode(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao criar categoria.');
     }
-    setField('category', name);
-    setNewCatName('');
-    setNewCatMode(false);
-  }, [newCatName, categories, setField]);
+  }, [addCategory, formData.type, newCatName, setField]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setField(e.target.name as keyof FormData, e.target.value as FormData[keyof FormData]);
@@ -269,7 +359,7 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
         <form onSubmit={(e) => void handleSubmit(e)} className="px-6 pb-6 space-y-5">
           <div>
             <label className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Tipo</label>
-            <TypeToggle value={formData.type} onChange={v => setField('type', v)} />
+            <TypeToggle value={formData.type} onChange={handleTypeChange} />
           </div>
 
           <div>
@@ -304,14 +394,21 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
             <label className="flex items-center gap-1.5 text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">
               <Tag className="w-3 h-3" /> Categoria
               <span className="ml-auto text-slate-600 normal-case text-[10px]">
-                {CAT_META[formData.category]?.emoji ?? '•'} {formData.category}
+                {loadingCategories ? 'Carregando…' : `${CAT_META[formData.category]?.emoji ?? '•'} ${formData.category}`}
               </span>
             </label>
             <CategoryPicker
               value={formData.category}
               onChange={v => setField('category', v)}
-              categories={categories}
+              categories={filteredCategories}
+              search={categorySearch}
+              onSearchChange={setCategorySearch}
             />
+            {categoriesError && (
+              <p className="mt-1.5 text-[10px] text-amber-400">
+                Não foi possível carregar categorias salvas. Usando categorias padrão.
+              </p>
+            )}
 
             {/* ── Nova categoria inline ──────────────────────────────── */}
             <AnimatePresence initial={false}>
@@ -330,7 +427,7 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
                       value={newCatName}
                       onChange={e => setNewCatName(e.target.value)}
                       onKeyDown={e => {
-                        if (e.key === 'Enter')  { e.preventDefault(); confirmNewCategory(); }
+                        if (e.key === 'Enter')  { e.preventDefault(); void confirmNewCategory(); }
                         if (e.key === 'Escape') { e.stopPropagation(); setNewCatMode(false); setNewCatName(''); }
                       }}
                       placeholder="Nome da categoria…"
@@ -339,8 +436,8 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
                     />
                     <button
                       type="button"
-                      onClick={confirmNewCategory}
-                      disabled={!newCatName.trim()}
+                      onClick={() => void confirmNewCategory()}
+                      disabled={!newCatName.trim() || loadingCategories}
                       className="px-2.5 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       title="Confirmar"
                     >
