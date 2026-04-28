@@ -9,12 +9,16 @@ import {
   orderBy,
   writeBatch,
   serverTimestamp,
+  deleteField,
   type CollectionReference,
 } from 'firebase/firestore';
+import { z } from 'zod';
 import { db } from '../api/firebase/index';
 import {
-  transactionCreateSchema,
-  transactionUpdateSchema,
+  centavosSchema,
+  dateSchema,
+  sourceSchema,
+  transactionTypeSchema,
   type FinancialSource,
 } from '../schemas/financialSchemas';
 import { fromCentavos, toCentavos, type Centavos, type MoneyInput } from '../types/money';
@@ -29,6 +33,31 @@ const TX_CHUNK_SIZE = 450;
 
 const txCol = (uid: string): CollectionReference =>
   collection(db, 'users', uid, 'transactions');
+
+const writeCategorySchema = z.string().trim().min(1).max(80);
+
+const transactionWriteCreateSchema = z.object({
+  description: z.string().trim().min(2).max(160),
+  value_cents: centavosSchema,
+  schemaVersion: z.literal(2),
+  type: transactionTypeSchema,
+  category: writeCategorySchema,
+  date: dateSchema,
+  source: sourceSchema,
+  account: z.string().trim().min(1).max(120).optional(),
+  accountId: z.string().trim().min(1).max(120).optional(),
+  cardId: z.string().trim().min(1).max(120).optional(),
+  fitId: z.string().trim().min(1).max(160).nullable().optional(),
+  tags: z.array(z.string().trim().min(1).max(32)).max(20).optional(),
+  isRecurring: z.boolean().optional(),
+}).strict();
+
+const transactionWriteUpdateSchema = transactionWriteCreateSchema.partial()
+  .extend({
+    isDeleted: z.boolean().optional(),
+    deletedAt: z.unknown().optional(),
+  })
+  .refine(value => Object.keys(value).length > 0, 'Atualização vazia.');
 
 export interface TransactionCreateDTO {
   description?: string;
@@ -64,6 +93,8 @@ export interface TransactionUpdateDTO {
   deletedAt?: unknown;
 }
 
+type TransactionCreatePayload = z.infer<typeof transactionWriteCreateSchema>;
+
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -92,11 +123,91 @@ function normalizeCreatePayload(data: TransactionCreateDTO) {
     ...(data.cardId ? { cardId: data.cardId } : {}),
   };
 
-  const parsed = transactionCreateSchema.safeParse(raw);
+  const parsed = transactionWriteCreateSchema.safeParse(raw);
   if (!parsed.success) {
     throw new Error(`Transação inválida: ${parsed.error.issues.map(issue => issue.message).join('; ')}`);
   }
   return parsed.data;
+}
+
+function debugAddPayload(payload: TransactionCreatePayload): void {
+  if (!import.meta.env.DEV) return;
+  console.warn('[Firestore][addTransaction][payload]', {
+    keys: Object.keys(payload).sort(),
+    type: payload.type,
+    category: payload.category,
+    date: payload.date,
+    source: payload.source,
+    value_cents: payload.value_cents,
+    schemaVersion: payload.schemaVersion,
+    hasDescription: payload.description.length > 0,
+    hasForbiddenFields: false,
+  });
+}
+
+function debugRejectedAddPayload(payload: TransactionCreatePayload, err: unknown): void {
+  if (!import.meta.env.DEV) return;
+  const code = typeof err === 'object' && err !== null && 'code' in err
+    ? String((err as { code?: unknown }).code ?? '')
+    : undefined;
+  if (code !== 'permission-denied') return;
+  console.warn('[Firestore][addTransaction][permission-denied]', {
+    keys: Object.keys(payload).sort(),
+    type: payload.type,
+    category: payload.category,
+    date: payload.date,
+    source: payload.source,
+    value_cents: payload.value_cents,
+    schemaVersion: payload.schemaVersion,
+    forbiddenFieldsPresent: ['uid', 'id', 'value', 'createdAt', 'updatedAt']
+      .filter(field => field in (payload as unknown as Record<string, unknown>)),
+  });
+}
+
+function getFirebaseErrorCode(err: unknown): string | undefined {
+  return typeof err === 'object' && err !== null && 'code' in err
+    ? String((err as { code?: unknown }).code ?? '')
+    : undefined;
+}
+
+function debugUpdatePayload(
+  id: string,
+  payload: Record<string, unknown>,
+  removesLegacyFields: boolean,
+): void {
+  if (!import.meta.env.DEV) return;
+  console.warn('[Firestore][updateTransaction][payload]', {
+    id,
+    keys: Object.keys(payload).sort(),
+    operation: 'update',
+    removesLegacyFields,
+    type: payload['type'],
+    category: payload['category'],
+    date: payload['date'],
+    source: payload['source'],
+    value_cents: payload['value_cents'],
+    schemaVersion: payload['schemaVersion'],
+    hasDescription: typeof payload['description'] === 'string' && payload['description'].length > 0,
+    forbiddenFieldsPresentAfterWrite: false,
+  });
+}
+
+function debugRejectedUpdatePayload(id: string, payload: Record<string, unknown>, err: unknown): void {
+  if (!import.meta.env.DEV) return;
+  if (getFirebaseErrorCode(err) !== 'permission-denied') return;
+  console.warn('[Firestore][updateTransaction][permission-denied]', {
+    id,
+    keys: Object.keys(payload).sort(),
+    operation: 'update',
+    removesLegacyFields: true,
+    type: payload['type'],
+    category: payload['category'],
+    date: payload['date'],
+    source: payload['source'],
+    value_cents: payload['value_cents'],
+    schemaVersion: payload['schemaVersion'],
+    legacyFieldsRequestedForDeletion: ['uid', 'id', 'value'],
+  });
 }
 
 function normalizeUpdatePayload(data: TransactionUpdateDTO): Record<string, unknown> {
@@ -120,7 +231,7 @@ function normalizeUpdatePayload(data: TransactionUpdateDTO): Record<string, unkn
   if (data.isDeleted !== undefined) payload['isDeleted'] = data.isDeleted;
   if (data.deletedAt !== undefined) payload['deletedAt'] = data.deletedAt;
 
-  const parsed = transactionUpdateSchema.safeParse(payload);
+  const parsed = transactionWriteUpdateSchema.safeParse(payload);
   if (!parsed.success) {
     throw new Error(`Atualização inválida: ${parsed.error.issues.map(issue => issue.message).join('; ')}`);
   }
@@ -169,21 +280,37 @@ export const FirestoreService = {
   async addTransaction(uid: string, data: TransactionCreateDTO): Promise<string> {
     if (!uid) throw new Error('[Firestore][addTransaction] UID ausente.');
     const payload = normalizeCreatePayload(data);
-    const docRef = await addDoc(txCol(uid), {
-      ...payload,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    return docRef.id;
+    debugAddPayload(payload);
+    try {
+      const docRef = await addDoc(txCol(uid), {
+        ...payload,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      return docRef.id;
+    } catch (err) {
+      debugRejectedAddPayload(payload, err);
+      throw err;
+    }
   },
 
   async updateTransaction(uid: string, id: string, data: TransactionUpdateDTO): Promise<void> {
     if (!uid || !id) throw new Error('[Firestore][updateTransaction] UID ou ID ausente.');
     const payload = normalizeUpdatePayload(data);
-    await updateDoc(doc(txCol(uid), id), {
+    const writePayload = {
       ...payload,
+      uid: deleteField(),
+      id: deleteField(),
+      value: deleteField(),
       updatedAt: serverTimestamp(),
-    });
+    };
+    debugUpdatePayload(id, payload, true);
+    try {
+      await updateDoc(doc(txCol(uid), id), writePayload);
+    } catch (err) {
+      debugRejectedUpdatePayload(id, payload, err);
+      throw err;
+    }
   },
 
   async deleteTransaction(uid: string, id: string): Promise<void> {
@@ -229,6 +356,9 @@ export const FirestoreService = {
           : doc(collection(db, 'transactions'), id);
         batch.update(ref, {
           ...payload,
+          uid: deleteField(),
+          id: deleteField(),
+          value: deleteField(),
           updatedAt: serverTimestamp(),
         });
       });

@@ -16,6 +16,22 @@ interface UseTransactionActionsParams {
   setTransactionToDelete: (tx: Transaction | null) => void;
 }
 
+function transactionErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const lower = message.toLowerCase();
+
+  if (lower.includes('permiss') || lower.includes('permission-denied')) {
+    return 'A movimentação foi recusada pelas regras do Firebase. Verifique campos proibidos no payload.';
+  }
+  if (lower.includes('network') || lower.includes('offline') || lower.includes('unavailable')) {
+    return 'Falha de conexão. A movimentação não foi confirmada.';
+  }
+  if (lower.includes('inválid') || lower.includes('invalid')) {
+    return message;
+  }
+  return message || 'Ocorreu um erro ao gravar. Tente novamente.';
+}
+
 export function useTransactionActions({
   user,
   update,
@@ -48,7 +64,7 @@ export function useTransactionActions({
       setTransactionToEdit(null);
     } catch (error) {
       console.error('Falha ao gravar no Cofre:', error);
-      toast.error('Ocorreu um erro ao gravar. Tente novamente.');
+      toast.error(transactionErrorMessage(error));
     }
   }, [transactionToEdit, update, add, setIsFormOpen, setTransactionToEdit]);
 
