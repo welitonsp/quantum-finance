@@ -1,5 +1,5 @@
 import type { ParsedTransaction } from '../types/transaction';
-import { toCentavos } from '../types/money';
+import { fromCentavos, toCentavos, type Centavos } from '../types/money';
 
 function readFileAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -12,7 +12,7 @@ function readFileAsText(file: File): Promise<string> {
 
 function extractTag(block: string, tag: string): string | null {
   const match = block.match(new RegExp(`<${tag}>([^<\\r\\n]+)`));
-  return match ? match[1].trim() : null;
+  return match?.[1]?.trim() ?? null;
 }
 
 function parseOFXDate(raw: string | null): string | null {
@@ -24,8 +24,18 @@ function parseOFXDate(raw: string | null): string | null {
   const month = digits.slice(4, 6);
   const day   = digits.slice(6, 8);
 
-  const date = new Date(`${year}-${month}-${day}T12:00:00`);
-  return isNaN(date.getTime()) ? null : `${year}-${month}-${day}`;
+  const iso = `${year}-${month}-${day}`;
+  const date = new Date(`${iso}T12:00:00Z`);
+  return !isNaN(date.getTime()) && date.toISOString().slice(0, 10) === iso ? iso : null;
+}
+
+function parseAmountCents(raw: string | null): Centavos | null {
+  if (!raw) return null;
+  try {
+    return toCentavos(raw.replace(',', '.'));
+  } catch {
+    return null;
+  }
 }
 
 export async function parseOFX(file: File): Promise<ParsedTransaction[]> {
@@ -42,29 +52,28 @@ export async function parseOFX(file: File): Promise<ParsedTransaction[]> {
   let match: RegExpExecArray | null;
 
   while ((match = trnRegex.exec(text)) !== null) {
-    const block = match[1];
+    const block = match[1] ?? '';
 
     const fitId = extractTag(block, 'FITID');
     if (fitId && seenFitIds.has(fitId)) continue;
     if (fitId) seenFitIds.add(fitId);
 
-    const amountStr = extractTag(block, 'TRNAMT');
-    const amount = amountStr ? parseFloat(amountStr.replace(',', '.')) : null;
+    const amount = parseAmountCents(extractTag(block, 'TRNAMT'));
 
-    if (amount === null || isNaN(amount) || amount === 0) continue;
+    if (amount === null || amount === 0) continue;
 
     const dateRaw = extractTag(block, 'DTPOSTED');
-    const date = parseOFXDate(dateRaw) ?? new Date().toISOString().split('T')[0];
+    const date = parseOFXDate(dateRaw) ?? new Date().toISOString().split('T')[0] ?? '';
 
     const memo = extractTag(block, 'MEMO') ?? extractTag(block, 'NAME') ?? 'Transação OFX';
     const type = amount > 0 ? 'entrada' : 'saida';
-    const amountCents = toCentavos(Math.abs(amount));
+    const amountCents = Math.abs(amount) as Centavos;
 
     transactions.push({
-      id:          fitId || crypto.randomUUID(),
+      id:          fitId || `ofx:${transactions.length}:${date}:${amountCents}`,
       fitId:       fitId || null,
       description: (memo as string).replace(/\s+/g, ' ').trim(),
-      value:       Math.abs(amount),
+      value:       fromCentavos(amountCents),
       value_cents: amountCents,
       schemaVersion: 2,
       type,

@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import { GeminiService } from '../features/ai-chat/GeminiService';
 import type { Transaction, ModuleBalances } from '../shared/types/transaction';
-import { isExpense, isIncome } from '../utils/transactionUtils';
+import { getTransactionAbsCentavos, isExpense, isIncome } from '../utils/transactionUtils';
+import { fromCentavos } from '../shared/types/money';
 
 interface Props {
   transactions?: Transaction[];
@@ -29,12 +30,16 @@ interface BurnMetrics {
 }
 interface Anomaly { cat: string; totalAtual: number; mediaHist: number; desvio: number }
 
+function txAmountReais(tx: Transaction): number {
+  return fromCentavos(getTransactionAbsCentavos(tx));
+}
+
 function groupByCategory(transactions: Transaction[]): CatTotal[] {
   const map: Record<string, number> = {};
   transactions.forEach(tx => {
     if (!isExpense(tx.type)) return;
     const cat = tx.category ?? 'Outros';
-    map[cat] = (map[cat] ?? 0) + Math.abs(Number(tx.value ?? 0));
+    map[cat] = (map[cat] ?? 0) + txAmountReais(tx);
   });
   return Object.entries(map).sort((a, b) => b[1] - a[1]).map(([cat, total]) => ({ cat, total }));
 }
@@ -51,7 +56,7 @@ function calcBurnMetrics(transactions: Transaction[], currentMonth: number, curr
         const d = new Date((tx.date ?? tx.createdAt) as string);
         return d.getMonth() + 1 === currentMonth && d.getFullYear() === currentYear;
       })
-      .reduce((acc, tx) => acc + Math.abs(Number(tx.value ?? 0)), 0);
+      .reduce((acc, tx) => acc + txAmountReais(tx), 0);
 
   const despesasMes   = filterByPredicate(isExpense);
   const receitasMes   = filterByPredicate(isIncome);
@@ -123,7 +128,7 @@ function AnomaliesPanel({ transactions, currentMonth, currentYear }: AnomaliesPa
       const d = new Date((tx.date ?? tx.createdAt) as string);
       if (d.getMonth() + 1 !== currentMonth || d.getFullYear() !== currentYear) return;
       const cat = tx.category ?? 'Outros';
-      catAtual[cat] = (catAtual[cat] ?? 0) + Math.abs(Number(tx.value ?? 0));
+      catAtual[cat] = (catAtual[cat] ?? 0) + txAmountReais(tx);
     });
 
     const catMedia: Record<string, number> = {};
@@ -133,7 +138,7 @@ function AnomaliesPanel({ transactions, currentMonth, currentYear }: AnomaliesPa
         const d = new Date((tx.date ?? tx.createdAt) as string);
         if (d.getMonth() + 1 !== month || d.getFullYear() !== year) return;
         const cat = tx.category ?? 'Outros';
-        catMedia[cat] = (catMedia[cat] ?? 0) + Math.abs(Number(tx.value ?? 0));
+        catMedia[cat] = (catMedia[cat] ?? 0) + txAmountReais(tx);
       });
     });
 

@@ -54,15 +54,16 @@ export function useAccounts(uid: string): UseAccountsReturn {
       (snapshot) => {
         const data: Account[] = snapshot.docs.map(d => {
           const raw = d.data();
-          return {
+          const account: Account = {
             id:            d.id,
             name:          (raw['name'] as string) ?? '',
             type:          (raw['type'] as Account['type']) ?? 'corrente',
             balance:       normalizeBalance(raw['balance'], raw['schemaVersion']),
-            schemaVersion: raw['schemaVersion'] === 2 ? 2 : undefined,
             createdAt:     raw['createdAt'] ?? null,
             updatedAt:     raw['updatedAt'] ?? null,
           };
+          if (raw['schemaVersion'] === 2) account.schemaVersion = 2;
+          return account;
         });
         data.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         setAccounts(data);

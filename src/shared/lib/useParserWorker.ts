@@ -67,7 +67,7 @@ export function useParserWorker() {
   }, []);
 
   const parseFile = useCallback((file: File, opts: Record<string, unknown> = {}): Promise<ParsedTransaction[]> => {
-    return new Promise(async (resolve, reject) => {
+    return new Promise((resolve, reject) => {
       if (!workerRef.current) {
         reject(new Error('Parser worker não está disponível.'));
         return;
@@ -76,20 +76,18 @@ export function useParserWorker() {
       const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
       const id  = crypto.randomUUID();
 
-      let buffer: ArrayBuffer;
-      try {
-        buffer = await file.arrayBuffer();
-      } catch (e: unknown) {
-        const err = e as Error;
-        reject(new Error(`Falha ao ler o ficheiro "${file.name}": ${err.message}`));
-        return;
-      }
-
-      pendingRef.current.set(id, { resolve, reject });
-      workerRef.current.postMessage(
-        { id, type: ext, buffer, fileName: file.name, ...opts },
-        [buffer]
-      );
+      file.arrayBuffer()
+        .then((buffer) => {
+          pendingRef.current.set(id, { resolve, reject });
+          workerRef.current?.postMessage(
+            { id, type: ext, buffer, fileName: file.name, ...opts },
+            [buffer],
+          );
+        })
+        .catch((e: unknown) => {
+          const err = e as Error;
+          reject(new Error(`Falha ao ler o ficheiro "${file.name}": ${err.message}`));
+        });
     });
   }, []);
 

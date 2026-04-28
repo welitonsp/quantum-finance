@@ -59,10 +59,13 @@ export default function QuantumBackground() {
     const drawConnections = () => {
       for (let i = 0; i < particles.length; i++) {
         for (let j = i+1; j < particles.length; j++) {
-          const dx = particles[i].x - particles[j].x, dy = particles[i].y - particles[j].y;
+          const a = particles[i];
+          const b = particles[j];
+          if (!a || !b) continue;
+          const dx = a.x - b.x, dy = a.y - b.y;
           const dist = Math.sqrt(dx*dx + dy*dy);
           if (dist < CONNECTION_DISTANCE) {
-            ctx.beginPath(); ctx.moveTo(particles[i].x, particles[i].y); ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
             ctx.strokeStyle = `rgba(0,230,138,${(1-dist/CONNECTION_DISTANCE)*0.15})`; ctx.lineWidth = 0.5; ctx.stroke();
           }
         }

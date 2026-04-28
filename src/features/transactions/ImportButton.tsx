@@ -5,19 +5,20 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   UploadCloud, Loader2, AlertTriangle, CheckCircle2,
-  X, FileUp, BrainCircuit, Eye, ChevronDown, ArrowRight,
+  X, FileUp, BrainCircuit, ChevronDown, ArrowRight,
   CheckSquare, Square, RotateCcw, Zap,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { useParserWorker } from '../../shared/lib/useParserWorker';
 import { batchCategorizeDescriptions } from '../../utils/aiCategorize';
-import { ALLOWED_CATEGORIES, transactionSchema } from '../../shared/schemas/financialSchemas';
+import { ALLOWED_CATEGORIES, transactionCreateSchema } from '../../shared/schemas/financialSchemas';
 import { CATEGORY_KEYWORDS } from '../../shared/data/categoryKeywords';
 import ReconciliationEngine from './ReconciliationEngine';
 import type { Transaction } from '../../shared/types/transaction';
 import type { AllowedCategory } from '../../shared/schemas/financialSchemas';
-import { isIncome, isExpense } from '../../utils/transactionUtils';
+import { getTransactionAbsCentavos, isIncome, isExpense } from '../../utils/transactionUtils';
+import { fromCentavos, toCentavos, type Centavos } from '../../shared/types/money';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ImportStatus =
@@ -63,9 +64,9 @@ interface ParseError extends Error {
 
 interface Props {
   onImportTransactions: (txs: ParsedTransaction[]) => Promise<ImportResult | void>;
-  uid?:                  string;
+  uid?:                  string | undefined;
   existingTransactions?: Transaction[];
-  userRules?:            import('../../hooks/useCategoryRules').UserCategoryRule[];
+  userRules?:            import('../../hooks/useCategoryRules').UserCategoryRule[] | undefined;
 }
 
 
@@ -325,8 +326,12 @@ function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) 
   const toggleAll = () => setItems(prev => prev.map(t => ({ ...t, _selected: !allChecked })));
   const setCat    = (id: string, cat: string) => setItems(prev => prev.map(t => t.id === id ? { ...t, category: cat } : t));
 
-  const totEntry = selected.filter(t => isIncome(t.type)).reduce((a, t) => a + (t.value as number), 0);
-  const totExit  = selected.filter(t => isExpense(t.type)).reduce((a, t) => a + (t.value as number), 0);
+  const totEntry = selected
+    .filter(t => isIncome(t.type))
+    .reduce((a, t) => a + fromCentavos(getTransactionAbsCentavos(t)), 0);
+  const totExit = selected
+    .filter(t => isExpense(t.type))
+    .reduce((a, t) => a + fromCentavos(getTransactionAbsCentavos(t)), 0);
 
   const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -423,7 +428,7 @@ function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) 
                     <td className={`px-3 py-2 text-right font-mono font-bold whitespace-nowrap ${
                       (tx.type === 'entrada' || tx.type === 'receita') ? 'text-quantum-accent' : 'text-quantum-red'
                     }`}>
-                      {(tx.type === 'entrada' || tx.type === 'receita') ? '+' : '-'}{fmt(tx.value as number)}
+                      {(tx.type === 'entrada' || tx.type === 'receita') ? '+' : '-'}{fmt(fromCentavos(getTransactionAbsCentavos(tx)))}
                     </td>
                   </motion.tr>
                 ))}
@@ -432,10 +437,6 @@ function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) 
           </table>
         </div>
       </div>
-
-      {/* Suppress unused import warning */}
-      {false && <Eye />}
-
       <div className="flex gap-3">
         <button onClick={onCancel} className="btn-quantum-secondary flex items-center gap-2">
           <RotateCcw className="w-3.5 h-3.5" /> Recomeçar
@@ -526,16 +527,15 @@ export default function ImportButton({ onImportTransactions, existingTransaction
   const deduplicate = useCallback((parsed: ParsedTransaction[]) => {
     const existingHashes = new Set<string>();
     existingTransactions.forEach(t => {
-      const val  = Number(t.value ?? 0);
+      const val  = getTransactionAbsCentavos(t);
       const desc = (t.description ?? '').substring(0, 12).toLowerCase().trim();
       const date = (t.date ?? '').substring(0, 10);
-      existingHashes.add(`${date}-${Math.round(val * 100)}-${desc}`);
-      existingHashes.add(`${date}-${Math.round(val)}-${desc}`);
+      existingHashes.add(`${date}-${val}-${desc}`);
     });
 
     let duplicates = 0;
     const fresh = parsed.filter(tx => {
-      const val  = Math.round(Number(tx.value) * 100);
+      const val  = getTransactionAbsCentavos(tx);
       const desc = tx.description.substring(0, 12).toLowerCase().trim();
       const date = (tx.date ?? '').substring(0, 10);
       const hash = `${date}-${val}-${desc}`;
@@ -665,14 +665,44 @@ export default function ImportButton({ onImportTransactions, existingTransaction
       let invalidCount = 0;
 
       for (const tx of selectedTxs) {
-        const cleanTx = { ...tx };
-        delete (cleanTx as any)._selected;       // eslint-disable-line @typescript-eslint/no-explicit-any
-        delete (cleanTx as any)._aiCategorized;  // eslint-disable-line @typescript-eslint/no-explicit-any
-        delete (cleanTx as any).id;              // eslint-disable-line @typescript-eslint/no-explicit-any
+        const {
+          id: previewId,
+          value: legacyValue,
+          _selected,
+          _aiCategorized,
+          ...rawTx
+        } = tx;
+        void previewId;
+        void _selected;
+        void _aiCategorized;
 
-        const zodResult = transactionSchema.safeParse(cleanTx);
+        const cleanTx = {
+          ...rawTx,
+          value_cents: rawTx.value_cents ?? toCentavos(legacyValue ?? 0),
+          schemaVersion: 2,
+          source: rawTx.source ?? 'csv',
+        };
+
+        const zodResult = transactionCreateSchema.safeParse(cleanTx);
         if (zodResult.success) {
-          validated.push(cleanTx);
+          const parsedData = zodResult.data;
+          const validData: Partial<Transaction> = {
+            description: parsedData.description,
+            value_cents: parsedData.value_cents as Centavos,
+            type: parsedData.type,
+            category: parsedData.category,
+            date: parsedData.date,
+            source: parsedData.source,
+            schemaVersion: 2,
+          };
+
+          if (parsedData.account !== undefined) validData.account = parsedData.account;
+          if (parsedData.accountId !== undefined) validData.accountId = parsedData.accountId;
+          if (parsedData.cardId !== undefined) validData.cardId = parsedData.cardId;
+          if (parsedData.fitId !== undefined) validData.fitId = parsedData.fitId;
+          if (parsedData.tags !== undefined) validData.tags = parsedData.tags;
+          if (parsedData.isRecurring !== undefined) validData.isRecurring = parsedData.isRecurring;
+          validated.push(validData);
         } else {
           invalidCount++;
           console.warn('[Import] Transação rejeitada:', cleanTx, zodResult.error.issues);

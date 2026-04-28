@@ -38,29 +38,47 @@ export default defineConfig({
       },
     }),
   ],
+
   build: {
     rollupOptions: {
       output: {
         manualChunks: {
-          'vendor-react':    ['react', 'react-dom'],
+          'vendor-react': ['react', 'react-dom'],
           'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/functions'],
-          'vendor-charts':   ['chart.js', 'react-chartjs-2', 'recharts'],
-          'vendor-utils':    ['decimal.js', 'zod', '@tanstack/react-query'],
-          'vendor-pdfjs':    ['pdfjs-dist'],
+          'vendor-charts': ['chart.js', 'react-chartjs-2', 'recharts'],
+          'vendor-utils': ['decimal.js', 'zod', '@tanstack/react-query'],
+          'vendor-pdfjs': ['pdfjs-dist'],
         },
       },
     },
     chunkSizeWarningLimit: 500,
     sourcemap: false,
   },
+
   worker: {
     format: 'es',
   },
+
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     globals: true,
     css: false,
+
+    include: [
+      'src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
+    ],
+
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/coverage/**',
+      '**/.git/**',
+      '**/.firebase/**',
+      '**/.claude/**',
+      '**/.claude/worktrees/**',
+    ],
+
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov', 'json-summary'],
@@ -76,16 +94,14 @@ export default defineConfig({
         '**/*.test.ts',
         '**/*.test.tsx',
         'src/**/*.d.ts',
+        '**/.claude/**',
+        '**/.claude/worktrees/**',
       ],
-      // Quality gate — thresholds calibrados ao baseline real do projeto.
-      // A maioria dos hooks depende de Firebase/React e não tem testes unitários,
-      // o que mantém a média global baixa. Subir gradualmente conforme PR plan.
-      // Meta Q3-2026: lines 80, functions 80, branches 70.
       thresholds: {
-        lines:     14,    // PR 12.A: +1pp com services testados (baseline 14.98%)
-        functions: 12,    // PR 12.A: +2pp com FirestoreService/AuditService (baseline 13.58%)
-        branches:  7,     // PR 12.A: +2pp (baseline 12.66%)
-        statements: 13,   // PR 12.A: +1pp (baseline 14.05%)
+        lines: 14,
+        functions: 12,
+        branches: 7,
+        statements: 13,
       },
     },
   },

@@ -1,11 +1,12 @@
 // src/features/reports/ReportsContent.tsx
 import { useState, useMemo } from 'react';
 import { ComposedChart, BarChart, Bar, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Target, Filter, AlertCircle, Calendar, Scissors, Sparkles, AlertTriangle } from 'lucide-react';
+import { Filter, AlertCircle, Calendar, Scissors, Sparkles, AlertTriangle } from 'lucide-react';
 import Decimal from 'decimal.js';
 import { formatCurrency } from '../../utils/formatters';
 import type { Transaction, Account } from '../../shared/types/transaction';
-import { isExpense } from '../../utils/transactionUtils';
+import { getTransactionAbsCentavos, isExpense } from '../../utils/transactionUtils';
+import { fromCentavos } from '../../shared/types/money';
 import { calcPareto, calcPatrimonyEvolution } from '../../utils/reportEngine';
 
 interface Props {
@@ -52,7 +53,7 @@ export default function ReportsContent({ transactions, accounts }: Props) {
         const cat = t.category ?? 'Diversos';
         if (expenseFilter === 'variables' && CATEGORIAS_FIXAS.includes(cat)) return;
 
-        const val = new Decimal(Math.abs(Number(t.value ?? 0)));
+        const val = new Decimal(fromCentavos(getTransactionAbsCentavos(t)));
         catTotals[cat] = catTotals[cat]
           ? new Decimal(catTotals[cat]).plus(val).toNumber()
           : val.toNumber();

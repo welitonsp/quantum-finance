@@ -5,6 +5,8 @@ import { functions }     from '../../shared/api/firebase/index';
 import { maskPII, buildSafePromptRows } from '../../shared/lib/piiMasker';
 import type { Transaction } from '../../shared/types/transaction';
 import type { RecurringTask } from '../../shared/types/transaction';
+import { getTransactionAbsCentavos } from '../../utils/transactionUtils';
+import { fromCentavos, toCentavos } from '../../shared/types/money';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface FinancialContext {
@@ -81,9 +83,12 @@ export class GeminiService {
       currentYear:  currentYear  ?? new Date().getFullYear(),
       transactions:   buildSafePromptRows(transactions.slice(0, 50)),
       recurringTasks: recurringTasks.map(t => ({
-        ...t,
         description: maskPII(t.description ?? ''),
-        value:       t.value,
+        value_cents: t.value_cents ?? toCentavos(t.value ?? 0),
+        type: t.type ?? 'saida',
+        category: t.category ?? 'Outros',
+        dueDay: t.dueDay,
+        active: t.active,
       })),
     };
 
@@ -118,7 +123,12 @@ export class GeminiService {
       currentYear:  currentYear  ?? new Date().getFullYear(),
       transactions:   buildSafePromptRows(transactions.slice(0, 50)),
       recurringTasks: recurringTasks.map(t => ({
-        ...t, description: maskPII(t.description ?? ''),
+        description: maskPII(t.description ?? ''),
+        value_cents: t.value_cents ?? toCentavos(t.value ?? 0),
+        type: t.type ?? 'saida',
+        category: t.category ?? 'Outros',
+        dueDay: t.dueDay,
+        active: t.active,
       })),
     };
 
@@ -235,7 +245,7 @@ export class GeminiService {
         const key = `${d.getFullYear()}-${d.getMonth()}`;
         if (!byMonth[key]) byMonth[key] = {};
         const cat = tx.category ?? 'Outros';
-        byMonth[key]![cat] = (byMonth[key]![cat] ?? 0) + Math.abs(Number(tx.value ?? 0));
+        byMonth[key]![cat] = (byMonth[key]![cat] ?? 0) + fromCentavos(getTransactionAbsCentavos(tx));
       });
 
       const months = Object.values(byMonth);
@@ -257,7 +267,7 @@ export class GeminiService {
       currentMonthTxs.forEach(tx => {
         if (tx.type !== 'saida' && tx.type !== 'despesa') return;
         const cat = tx.category ?? 'Outros';
-        currentByCat[cat] = (currentByCat[cat] ?? 0) + Math.abs(Number(tx.value ?? 0));
+        currentByCat[cat] = (currentByCat[cat] ?? 0) + fromCentavos(getTransactionAbsCentavos(tx));
       });
 
       return Object.entries(currentByCat)

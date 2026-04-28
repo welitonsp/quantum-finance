@@ -1,5 +1,5 @@
 import { useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import CountUp from 'react-countup';
 import {
   ArrowRightLeft, TrendingUp, TrendingDown, AlertTriangle,
@@ -10,7 +10,6 @@ import { useNavigation } from '../contexts/NavigationContext';
 import { formatCurrency } from '../utils/formatters';
 import { useDashboardData } from '../hooks/useFinancialData';
 import ForecastWidget from './ForecastWidget';
-import TransactionForm from '../features/transactions/TransactionForm';
 import ProactiveBriefing from './ProactiveBriefing';
 import SurvivalHeatmap from './SurvivalHeatmap';
 import WealthKPIs from './WealthKPIs';
@@ -78,13 +77,9 @@ export default function DashboardContent({
   loading,
   moduleBalances,
   monthlyGoal,
-  onSaveTransaction,
   onEditTransaction,
-  isFormOpen,
   setIsFormOpen,
-  transactionToEdit,
   setTransactionToEdit,
-  onCloseForm,
   accounts,
   recurringTasks,
 }: Props) {

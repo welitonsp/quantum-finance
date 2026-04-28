@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { Transaction } from '../shared/types/transaction';
-import { isIncome } from '../utils/transactionUtils';
+import { getTransactionAbsCentavos, isIncome } from '../utils/transactionUtils';
+import { fromCentavos } from '../shared/types/money';
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
 
@@ -12,13 +13,6 @@ export interface FinancialKPIs {
   projectedBalance: number;  // saldo estimado no fim do mês
 }
 
-// ─── Guard ────────────────────────────────────────────────────────────────────
-
-const safe = (v: unknown): number => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-};
-
 // ─── Pure computation (exported for deterministic testing) ────────────────────
 
 export function computeKPIs(transactions: Transaction[], now: Date): FinancialKPIs {
@@ -26,7 +20,7 @@ export function computeKPIs(transactions: Transaction[], now: Date): FinancialKP
   let totalExpense = 0;
 
   for (const tx of transactions) {
-    const val = Math.abs(safe(tx.value));
+    const val = fromCentavos(getTransactionAbsCentavos(tx));
     if (isIncome(tx.type)) totalIncome  += val;
     else                   totalExpense += val;
   }

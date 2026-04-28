@@ -2,7 +2,9 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import type { Transaction } from '../shared/types/transaction';
 import { calculateForecast } from '../utils/forecastEngine';
 import { isIncome as checkIncomeStr } from '../utils/transactionUtils';
+import { getTransactionAbsCentavos } from '../utils/transactionUtils';
 import { generateHash } from '../utils/hashGenerator';
+import { fromCentavos } from '../shared/types/money';
 import type { ForecastResult, ForecastHealth, ForecastPoint } from '../utils/forecastEngine';
 
 // Re-export deterministic types for backward compatibility
@@ -72,10 +74,10 @@ function isIncomeTx(tx: Transaction): boolean {
   return checkIncomeStr(tx.type);
 }
 
-function computeMCInputs(transactions: Transaction[]): MCInputs {
-  const now     = Date.now();
-  const cutoff  = new Date(now - 30 * 86_400_000).toISOString().slice(0, 10);
-  const today   = new Date(now).toISOString().slice(0, 10);
+export function computeMCInputs(transactions: Transaction[], now: Date = new Date()): MCInputs {
+  const nowMs   = now.getTime();
+  const cutoff  = new Date(nowMs - 30 * 86_400_000).toISOString().slice(0, 10);
+  const today   = new Date(nowMs).toISOString().slice(0, 10);
 
   const recent  = transactions.filter(tx => tx.date && tx.date > cutoff && tx.date <= today);
 
@@ -84,7 +86,8 @@ function computeMCInputs(transactions: Transaction[]): MCInputs {
 
   for (const tx of recent) {
     if (!tx.date) continue;
-    const v = Math.abs(Number(tx.value ?? 0));
+    if (tx.value_cents === undefined) continue;
+    const v = getTransactionAbsCentavos(tx);
     if (isIncomeTx(tx)) dailyInc.set(tx.date, (dailyInc.get(tx.date) ?? 0) + v);
     else                 dailyExp.set(tx.date, (dailyExp.get(tx.date) ?? 0) + v);
   }
@@ -92,20 +95,24 @@ function computeMCInputs(transactions: Transaction[]): MCInputs {
   // Build 30-point daily expense vector (0 for empty days)
   const expVals: number[] = [];
   for (let d = 29; d >= 0; d--) {
-    const ds = new Date(now - d * 86_400_000).toISOString().slice(0, 10);
+    const ds = new Date(nowMs - d * 86_400_000).toISOString().slice(0, 10);
     expVals.push(dailyExp.get(ds) ?? 0);
   }
 
   const totalExp       = expVals.reduce((a, b) => a + b, 0);
   const totalInc       = Array.from(dailyInc.values()).reduce((a, b) => a + b, 0);
-  const burnRate       = totalExp / 30;
-  const expectedIncome = totalInc / 30;
+  const burnRateCents       = Math.round(totalExp / 30);
+  const expectedIncomeCents = Math.round(totalInc / 30);
 
   // Population std dev of daily expenses
-  const variance   = expVals.reduce((acc, v) => acc + (v - burnRate) ** 2, 0) / 30;
-  const volatility = Math.sqrt(variance);
+  const variance   = expVals.reduce((acc, v) => acc + (v - burnRateCents) ** 2, 0) / 30;
+  const volatilityCents = Math.round(Math.sqrt(variance));
 
-  return { burnRate, expectedIncome, volatility };
+  return {
+    burnRate:       fromCentavos(burnRateCents),
+    expectedIncome: fromCentavos(expectedIncomeCents),
+    volatility:     fromCentavos(volatilityCents),
+  };
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -191,7 +198,7 @@ export function useForecast(
 ): UseForecastResult {
   // Stable content hash — recalculates only when id/value/date change
   const txHash = useMemo(
-    () => generateHash(transactions.map(t => t.id + String(t.value ?? 0) + (t.date ?? ''))),
+    () => generateHash(transactions.map(t => t.id + String(t.value_cents ?? '') + (t.date ?? ''))),
     [transactions],
   );
 
@@ -216,6 +223,7 @@ export function useForecast(
   const isRunningRef   = useRef(false);
   const currentJobRef  = useRef('');
   const debounceRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const jobSeqRef      = useRef(0);
 
   // Stable copies so the onmessage closure (set up once) always reads current values
   const mcInputsRef  = useRef<MCInputs>(mcInputs);
@@ -292,7 +300,8 @@ export function useForecast(
     debounceRef.current = setTimeout(() => {
       if (!workerRef.current || isRunningRef.current) return;
 
-      const jobId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      jobSeqRef.current += 1;
+      const jobId = `${txHash}_${currentBalance}_${jobSeqRef.current}`;
       currentJobRef.current = jobId;
       isRunningRef.current  = true;
       setMcStats(prev => ({ ...prev, mcLoading: true }));
@@ -311,7 +320,7 @@ export function useForecast(
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [currentBalance, mcInputs]);
+  }, [currentBalance, mcInputs, txHash]);
 
   return {
     ...deterministic,

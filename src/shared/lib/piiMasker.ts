@@ -1,16 +1,17 @@
 import type { Transaction } from '../types/transaction';
+import { getTransactionCentavos } from '../../utils/transactionUtils';
 
 const CPF_RE      = /\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g;
 const CNPJ_RE     = /\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/g;
 const CNPJ_PURE_RE = /\b\d{14}\b/g;
 const CPF_PURE_RE  = /\b\d{11}\b/g;
-const EMAIL_RE  = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
+const EMAIL_RE  = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 const UUID_RE   = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 const PHONE_RE  = /(?:\+?55[\s-]?)?(?:\(?\d{2}\)?[\s-]?)?\b9\d{4}[\s-]?\d{4}\b/g;
 const PIX_PARA_RE = /\bpix\s+(?:para|envio|pgto|pag\.?|transf\.?)\s+[A-Za-zÀ-ÿ][\w\sÀ-ÿ'.]{2,39}/gi;
 const PIX_DE_RE   = /\bpix\s+(?:de|rec(?:ebido)?\.?|rece?b?\.?)\s+[A-Za-zÀ-ÿ][\w\sÀ-ÿ'.]{2,39}/gi;
 const TRANSF_RE   = /\b(?:ted|doc)\s+(?:para|de)\s+[A-Za-zÀ-ÿ][\w\sÀ-ÿ'.]{2,39}/gi;
-const AGENCIA_RE  = /\b(?:ag\.?|agencia|cc|c\.c\.|conta)\s*[\d.\-\/]+/gi;
+const AGENCIA_RE  = /\b(?:ag\.?|agencia|cc|c\.c\.|conta)\s*[\d./-]+/gi;
 
 export function maskPII(text: string | undefined | null): string {
   if (!text) return '';
@@ -42,7 +43,7 @@ export function buildSafePromptRows(transactions: Array<Partial<Transaction>> = 
   return transactions.map(tx => ({
     id:          tx.id,
     date:        tx.date        || '',
-    value:       tx.value       ?? 0,
+    value_cents: getTransactionCentavos(tx) ?? 0,
     type:        tx.type        || 'saida',
     category:    tx.category    || 'Outros',
     description: maskPII(tx.description),

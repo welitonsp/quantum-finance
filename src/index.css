@@ -8,6 +8,7 @@
 
   /* ─── Tokens de Tema (Light) ─── */
   :root {
+    color-scheme: light;
     --q-bg:           #F8FAFC;
     --q-bg-sec:       #F1F5F9;
     --q-card:         #FFFFFF;
@@ -47,6 +48,7 @@
 
   /* ─── Tokens de Tema (Dark) ─── */
   .dark {
+    color-scheme: dark;
     --q-bg:           #0A0E17;
     --q-bg-sec:       #0F1520;
     --q-card:         #131A2A;

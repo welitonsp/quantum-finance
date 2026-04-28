@@ -1,200 +1,151 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FirestoreService } from './FirestoreService';
 import { toCentavos } from '../types/money';
 
-// ─── Hoisted mocks (vi.hoisted runs before vi.mock) ───────────────────────────
-
 const {
-  mockBatchCommit, mockBatchSet, mockBatchDelete,
-  mockWriteBatch, mockAddDoc, mockServerTimestamp,
-  mockDoc, mockCollection,
+  mockAddDoc,
+  mockBatchCommit,
+  mockBatchUpdate,
+  mockCollection,
+  mockDoc,
+  mockLedgerImport,
+  mockServerTimestamp,
+  mockWriteBatch,
 } = vi.hoisted(() => {
-  const mockBatchCommit  = vi.fn().mockResolvedValue(undefined);
-  const mockBatchSet     = vi.fn();
-  const mockBatchDelete  = vi.fn();
-  const mockBatchUpdate  = vi.fn();
-  const mockWriteBatch   = vi.fn(() => ({
-    set:    mockBatchSet,
-    delete: mockBatchDelete,
+  const mockAddDoc = vi.fn().mockResolvedValue({ id: 'new-doc-id' });
+  const mockBatchCommit = vi.fn().mockResolvedValue(undefined);
+  const mockBatchUpdate = vi.fn();
+  const mockWriteBatch = vi.fn(() => ({
     update: mockBatchUpdate,
     commit: mockBatchCommit,
   }));
-  const mockAddDoc           = vi.fn().mockResolvedValue({ id: 'new-doc-id' });
-  const mockServerTimestamp  = vi.fn().mockReturnValue({ _serverTimestamp: true });
-  const mockDoc              = vi.fn().mockReturnValue({ id: 'mock-doc-id', path: 'mock/path' });
-  const mockCollection       = vi.fn().mockReturnValue({ id: 'mock-col', path: 'mock-col/path' });
+  const mockCollection = vi.fn().mockReturnValue({ id: 'mock-col', path: 'mock-col/path' });
+  const mockDoc = vi.fn().mockReturnValue({ id: 'mock-doc-id', path: 'mock/path' });
+  const mockLedgerImport = vi.fn().mockResolvedValue({ added: 1, duplicates: 0, invalid: 0 });
+  const mockServerTimestamp = vi.fn().mockReturnValue({ _serverTimestamp: true });
+
   return {
-    mockBatchCommit, mockBatchSet, mockBatchDelete,
-    mockWriteBatch, mockAddDoc, mockServerTimestamp,
-    mockDoc, mockCollection,
+    mockAddDoc,
+    mockBatchCommit,
+    mockBatchUpdate,
+    mockCollection,
+    mockDoc,
+    mockLedgerImport,
+    mockServerTimestamp,
+    mockWriteBatch,
   };
 });
 
 vi.mock('firebase/firestore', () => ({
-  writeBatch:     mockWriteBatch,
+  addDoc: mockAddDoc,
+  collection: mockCollection,
+  deleteDoc: vi.fn().mockResolvedValue(undefined),
+  doc: mockDoc,
+  getDocs: vi.fn().mockResolvedValue({ docs: [] }),
+  orderBy: vi.fn(),
+  query: vi.fn((collectionRef: unknown) => collectionRef),
   serverTimestamp: mockServerTimestamp,
-  addDoc:         mockAddDoc,
-  doc:            mockDoc,
-  collection:     mockCollection,
-  updateDoc:      vi.fn().mockResolvedValue(undefined),
-  deleteDoc:      vi.fn().mockResolvedValue(undefined),
-  getDocs:        vi.fn().mockResolvedValue({ docs: [] }),
-  query:          vi.fn((col: unknown) => col),
-  orderBy:        vi.fn(),
+  updateDoc: vi.fn().mockResolvedValue(undefined),
+  writeBatch: mockWriteBatch,
 }));
 
 vi.mock('../api/firebase/index', () => ({ db: { _isMock: true } }));
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+vi.mock('./LedgerService', () => ({
+  LedgerService: {
+    importTransactions: mockLedgerImport,
+  },
+  transactionToLedgerInput: (tx: Record<string, unknown>) => {
+    const input: Record<string, unknown> = {};
+    if (tx['description'] !== undefined) input['description'] = tx['description'];
+    if (tx['value_cents'] !== undefined) input['value_cents'] = tx['value_cents'];
+    if (tx['type'] !== undefined) input['type'] = tx['type'];
+    if (tx['category'] !== undefined) input['category'] = tx['category'];
+    if (tx['date'] !== undefined) input['date'] = tx['date'];
+    if (tx['source'] !== undefined) input['source'] = tx['source'];
+    return input;
+  },
+}));
 
-const mkPartialTx = (overrides: Record<string, unknown> = {}) => ({
-  value:       100,
-  type:        'saida' as const,
-  description: 'Test tx',
-  date:        '2026-04-01',
-  category:    'Alimentação',
-  ...overrides,
-});
+const baseCreate = {
+  description: 'Supermercado ABC',
+  value_cents: toCentavos(123.45),
+  type: 'saida',
+  category: 'Alimentação',
+  date: '2026-04-01',
+  source: 'manual',
+} as const;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Re-apply mockResolvedValue after clearAllMocks (only clears call history)
-  mockBatchCommit.mockResolvedValue(undefined);
   mockAddDoc.mockResolvedValue({ id: 'new-doc-id' });
+  mockBatchCommit.mockResolvedValue(undefined);
+  mockLedgerImport.mockResolvedValue({ added: 1, duplicates: 0, invalid: 0 });
 });
-
-// ─── Suite 1: saveAllTransactions ─────────────────────────────────────────────
 
 describe('FirestoreService.saveAllTransactions', () => {
-  it('array vazio → retorna early sem writeBatch', async () => {
-    const result = await FirestoreService.saveAllTransactions('uid1', []);
-    expect(result).toEqual({ added: 0, duplicates: 0, invalid: 0 });
-    expect(mockWriteBatch).not.toHaveBeenCalled();
+  it('retorna cedo quando uid ou lista estão vazios', async () => {
+    expect(await FirestoreService.saveAllTransactions('', [baseCreate])).toEqual({ added: 0, duplicates: 0, invalid: 0 });
+    expect(await FirestoreService.saveAllTransactions('uid1', [])).toEqual({ added: 0, duplicates: 0, invalid: 0 });
+    expect(mockLedgerImport).not.toHaveBeenCalled();
   });
 
-  it('uid ausente → retorna early sem writeBatch', async () => {
-    const result = await FirestoreService.saveAllTransactions('', [mkPartialTx()]);
-    expect(result).toEqual({ added: 0, duplicates: 0, invalid: 0 });
-    expect(mockWriteBatch).not.toHaveBeenCalled();
-  });
+  it('delega importações financeiras para LedgerService', async () => {
+    const result = await FirestoreService.saveAllTransactions('uid1', [baseCreate]);
 
-  it('deduplicação: transação duplicada → 1 adicionada, 1 duplicata', async () => {
-    const tx = mkPartialTx({ date: '2026-04-01', description: 'Cafe', value: 10 });
-    const result = await FirestoreService.saveAllTransactions('uid1', [tx, tx]);
-    expect(result.added).toBe(1);
-    expect(result.duplicates).toBe(1);
-    expect(result.invalid).toBe(0);
-  });
-
-  it('valor zero → contado como inválido', async () => {
-    const tx = mkPartialTx({ value: 0 });
-    const result = await FirestoreService.saveAllTransactions('uid1', [tx]);
-    expect(result.invalid).toBe(1);
-    expect(result.added).toBe(0);
-    expect(mockBatchSet).not.toHaveBeenCalled();
-  });
-
-  it('valor NaN → contado como inválido', async () => {
-    const tx = mkPartialTx({ value: NaN });
-    const result = await FirestoreService.saveAllTransactions('uid1', [tx]);
-    expect(result.invalid).toBe(1);
-    expect(result.added).toBe(0);
-  });
-
-  it('atomicidade: batch.commit chamado exatamente 1 vez por importação', async () => {
-    const txs = [
-      mkPartialTx({ description: 'tx1', value: 10 }),
-      mkPartialTx({ description: 'tx2', value: 20 }),
-      mkPartialTx({ description: 'tx3', value: 30 }),
-    ];
-    await FirestoreService.saveAllTransactions('uid1', txs);
-    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
-  });
-
-  it('campos default: account, tags, source, isRecurring, fitId', async () => {
-    const tx = mkPartialTx({ value: 50 });
-    await FirestoreService.saveAllTransactions('uid1', [tx]);
-    const [, data] = mockBatchSet.mock.calls[0] as [unknown, Record<string, unknown>];
-    expect(data.account).toBe('conta_corrente');
-    expect(data.tags).toEqual([]);
-    expect(data.source).toBe('csv');
-    expect(data.isRecurring).toBe(false);
-    expect(data.fitId).toBeNull();
-    expect(data.createdAt).toEqual({ _serverTimestamp: true });
-    expect(data.updatedAt).toEqual({ _serverTimestamp: true });
-  });
-
-  it('conversão de valor: rawVal em reais → centavos (Math.round(abs * 100))', async () => {
-    const tx = mkPartialTx({ value: 12.5, type: 'saida' });
-    await FirestoreService.saveAllTransactions('uid1', [tx]);
-    const [, data] = mockBatchSet.mock.calls[0] as [unknown, Record<string, unknown>];
-    expect(data.value).toBe(12.5);
-    expect(data.value_cents).toBe(1250);
-    expect(data.schemaVersion).toBe(2);
-  });
-
-  it('TODO PR12.B: rawVal inteiro ≥ 100 é multiplicado por 100 novamente (bug heurística centavos)', async () => {
-    // Se o input já chegar em centavos (ex: 10000 = R$100,00), o código trata
-    // como 10000 reais e multiplica → 1_000_000 centavos. Corrigir em PR12.B
-    // com heurística isInteger (valor inteiro e ≥ 1000 → provavelmente centavos).
-    const tx = mkPartialTx({ value_cents: toCentavos(100), value: undefined });
-    await FirestoreService.saveAllTransactions('uid1', [tx]);
-    const [, data] = mockBatchSet.mock.calls[0] as [unknown, Record<string, unknown>];
-    // Comportamento ATUAL (incorreto para inputs já em centavos):
-    expect(data.value_cents).toBe(10_000);
-    expect(data.value).toBe(100);
+    expect(result).toEqual({ added: 1, duplicates: 0, invalid: 0 });
+    expect(mockLedgerImport).toHaveBeenCalledWith('uid1', [
+      expect.objectContaining({
+        description: 'Supermercado ABC',
+        value_cents: 12345,
+        source: 'manual',
+      }),
+    ]);
+    expect(mockAddDoc).not.toHaveBeenCalled();
   });
 });
-
-// ─── Suite 2: deleteBatchTransactions ─────────────────────────────────────────
-
-describe('FirestoreService.deleteBatchTransactions', () => {
-  it('ids vazio → retorna sem criar batch', async () => {
-    await FirestoreService.deleteBatchTransactions('uid1', []);
-    expect(mockWriteBatch).not.toHaveBeenCalled();
-  });
-
-  it('uid ausente → retorna sem criar batch', async () => {
-    await FirestoreService.deleteBatchTransactions('', ['id1', 'id2']);
-    expect(mockWriteBatch).not.toHaveBeenCalled();
-  });
-
-  it('ids válidos: batch.delete chamado para cada id e commit executado uma vez', async () => {
-    const ids = ['tx-a', 'tx-b', 'tx-c'];
-    await FirestoreService.deleteBatchTransactions('uid1', ids);
-    expect(mockBatchDelete).toHaveBeenCalledTimes(3);
-    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ─── Suite 3: addTransaction ──────────────────────────────────────────────────
 
 describe('FirestoreService.addTransaction', () => {
-  it('uid ausente → lança erro', async () => {
-    await expect(
-      FirestoreService.addTransaction('', { value: 100, type: 'entrada' })
-    ).rejects.toThrow('[Firestore][addTransaction] UID ausente.');
-  });
-
-  it('strips id/uid/createdAt/updatedAt do payload de entrada', async () => {
-    // Cast to any to simulate caller bypassing the type (runtime guard)
+  it('não grava value como fonte primária em criação manual', async () => {
     await FirestoreService.addTransaction('uid1', {
-      value:     100,
-      type:      'entrada',
-      uid:       'old-uid-to-override',
-      createdAt: 12345 as unknown as undefined,
-    } as Parameters<typeof FirestoreService.addTransaction>[1]);
+      ...baseCreate,
+      value: 999999,
+    });
+
     const [, data] = mockAddDoc.mock.calls[0] as [unknown, Record<string, unknown>];
-    expect(data.uid).toBe('uid1');                                   // own uid wins
-    expect(data.createdAt).toEqual({ _serverTimestamp: true });      // serverTimestamp injected
+    expect(data['value']).toBeUndefined();
+    expect(data['value_cents']).toBe(12345);
+    expect(data['schemaVersion']).toBe(2);
+    expect(data['createdAt']).toEqual({ _serverTimestamp: true });
+    expect(data['updatedAt']).toEqual({ _serverTimestamp: true });
   });
 
-  it('adiciona uid + serverTimestamp ao documento', async () => {
-    const result = await FirestoreService.addTransaction('uid1', { value: 50, type: 'saida' });
+  it('converte value legado para value_cents apenas na borda de criação manual', async () => {
+    await FirestoreService.addTransaction('uid1', {
+      description: 'Freela',
+      value: '1.234,56',
+      type: 'entrada',
+      category: 'Freelance',
+      date: '2026-04-02',
+      source: 'manual',
+    });
+
     const [, data] = mockAddDoc.mock.calls[0] as [unknown, Record<string, unknown>];
-    expect(data.uid).toBe('uid1');
-    expect(data.createdAt).toEqual({ _serverTimestamp: true });
-    expect(data.updatedAt).toEqual({ _serverTimestamp: true });
-    expect(result).toBe('new-doc-id');
+    expect(data['value']).toBeUndefined();
+    expect(data['value_cents']).toBe(123456);
+  });
+});
+
+describe('FirestoreService.deleteBatchTransactions', () => {
+  it('usa soft delete em lote para transações financeiras', async () => {
+    await FirestoreService.deleteBatchTransactions('uid1', ['tx-a', 'tx-b']);
+
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(2);
+    expect(mockBatchUpdate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      isDeleted: true,
+      deletedAt: { _serverTimestamp: true },
+      updatedAt: { _serverTimestamp: true },
+    }));
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
   });
 });

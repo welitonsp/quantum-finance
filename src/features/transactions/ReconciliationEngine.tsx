@@ -5,11 +5,12 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
-  ArrowLeft, ArrowRight, Trash2, CheckCircle2, GitMerge,
+  ArrowLeft, Trash2, CheckCircle2, GitMerge,
   Zap, ShieldCheck, ChevronRight, Sparkles,
 } from 'lucide-react';
 import type { Transaction } from '../../shared/types/transaction';
-import { isIncome as checkIncome } from '../../utils/transactionUtils';
+import { getTransactionAbsCentavos, isIncome as checkIncome } from '../../utils/transactionUtils';
+import { fromCentavos } from '../../shared/types/money';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type HintDir = 'left' | 'right' | 'down' | null;
@@ -65,12 +66,12 @@ const catClass = (cat: string | undefined): string =>
 function findMergeCandidate(tx: Transaction, existing: Transaction[]): Transaction | null {
   if (!existing?.length) return null;
   const txDate  = new Date(tx.date ?? '');
-  const txValue = Math.abs(Number(tx.value));
+  const txValue = getTransactionAbsCentavos(tx);
   if (!txValue) return null;
 
   for (const ex of existing) {
     const exDate  = new Date(ex.date ?? '');
-    const exValue = Math.abs(Number(ex.value));
+    const exValue = getTransactionAbsCentavos(ex);
     const dayDiff = Math.abs((txDate.getTime() - exDate.getTime()) / 86_400_000);
     if (dayDiff > 3) continue;
     const pctDiff = Math.abs(txValue - exValue) / Math.max(txValue, 0.01);
@@ -319,7 +320,7 @@ export default function ReconciliationEngine({
                       className={`text-xl sm:text-2xl font-black font-mono leading-none pb-1 pr-1 ${isIncome ? 'text-emerald-400' : 'text-red-400'}`}
                       style={{ textShadow: isIncome ? '0 0 20px rgba(52,211,153,0.5)' : '0 0 20px rgba(248,113,113,0.5)' }}
                     >
-                      {`${isIncome ? '+' : '-'}${fmtBRL(Number(card.value))}`}
+                      {`${isIncome ? '+' : '-'}${fmtBRL(fromCentavos(getTransactionAbsCentavos(card)))}`}
                     </p>
                   </div>
                 </div>

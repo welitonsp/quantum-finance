@@ -3,7 +3,8 @@ import { useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import Decimal from 'decimal.js';
 import type { Transaction } from '../../shared/types/transaction';
-import { isIncome } from '../../utils/transactionUtils';
+import { getTransactionAbsCentavos, isIncome } from '../../utils/transactionUtils';
+import { fromCentavos } from '../../shared/types/money';
 
 interface Props {
   transactions: Transaction[];
@@ -41,7 +42,7 @@ export default function TrendsChart({ transactions }: Props) {
 
       const monthKey = txDate.toLocaleString('pt-BR', { month: 'short', year: 'numeric' });
       if (monthlyData[monthKey]) {
-        const val = new Decimal(tx.value ?? 0);
+        const val = new Decimal(fromCentavos(getTransactionAbsCentavos(tx)));
         if (isIncome(tx.type)) {
           monthlyData[monthKey].receitas = new Decimal(monthlyData[monthKey].receitas).plus(val).toNumber();
         } else {

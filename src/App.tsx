@@ -1,4 +1,4 @@
-import React, { useEffect, useState, lazy, Suspense, useRef, useCallback } from 'react';
+import React, { useEffect, useState, lazy, Suspense, useCallback } from 'react';
 import { auth } from './shared/api/firebase/index';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import type { User } from 'firebase/auth';
@@ -123,7 +123,7 @@ interface AuthenticatedAppProps {
   handleLogout: () => Promise<void>;
 }
 const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
-  const { theme, toggleTheme }   = useTheme();
+  const { theme, resolvedTheme, toggleTheme } = useTheme();
   const { togglePrivacy }        = usePrivacy();
   const {
     currentPage, currentMonth, currentYear,
@@ -142,10 +142,10 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
 
   const safeUID = user.uid;
 
-  // FIX P0.1: regras do usuário aplicadas em add/addBatch via useTransactions
+  // Regras do usuário aplicadas em writes manuais; importação passa pelo LedgerService.
   const { asUserRules: userCategoryRules } = useCategoryRules(safeUID);
   const {
-    transactions, loading, add, addBatch, remove, removeBatch, update,
+    transactions, loading, add, remove, removeBatch, update,
     bulkUpdateTransactions, isBulkUpdating,
     undoLastBulkUpdate, isUndoing, hasUndoSnapshot, clearBulkSnapshot,
   } = useTransactions(safeUID, userCategoryRules);
@@ -158,7 +158,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
     isAIChatOpen, setIsAIChatOpen, isFormOpen, setIsFormOpen, isSettingsOpen, setIsSettingsOpen,
     transactionToEdit, setTransactionToEdit, transactionToDelete, setTransactionToDelete,
     handleImport, handleSaveTransaction, confirmDelete, handleBatchDelete,
-  } = useAppLogic(user, update, add, addBatch, remove, removeBatch);
+  } = useAppLogic(user, update, add, remove, removeBatch);
 
   // setActiveModule é gerido pela Sidebar; não deve ser tocado pelo fluxo de edição
   void setActiveModule;
@@ -235,6 +235,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
             handleNextMonth={handleNextMonth}
             nomeMeses={MESES_DO_ANO as unknown as string[]}
             theme={theme}
+            resolvedTheme={resolvedTheme}
             toggleTheme={toggleTheme}
             isSidebarCollapsed={isSidebarCollapsed}
             setIsSidebarCollapsed={setIsSidebarCollapsed}
