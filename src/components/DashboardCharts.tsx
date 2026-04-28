@@ -141,10 +141,10 @@ export default function DashboardCharts({ timelineData, categoryData }: Props) {
                 paddingAngle={2}
                 isAnimationActive
               >
-                {categoryData.map((_, idx) => (
+                {categoryData.map((entry, idx) => (
                   <Cell
                     key={`cell-${idx}`}
-                    fill={pieColors[idx % pieColors.length] ?? colors.success}
+                    fill={entry.color ?? pieColors[idx % pieColors.length] ?? colors.success}
                     stroke={colors.card}
                     strokeWidth={2}
                   />

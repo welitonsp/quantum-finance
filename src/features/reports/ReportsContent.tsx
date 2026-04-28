@@ -8,10 +8,12 @@ import type { Transaction, Account } from '../../shared/types/transaction';
 import { getTransactionAbsCentavos, isExpense } from '../../utils/transactionUtils';
 import { fromCentavos } from '../../shared/types/money';
 import { calcPareto, calcPatrimonyEvolution } from '../../utils/reportEngine';
+import { normalizeCategoryName, type UserCategory } from '../../shared/schemas/categorySchemas';
 
 interface Props {
   transactions: Transaction[];
   accounts?:    Account[];
+  categories?:  UserCategory[];
 }
 
 interface ParetoItem {
@@ -21,14 +23,38 @@ interface ParetoItem {
   pctAcumulada:  number;
   isTop80:       boolean;
   rank:          number;
+  color:         string;
 }
 
 type TimeFilter    = '30d' | '90d' | '180d' | 'all';
 type ExpenseFilter = 'all' | 'variables';
 
-const CATEGORIAS_FIXAS = ['Moradia', 'Assinaturas', 'Educação', 'Impostos/Taxas', 'Saúde'];
+const LOW_CUTTABLE_DEFAULT_CATEGORIES = new Set([
+  'moradia',
+  'assinaturas',
+  'educacao',
+  'impostos/taxas',
+  'saude',
+]);
 
-export default function ReportsContent({ transactions, accounts }: Props) {
+const PARETO_FALLBACK_COLORS = ['#3B82F6', '#06B6D4', '#8B5CF6', '#F59E0B', '#10B981', '#F43F5E'];
+
+function getCategoryColor(category: string, categories: UserCategory[], index: number): string {
+  const normalizedName = normalizeCategoryName(category);
+  return categories.find(item => item.normalizedName === normalizedName)?.color
+    ?? PARETO_FALLBACK_COLORS[index % PARETO_FALLBACK_COLORS.length]
+    ?? PARETO_FALLBACK_COLORS[0]!;
+}
+
+function isLowCuttableCategory(category: string | undefined, categories: UserCategory[]): boolean {
+  if (!category) return false;
+  const normalizedName = normalizeCategoryName(category);
+  const catalogCategory = categories.find(item => item.normalizedName === normalizedName);
+  if (catalogCategory && catalogCategory.type === 'entrada') return true;
+  return LOW_CUTTABLE_DEFAULT_CATEGORIES.has(normalizedName);
+}
+
+export default function ReportsContent({ transactions, accounts, categories = [] }: Props) {
   const [activeTab,      setActiveTab]      = useState<'pareto' | 'tendencias'>('pareto');
   const [timeFilter,     setTimeFilter]     = useState<TimeFilter>('30d');
   const [expenseFilter,  setExpenseFilter]  = useState<ExpenseFilter>('all');
@@ -51,7 +77,7 @@ export default function ReportsContent({ transactions, accounts }: Props) {
         if (timeFilter === '180d' && diffDias > 180) return;
 
         const cat = t.category ?? 'Diversos';
-        if (expenseFilter === 'variables' && CATEGORIAS_FIXAS.includes(cat)) return;
+        if (expenseFilter === 'variables' && isLowCuttableCategory(cat, categories)) return;
 
         const val = new Decimal(fromCentavos(getTransactionAbsCentavos(t)));
         catTotals[cat] = catTotals[cat]
@@ -74,9 +100,10 @@ export default function ReportsContent({ transactions, accounts }: Props) {
         pctAcumulada:  totalFloat > 0 ? Number(((acumulado / totalFloat) * 100).toFixed(1)) : 0,
         isTop80:       totalFloat > 0 && ((acumulado / totalFloat) * 100) <= 80.1,
         rank:          index + 1,
+        color:         getCategoryColor(name, categories, index),
       };
     });
-  }, [transactions, timeFilter, expenseFilter]);
+  }, [categories, transactions, timeFilter, expenseFilter]);
 
   const topCategoriesCount = paretoData.filter(d => d.isTop80).length;
   const top80Value = paretoData.filter(d => d.isTop80).reduce((sum, item) => sum + item.valor, 0);
@@ -178,7 +205,7 @@ export default function ReportsContent({ transactions, accounts }: Props) {
                         }}
                       />
                       <Bar yAxisId="left" dataKey="valor" radius={[6, 6, 0, 0]} maxBarSize={60}>
-                        {paretoData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.isTop80 ? '#EF4444' : '#3B82F6'} fillOpacity={entry.isTop80 ? 0.8 : 0.4} />)}
+                        {paretoData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.isTop80 ? '#EF4444' : entry.color} fillOpacity={entry.isTop80 ? 0.8 : 0.55} />)}
                       </Bar>
                       <Line yAxisId="right" type="monotone" dataKey="pctAcumulada" stroke="#F59E0B" strokeWidth={3} dot={{ r: 4, fill: '#131A2A', stroke: '#F59E0B', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#F59E0B' }} />
                     </ComposedChart>

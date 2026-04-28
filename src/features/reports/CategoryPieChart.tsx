@@ -5,14 +5,25 @@ import Decimal from 'decimal.js';
 import type { Transaction } from '../../shared/types/transaction';
 import { getTransactionAbsCentavos } from '../../utils/transactionUtils';
 import { fromCentavos } from '../../shared/types/money';
+import { normalizeCategoryName, type UserCategory } from '../../shared/schemas/categorySchemas';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 interface Props {
   transactions: Transaction[];
+  categories?: UserCategory[];
 }
 
-export default function CategoryPieChart({ transactions }: Props) {
+const CATEGORY_COLORS = ['#6366f1', '#22c55e', '#f97316', '#ef4444', '#14b8a6', '#eab308'];
+
+function categoryColor(name: string, categories: UserCategory[], index: number): string {
+  const normalizedName = normalizeCategoryName(name);
+  return categories.find(category => category.normalizedName === normalizedName)?.color
+    ?? CATEGORY_COLORS[index % CATEGORY_COLORS.length]
+    ?? CATEGORY_COLORS[0]!;
+}
+
+export default function CategoryPieChart({ transactions, categories = [] }: Props) {
   if (!transactions || transactions.length === 0) {
     return (
       <div className="text-center text-zinc-400 text-sm">
@@ -33,7 +44,7 @@ export default function CategoryPieChart({ transactions }: Props) {
     datasets: [
       {
         data:            Object.values(categoryTotals),
-        backgroundColor: ['#6366f1', '#22c55e', '#f97316', '#ef4444', '#14b8a6', '#eab308'],
+        backgroundColor: Object.keys(categoryTotals).map((name, index) => categoryColor(name, categories, index)),
       },
     ],
   };

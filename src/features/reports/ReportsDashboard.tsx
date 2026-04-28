@@ -10,6 +10,7 @@ import Decimal from 'decimal.js';
 import type { Transaction } from '../../shared/types/transaction';
 import { getTransactionAbsCentavos, isExpense } from '../../utils/transactionUtils';
 import { fromCentavos } from '../../shared/types/money';
+import { normalizeCategoryName, type UserCategory } from '../../shared/schemas/categorySchemas';
 
 interface RechartsTooltipProps {
   active?: boolean;
@@ -25,12 +26,22 @@ interface Balances {
 interface Props {
   transactions: Transaction[];
   balances:     Balances;
+  categories?:  UserCategory[];
 }
 
 interface CategoryEntry {
   name:  string;
   value: number;
   color: string;
+}
+
+const CATEGORY_COLORS = ['#ef4444', '#06b6d4', '#a855f7', '#f59e0b', '#10b981', '#3b82f6'];
+
+function categoryColor(name: string, categories: UserCategory[], index: number): string {
+  const normalizedName = normalizeCategoryName(name);
+  return categories.find(category => category.normalizedName === normalizedName)?.color
+    ?? CATEGORY_COLORS[index % CATEGORY_COLORS.length]
+    ?? CATEGORY_COLORS[0]!;
 }
 
 // ─── CustomTooltip ────────────────────────────────────────────────────────────
@@ -49,7 +60,7 @@ function CustomTooltip({ active, payload, label }: RechartsTooltipProps) {
   );
 }
 
-export default function ReportsDashboard({ transactions, balances }: Props) {
+export default function ReportsDashboard({ transactions, balances, categories = [] }: Props) {
   const rec  = new Decimal(balances.entradas ?? 0);
   const desp = new Decimal(balances.saidas   ?? 0);
   const saldoDecimal = rec.minus(desp);
@@ -70,13 +81,12 @@ export default function ReportsDashboard({ transactions, balances }: Props) {
         map[cat] = map[cat] ? new Decimal(map[cat]).plus(val).toNumber() : val.toNumber();
       }
     });
-    const COLORS = ['#ef4444', '#06b6d4', '#a855f7', '#f59e0b', '#10b981', '#3b82f6'];
     return Object.keys(map).map((key, index) => ({
       name:  key,
       value: map[key]!,
-      color: COLORS[index % COLORS.length]!,
+      color: categoryColor(key, categories, index),
     })).sort((a, b) => b.value - a.value);
-  }, [transactions]);
+  }, [categories, transactions]);
 
   const cashflowData = [{ name: 'Fluxo Mensal', Receitas: receitas, Despesas: despesas }];
 

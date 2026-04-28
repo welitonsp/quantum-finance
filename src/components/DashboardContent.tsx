@@ -26,6 +26,7 @@ import type { Transaction, ModuleBalances, CategoryDataPoint, Account, Recurring
 import { useFinancialMetrics } from '../hooks/useFinancialMetrics';
 import QuantumInsights from './QuantumInsights';
 import type { TimeRange } from '../hooks/useFinancialData';
+import type { UserCategory } from '../shared/schemas/categorySchemas';
 
 interface Props {
   user: { uid: string } | null;
@@ -48,6 +49,7 @@ interface Props {
   onCloseForm?: () => void;
   accounts: Account[];
   recurringTasks: RecurringTask[];
+  categories?: UserCategory[];
 }
 
 const containerVariants = {
@@ -82,6 +84,7 @@ export default function DashboardContent({
   setTransactionToEdit,
   accounts,
   recurringTasks,
+  categories = [],
 }: Props) {
   const { currentMonth, currentYear } = useNavigation();
   void recurringTasks;
@@ -154,7 +157,7 @@ export default function DashboardContent({
     setTimeRange,
     loading: dashLoading,
   // FIX: single source of truth for transactions
-  } = useDashboardData(allTransactions, loading);
+  } = useDashboardData(allTransactions, loading, categories);
 
   return (
     <motion.div
