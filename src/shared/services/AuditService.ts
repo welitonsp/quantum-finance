@@ -25,10 +25,12 @@ export interface AuditLog {
   entity:    AuditEntity;
   details:   string;
   metadata:  AuditMetadata;
-  timestamp: ReturnType<typeof serverTimestamp>;
+  createdAt: ReturnType<typeof serverTimestamp>;
+  timestamp?: ReturnType<typeof serverTimestamp>;
+  schemaVersion: 2;
 }
 
-type AuditLogInput = Omit<AuditLog, 'id' | 'timestamp'>;
+type AuditLogInput = Omit<AuditLog, 'id' | 'createdAt' | 'schemaVersion'>;
 
 // ─── AuditService ─────────────────────────────────────────────────────────────
 
@@ -43,23 +45,27 @@ export const AuditService = {
    */
   async logAction(log: AuditLogInput): Promise<void> {
     if (!log.userId) {
-      console.warn('[AuditService] logAction ignorado: userId ausente.');
+      if (import.meta.env.DEV) {
+        console.warn('[AuditService] logAction ignorado: userId ausente.');
+      }
       return;
     }
 
     try {
       const ref = collection(db, 'users', log.userId, 'audit_logs');
       await addDoc(ref, {
-        userId:    log.userId,
-        action:    log.action,
-        entity:    log.entity,
-        details:   log.details,
-        metadata:  log.metadata,
-        timestamp: serverTimestamp(),
+        action:        log.action,
+        entity:        log.entity,
+        details:       log.details,
+        metadata:      log.metadata,
+        createdAt:     serverTimestamp(),
+        schemaVersion: 2,
       });
     } catch (error) {
       // FAIL SILENT — UI nunca quebra por falha de auditoria
-      console.error('[AuditService] log failed:', error);
+      if (import.meta.env.DEV) {
+        console.warn('[AuditService] log failed:', error);
+      }
     }
   },
 };
