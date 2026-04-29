@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   collection, query, orderBy, onSnapshot, limit,
-  type Timestamp,
+  getDocs, startAfter,
+  type QueryDocumentSnapshot, type DocumentData, type Timestamp,
 } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
 import { FirestoreService } from '../shared/services/FirestoreService';
@@ -11,6 +12,7 @@ import { fromCentavos, toCentavos, type Centavos } from '../shared/types/money';
 import { getTransactionCentavos } from '../utils/transactionUtils';
 import { categorizeTransaction } from '../utils/aiCategorize';
 import { categorizeWithAI } from '../services/AICategorizationService';
+import { PAGE_SIZE, mergeTransactionPages, hasMorePages } from '../utils/transactionPagination';
 import toast from 'react-hot-toast';
 
 // ─── Bulk Update — tipo restrito (não expõe Partial<Transaction> livre) ────────
@@ -74,6 +76,12 @@ interface UseTransactionsReturn {
   isBulkUpdating:         boolean;
   isUndoing:              boolean;
   hasUndoSnapshot:        boolean;
+  // ── Paginação ────────────────────────────────────────────────────────────
+  hasMoreTransactions:    boolean;
+  isLoadingMore:          boolean;
+  loadedCount:            number;
+  loadMoreTransactions:   () => Promise<void>;
+  // ── Operações ────────────────────────────────────────────────────────────
   add:                    (data: Partial<Transaction>) => Promise<string>;
   addBatch:               (items: Partial<Transaction>[]) => Promise<string[]>;
   remove:                 (id: string) => Promise<void>;
@@ -236,12 +244,15 @@ export function useTransactions(
   uid: string,
   userRules: import('./useCategoryRules').UserCategoryRule[] = []
 ): UseTransactionsReturn {
-  const [transactions,   setTransactions]   = useState<Transaction[]>([]);
-  const [loading,        setLoading]        = useState(true);
-  const [error,          setError]          = useState<Error | null>(null);
-  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
-  const [isUndoing,      setIsUndoing]      = useState(false);
-  const [hasUndoSnapshot, setHasUndoSnapshot] = useState(false);
+  const [transactions,      setTransactions]      = useState<Transaction[]>([]);
+  const [loading,           setLoading]           = useState(true);
+  const [error,             setError]             = useState<Error | null>(null);
+  const [isBulkUpdating,    setIsBulkUpdating]    = useState(false);
+  const [isUndoing,         setIsUndoing]         = useState(false);
+  const [hasUndoSnapshot,   setHasUndoSnapshot]   = useState(false);
+  // ── Paginação ──────────────────────────────────────────────────────────────
+  const [hasMoreTransactions, setHasMoreTransactions] = useState(false);
+  const [isLoadingMore,       setIsLoadingMore]       = useState(false);
 
   // ── Refs para guards sem recrear callbacks ────────────────────────────────
   const isBulkUpdatingRef  = useRef(false);
@@ -249,6 +260,14 @@ export function useTransactions(
   const snapshotRef        = useRef<BulkSnapshot | null>(null);
   /** Espelho síncrono de `transactions` para leitura dentro de callbacks. */
   const transactionsRef    = useRef<Transaction[]>([]);
+
+  // ── Refs de paginação ─────────────────────────────────────────────────────
+  /** Último documento da página mais recentemente carregada; cursor para startAfter. */
+  const lastPageDocRef   = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  /** Transações de páginas antigas (getDocs); fundidas com o estado no render. */
+  const olderPagesRef    = useRef<Transaction[]>([]);
+  /** Guard contra loadMore concorrente. */
+  const isLoadingMoreRef = useRef(false);
 
   // ── Fila de sync ──────────────────────────────────────────────────────────
   const queueRef    = useRef<Op[]>([]);
@@ -283,12 +302,18 @@ export function useTransactions(
     }
 
     // Limpa estado de fila ao trocar de utilizador
-    queueRef.current          = [];
-    processing.current        = false;
-    pendingAdds.current       = new Map();
-    pendingIds.current        = new Set();
-    postAddCallbacks.current  = new Map();
-    pendingAddResolvers.current = new Map();
+    queueRef.current              = [];
+    processing.current            = false;
+    pendingAdds.current           = new Map();
+    pendingIds.current            = new Set();
+    postAddCallbacks.current      = new Map();
+    pendingAddResolvers.current   = new Map();
+    // Limpa paginação ao trocar de utilizador
+    olderPagesRef.current         = [];
+    lastPageDocRef.current        = null;
+    isLoadingMoreRef.current      = false;
+    setHasMoreTransactions(false);
+    setIsLoadingMore(false);
 
     setLoading(true);
     setError(null);
@@ -296,12 +321,30 @@ export function useTransactions(
     const q = query(
       collection(db, 'users', uid, 'transactions'),
       orderBy('createdAt', 'desc'),
-      limit(500)
+      limit(PAGE_SIZE)
     );
 
     const unsub = onSnapshot(
       q,
       snap => {
+        // ── Atualiza cursor e estado de "há mais" ────────────────────────────
+        const snapLastDoc  = snap.docs.length > 0 ? (snap.docs[snap.docs.length - 1] ?? null) : null;
+        const snapIsFull   = snap.docs.length >= PAGE_SIZE;
+
+        if (!snapIsFull) {
+          // Snapshot não cheio → ALL transações cabem na janela realtime.
+          // Quaisquer páginas antigas carregadas estão cobertas (ou foram eliminadas).
+          olderPagesRef.current  = [];
+          lastPageDocRef.current = snapLastDoc;
+          setHasMoreTransactions(false);
+        } else if (olderPagesRef.current.length === 0) {
+          // Snapshot cheio, ainda não carregámos páginas adicionais.
+          lastPageDocRef.current = snapLastDoc;
+          setHasMoreTransactions(true);
+        }
+        // Se snapIsFull && olderPagesRef não vazio: o cursor e hasMore foram
+        // definidos pelo último loadMoreTransactions — não regredir.
+
         const remote: Transaction[] = snap.docs.map(d => normalizeTransaction({
           id: d.id,
           ...(d.data() as Omit<Transaction, 'id'>),
@@ -332,7 +375,13 @@ export function useTransactions(
           const stillPending = Array.from(pendingAdds.current.values())
             .filter(tx => !remoteIds.has(tx.id));
 
-          return [...stillPending, ...merged];
+          // Funde páginas antigas, deduplicando contra a página realtime
+          const uniqueOlder = mergeTransactionPages(
+            [...stillPending, ...merged],
+            olderPagesRef.current,
+          ).slice([...stillPending, ...merged].length);
+
+          return [...stillPending, ...merged, ...uniqueOlder];
         });
 
         setLoading(false);
@@ -510,6 +559,59 @@ export function useTransactions(
     queueRef.current.push(op);
     void processQueue();
   }, [processQueue]);
+
+  // ── loadMoreTransactions ───────────────────────────────────────────────────
+  const loadMoreTransactions = useCallback(async (): Promise<void> => {
+    if (!uid || isLoadingMoreRef.current || !lastPageDocRef.current) return;
+
+    isLoadingMoreRef.current = true;
+    setIsLoadingMore(true);
+
+    try {
+      const q = query(
+        collection(db, 'users', uid, 'transactions'),
+        orderBy('createdAt', 'desc'),
+        startAfter(lastPageDocRef.current),
+        limit(PAGE_SIZE)
+      );
+
+      const snap = await getDocs(q);
+
+      const newDocs = snap.docs
+        .map(d => normalizeTransaction({
+          id: d.id,
+          ...(d.data() as Omit<Transaction, 'id'>),
+        }))
+        .filter(tx => tx.isDeleted !== true && !tx.deletedAt);
+
+      // Atualiza cursor para o último documento desta página
+      if (snap.docs.length > 0) {
+        lastPageDocRef.current = snap.docs[snap.docs.length - 1] ?? null;
+      }
+
+      // Deduplica contra o estado actual (inclui páginas antigas já carregadas)
+      const existingIds = new Set(transactionsRef.current.map(tx => tx.id));
+      const uniqueNew   = newDocs.filter(tx => !existingIds.has(tx.id));
+
+      olderPagesRef.current = [...olderPagesRef.current, ...uniqueNew];
+
+      setHasMoreTransactions(hasMorePages(PAGE_SIZE, snap.docs.length));
+
+      if (uniqueNew.length > 0) {
+        setTransactions(prev => {
+          const prevIds  = new Set(prev.map(tx => tx.id));
+          const deduped  = uniqueNew.filter(tx => !prevIds.has(tx.id));
+          return [...prev, ...deduped];
+        });
+      }
+    } catch (err) {
+      console.error('[loadMoreTransactions] erro:', err);
+      toast.error('Falha ao carregar mais movimentações.');
+    } finally {
+      isLoadingMoreRef.current = false;
+      setIsLoadingMore(false);
+    }
+  }, [uid]);
 
   // ── ADD — Optimistic + enqueue ────────────────────────────────────────────
   const add = useCallback(async (data: Partial<Transaction>): Promise<string> => {
@@ -809,6 +911,10 @@ export function useTransactions(
     isBulkUpdating,
     isUndoing,
     hasUndoSnapshot,
+    hasMoreTransactions,
+    isLoadingMore,
+    loadedCount: transactions.filter(tx => !isTemp(tx.id)).length,
+    loadMoreTransactions,
     add,
     addBatch,
     remove,

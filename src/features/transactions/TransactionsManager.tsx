@@ -7,6 +7,7 @@ import {
   CheckSquare, Square, MinusSquare, X, SlidersHorizontal,
   TrendingUp, TrendingDown, Minus, Tag, ArrowUpDown,
   Layers, RotateCcw, AlertTriangle, Check, ShieldAlert, History, Download,
+  ChevronDown,
 } from 'lucide-react';
 import { transactionsToCSV, downloadCSV } from '../../utils/exportCSV';
 import { formatCurrency } from '../../utils/formatters';
@@ -54,6 +55,11 @@ interface Props {
   /** UID do utilizador autenticado. Fallback automático para auth.currentUser. */
   uid?: string;
   categories?: UserCategory[];
+  // ── Paginação ────────────────────────────────────────────────────────────
+  hasMoreTransactions?: boolean;
+  isLoadingMore?: boolean;
+  loadedCount?: number;
+  loadMoreTransactions?: () => Promise<void>;
 }
 
 // ─── Paleta de cores por categoria ───────────────────────────────────────────
@@ -237,6 +243,10 @@ export default function TransactionsManager({
   clearBulkSnapshot,
   uid,
   categories: providedCategories,
+  hasMoreTransactions = false,
+  isLoadingMore = false,
+  loadedCount,
+  loadMoreTransactions,
 }: Props) {
   const effectiveUid = uid ?? auth.currentUser?.uid ?? '';
   const { categories: loadedCategories } = useCategories(providedCategories ? '' : effectiveUid);
@@ -903,36 +913,66 @@ export default function TransactionsManager({
             )}
           </div>
         ) : (
-          <AnimatePresence mode="popLayout">
-            {groups.map(group => (
-              <div key={group.key || 'ungrouped'}>
-                {group.key && (() => {
-                  const gIn  = group.items.reduce((a, t) => checkIncome(t.type)  ? a + fromCentavos(getTransactionAbsCentavos(t)) : a, 0);
-                  const gOut = group.items.reduce((a, t) => checkExpense(t.type) ? a + fromCentavos(getTransactionAbsCentavos(t)) : a, 0);
-                  return (
-                    <GroupHeader
-                      label={group.label}
-                      count={group.items.length}
-                      totalIn={gIn}
-                      totalOut={gOut}
-                    />
-                  );
-                })()}
-                <div className="space-y-1.5 mb-2">
-                  {group.items.map(tx => (
-                    <TransactionRow
-                      key={tx.id}
-                      tx={tx}
-                      isSelected={selected.has(tx.id)}
-                      onToggle={toggleOne}
-                      onEdit={onEdit}
-                      onDelete={onDeleteRequest}
-                    />
-                  ))}
+          <>
+            <AnimatePresence mode="popLayout">
+              {groups.map(group => (
+                <div key={group.key || 'ungrouped'}>
+                  {group.key && (() => {
+                    const gIn  = group.items.reduce((a, t) => checkIncome(t.type)  ? a + fromCentavos(getTransactionAbsCentavos(t)) : a, 0);
+                    const gOut = group.items.reduce((a, t) => checkExpense(t.type) ? a + fromCentavos(getTransactionAbsCentavos(t)) : a, 0);
+                    return (
+                      <GroupHeader
+                        label={group.label}
+                        count={group.items.length}
+                        totalIn={gIn}
+                        totalOut={gOut}
+                      />
+                    );
+                  })()}
+                  <div className="space-y-1.5 mb-2">
+                    {group.items.map(tx => (
+                      <TransactionRow
+                        key={tx.id}
+                        tx={tx}
+                        isSelected={selected.has(tx.id)}
+                        onToggle={toggleOne}
+                        onEdit={onEdit}
+                        onDelete={onDeleteRequest}
+                      />
+                    ))}
+                  </div>
                 </div>
+              ))}
+            </AnimatePresence>
+
+            {/* ═══ CARREGAR MAIS ═══════════════════════════════════════════════ */}
+            {(hasMoreTransactions || isLoadingMore) && (
+              <div className="flex flex-col items-center gap-1.5 py-5">
+                <button
+                  onClick={() => void loadMoreTransactions?.()}
+                  disabled={isLoadingMore || !loadMoreTransactions}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-quantum-bgSecondary border border-quantum-border rounded-xl text-sm font-bold text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoadingMore ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-quantum-fgMuted/30 border-t-quantum-fgMuted rounded-full animate-spin" />
+                      A carregar mais...
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="w-4 h-4" />
+                      Carregar mais movimentações
+                    </>
+                  )}
+                </button>
+                {loadedCount !== undefined && (
+                  <span className="text-[10px] text-quantum-fgMuted font-mono">
+                    {loadedCount} movimentações carregadas
+                  </span>
+                )}
               </div>
-            ))}
-          </AnimatePresence>
+            )}
+          </>
         )}
       </div>
     </div>

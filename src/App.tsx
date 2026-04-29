@@ -150,6 +150,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
     transactions, loading, add, remove, removeBatch, update,
     bulkUpdateTransactions, isBulkUpdating,
     undoLastBulkUpdate, isUndoing, hasUndoSnapshot, clearBulkSnapshot,
+    hasMoreTransactions, isLoadingMore, loadedCount, loadMoreTransactions,
   } = useTransactions(safeUID, userCategoryRules);
   const { accounts } = useAccounts(safeUID);
   const { recurringTasks } = useRecurring(safeUID);
@@ -307,6 +308,10 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     clearBulkSnapshot={clearBulkSnapshot}
                     uid={safeUID}
                     categories={categories}
+                    hasMoreTransactions={hasMoreTransactions}
+                    isLoadingMore={isLoadingMore}
+                    loadedCount={loadedCount}
+                    loadMoreTransactions={loadMoreTransactions}
                   />
                 )}
                 {currentPage === 'reports' && (
