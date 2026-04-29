@@ -44,7 +44,7 @@ const mapLog = (log: AuditLog): AuditView => {
       id:        log.id!,
       title:     'Recategorização em lote',
       subtitle:  `${count} transações movidas para ${categoryLabel}`,
-      timestamp: safeTimestamp(log.timestamp),
+      timestamp: safeTimestamp(log.createdAt ?? log.timestamp),
     };
   }
 
@@ -53,7 +53,7 @@ const mapLog = (log: AuditLog): AuditView => {
       id:        log.id!,
       title:     'Desfazer alterações',
       subtitle:  `${count} transações restauradas`,
-      timestamp: safeTimestamp(log.timestamp),
+      timestamp: safeTimestamp(log.createdAt ?? log.timestamp),
     };
   }
 
@@ -61,7 +61,7 @@ const mapLog = (log: AuditLog): AuditView => {
     id:        log.id!,
     title:     'Ação do sistema',
     subtitle:  `${count} itens afetados`,
-    timestamp: safeTimestamp(log.timestamp),
+    timestamp: safeTimestamp(log.createdAt ?? log.timestamp),
   };
 };
 
@@ -91,7 +91,7 @@ export function useAuditLogs(uid: string): UseAuditLogsReturn {
     setError(null);
 
     const ref = collection(db, 'users', uid, 'audit_logs');
-    const q   = query(ref, orderBy('timestamp', 'desc'), limit(50));
+    const q   = query(ref, orderBy('createdAt', 'desc'), limit(50));
 
     const unsub = onSnapshot(
       q,

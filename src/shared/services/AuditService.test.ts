@@ -56,10 +56,10 @@ describe('AuditService.logAction', () => {
     );
   });
 
-  it('injeta serverTimestamp no documento (sem drift de cliente)', async () => {
+  it('injeta createdAt com serverTimestamp no documento (sem drift de cliente)', async () => {
     await AuditService.logAction(mkLog());
     const [, data] = mockAddDoc.mock.calls[0] as [unknown, Record<string, unknown>];
-    expect(data.timestamp).toEqual({ _serverTimestamp: true });
+    expect(data.createdAt).toEqual({ _serverTimestamp: true });
   });
 
   it('fail silent: erro do Firestore não lança exceção para o chamador', async () => {
@@ -82,11 +82,19 @@ describe('AuditService.logAction', () => {
     expect(data.metadata).toEqual({ count: 2, changes });
   });
 
-  it('action e entity escritos corretamente no documento', async () => {
-    await AuditService.logAction(mkLog({ action: 'UNDO_BULK_UPDATE', entity: 'TRANSACTION' }));
+  it('grava payload compatível com firestore.rules', async () => {
+    const log = mkLog({ action: 'UNDO_BULK_UPDATE', entity: 'TRANSACTION' });
+    await AuditService.logAction(log);
     const [, data] = mockAddDoc.mock.calls[0] as [unknown, Record<string, unknown>];
-    expect(data.action).toBe('UNDO_BULK_UPDATE');
-    expect(data.entity).toBe('TRANSACTION');
-    expect(data.userId).toBe('user-abc');
+    expect(data).toEqual({
+      action:        'UNDO_BULK_UPDATE',
+      entity:        'TRANSACTION',
+      details:       log.details,
+      metadata:      log.metadata,
+      createdAt:     { _serverTimestamp: true },
+      schemaVersion: 2,
+    });
+    expect(data).not.toHaveProperty('userId');
+    expect(data).not.toHaveProperty('timestamp');
   });
 });
