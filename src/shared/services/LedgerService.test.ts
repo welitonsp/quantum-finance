@@ -71,9 +71,20 @@ describe('LedgerService.normalizeImportTransaction', () => {
       description: 'Supermercado ABC',
       value_cents: 123456,
       type: 'saida',
+      category: baseInput.category,
       source: 'csv',
       schemaVersion: 2,
       fitId: 'FIT-1',
+    }));
+  });
+
+  it('preserva categoria personalizada válida na importação', () => {
+    const normalized = normalizeImportTransaction({ ...baseInput, category: 'Petshop' });
+
+    expect(normalized).toEqual(expect.objectContaining({
+      category: 'Petshop',
+      value_cents: 123456,
+      schemaVersion: 2,
     }));
   });
 
@@ -116,6 +127,19 @@ describe('LedgerService hash de importação', () => {
 });
 
 describe('LedgerService.importTransactions', () => {
+  it('não descarta transação importada com categoria personalizada válida', async () => {
+    const result = await LedgerService.importTransactions('uid1', [
+      { ...baseInput, category: 'Academia' },
+    ]);
+
+    expect(result).toEqual({ added: 1, duplicates: 0, invalid: 0 });
+    expect(mockTransactionSet.mock.calls[0]?.[1]).toEqual(expect.objectContaining({
+      category: 'Academia',
+      value_cents: 123456,
+      importHash: expect.any(String),
+    }));
+  });
+
   it('importação duplicada no mesmo lote não cria duplicidade', async () => {
     const result = await LedgerService.importTransactions('uid1', [baseInput, { ...baseInput }]);
 
