@@ -238,6 +238,42 @@ function toMillis(ts: Transaction['updatedAt'] | Transaction['createdAt']): numb
   return 0;
 }
 
+// ─── Helpers de histórico (puros) ─────────────────────────────────────────────
+
+/**
+ * Serializa uma transação para o payload de histórico.
+ * Exclui id, uid e value (legado) — campos proibidos ou redundantes com o path.
+ * Filtra undefined para garantir escrita válida no Firestore.
+ */
+function sanitizeForHistory(tx: Partial<Transaction>): Record<string, unknown> {
+  const excluded = new Set<string>(['id', 'uid', 'value']);
+  const result: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(tx)) {
+    if (!excluded.has(k) && v !== undefined) {
+      result[k] = v;
+    }
+  }
+  return result;
+}
+
+/**
+ * Retorna os nomes dos campos que diferem entre before e after.
+ * Usa JSON.stringify para comparação — suficiente para tipos primitivos e objetos simples.
+ */
+function computeChangedFields(
+  before: Record<string, unknown>,
+  after:  Record<string, unknown>,
+): string[] {
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  return [...keys].filter(k => {
+    try {
+      return JSON.stringify(before[k]) !== JSON.stringify(after[k]);
+    } catch {
+      return before[k] !== after[k];
+    }
+  });
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useTransactions(
@@ -469,14 +505,55 @@ export function useTransactions(
             });
             await FirestoreService.updateTransaction(uid, op.itemId, op.data);
             pendingIds.current.delete(op.itemId);
+            // Histórico por transação — fire-and-forget, não bloqueia UI
+            if (op.previous) {
+              const before = sanitizeForHistory(op.previous);
+              const after  = sanitizeForHistory({ ...op.previous, ...op.data });
+              void AuditService.logTransactionHistory(uid, op.itemId, {
+                action:        'UPDATE',
+                txId:          op.itemId,
+                before,
+                after,
+                changedFields: computeChangedFields(before, after),
+                origin:        'manual',
+                ...(typeof after['value_cents'] === 'number' ? { amount_cents: after['value_cents'] } : {}),
+                ...(typeof after['category']   === 'string'  ? { category:     after['category']   } : {}),
+              });
+            }
             break;
           case 'delete':
             await FirestoreService.deleteTransaction(uid, op.itemId);
             pendingIds.current.delete(op.itemId);
+            // Histórico por transação — fire-and-forget
+            if (op.previous) {
+              void AuditService.logTransactionHistory(uid, op.itemId, {
+                action: 'SOFT_DELETE',
+                txId:   op.itemId,
+                before: sanitizeForHistory(op.previous),
+                origin: 'manual',
+                ...(op.previous.value_cents !== undefined ? { amount_cents: op.previous.value_cents } : {}),
+                ...(op.previous.category    !== undefined ? { category:     op.previous.category    } : {}),
+              });
+            }
             break;
           case 'deleteBatch':
             await FirestoreService.deleteBatchTransactions(uid, op.ids);
             op.ids.forEach(id => pendingIds.current.delete(id));
+            // Histórico por transação — fire-and-forget, correlacionado por lote
+            if (op.previousBatch.length > 0) {
+              const batchCorrId = Date.now().toString(36);
+              op.previousBatch.forEach(tx => {
+                void AuditService.logTransactionHistory(uid, tx.id, {
+                  action:        'SOFT_DELETE',
+                  txId:          tx.id,
+                  before:        sanitizeForHistory(tx),
+                  origin:        'manual',
+                  correlationId: batchCorrId,
+                  ...(tx.value_cents !== undefined ? { amount_cents: tx.value_cents } : {}),
+                  ...(tx.category    !== undefined ? { category:     tx.category    } : {}),
+                });
+              });
+            }
             break;
         }
         queueRef.current.shift();
@@ -836,7 +913,7 @@ export function useTransactions(
         await FirestoreService.batchUpdateTransactions(uid, chunk, updates);
       }
 
-      // Auditoria — fire-and-forget após todos os commits (nunca bloqueia UI)
+      // Auditoria global — fire-and-forget após todos os commits (nunca bloqueia UI)
       void AuditService.logAction({
         userId:  uid,
         action:  'BULK_UPDATE',
@@ -846,6 +923,20 @@ export function useTransactions(
           count:   ids.length,
           changes: snap.map(s => ({ id: s.id, from: s.oldCategory, to: updates.category ?? 'Outros' })),
         },
+      });
+      // Histórico por transação — fire-and-forget, correlacionado por lote
+      const bulkCorrId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+      snap.forEach(({ id, oldCategory }) => {
+        void AuditService.logTransactionHistory(uid, id, {
+          action:        'BULK_UPDATE',
+          txId:          id,
+          before:        { category: oldCategory },
+          after:         { category: updates.category ?? 'Outros' },
+          changedFields: ['category'],
+          origin:        'bulk',
+          correlationId: bulkCorrId,
+          category:      updates.category ?? 'Outros',
+        });
       });
     } catch (err) {
       // Update falhou — snapshot inválido, descarta
@@ -886,7 +977,7 @@ export function useTransactions(
         await FirestoreService.batchUpdateTransactions(uid, groupIds, { category: oldCategory });
       }
 
-      // Auditoria — fire-and-forget após todos os commits (nunca bloqueia UI)
+      // Auditoria global — fire-and-forget após todos os commits (nunca bloqueia UI)
       void AuditService.logAction({
         userId:  uid,
         action:  'UNDO_BULK_UPDATE',
@@ -897,6 +988,20 @@ export function useTransactions(
           // from = categoria aplicada pelo bulk update; to = categoria original restaurada
           changes: snap.map(s => ({ id: s.id, from: s.newCategory ?? 'unknown', to: s.oldCategory })),
         },
+      });
+      // Histórico por transação — fire-and-forget, correlacionado por lote de undo
+      const undoCorrId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+      snap.forEach(({ id, oldCategory, newCategory }) => {
+        void AuditService.logTransactionHistory(uid, id, {
+          action:        'UNDO_BULK_UPDATE',
+          txId:          id,
+          before:        { category: newCategory ?? 'unknown' },
+          after:         { category: oldCategory },
+          changedFields: ['category'],
+          origin:        'bulk',
+          correlationId: undoCorrId,
+          category:      oldCategory,
+        });
       });
     } finally {
       isUndoingRef.current = false;

@@ -1,5 +1,5 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { AuditService } from './AuditService';
+import { AuditService, type TransactionHistoryEvent } from './AuditService';
 
 // ─── Hoisted mocks ────────────────────────────────────────────────────────────
 
@@ -96,5 +96,99 @@ describe('AuditService.logAction', () => {
     });
     expect(data).not.toHaveProperty('userId');
     expect(data).not.toHaveProperty('timestamp');
+  });
+});
+
+// ─── Suite: AuditService.logTransactionHistory ────────────────────────────────
+
+const mkHistoryEvent = (overrides: Partial<TransactionHistoryEvent> = {}): TransactionHistoryEvent => ({
+  action: 'UPDATE',
+  txId:   'tx-abc',
+  ...overrides,
+});
+
+describe('AuditService.logTransactionHistory', () => {
+  it('grava em users/{uid}/transactions/{txId}/history (path correto)', async () => {
+    await AuditService.logTransactionHistory('uid-xyz', 'tx-abc', mkHistoryEvent());
+    expect(mockCollection).toHaveBeenCalledWith(
+      expect.anything(),
+      'users', 'uid-xyz', 'transactions', 'tx-abc', 'history',
+    );
+    expect(mockAddDoc).toHaveBeenCalledTimes(1);
+  });
+
+  it('payload contém action, txId, createdAt (serverTimestamp) e schemaVersion: 1', async () => {
+    await AuditService.logTransactionHistory('u1', 'tx-1', mkHistoryEvent({ action: 'SOFT_DELETE', txId: 'tx-1' }));
+    const [, data] = mockAddDoc.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(data['action']).toBe('SOFT_DELETE');
+    expect(data['txId']).toBe('tx-1');
+    expect(data['createdAt']).toEqual({ _serverTimestamp: true });
+    expect(data['schemaVersion']).toBe(1);
+  });
+
+  it('payload NÃO contém userId nem uid (path já contém o usuário)', async () => {
+    await AuditService.logTransactionHistory('u1', 'tx-1', mkHistoryEvent());
+    const [, data] = mockAddDoc.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(data).not.toHaveProperty('userId');
+    expect(data).not.toHaveProperty('uid');
+  });
+
+  it('preserva before, after, changedFields e origin quando fornecidos', async () => {
+    const before = { category: 'Outros', value_cents: 1000 };
+    const after  = { category: 'Alimentação', value_cents: 1000 };
+    await AuditService.logTransactionHistory('u1', 'tx-2', mkHistoryEvent({
+      before,
+      after,
+      changedFields: ['category'],
+      origin: 'manual',
+    }));
+    const [, data] = mockAddDoc.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(data['before']).toEqual(before);
+    expect(data['after']).toEqual(after);
+    expect(data['changedFields']).toEqual(['category']);
+    expect(data['origin']).toBe('manual');
+  });
+
+  it('correlationId e category incluídos quando presentes', async () => {
+    await AuditService.logTransactionHistory('u1', 'tx-3', mkHistoryEvent({
+      action:        'BULK_UPDATE',
+      correlationId: 'batch-456',
+      category:      'Saúde',
+      amount_cents:  5000,
+    }));
+    const [, data] = mockAddDoc.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(data['correlationId']).toBe('batch-456');
+    expect(data['category']).toBe('Saúde');
+    expect(data['amount_cents']).toBe(5000);
+  });
+
+  it('omite campos opcionais ausentes (before, after, changedFields, etc.)', async () => {
+    await AuditService.logTransactionHistory('u1', 'tx-4', mkHistoryEvent());
+    const [, data] = mockAddDoc.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(data).not.toHaveProperty('before');
+    expect(data).not.toHaveProperty('after');
+    expect(data).not.toHaveProperty('changedFields');
+    expect(data).not.toHaveProperty('correlationId');
+    expect(data).not.toHaveProperty('reason');
+  });
+
+  it('fail silent: erro do Firestore não lança exceção para o chamador', async () => {
+    mockAddDoc.mockRejectedValueOnce(new Error('Firestore offline'));
+    await expect(
+      AuditService.logTransactionHistory('u1', 'tx-1', mkHistoryEvent())
+    ).resolves.toBeUndefined();
+  });
+
+  it('uid ou txId ausente → retorna sem chamar addDoc', async () => {
+    await AuditService.logTransactionHistory('', 'tx-1', mkHistoryEvent());
+    await AuditService.logTransactionHistory('u1', '', mkHistoryEvent());
+    expect(mockAddDoc).not.toHaveBeenCalled();
+  });
+
+  it('schemaVersion é 1 (distinto do audit_logs global que usa 2)', async () => {
+    await AuditService.logTransactionHistory('u1', 'tx-1', mkHistoryEvent());
+    const [, data] = mockAddDoc.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(data['schemaVersion']).toBe(1);
+    expect(data['schemaVersion']).not.toBe(2);
   });
 });

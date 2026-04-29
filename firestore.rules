@@ -100,6 +100,20 @@ service cloud.firestore {
           && request.resource.data.updatedAt == request.time;
     }
 
+    function isValidTransactionHistory(data) {
+      return data.keys().hasAll(['action', 'txId', 'createdAt', 'schemaVersion'])
+          && data.keys().hasOnly([
+            'action', 'txId', 'before', 'after', 'changedFields', 'origin',
+            'reason', 'correlationId', 'importHash', 'amount_cents', 'category',
+            'createdAt', 'schemaVersion'
+          ])
+          && isStringSized(data.action, 2, 40)
+          && isStringSized(data.txId, 1, 128)
+          && data.createdAt == request.time
+          && data.schemaVersion == 1
+          && (!('amount_cents' in data) || isSafeInt(data.amount_cents));
+    }
+
     function isValidAuditLog(data) {
       return data.keys().hasAll(['action', 'entity', 'createdAt', 'schemaVersion'])
           && data.keys().hasOnly([
@@ -220,6 +234,12 @@ service cloud.firestore {
         allow create: if isOwner(userId) && isValidTransactionCreate();
         allow update: if isOwner(userId) && isValidTransactionUpdate();
         allow delete: if false;
+
+        match /history/{historyId} {
+          allow read: if isOwner(userId);
+          allow create: if isOwner(userId) && isValidTransactionHistory(request.resource.data);
+          allow update, delete: if false;
+        }
       }
 
       match /accounts/{accountId} {
