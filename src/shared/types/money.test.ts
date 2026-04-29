@@ -28,7 +28,16 @@ describe('Money - Centavos', () => {
     });
 
     it('aceita formatos monetários brasileiros e decimal com ponto', () => {
+      expect(toCentavos('12,50')).toBe(1250);
+      expect(toCentavos('12.50')).toBe(1250);
+      expect(toCentavos('12,00')).toBe(1200);
+      expect(toCentavos('12.00')).toBe(1200);
+      expect(toCentavos('1200')).toBe(120000);
+      expect(toCentavos('1.200')).toBe(120000);
       expect(toCentavos('1.234,56')).toBe(123456);
+      expect(toCentavos('1.200,50')).toBe(120050);
+      expect(toCentavos('1,200.50')).toBe(120050);
+      expect(toCentavos('1200,50')).toBe(120050);
       expect(toCentavos('1234,56')).toBe(123456);
       expect(toCentavos('1234.56')).toBe(123456);
       expect(toCentavos(1234.56)).toBe(123456);
