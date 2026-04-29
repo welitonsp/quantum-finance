@@ -1,5 +1,6 @@
 import type { ParsedTransaction } from '../types/transaction';
-import { fromCentavos, toCentavos, type Centavos } from '../types/money';
+import { fromCentavos, type Centavos } from '../types/money';
+import { parseImportedMoneyToCentavos } from './importMoneyParser';
 
 function readFileAsText(file: File, encoding = 'utf-8'): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -52,15 +53,19 @@ function validateDate(raw: string | undefined): string | null {
   return null;
 }
 
-function parseAmountCents(raw: string | undefined): Centavos | null {
+const CENTS_HEADER_KEYS = ['valorcentavos', 'valuecents', 'amountcents', 'cents', 'centavos', 'valoremcentavos'];
+
+function isCentsHeader(normalizedHeader: string): boolean {
+  return CENTS_HEADER_KEYS.some(k => normalizedHeader === k || normalizedHeader.endsWith(k));
+}
+
+function parseAmountCents(raw: string | undefined, integerMinorUnits = false): Centavos | null {
   if (!raw) return null;
   const s = raw.replace(/"/g, '').trim();
   if (!s) return null;
 
-  const negative = s.startsWith('-') || s.startsWith('(');
   try {
-    const cents = toCentavos(s);
-    return negative ? (-Math.abs(cents) as Centavos) : cents;
+    return parseImportedMoneyToCentavos(s, { integerMinorUnits });
   } catch {
     return null;
   }
@@ -81,6 +86,8 @@ export interface ColumnMapping {
   dateIdx: number;
   descIdx: number;
   valueIdx: number;
+  /** Força interpretação da coluna de valor como inteiro em centavos (minor units). */
+  valueIntegerMinorUnits?: boolean;
 }
 
 function autoDetectColumns(headers: string[]): ColumnMapping {
@@ -145,6 +152,12 @@ export async function parseCSVWithMapping(file: File, mapping: ColumnMapping): P
 
   const firstLine = lines[0] ?? '';
   const separator = detectSeparator(firstLine);
+
+  // Detectar se a coluna de valor exporta centavos como inteiro sem separador decimal
+  const rawHeaders = splitLine(firstLine, separator);
+  const valueHeaderNorm = normalizeHeader(rawHeaders[valueIdx] ?? '');
+  const integerMinorUnits = mapping.valueIntegerMinorUnits ?? isCentsHeader(valueHeaderNorm);
+
   const transactions: ParsedTransaction[] = [];
   const errors: string[] = [];
 
@@ -152,7 +165,7 @@ export async function parseCSVWithMapping(file: File, mapping: ColumnMapping): P
     const fields = splitLine(lines[i] ?? '', separator);
 
     const date   = validateDate(fields[dateIdx]);
-    const amountCents = parseAmountCents(fields[valueIdx]);
+    const amountCents = parseAmountCents(fields[valueIdx], integerMinorUnits);
     const desc   = normalizeDescription(fields[descIdx] || '') || `Linha ${i + 1}`;
 
     if (!date)          { errors.push(`Linha ${i+1}: data inválida ("${fields[dateIdx]}")`); continue; }

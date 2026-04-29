@@ -48,4 +48,73 @@ describe('csvParser - parsing monetário brasileiro', () => {
     await expect(parseCSVWithMapping(file, { valueIdx: 0, descIdx: 1, dateIdx: 2 }))
       .rejects.toThrow('Nenhuma transação válida');
   });
+
+  describe('critério de aceite: "12,00" → value_cents = 1200', () => {
+    it('"12,00" em coluna "valor" resulta em 1200 centavos (R$ 12,00)', async () => {
+      const file = csvFile([
+        'data;descricao;valor',
+        '01/04/2026;Cafe;12,00',
+      ].join('\n'));
+
+      const transactions = await parseCSV(file);
+
+      expect(transactions).toHaveLength(1);
+      expect(transactions[0]!.value_cents).toBe(1200);
+    });
+
+    it('"1.200,00" em coluna "valor" resulta em 120000 centavos (R$ 1.200,00)', async () => {
+      const file = csvFile([
+        'data;descricao;valor',
+        '01/04/2026;Salario;1.200,00',
+      ].join('\n'));
+
+      const transactions = await parseCSV(file);
+
+      expect(transactions).toHaveLength(1);
+      expect(transactions[0]!.value_cents).toBe(120000);
+    });
+  });
+
+  describe('heurística de header de centavos', () => {
+    it('coluna "valor_centavos" com "1200" resulta em 1200 centavos (R$ 12,00)', async () => {
+      const file = csvFile([
+        'data;descricao;valor_centavos',
+        '01/04/2026;Cafe;1200',
+      ].join('\n'));
+
+      const transactions = await parseCSV(file);
+
+      expect(transactions).toHaveLength(1);
+      expect(transactions[0]!.value_cents).toBe(1200);
+    });
+
+    it('coluna "valor" comum com "1200" resulta em 120000 centavos (R$ 1.200,00)', async () => {
+      const file = csvFile([
+        'data;descricao;valor',
+        '01/04/2026;Transferencia;1200',
+      ].join('\n'));
+
+      const transactions = await parseCSV(file);
+
+      expect(transactions).toHaveLength(1);
+      expect(transactions[0]!.value_cents).toBe(120000);
+    });
+
+    it('mapeamento manual com valueIntegerMinorUnits=true força interpretação em centavos', async () => {
+      const file = csvFile([
+        'date;description;amount',
+        '2026-04-01;Pagamento;1200',
+      ].join('\n'));
+
+      const transactions = await parseCSVWithMapping(file, {
+        dateIdx: 0,
+        descIdx: 1,
+        valueIdx: 2,
+        valueIntegerMinorUnits: true,
+      });
+
+      expect(transactions).toHaveLength(1);
+      expect(transactions[0]!.value_cents).toBe(1200);
+    });
+  });
 });

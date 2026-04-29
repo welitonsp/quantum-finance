@@ -5,6 +5,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  getDoc,
   query,
   orderBy,
   writeBatch,
@@ -19,6 +20,7 @@ import {
   dateSchema,
   sourceSchema,
   transactionTypeSchema,
+  SOURCE_VALUES,
   type FinancialSource,
 } from '../schemas/financialSchemas';
 import { fromCentavos, toCentavos, type Centavos, type MoneyInput } from '../types/money';
@@ -238,6 +240,37 @@ function normalizeUpdatePayload(data: TransactionUpdateDTO): Record<string, unkn
   return parsed.data;
 }
 
+function buildSoftDeletePatch(existing: Record<string, unknown>): Record<string, unknown> {
+  const type = canonicalizeTransactionType(existing['type'] as string | undefined);
+  const srcRaw = existing['source'] as string | undefined;
+  const source: FinancialSource = SOURCE_VALUES.includes(srcRaw as FinancialSource)
+    ? (srcRaw as FinancialSource)
+    : 'manual';
+
+  const patch: Record<string, unknown> = {
+    schemaVersion: 2,
+    type,
+    source,
+    isDeleted: true,
+    deletedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    uid: deleteField(),
+    id: deleteField(),
+    value: deleteField(),
+  };
+
+  // Fix legacy documents where value_cents is absent or zero but a float 'value' exists
+  const rawCents = existing['value_cents'];
+  const legacyValue = existing['value'];
+  if (typeof rawCents === 'number' && rawCents > 0) {
+    patch['value_cents'] = Math.round(rawCents);
+  } else if (typeof legacyValue === 'number' && legacyValue !== 0) {
+    patch['value_cents'] = Math.abs(Math.round(legacyValue * 100));
+  }
+
+  return patch;
+}
+
 function normalizeReadTransaction(tx: Transaction): Transaction {
   const value_cents = getTransactionCentavos(tx) ?? (0 as Centavos);
   return {
@@ -315,11 +348,10 @@ export const FirestoreService = {
 
   async deleteTransaction(uid: string, id: string): Promise<void> {
     if (!uid || !id) throw new Error('[Firestore][deleteTransaction] UID ou ID ausente.');
-    await updateDoc(doc(txCol(uid), id), {
-      isDeleted: true,
-      deletedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    const docRef = doc(txCol(uid), id);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) return;
+    await updateDoc(docRef, buildSoftDeletePatch(snap.data() as Record<string, unknown>));
   },
 
   async deleteBatchTransactions(uid: string, ids: string[]): Promise<void> {
@@ -327,13 +359,13 @@ export const FirestoreService = {
 
     for (let i = 0; i < ids.length; i += TX_CHUNK_SIZE) {
       const chunk = ids.slice(i, i + TX_CHUNK_SIZE);
+      const refs = chunk.map(txId => doc(txCol(uid), txId));
+      const snaps = await Promise.all(refs.map(r => getDoc(r)));
       const batch = writeBatch(db);
-      chunk.forEach(id => {
-        batch.update(doc(txCol(uid), id), {
-          isDeleted: true,
-          deletedAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
+      chunk.forEach((_, idx) => {
+        const snap = snaps[idx];
+        if (!snap?.exists()) return;
+        batch.update(refs[idx]!, buildSoftDeletePatch(snap.data() as Record<string, unknown>));
       });
       await batch.commit();
     }
