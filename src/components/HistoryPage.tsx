@@ -6,6 +6,7 @@ import type { Transaction } from '../shared/types/transaction';
 import type { BulkUpdate } from '../hooks/useTransactions';
 import { getTransactionAbsCentavos, isIncome } from '../utils/transactionUtils';
 import { fromCentavos } from '../shared/types/money';
+import type { UserCategory } from '../shared/schemas/categorySchemas';
 
 interface StatPillProps {
   icon: LucideIcon;
@@ -47,6 +48,8 @@ interface Props {
   isUndoing?: boolean;
   hasUndoSnapshot?: boolean;
   clearBulkSnapshot?: () => void;
+  uid?: string;
+  categories?: UserCategory[];
 }
 
 export default function HistoryPage({
@@ -61,6 +64,8 @@ export default function HistoryPage({
   isUndoing = false,
   hasUndoSnapshot = false,
   clearBulkSnapshot,
+  uid,
+  categories = [],
 }: Props) {
   const stats = useMemo(() => {
     let totalIn = 0, totalOut = 0;
@@ -129,6 +134,8 @@ export default function HistoryPage({
           isUndoing={isUndoing}
           hasUndoSnapshot={hasUndoSnapshot}
           clearBulkSnapshot={clearBulkSnapshot}
+          categories={categories}
+          {...(uid ? { uid } : {})}
         />
       </motion.div>
     </div>

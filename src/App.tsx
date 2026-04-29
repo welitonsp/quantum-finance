@@ -13,6 +13,7 @@ import { useFinancialData } from './hooks/useFinancialData';
 import { useAccounts } from './hooks/useAccounts';
 import { useRecurring } from './hooks/useRecurring';
 import { useCategoryRules } from './hooks/useCategoryRules';
+import { useCategories } from './hooks/useCategories';
 import { useAppLogic } from './hooks/useAppLogic';
 
 import Sidebar from './components/Sidebar';
@@ -144,6 +145,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
 
   // Regras do usuário aplicadas em writes manuais; importação passa pelo LedgerService.
   const { asUserRules: userCategoryRules } = useCategoryRules(safeUID);
+  const { categories } = useCategories(safeUID);
   const {
     transactions, loading, add, remove, removeBatch, update,
     bulkUpdateTransactions, isBulkUpdating,
@@ -152,7 +154,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   const { accounts } = useAccounts(safeUID);
   const { recurringTasks } = useRecurring(safeUID);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
-    useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts);
+    useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts, categories);
 
   const {
     isAIChatOpen, setIsAIChatOpen, isFormOpen, setIsFormOpen, isSettingsOpen, setIsSettingsOpen,
@@ -274,6 +276,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     onCloseForm={handleCloseForm}
                     accounts={accounts}
                     recurringTasks={recurringTasks}
+                    categories={categories}
                   />
                 )}
                 {currentPage === 'accounts'   && <AccountsManager   uid={safeUID} />}
@@ -302,12 +305,15 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     isUndoing={isUndoing}
                     hasUndoSnapshot={hasUndoSnapshot}
                     clearBulkSnapshot={clearBulkSnapshot}
+                    uid={safeUID}
+                    categories={categories}
                   />
                 )}
                 {currentPage === 'reports' && (
                   <ReportsContent
                     transactions={displayedTransactions}
                     accounts={accounts}
+                    categories={categories}
                   />
                 )}
                 {currentPage === 'simulation' && (

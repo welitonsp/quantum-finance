@@ -4,6 +4,7 @@ import type { Transaction, Account, ModuleBalances, CategoryDataPoint } from '..
 import { isIncome as checkIncome, isExpense as checkExpense } from '../utils/transactionUtils';
 import { getTransactionCentavos } from '../utils/transactionUtils';
 import { fromCentavos, type Centavos } from '../shared/types/money';
+import { normalizeCategoryName, type UserCategory } from '../shared/schemas/categorySchemas';
 
 interface FirestoreTimestamp { toDate: () => Date; }
 
@@ -28,6 +29,14 @@ function txValueReais(tx: Transaction): number {
   return fromCentavos(txValueCents(tx));
 }
 
+const CATEGORY_FALLBACK_COLORS = ['#ef4444','#06b6d4','#a855f7','#f59e0b','#10b981','#3b82f6','#f43f5e'];
+
+function categoryColor(name: string, categories: UserCategory[], index: number): string {
+  const normalizedName = normalizeCategoryName(name);
+  const meta = categories.find(category => category.normalizedName === normalizedName);
+  return meta?.color ?? CATEGORY_FALLBACK_COLORS[index % CATEGORY_FALLBACK_COLORS.length] ?? CATEGORY_FALLBACK_COLORS[0]!;
+}
+
 // ─── Existing hook (kept for App.tsx compatibility) ──────────────────────────
 
 export interface FinancialDataReturn {
@@ -43,7 +52,8 @@ export function useFinancialData(
   activeModule: string,
   currentMonth: number,
   currentYear: number,
-  accounts: Account[] = []
+  accounts: Account[] = [],
+  categories: UserCategory[] = [],
 ): FinancialDataReturn {
 
   const displayedTransactions = useMemo(() => {
@@ -120,13 +130,12 @@ export function useFinancialData(
       }
     });
 
-    const colors = ['#ef4444','#06b6d4','#a855f7','#f59e0b','#10b981','#3b82f6','#f43f5e'];
     return Object.keys(map).map((name, idx) => ({
       name,
       value: fromCentavos(map[name] ?? 0),
-      color: colors[idx % colors.length] ?? colors[0]!
+      color: categoryColor(name, categories, idx),
     })).sort((a, b) => b.value - a.value);
-  }, [displayedTransactions]);
+  }, [categories, displayedTransactions]);
 
   const topExpensesData = useMemo(() => categoryData.slice(0, 4), [categoryData]);
 
@@ -172,6 +181,7 @@ export interface TimelineDataPoint {
 export interface CategoryChartPoint {
   name:  string;
   value: number;
+  color?: string;
 }
 
 export interface DashboardDataReturn {
@@ -188,7 +198,11 @@ const RANGE_DAYS: Record<Exclude<TimeRange, 'all'>, number> = {
 };
 
 // FIX: single source of truth for transactions
-export function useDashboardData(transactions: Transaction[], loading: boolean): DashboardDataReturn {
+export function useDashboardData(
+  transactions: Transaction[],
+  loading: boolean,
+  categories: UserCategory[] = [],
+): DashboardDataReturn {
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
 
   const filtered = useMemo(() => {
@@ -260,9 +274,13 @@ export function useDashboardData(transactions: Transaction[], loading: boolean):
     });
 
     return Array.from(map.entries())
-      .map(([name, val]) => ({ name, value: fromCentavos(val.toNumber()) }))
+      .map(([name, val], index) => ({
+        name,
+        value: fromCentavos(val.toNumber()),
+        color: categoryColor(name, categories, index),
+      }))
       .sort((a, b) => b.value - a.value);
-  }, [filtered]);
+  }, [categories, filtered]);
 
   return { kpis, timelineData, categoryData, timeRange, setTimeRange, loading };
 }

@@ -4,9 +4,11 @@ import { formatCurrency } from '../utils/formatters';
 import type { Transaction } from '../shared/types/transaction';
 import { getTransactionAbsCentavos, isIncome as checkIncome } from '../utils/transactionUtils';
 import { fromCentavos } from '../shared/types/money';
+import { normalizeCategoryName, type UserCategory } from '../shared/schemas/categorySchemas';
 
 interface Props {
   transactions: Transaction[];
+  categories?: UserCategory[];
 }
 
 interface CategoryEntry {
@@ -14,9 +16,19 @@ interface CategoryEntry {
   value: number;
   pct: number;
   color: string;
+  icon: string;
 }
 
-export const CategoryBreakdown = memo(({ transactions }: Props) => {
+function categoryMeta(name: string, categories: UserCategory[], fallbackColor: string): { color: string; icon: string } {
+  const normalizedName = normalizeCategoryName(name);
+  const meta = categories.find(category => category.normalizedName === normalizedName);
+  return {
+    color: meta?.color ?? fallbackColor,
+    icon: meta?.icon ?? '•',
+  };
+}
+
+export const CategoryBreakdown = memo(({ transactions, categories = [] }: Props) => {
   const { incomeCategories, expenseCategories } = useMemo(() => {
     const incomeMap: Record<string, number> = {};
     const expenseMap: Record<string, number> = {};
@@ -37,10 +49,14 @@ export const CategoryBreakdown = memo(({ transactions }: Props) => {
       Object.entries(map)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 5)
-        .map(([name, value], i) => ({ name, value, pct: (value / total) * 100, color: colors[i % colors.length] ?? colors[0]! }));
+        .map(([name, value], i) => {
+          const fallbackColor = colors[i % colors.length] ?? colors[0]!;
+          const meta = categoryMeta(name, categories, fallbackColor);
+          return { name, value, pct: (value / total) * 100, color: meta.color, icon: meta.icon };
+        });
 
     return { incomeCategories: process(incomeMap, incomeTotal), expenseCategories: process(expenseMap, expenseTotal) };
-  }, [transactions]);
+  }, [categories, transactions]);
 
   const renderCategoryList = (categories: CategoryEntry[], title: string, type: 'income' | 'expense') => (
     <div className="flex-1">
@@ -54,6 +70,7 @@ export const CategoryBreakdown = memo(({ transactions }: Props) => {
               <div className="flex justify-between items-center text-sm">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full" style={{ background: cat.color }} />
+                  <span className="text-xs text-quantum-fgMuted w-4 text-center">{cat.icon}</span>
                   <span className="text-quantum-fg">{cat.name}</span>
                 </div>
                 <div className="flex gap-3 items-baseline">
