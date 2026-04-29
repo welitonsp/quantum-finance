@@ -64,8 +64,27 @@ describe('financialSchemas - transações', () => {
     }
   });
 
+  it('aceita categorias personalizadas como string segura', () => {
+    for (const category of ['Petshop', 'Academia', 'Pix da Avó', 'Remédio Manipulado']) {
+      const result = transactionCreateSchema.safeParse({ ...baseTransaction, category });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.category).toBe(category);
+    }
+  });
+
+  it('rejeita categorias vazias, longas ou de tipo inválido', () => {
+    expect(transactionCreateSchema.safeParse({ ...baseTransaction, category: '' }).success).toBe(false);
+    expect(transactionCreateSchema.safeParse({ ...baseTransaction, category: '     ' }).success).toBe(false);
+    expect(transactionCreateSchema.safeParse({ ...baseTransaction, category: 'a'.repeat(81) }).success).toBe(false);
+    expect(transactionCreateSchema.safeParse({ ...baseTransaction, category: null }).success).toBe(false);
+    expect(transactionCreateSchema.safeParse({ ...baseTransaction, category: undefined }).success).toBe(false);
+    expect(transactionCreateSchema.safeParse({ ...baseTransaction, category: 123 }).success).toBe(false);
+    expect(transactionCreateSchema.safeParse({ ...baseTransaction, category: { name: 'Petshop' } }).success).toBe(false);
+  });
+
   it('update é strict, parcial e não aceita alteração de createdAt', () => {
     expect(transactionUpdateSchema.safeParse({ category: 'Saúde' }).success).toBe(true);
+    expect(transactionUpdateSchema.safeParse({ category: 'Petshop' }).success).toBe(true);
     expect(transactionUpdateSchema.safeParse({}).success).toBe(false);
     expect(transactionUpdateSchema.safeParse({ createdAt: new Date() }).success).toBe(false);
   });
