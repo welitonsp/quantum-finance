@@ -1,6 +1,6 @@
 // src/features/transactions/ImportButton.tsx
 // Fluxo de estados: idle → parsing → [col_mapping] → ai_processing → preview → importing → success | error | reconciliation
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -12,13 +12,14 @@ import toast from 'react-hot-toast';
 
 import { useParserWorker } from '../../shared/lib/useParserWorker';
 import { batchCategorizeDescriptions } from '../../utils/aiCategorize';
-import { ALLOWED_CATEGORIES, transactionCreateSchema } from '../../shared/schemas/financialSchemas';
+import { transactionCreateSchema } from '../../shared/schemas/financialSchemas';
 import { CATEGORY_KEYWORDS } from '../../shared/data/categoryKeywords';
 import ReconciliationEngine from './ReconciliationEngine';
 import type { Transaction } from '../../shared/types/transaction';
-import type { AllowedCategory } from '../../shared/schemas/financialSchemas';
 import { getTransactionAbsCentavos, isIncome, isExpense } from '../../utils/transactionUtils';
 import { fromCentavos, toCentavos, type Centavos } from '../../shared/types/money';
+import { useCategories } from '../../hooks/useCategories';
+import { normalizeCategoryName, type UserCategory } from '../../shared/schemas/categorySchemas';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ImportStatus =
@@ -88,6 +89,21 @@ const CAT_COLORS: Record<string, string> = {
 };
 const catClass = (cat: string | undefined): string =>
   CAT_COLORS[cat ?? 'Diversos'] ?? CAT_COLORS['Diversos']!;
+
+function uniqueCategoryNames(categories: UserCategory[], extraNames: string[] = []): string[] {
+  const byName = new Map<string, string>();
+  categories.forEach(category => {
+    const name = category.name.trim();
+    if (name) byName.set(category.normalizedName, name);
+  });
+  extraNames.forEach(rawName => {
+    const name = rawName.trim();
+    if (!name) return;
+    const normalizedName = normalizeCategoryName(name);
+    if (!byName.has(normalizedName)) byName.set(normalizedName, name);
+  });
+  return [...byName.values()].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+}
 
 // ─── StepBar ─────────────────────────────────────────────────────────────────
 const STEPS = ['Ficheiro', 'Categorizar', 'Pré-visualizar', 'Importar'];
@@ -312,10 +328,11 @@ function ColumnMapper({ headers, previewRows, autoMap, onApply, onCancel }: Colu
 interface PreviewItem extends ParsedTransaction { _selected: boolean }
 interface PreviewPanelProps {
   transactions: ParsedTransaction[];
+  categoryOptions: string[];
   onConfirm:    (txs: ParsedTransaction[]) => void;
   onCancel:     () => void;
 }
-function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) {
+function PreviewPanel({ transactions, categoryOptions, onConfirm, onCancel }: PreviewPanelProps) {
   const [items, setItems]       = useState<PreviewItem[]>(() => transactions.map(tx => ({ ...tx, _selected: true })));
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -412,7 +429,7 @@ function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) 
                           onBlur={() => setEditingId(null)}
                           className="bg-quantum-bgSecondary border border-quantum-accent/30 rounded-lg px-1 py-0.5 text-[10px] text-quantum-fg outline-none"
                         >
-                          {ALLOWED_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                          {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       ) : (
                         <button
@@ -511,7 +528,7 @@ function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void
 }
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
-export default function ImportButton({ onImportTransactions, existingTransactions = [], userRules }: Props) {
+export default function ImportButton({ onImportTransactions, uid, existingTransactions = [], userRules }: Props) {
   const [isOpen,              setIsOpen]              = useState(false);
   const [status,              setStatus]              = useState<ImportStatus>('idle');
   const [errorMessage,        setErrorMessage]        = useState('');
@@ -523,6 +540,16 @@ export default function ImportButton({ onImportTransactions, existingTransaction
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { parseFile, parseFileWithMapping } = useParserWorker();
+  const { categories } = useCategories(uid ?? '');
+
+  const categoryOptions = useMemo(
+    () => uniqueCategoryNames(categories, [
+      ...existingTransactions.map(tx => tx.category ?? ''),
+      ...preview.map(tx => tx.category ?? ''),
+      ...reconciliationQueue.map(tx => tx.category ?? ''),
+    ]),
+    [categories, existingTransactions, preview, reconciliationQueue],
+  );
 
   const deduplicate = useCallback((parsed: ParsedTransaction[]) => {
     const existingHashes = new Set<string>();
@@ -556,7 +583,7 @@ export default function ImportButton({ onImportTransactions, existingTransaction
       for (const rule of (userRules ?? [])) {
         for (const kw of rule.keywords) {
           if (upper.includes(kw.toUpperCase())) {
-            tx.category = rule.category as AllowedCategory; found = true; break;
+            tx.category = rule.category; found = true; break;
           }
         }
         if (found) break;
@@ -565,7 +592,7 @@ export default function ImportButton({ onImportTransactions, existingTransaction
         for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
           for (const kw of keywords) {
             if (upper.includes(kw.toUpperCase())) {
-              tx.category = category as AllowedCategory; found = true; break;
+              tx.category = category; found = true; break;
             }
           }
           if (found) break;
@@ -828,6 +855,7 @@ export default function ImportButton({ onImportTransactions, existingTransaction
                     <motion.div key="preview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                       <PreviewPanel
                         transactions={preview}
+                        categoryOptions={categoryOptions}
                         onConfirm={txs => void handleConfirmImport(txs)}
                         onCancel={() => setStatus('idle')}
                       />

@@ -8,11 +8,12 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useBudgets, currentMonthStr } from '../hooks/useBudgets';
-import { ALLOWED_CATEGORIES } from '../shared/schemas/financialSchemas';
 import { formatCurrency } from '../utils/formatters';
 import type { Transaction } from '../shared/types/transaction';
 import type { BudgetInsight } from '../hooks/useBudgets';
 import { fromCentavos, toCentavos } from '../shared/types/money';
+import { useCategories } from '../hooks/useCategories';
+import { normalizeCategoryName, type UserCategory } from '../shared/schemas/categorySchemas';
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
@@ -153,16 +154,34 @@ function BudgetCard({ insight, onRemove }: BudgetCardProps) {
 // ─── Add budget form (inline, animated) ──────────────────────────────────────
 
 // Exclude income-only categories from budget targets
-const BUDGET_CATEGORIES = ALLOWED_CATEGORIES.filter(
-  c => c !== 'Salário' && c !== 'Freelance' && c !== 'Investimento',
-);
+function budgetCategoryNames(categories: UserCategory[], transactions: Transaction[]): string[] {
+  const byName = new Map<string, string>();
+  categories
+    .filter(category => category.type !== 'entrada')
+    .forEach(category => {
+      const name = category.name.trim();
+      if (name) byName.set(category.normalizedName, name);
+    });
+
+  transactions
+    .filter(tx => tx.type !== 'entrada' && tx.type !== 'receita')
+    .forEach(tx => {
+      const name = (tx.category ?? '').trim();
+      if (!name) return;
+      const normalizedName = normalizeCategoryName(name);
+      if (!byName.has(normalizedName)) byName.set(normalizedName, name);
+    });
+
+  return [...byName.values()].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+}
 
 interface AddFormProps {
   onAdd:    (data: Omit<BudgetInsight, 'id' | 'createdAt' | 'spent' | 'remaining' | 'progress' | 'projectedSpend' | 'status'>) => Promise<void>;
   onClose:  () => void;
+  categoryOptions: string[];
 }
 
-function AddForm({ onAdd, onClose }: AddFormProps) {
+function AddForm({ onAdd, onClose, categoryOptions }: AddFormProps) {
   const [category, setCategory] = useState('');
   const [amount,   setAmount]   = useState('');
   const [month,    setMonth]    = useState(currentMonthStr());
@@ -218,7 +237,7 @@ function AddForm({ onAdd, onClose }: AddFormProps) {
               required
             >
               <option value="">— Selecionar —</option>
-              {BUDGET_CATEGORIES.map(c => (
+              {categoryOptions.map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
@@ -292,6 +311,12 @@ export default function BudgetWidget({ uid, transactions }: Props) {
   const [collapsed, setCollapsed] = useState(false);
 
   const { insights, loading, addBudget, removeBudget } = useBudgets(uid, transactions);
+  const { categories } = useCategories(uid);
+
+  const categoryOptions = useMemo(
+    () => budgetCategoryNames(categories, transactions),
+    [categories, transactions],
+  );
 
   // Months that have at least one budget — for the filter strip
   const availableMonths = useMemo(() => {
@@ -390,6 +415,7 @@ export default function BudgetWidget({ uid, transactions }: Props) {
                   <AddForm
                     onAdd={async data => { await addBudget(data); }}
                     onClose={() => setShowAdd(false)}
+                    categoryOptions={categoryOptions}
                   />
                 )}
               </AnimatePresence>

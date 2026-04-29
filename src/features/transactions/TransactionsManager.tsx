@@ -10,15 +10,15 @@ import {
 } from 'lucide-react';
 import { transactionsToCSV, downloadCSV } from '../../utils/exportCSV';
 import { formatCurrency } from '../../utils/formatters';
-import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
 import toast from 'react-hot-toast';
 import type { Transaction } from '../../shared/types/transaction';
-import type { AllowedCategory } from '../../shared/schemas/financialSchemas';
 import type { BulkUpdate } from '../../hooks/useTransactions';
 import { auth } from '../../shared/api/firebase/auth';
 import { getTransactionAbsCentavos, isIncome as checkIncome, isExpense as checkExpense } from '../../utils/transactionUtils';
 import { fromCentavos } from '../../shared/types/money';
 import AuditTimeline from '../../components/AuditTimeline';
+import { useCategories } from '../../hooks/useCategories';
+import { normalizeCategoryName, type UserCategory } from '../../shared/schemas/categorySchemas';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SortBy = 'date_desc' | 'date_asc' | 'value_desc' | 'value_asc' | 'cat';
@@ -72,6 +72,21 @@ const CAT_STYLE: Record<string, CatStyleEntry> = {
   'Outros':         { bg: 'bg-white/5',         text: 'text-quantum-fgMuted', border: 'border-quantum-border'       },
 };
 const catStyle = (cat: string): CatStyleEntry => CAT_STYLE[cat] ?? CAT_STYLE['Diversos']!;
+
+function uniqueCategoryNames(categories: UserCategory[], extraNames: string[] = []): string[] {
+  const byName = new Map<string, string>();
+  categories.forEach(category => {
+    const name = category.name.trim();
+    if (name) byName.set(category.normalizedName, name);
+  });
+  extraNames.forEach(rawName => {
+    const name = rawName.trim();
+    if (!name) return;
+    const normalizedName = normalizeCategoryName(name);
+    if (!byName.has(normalizedName)) byName.set(normalizedName, name);
+  });
+  return [...byName.values()].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+}
 
 // ─── Label amigável para datas ────────────────────────────────────────────────
 function getDateLabel(dateStr: string): string {
@@ -246,11 +261,23 @@ export default function TransactionsManager({
 
   const [selected,      setSelected]      = useState<Set<string>>(new Set());
   const [batchAction,   setBatchAction]   = useState<BatchAction>(null);
-  const [newCat,        setNewCat]        = useState<AllowedCategory>(ALLOWED_CATEGORIES[0]);
+  const [newCat,        setNewCat]        = useState('Outros');
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const searchRef    = useRef<HTMLInputElement>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { categories } = useCategories(effectiveUid);
+
+  const categoryOptions = useMemo(
+    () => uniqueCategoryNames(categories, transactions.map(tx => tx.category ?? '')),
+    [categories, transactions],
+  );
+
+  useEffect(() => {
+    if (categoryOptions.length > 0 && !categoryOptions.includes(newCat)) {
+      setNewCat(categoryOptions[0]!);
+    }
+  }, [categoryOptions, newCat]);
 
   // Limpa timer de undo ao desmontar (evita clearBulkSnapshot em componente morto)
   useEffect(() => () => {
@@ -564,7 +591,7 @@ export default function TransactionsManager({
                     className="input-quantum pl-9 py-2 text-xs appearance-none"
                   >
                     <option value="">Todas as categorias</option>
-                    {ALLOWED_CATEGORIES.map(c => (
+                    {categoryOptions.map(c => (
                       <option key={c} value={c}>{c} ({catCounts[c] ?? 0})</option>
                     ))}
                   </select>
@@ -824,10 +851,10 @@ export default function TransactionsManager({
                     </span>
                     <select
                       value={newCat}
-                      onChange={e => setNewCat(e.target.value as AllowedCategory)}
+                      onChange={e => setNewCat(e.target.value)}
                       className="input-quantum py-1.5 text-xs flex-1 min-w-[160px]"
                     >
-                      {ALLOWED_CATEGORIES.map(c => (
+                      {categoryOptions.map(c => (
                         <option key={c} value={c}>{c}</option>
                       ))}
                     </select>

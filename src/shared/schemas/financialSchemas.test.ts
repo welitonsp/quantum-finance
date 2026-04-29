@@ -64,6 +64,20 @@ describe('financialSchemas - transações', () => {
     }
   });
 
+  it('aceita categoria personalizada validada como string', () => {
+    for (const category of ['Petshop', 'Academia', 'Pix da Avó', 'Remédio Manipulado']) {
+      const result = transactionCreateSchema.safeParse({ ...baseTransaction, category });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.category).toBe(category);
+    }
+  });
+
+  it('rejeita categoria vazia ou longa demais', () => {
+    expect(transactionCreateSchema.safeParse({ ...baseTransaction, category: '' }).success).toBe(false);
+    expect(transactionCreateSchema.safeParse({ ...baseTransaction, category: ' '.repeat(5) }).success).toBe(false);
+    expect(transactionCreateSchema.safeParse({ ...baseTransaction, category: 'x'.repeat(81) }).success).toBe(false);
+  });
+
   it('update é strict, parcial e não aceita alteração de createdAt', () => {
     expect(transactionUpdateSchema.safeParse({ category: 'Saúde' }).success).toBe(true);
     expect(transactionUpdateSchema.safeParse({}).success).toBe(false);

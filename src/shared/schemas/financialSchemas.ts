@@ -45,7 +45,10 @@ export const dateSchema = z.string()
     return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
   }, 'Data inválida.');
 
-export const categorySchema = z.enum(ALLOWED_CATEGORIES, { message: 'Categoria inválida.' });
+export const categorySchema = z.string()
+  .trim()
+  .min(1, 'Categoria inválida.')
+  .max(80, 'Categoria deve ter no máximo 80 caracteres.');
 export const transactionTypeSchema = z.enum(['entrada', 'saida'], {
   message: "O tipo deve ser 'entrada' ou 'saida'.",
 });
