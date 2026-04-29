@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
 import type { Transaction } from '../../shared/types/transaction';
+import { formatBRL, fromCentavos, toCentavos } from '../../shared/types/money';
 import { isIncome } from '../../utils/transactionUtils';
 import { useCategories } from '../../hooks/useCategories';
 import { normalizeCategoryName, type UserCategory } from '../../shared/schemas/categorySchemas';
@@ -29,9 +30,19 @@ const CAT_META: Record<string, CatMeta> = {
 };
 
 function formatCurrencyDisplay(raw: string): string | null {
-  const num = parseFloat(raw);
-  if (isNaN(num) || raw === '' || raw === '0') return null;
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
+  if (!raw.trim()) return null;
+  try {
+    const cents = toCentavos(raw);
+    if (cents <= 0) return null;
+    return formatBRL(cents);
+  } catch {
+    return null;
+  }
+}
+
+function formatFormMoney(value: number | undefined): string {
+  if (value === undefined || !Number.isFinite(value)) return '';
+  return value.toFixed(2).replace('.', ',');
 }
 
 const backdropVariants = { hidden: { opacity: 0 }, visible: { opacity: 1 } };
@@ -203,9 +214,12 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
   useEffect(() => {
     if (editingTransaction) {
       const cat = editingTransaction.category ?? ALLOWED_CATEGORIES[0];
+      const editValue = editingTransaction.value_cents !== undefined
+        ? fromCentavos(editingTransaction.value_cents)
+        : editingTransaction.value;
       setFormData({
         description: editingTransaction.description ?? '',
-        value:       String(editingTransaction.value ?? ''),
+        value:       formatFormMoney(editValue),
         type:        isIncome(editingTransaction.type) ? 'entrada' : 'saida',
         category:    cat,
         date:        typeof editingTransaction.date === 'string'
@@ -280,15 +294,24 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
       descRef.current?.focus();
       return;
     }
-    const num = parseFloat(formData.value);
-    if (!formData.value || isNaN(num) || num <= 0) {
+    let valueCents: ReturnType<typeof toCentavos>;
+    try {
+      valueCents = toCentavos(formData.value);
+    } catch {
+      setError('Insira um valor monetario valido.');
+      return;
+    }
+
+    if (valueCents <= 0) {
       setError('Insira um valor válido maior que zero.');
       return;
     }
 
+    const value = fromCentavos(valueCents);
+
     setIsSubmitting(true); setError('');
     try {
-      await onSave({ ...formData, value: num });
+      await onSave({ ...formData, value, value_cents: valueCents });
       setSaved(true);
       setTimeout(() => setSaved(false), 1200);
     } catch (err) {
@@ -378,7 +401,7 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
               </label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-quantum-fgMuted text-sm font-semibold">R$</span>
-                <input type="number" step="0.01" min="0.01" name="value" value={formData.value} onChange={handleChange}
+                <input type="text" inputMode="decimal" name="value" value={formData.value} onChange={handleChange}
                   placeholder="0,00" className="input-quantum w-full pl-9" />
               </div>
             </div>

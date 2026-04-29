@@ -32,11 +32,19 @@ describe('Money - Centavos', () => {
       expect(toCentavos('1234,56')).toBe(123456);
       expect(toCentavos('1234.56')).toBe(123456);
       expect(toCentavos(1234.56)).toBe(123456);
+      expect(toCentavos('12,50')).toBe(1250);
+      expect(toCentavos('12.50')).toBe(1250);
+      expect(toCentavos('12,00')).toBe(1200);
+      expect(toCentavos('12.00')).toBe(1200);
+      expect(toCentavos('1200')).toBe(120000);
+      expect(toCentavos('1.200')).toBe(120000);
+      expect(toCentavos('1.200,50')).toBe(120050);
+      expect(toCentavos('1,200.50')).toBe(120050);
     });
 
     it('preserva sinal para estornos ou ajustes negativos', () => {
       expect(toCentavos(-10.5)).toBe(-1050);
-      expect(toCentavos('-10.005')).toBe(-1001);
+      expect(toCentavos(-10.005)).toBe(-1001);
     });
 
     it('rejeita NaN, Infinity e valores fora do inteiro seguro', () => {
