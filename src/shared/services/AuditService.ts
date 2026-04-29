@@ -6,6 +6,36 @@ import { db } from '../api/firebase/index';
 export type AuditAction = 'BULK_UPDATE' | 'UNDO_BULK_UPDATE';
 export type AuditEntity = 'TRANSACTION';
 
+// ─── Transaction History Model ────────────────────────────────────────────────
+
+export type TransactionHistoryAction =
+  | 'CREATE'
+  | 'UPDATE'
+  | 'SOFT_DELETE'
+  | 'RESTORE'
+  | 'BULK_UPDATE'
+  | 'UNDO_BULK_UPDATE'
+  | 'IMPORT';
+
+/**
+ * Evento de histórico por movimentação.
+ * Gravado em users/{uid}/transactions/{txId}/history/{historyId}.
+ * Nunca inclui userId: o path já isola por usuário.
+ */
+export interface TransactionHistoryEvent {
+  action:        TransactionHistoryAction;
+  txId:          string;
+  before?:       Record<string, unknown>;
+  after?:        Record<string, unknown>;
+  changedFields?: string[];
+  origin?:       string;
+  reason?:       string;
+  correlationId?: string;
+  importHash?:   string;
+  amount_cents?: number;
+  category?:     string;
+}
+
 /** Uma linha de diff: o que era → o que ficou. */
 export interface AuditChange {
   id:    string;
@@ -65,6 +95,51 @@ export const AuditService = {
       // FAIL SILENT — UI nunca quebra por falha de auditoria
       if (import.meta.env.DEV) {
         console.warn('[AuditService] log failed:', error);
+      }
+    }
+  },
+
+  /**
+   * Persiste um evento de histórico por movimentação em:
+   * users/{uid}/transactions/{txId}/history/{historyId}
+   *
+   * - Path aninhado isola por usuário + transação (sem userId no doc)
+   * - schemaVersion: 1 — modelo distinto do audit_logs global
+   * - FAIL SILENT — nunca lança erro nem bloqueia o fluxo principal
+   */
+  async logTransactionHistory(
+    uid:   string,
+    txId:  string,
+    event: TransactionHistoryEvent,
+  ): Promise<void> {
+    if (!uid || !txId) {
+      if (import.meta.env.DEV) {
+        console.warn('[AuditService] logTransactionHistory ignorado: uid ou txId ausente.');
+      }
+      return;
+    }
+    try {
+      const histRef = collection(db, 'users', uid, 'transactions', txId, 'history');
+      const payload: Record<string, unknown> = {
+        action:        event.action,
+        txId:          event.txId,
+        createdAt:     serverTimestamp(),
+        schemaVersion: 1,
+      };
+      if (event.before      !== undefined)          payload['before']        = event.before;
+      if (event.after       !== undefined)          payload['after']         = event.after;
+      if (event.changedFields?.length)              payload['changedFields'] = event.changedFields;
+      if (event.origin)                             payload['origin']        = event.origin;
+      if (event.reason)                             payload['reason']        = event.reason;
+      if (event.correlationId)                      payload['correlationId'] = event.correlationId;
+      if (event.importHash)                         payload['importHash']    = event.importHash;
+      if (event.amount_cents !== undefined)         payload['amount_cents']  = event.amount_cents;
+      if (event.category)                           payload['category']      = event.category;
+      await addDoc(histRef, payload);
+    } catch (error) {
+      // FAIL SILENT — UI nunca quebra por falha de auditoria
+      if (import.meta.env.DEV) {
+        console.warn('[AuditService] logTransactionHistory failed:', error);
       }
     }
   },
