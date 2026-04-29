@@ -3,6 +3,7 @@
 import * as pdfjsLib  from 'pdfjs-dist';
 import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { fromCentavos, toCentavos, type Centavos } from '../../types/money';
+import { parseImportedMoneyToCentavos } from '../importMoneyParser';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 
@@ -42,6 +43,12 @@ interface WorkerError extends Error {
 }
 
 // ─── CSV ─────────────────────────────────────────────────────────────────────
+
+const CENTS_HEADER_KEYS = ['valorcentavos', 'valuecents', 'amountcents', 'cents', 'centavos', 'valoremcentavos'];
+
+function isCentsHeader(normalizedHeader: string): boolean {
+  return CENTS_HEADER_KEYS.some(k => normalizedHeader === k || normalizedHeader.endsWith(k));
+}
 
 function detectSeparator(line: string): string {
   const pipes = (line.match(/\|/g) || []).length;
@@ -85,7 +92,8 @@ function validateDate(raw: string | undefined): string | null {
 
 function parseAmountCents(
   raw: string | number | undefined,
-  source: 'OFX' | 'PDF' | 'CSV' | 'UNKNOWN' = 'UNKNOWN'
+  source: 'OFX' | 'PDF' | 'CSV' | 'UNKNOWN' = 'UNKNOWN',
+  integerMinorUnits = false,
 ): Centavos | null {
   if (raw === undefined || raw === null) return null;
   if (typeof raw === 'number') {
@@ -103,10 +111,9 @@ function parseAmountCents(
     try { return toCentavos(s); } catch { return null; }
   }
 
-  const neg = s.startsWith('-') || s.startsWith('(');
+  // CSV / UNKNOWN: usar parseImportedMoneyToCentavos para suportar integerMinorUnits
   try {
-    const cents = toCentavos(s);
-    return neg ? (-Math.abs(cents) as Centavos) : cents;
+    return parseImportedMoneyToCentavos(s, { integerMinorUnits });
   } catch {
     return null;
   }
@@ -152,11 +159,15 @@ function parseCSVBuffer(buffer: ArrayBuffer, mapping: ColumnMapping | null = nul
     throw err;
   }
 
+  // Detectar se a coluna de valor exporta centavos como inteiro sem separador decimal
+  const valueHeaderNorm = normalizeHeader(rawHeaders[valueIdx] ?? '');
+  const integerMinorUnits = isCentsHeader(valueHeaderNorm);
+
   const transactions: ParsedTx[] = [];
   for (let i=1; i<lines.length; i++) {
     const fields=splitLine(lines[i] ?? '',sep);
     const date=validateDate(fields[dateIdx]);
-    const amount=parseAmountCents(fields[valueIdx]);
+    const amount=parseAmountCents(fields[valueIdx], 'CSV', integerMinorUnits);
     const desc=(fields[descIdx]||'').trim()||`Linha ${i+1}`;
     if (!date||amount===null||amount===0) continue;
     const valueCents = Math.abs(amount) as Centavos;

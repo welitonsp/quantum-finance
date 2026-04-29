@@ -8,6 +8,7 @@ const {
   mockBatchUpdate,
   mockCollection,
   mockDoc,
+  mockGetDoc,
   mockLedgerImport,
   mockServerTimestamp,
   mockWriteBatch,
@@ -21,6 +22,18 @@ const {
   }));
   const mockCollection = vi.fn().mockReturnValue({ id: 'mock-col', path: 'mock-col/path' });
   const mockDoc = vi.fn().mockReturnValue({ id: 'mock-doc-id', path: 'mock/path' });
+  const mockGetDoc = vi.fn().mockResolvedValue({
+    exists: () => true,
+    data: () => ({
+      type: 'saida',
+      source: 'manual',
+      value_cents: 1000,
+      schemaVersion: 2,
+      description: 'Test',
+      category: 'Outros',
+      date: '2026-01-01',
+    }),
+  });
   const mockLedgerImport = vi.fn().mockResolvedValue({ added: 1, duplicates: 0, invalid: 0 });
   const mockServerTimestamp = vi.fn().mockReturnValue({ _serverTimestamp: true });
 
@@ -30,6 +43,7 @@ const {
     mockBatchUpdate,
     mockCollection,
     mockDoc,
+    mockGetDoc,
     mockLedgerImport,
     mockServerTimestamp,
     mockWriteBatch,
@@ -41,12 +55,14 @@ vi.mock('firebase/firestore', () => ({
   collection: mockCollection,
   deleteDoc: vi.fn().mockResolvedValue(undefined),
   doc: mockDoc,
+  getDoc: mockGetDoc,
   getDocs: vi.fn().mockResolvedValue({ docs: [] }),
   orderBy: vi.fn(),
   query: vi.fn((collectionRef: unknown) => collectionRef),
   serverTimestamp: mockServerTimestamp,
   updateDoc: vi.fn().mockResolvedValue(undefined),
   writeBatch: mockWriteBatch,
+  deleteField: vi.fn().mockReturnValue({ _deleteField: true }),
 }));
 
 vi.mock('../api/firebase/index', () => ({ db: { _isMock: true } }));
@@ -140,12 +156,29 @@ describe('FirestoreService.deleteBatchTransactions', () => {
   it('usa soft delete em lote para transações financeiras', async () => {
     await FirestoreService.deleteBatchTransactions('uid1', ['tx-a', 'tx-b']);
 
+    expect(mockGetDoc).toHaveBeenCalledTimes(2);
     expect(mockBatchUpdate).toHaveBeenCalledTimes(2);
     expect(mockBatchUpdate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       isDeleted: true,
       deletedAt: { _serverTimestamp: true },
       updatedAt: { _serverTimestamp: true },
+      schemaVersion: 2,
+      type: 'saida',
+      source: 'manual',
     }));
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignora documentos que não existem no lote', async () => {
+    mockGetDoc.mockResolvedValueOnce({ exists: () => false, data: () => ({}) });
+    mockGetDoc.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({ type: 'entrada', source: 'csv', value_cents: 500, schemaVersion: 2, description: 'T', category: 'Outros', date: '2026-01-01' }),
+    });
+
+    await FirestoreService.deleteBatchTransactions('uid1', ['tx-missing', 'tx-exists']);
+
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
     expect(mockBatchCommit).toHaveBeenCalledTimes(1);
   });
 });
