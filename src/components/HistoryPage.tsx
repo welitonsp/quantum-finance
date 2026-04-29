@@ -50,6 +50,11 @@ interface Props {
   clearBulkSnapshot?: () => void;
   uid?: string;
   categories?: UserCategory[];
+  // ── Paginação ────────────────────────────────────────────────────────────
+  hasMoreTransactions?: boolean;
+  isLoadingMore?: boolean;
+  loadedCount?: number;
+  loadMoreTransactions?: () => Promise<void>;
 }
 
 export default function HistoryPage({
@@ -66,6 +71,10 @@ export default function HistoryPage({
   clearBulkSnapshot,
   uid,
   categories = [],
+  hasMoreTransactions,
+  isLoadingMore,
+  loadedCount,
+  loadMoreTransactions,
 }: Props) {
   const stats = useMemo(() => {
     let totalIn = 0, totalOut = 0;
@@ -136,6 +145,10 @@ export default function HistoryPage({
           clearBulkSnapshot={clearBulkSnapshot}
           categories={categories}
           {...(uid ? { uid } : {})}
+          {...(hasMoreTransactions !== undefined ? { hasMoreTransactions } : {})}
+          {...(isLoadingMore !== undefined ? { isLoadingMore } : {})}
+          {...(loadedCount !== undefined ? { loadedCount } : {})}
+          {...(loadMoreTransactions ? { loadMoreTransactions } : {})}
         />
       </motion.div>
     </div>
