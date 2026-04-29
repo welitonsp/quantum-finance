@@ -58,6 +58,8 @@ function normalizeMoneyString(input: string): string {
     }
   } else if (lastComma !== -1) {
     value = value.replace(/\./g, '').replace(',', '.');
+  } else if (/^\d{1,3}(?:\.\d{3})+$/.test(value)) {
+    value = value.replace(/\./g, '');
   } else if ((value.match(/\./g) ?? []).length > 1) {
     value = value.replace(/\./g, '');
   }

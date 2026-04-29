@@ -12,6 +12,7 @@ import { ALLOWED_CATEGORIES } from '../shared/schemas/financialSchemas';
 import { formatCurrency } from '../utils/formatters';
 import type { Transaction } from '../shared/types/transaction';
 import type { BudgetInsight } from '../hooks/useBudgets';
+import { fromCentavos, toCentavos } from '../shared/types/money';
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
@@ -169,13 +170,20 @@ function AddForm({ onAdd, onClose }: AddFormProps) {
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const num = parseFloat(amount.replace(',', '.'));
     if (!category)           { toast.error('Selecione uma categoria.');              return; }
-    if (isNaN(num) || num <= 0) { toast.error('Insira um valor válido maior que zero.'); return; }
+    let targetAmount: number;
+    try {
+      const amountCents = toCentavos(amount);
+      if (amountCents <= 0) { toast.error('Insira um valor válido maior que zero.'); return; }
+      targetAmount = fromCentavos(amountCents);
+    } catch {
+      toast.error('Insira um valor monetário válido.');
+      return;
+    }
 
     setBusy(true);
     try {
-      await onAdd({ category, targetAmount: num, month, period: 'monthly' });
+      await onAdd({ category, targetAmount, month, period: 'monthly' });
       toast.success(`Orçamento de ${category} criado!`);
       onClose();
     } catch {
@@ -222,10 +230,9 @@ function AddForm({ onAdd, onClose }: AddFormProps) {
               Limite (R$)
             </label>
             <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              placeholder="500.00"
+              type="text"
+              inputMode="decimal"
+              placeholder="500,00"
               value={amount}
               onChange={e => setAmount(e.target.value)}
               className="input-quantum text-sm font-mono"

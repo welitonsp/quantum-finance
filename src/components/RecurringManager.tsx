@@ -5,6 +5,7 @@ import { useRecurring } from '../hooks/useRecurring';
 import { formatCurrency } from '../utils/formatters';
 import toast from 'react-hot-toast';
 import type { RecurringTask } from '../shared/types/transaction';
+import { fromCentavos, toCentavos } from '../shared/types/money';
 
 interface Props {
   uid: string;
@@ -47,11 +48,20 @@ export default function RecurringManager({ uid }: Props) {
   const handleAddRecurring = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDescription || !newValue) { toast.error('Preencha a descrição e o valor.'); return; }
+    let parsedValue: number;
+    try {
+      const valueCents = toCentavos(newValue);
+      if (valueCents <= 0) { toast.error('Insira um valor válido maior que zero.'); return; }
+      parsedValue = fromCentavos(valueCents);
+    } catch {
+      toast.error('Insira um valor monetário válido.');
+      return;
+    }
     setIsProcessing(true);
     try {
       await addRecurring({
         description: newDescription,
-        value:       parseFloat(newValue),
+        value:       parsedValue,
         category:    newCategory,
         frequency:   newFrequency,
         dueDay:      1,
@@ -192,7 +202,7 @@ export default function RecurringManager({ uid }: Props) {
 
               <div>
                 <label className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Valor Fixo (R$)</label>
-                <input type="number" step="0.01" value={newValue} onChange={e => setNewValue(e.target.value)} required placeholder="0.00"
+                <input type="text" inputMode="decimal" value={newValue} onChange={e => setNewValue(e.target.value)} required placeholder="0,00"
                   className="w-full bg-quantum-bg border border-quantum-border rounded-xl px-4 py-3 text-sm text-quantum-fg focus:outline-none focus:border-cyan-500 font-mono transition-colors placeholder:text-slate-600" />
               </div>
 
