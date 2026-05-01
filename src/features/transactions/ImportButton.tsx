@@ -424,6 +424,25 @@ interface PreviewPanelProps {
   onConfirm:    (txs: ParsedTransaction[]) => void;
   onCancel:     () => void;
 }
+
+type PreviewTotalSource = Pick<ParsedTransaction, 'type' | 'value_cents' | 'value' | 'schemaVersion'>;
+
+export function calculatePreviewTotals(transactions: PreviewTotalSource[]) {
+  let entryCents = 0;
+  let exitCents = 0;
+
+  transactions.forEach(tx => {
+    const cents = getTransactionAbsCentavos(tx);
+    if (isIncome(tx.type))  entryCents += cents;
+    if (isExpense(tx.type)) exitCents  += cents;
+  });
+
+  return {
+    totEntry: fromCentavos(entryCents),
+    totExit:  fromCentavos(exitCents),
+  };
+}
+
 function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) {
   const [items, setItems]       = useState<PreviewItem[]>(() => transactions.map(tx => ({ ...tx, _selected: true })));
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -435,12 +454,7 @@ function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) 
   const toggleAll = () => setItems(prev => prev.map(t => ({ ...t, _selected: !allChecked })));
   const setCat    = (id: string, cat: string) => setItems(prev => prev.map(t => t.id === id ? { ...t, category: cat } : t));
 
-  const totEntry = selected
-    .filter(t => isIncome(t.type))
-    .reduce((a, t) => a + fromCentavos(getTransactionAbsCentavos(t)), 0);
-  const totExit = selected
-    .filter(t => isExpense(t.type))
-    .reduce((a, t) => a + fromCentavos(getTransactionAbsCentavos(t)), 0);
+  const { totEntry, totExit } = calculatePreviewTotals(selected);
 
   const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
