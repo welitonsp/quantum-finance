@@ -226,6 +226,96 @@ service cloud.firestore {
           && data.schemaVersion == 2;
     }
 
+    function isValidRecurringTask(data, userId) {
+      return data.keys().hasAll([
+            'description', 'category', 'dueDay', 'active',
+            'frequency', 'schemaVersion', 'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'description', 'value', 'value_cents', 'type', 'category',
+            'dueDay', 'active', 'frequency', 'schemaVersion',
+            'createdAt', 'updatedAt', 'uid'
+          ])
+          && (('value' in data) || ('value_cents' in data))
+          && isStringSized(data.description, 2, 160)
+          && (!('value' in data) || isPositiveSafeInt(data.value))
+          && (!('value_cents' in data) || isPositiveSafeInt(data.value_cents))
+          && (!('type' in data) || data.type in ['entrada', 'saida', 'receita', 'despesa'])
+          && isStringSized(data.category, 1, 80)
+          && data.dueDay is int && data.dueDay >= 1 && data.dueDay <= 31
+          && data.active is bool
+          && data.frequency in ['mensal', 'anual']
+          && data.schemaVersion == 2
+          && (!('uid' in data) || data.uid == userId);
+    }
+
+    function isValidRecurringTaskCreate(userId) {
+      return isValidRecurringTask(request.resource.data, userId)
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+    }
+
+    function isValidRecurringTaskUpdate(userId) {
+      return isValidRecurringTask(request.resource.data, userId)
+          && request.resource.data.createdAt == resource.data.createdAt
+          && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['updatedAt'])
+              || request.resource.data.updatedAt == request.time);
+    }
+
+    function isValidBasisPoints(value, min, max) {
+      return isSafeInt(value) && value >= min && value <= max;
+    }
+
+    function isValidSimulation(data, userId) {
+      return data.keys().hasAll(['schemaVersion', 'createdAt', 'updatedAt'])
+          && data.keys().hasOnly([
+            'name', 'description', 'scenario',
+            'inflacao', 'corteDespesas', 'aumentoSalario',
+            'inflacaoBps', 'corteDespesasBps', 'aumentoSalarialBps',
+            'meses', 'iteracoes',
+            'saldoInicialCents', 'receitaMensalCents', 'despesaFixaCents',
+            'mediaVariavelCents', 'desvioVariavelCents',
+            'probabilidadeSobrevivencia', 'p10Final', 'p50Final', 'p90Final',
+            'chartData', 'schemaVersion', 'createdAt', 'updatedAt', 'uid'
+          ])
+          && (!('name' in data) || isStringSized(data.name, 1, 100))
+          && (!('description' in data) || isStringSized(data.description, 1, 500))
+          && (!('scenario' in data) || isStringSized(data.scenario, 1, 80))
+          && (!('inflacao' in data) || isValidBasisPoints(data.inflacao, 0, 100))
+          && (!('corteDespesas' in data) || isValidBasisPoints(data.corteDespesas, 0, 100))
+          && (!('aumentoSalario' in data) || isValidBasisPoints(data.aumentoSalario, 0, 100))
+          && (!('inflacaoBps' in data) || isValidBasisPoints(data.inflacaoBps, 0, 10000))
+          && (!('corteDespesasBps' in data) || isValidBasisPoints(data.corteDespesasBps, 0, 10000))
+          && (!('aumentoSalarialBps' in data) || isValidBasisPoints(data.aumentoSalarialBps, 0, 10000))
+          && (!('meses' in data) || (data.meses is int && data.meses >= 1 && data.meses <= 600))
+          && (!('iteracoes' in data) || (data.iteracoes is int && data.iteracoes >= 1 && data.iteracoes <= 100000))
+          && (!('saldoInicialCents' in data) || isSafeInt(data.saldoInicialCents))
+          && (!('receitaMensalCents' in data) || isPositiveSafeInt(data.receitaMensalCents))
+          && (!('despesaFixaCents' in data) || isPositiveSafeInt(data.despesaFixaCents))
+          && (!('mediaVariavelCents' in data) || isPositiveSafeInt(data.mediaVariavelCents))
+          && (!('desvioVariavelCents' in data) || isSafeInt(data.desvioVariavelCents))
+          && (!('probabilidadeSobrevivencia' in data) || isValidBasisPoints(data.probabilidadeSobrevivencia, 0, 100))
+          && (!('p10Final' in data) || isSafeInt(data.p10Final))
+          && (!('p50Final' in data) || isSafeInt(data.p50Final))
+          && (!('p90Final' in data) || isSafeInt(data.p90Final))
+          && (!('chartData' in data) || data.chartData is list)
+          && data.schemaVersion == 2
+          && (!('uid' in data) || data.uid == userId);
+    }
+
+    function isValidSimulationCreate(userId) {
+      return isValidSimulation(request.resource.data, userId)
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+    }
+
+    function isValidSimulationUpdate(userId) {
+      return isValidSimulation(request.resource.data, userId)
+          && request.resource.data.createdAt == resource.data.createdAt
+          && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['updatedAt'])
+              || request.resource.data.updatedAt == request.time);
+    }
+
     match /users/{userId} {
       allow read, write: if isOwner(userId);
 
@@ -300,7 +390,8 @@ service cloud.firestore {
 
       match /recurringTasks/{taskId} {
         allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidRecurringTaskCreate(userId);
+        allow update: if isOwner(userId) && isValidRecurringTaskUpdate(userId);
         allow delete: if isOwner(userId);
       }
 
@@ -309,7 +400,10 @@ service cloud.firestore {
       }
 
       match /simulations/{simId} {
-        allow read, create, update, delete: if isOwner(userId);
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidSimulationCreate(userId);
+        allow update: if isOwner(userId) && isValidSimulationUpdate(userId);
+        allow delete: if isOwner(userId);
       }
     }
 
