@@ -20,6 +20,7 @@ import { auth } from '../../shared/api/firebase/auth';
 import { getTransactionAbsCentavos, isIncome as checkIncome, isExpense as checkExpense } from '../../utils/transactionUtils';
 import { fromCentavos } from '../../shared/types/money';
 import AuditTimeline from '../../components/AuditTimeline';
+import TransactionHistoryDrawer from '../../components/TransactionHistoryDrawer';
 import type { UserCategory } from '../../shared/schemas/categorySchemas';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -176,8 +177,9 @@ interface TransactionRowProps {
   onToggle: (id: string) => void;
   onEdit: (tx: Transaction) => void;
   onDelete: (tx: Transaction) => void;
+  onHistory: (tx: Transaction) => void;
 }
-const TransactionRow = React.memo(({ tx, isSelected, onToggle, onEdit, onDelete }: TransactionRowProps) => {
+const TransactionRow = React.memo(({ tx, isSelected, onToggle, onEdit, onDelete, onHistory }: TransactionRowProps) => {
   const isIncome = checkIncome(tx.type);
   const cs = catStyle(tx.category ?? 'Diversos');
 
@@ -229,6 +231,13 @@ const TransactionRow = React.memo(({ tx, isSelected, onToggle, onEdit, onDelete 
 
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
         <button
+          onClick={() => onHistory(tx)}
+          className="p-1.5 text-quantum-fgMuted hover:text-quantum-accent hover:bg-quantum-accentDim rounded-lg transition-all"
+          title="Histórico"
+        >
+          <History className="w-3.5 h-3.5" />
+        </button>
+        <button
           onClick={() => onEdit(tx)}
           className="p-1.5 text-quantum-fgMuted hover:text-quantum-accent hover:bg-quantum-accentDim rounded-lg transition-all"
           title="Editar (E)"
@@ -277,6 +286,7 @@ export default function TransactionsManager({
   const [groupBy,       setGroupBy]       = useState<GroupByOption>('date');
   const [filtersOpen,   setFiltersOpen]   = useState(false);
   const [auditOpen,     setAuditOpen]     = useState(false);
+  const [historyTx,     setHistoryTx]     = useState<Transaction | null>(null);
 
   const [selected,      setSelected]      = useState<Set<string>>(new Set());
   const [batchAction,   setBatchAction]   = useState<BatchAction>(null);
@@ -909,6 +919,13 @@ export default function TransactionsManager({
         onClose={() => setAuditOpen(false)}
       />
 
+      <TransactionHistoryDrawer
+        uid={effectiveUid}
+        isOpen={historyTx !== null}
+        transaction={historyTx}
+        onClose={() => setHistoryTx(null)}
+      />
+
       {/* ═══ LISTA DE TRANSAÇÕES ════════════════════════════════════════════ */}
       <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-1 custom-scrollbar">
         {filtered.length === 0 ? (
@@ -959,6 +976,7 @@ export default function TransactionsManager({
                         onToggle={toggleOne}
                         onEdit={onEdit}
                         onDelete={onDeleteRequest}
+                        onHistory={setHistoryTx}
                       />
                     ))}
                   </div>
