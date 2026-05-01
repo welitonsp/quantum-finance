@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
 import type { AuditLog } from '../shared/services/AuditService';
+import { fromCentavos } from '../shared/types/money';
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
 
@@ -23,8 +24,45 @@ const safeTimestamp = (ts: unknown): number => {
   return Number.isFinite(n) ? n : Date.now();
 };
 
-const mapLog = (log: AuditLog): AuditView => {
+type ImportAuditLog = AuditLog & {
+  source?: unknown;
+  amount_cents?: unknown;
+  amount_display?: unknown;
+  fileName?: unknown;
+  description?: unknown;
+  category?: unknown;
+};
+
+const formatMoney = (value: number): string =>
+  `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const getImportSubtitle = (log: ImportAuditLog): string => {
+  const parts: string[] = [];
+
+  if (typeof log.source === 'string' && log.source.trim() !== '') {
+    parts.push(`Origem: ${log.source.toUpperCase()}`);
+  }
+
+  if (typeof log.fileName === 'string' && log.fileName.trim() !== '') {
+    parts.push(log.fileName);
+  }
+
+  if (typeof log.amount_cents === 'number' && Number.isFinite(log.amount_cents)) {
+    parts.push(`Valor: ${formatMoney(fromCentavos(log.amount_cents))}`);
+  } else if (typeof log.amount_display === 'number' && Number.isFinite(log.amount_display)) {
+    parts.push(`Valor: ${formatMoney(log.amount_display)}`);
+  }
+
+  if (typeof log.category === 'string' && log.category.trim() !== '') {
+    parts.push(`Categoria: ${log.category}`);
+  }
+
+  return parts.length > 0 ? parts.join(' • ') : 'Importação registrada';
+};
+
+export const mapLog = (log: AuditLog): AuditView => {
   const count = log.metadata?.count ?? 0;
+  const action = log.action as string;
 
   const categories = new Set(
     (log.metadata?.changes ?? [])
@@ -39,7 +77,7 @@ const mapLog = (log: AuditLog): AuditView => {
         ? `'${Array.from(categories)[0]}'`
         : `${categories.size} categorias diferentes`;
 
-  if (log.action === 'BULK_UPDATE') {
+  if (action === 'BULK_UPDATE') {
     return {
       id:        log.id!,
       title:     'Recategorização em lote',
@@ -48,11 +86,20 @@ const mapLog = (log: AuditLog): AuditView => {
     };
   }
 
-  if (log.action === 'UNDO_BULK_UPDATE') {
+  if (action === 'UNDO_BULK_UPDATE') {
     return {
       id:        log.id!,
       title:     'Desfazer alterações',
       subtitle:  `${count} transações restauradas`,
+      timestamp: safeTimestamp(log.createdAt ?? log.timestamp),
+    };
+  }
+
+  if (action === 'IMPORT_TRANSACTION') {
+    return {
+      id:        log.id!,
+      title:     'Movimentação importada',
+      subtitle:  getImportSubtitle(log as ImportAuditLog),
       timestamp: safeTimestamp(log.createdAt ?? log.timestamp),
     };
   }
