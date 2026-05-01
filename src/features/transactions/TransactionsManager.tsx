@@ -229,25 +229,37 @@ const TransactionRow = React.memo(({ tx, isSelected, onToggle, onEdit, onDelete,
         {isIncome ? '+' : '-'}{formatCurrency(fromCentavos(getTransactionAbsCentavos(tx)))}
       </p>
 
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
+      <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity shrink-0">
         <button
-          onClick={() => onHistory(tx)}
+          onClick={(event) => {
+            event.stopPropagation();
+            onHistory(tx);
+          }}
           className="p-1.5 text-quantum-fgMuted hover:text-quantum-accent hover:bg-quantum-accentDim rounded-lg transition-all"
           title="Histórico"
+          aria-label="Ver histórico da movimentação"
         >
           <History className="w-3.5 h-3.5" />
         </button>
         <button
-          onClick={() => onEdit(tx)}
+          onClick={(event) => {
+            event.stopPropagation();
+            onEdit(tx);
+          }}
           className="p-1.5 text-quantum-fgMuted hover:text-quantum-accent hover:bg-quantum-accentDim rounded-lg transition-all"
           title="Editar (E)"
+          aria-label="Editar movimentação"
         >
           <Edit3 className="w-3.5 h-3.5" />
         </button>
         <button
-          onClick={() => onDelete(tx)}
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete(tx);
+          }}
           className="p-1.5 text-quantum-fgMuted hover:text-quantum-red hover:bg-quantum-redDim rounded-lg transition-all"
           title="Apagar (Del)"
+          aria-label="Excluir movimentação"
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
