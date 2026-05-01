@@ -34,6 +34,25 @@ interface Group {
   items: Transaction[];
 }
 
+type TransactionTotalSource = Pick<Transaction, 'type' | 'value_cents' | 'value' | 'schemaVersion'>;
+
+export function calculateTransactionTotals(transactions: TransactionTotalSource[]) {
+  let totalInCents = 0;
+  let totalOutCents = 0;
+
+  transactions.forEach(tx => {
+    const cents = getTransactionAbsCentavos(tx);
+    if (checkIncome(tx.type)) totalInCents += cents;
+    else                     totalOutCents += cents;
+  });
+
+  return {
+    totalIn:  fromCentavos(totalInCents),
+    totalOut: fromCentavos(totalOutCents),
+    net:      fromCentavos(totalInCents - totalOutCents),
+  };
+}
+
 interface CatStyleEntry {
   bg: string;
   text: string;
@@ -358,13 +377,8 @@ export default function TransactionsManager({
   }, [filtered, groupBy]);
 
   const stats = useMemo(() => {
-    let totalIn = 0, totalOut = 0;
-    filtered.forEach(tx => {
-      const v = fromCentavos(getTransactionAbsCentavos(tx));
-      if (checkIncome(tx.type)) totalIn  += v;
-      else                      totalOut += v;
-    });
-    return { count: filtered.length, totalIn, totalOut, net: totalIn - totalOut };
+    const totals = calculateTransactionTotals(filtered);
+    return { count: filtered.length, ...totals };
   }, [filtered]);
 
   const catCounts = useMemo(() => {
@@ -918,8 +932,15 @@ export default function TransactionsManager({
               {groups.map(group => (
                 <div key={group.key || 'ungrouped'}>
                   {group.key && (() => {
-                    const gIn  = group.items.reduce((a, t) => checkIncome(t.type)  ? a + fromCentavos(getTransactionAbsCentavos(t)) : a, 0);
-                    const gOut = group.items.reduce((a, t) => checkExpense(t.type) ? a + fromCentavos(getTransactionAbsCentavos(t)) : a, 0);
+                    let gInCents = 0;
+                    let gOutCents = 0;
+                    group.items.forEach(t => {
+                      const cents = getTransactionAbsCentavos(t);
+                      if (checkIncome(t.type))  gInCents  += cents;
+                      if (checkExpense(t.type)) gOutCents += cents;
+                    });
+                    const gIn  = fromCentavos(gInCents);
+                    const gOut = fromCentavos(gOutCents);
                     return (
                       <GroupHeader
                         label={group.label}
