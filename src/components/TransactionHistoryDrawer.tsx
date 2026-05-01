@@ -32,17 +32,58 @@ function formatDate(timestamp: number): string {
   return new Date(timestamp).toLocaleString('pt-BR');
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  amount_cents: 'Valor',
+  category:     'Categoria',
+  date:         'Data',
+  description:  'Descrição',
+  source:       'Origem',
+  type:         'Tipo',
+  value:        'Valor',
+  value_cents:  'Valor',
+};
+
+function fieldLabel(field: string): string {
+  return FIELD_LABELS[field] ?? field;
+}
+
+function isMoneyField(field: string): boolean {
+  return field === 'value' || field === 'value_cents' || field === 'amount_cents';
+}
+
+function formatFieldValue(field: string, value: unknown): string {
+  if (value === undefined) return 'vazio';
+  if (value === null) return 'vazio';
+  if (isMoneyField(field) && typeof value === 'number' && Number.isFinite(value)) {
+    return formatCurrency(fromCentavos(value));
+  }
+  if (typeof value === 'boolean') return value ? 'Sim' : 'Não';
+  if (typeof value === 'string') return value.trim() || 'vazio';
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return String(value);
+}
+
 function formatChangedFields(event: TransactionHistoryView): string | null {
   if (!event.changedFields?.length) return null;
   return `Campos alterados: ${event.changedFields.join(', ')}`;
 }
 
+function formatChangedFieldDeltas(event: TransactionHistoryView): string[] | null {
+  if (!event.changedFields?.length || !event.before || !event.after) return null;
+
+  return event.changedFields.map(field => {
+    const before = formatFieldValue(field, event.before?.[field]);
+    const after = formatFieldValue(field, event.after?.[field]);
+    return `${fieldLabel(field)}: ${before} → ${after}`;
+  });
+}
+
 function eventDetails(event: TransactionHistoryView): string[] {
   const details: string[] = [];
-  const changed = formatChangedFields(event);
+  const changed = formatChangedFieldDeltas(event) ?? [formatChangedFields(event)].filter((detail): detail is string => Boolean(detail));
 
   if (event.origin) details.push(`Origem: ${event.origin}`);
-  if (changed) details.push(changed);
+  details.push(...changed);
   if (event.category) details.push(`Categoria: ${event.category}`);
   if (typeof event.amount_cents === 'number') {
     details.push(`Valor: ${formatCurrency(fromCentavos(event.amount_cents))}`);
