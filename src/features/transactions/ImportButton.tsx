@@ -244,14 +244,24 @@ function DropZone({ onFile, fileInputRef }: DropZoneProps) {
       onDragLeave={() => setDragging(false)}
       onDrop={e => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]); }}
       onClick={() => fileInputRef.current?.click()}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          fileInputRef.current?.click();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label="Importar arquivo de extrato bancário"
       className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center text-center cursor-pointer transition-all duration-300 ${
         dragging
           ? 'border-quantum-accent bg-quantum-accent/5 scale-[1.01]'
           : 'border-quantum-border hover:border-quantum-accent/40 hover:bg-white/[0.02]'
-      }`}
+      } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-quantum-accent`}
     >
       <input
         type="file" ref={fileInputRef} className="hidden" accept=".csv,.ofx,.pdf"
+        aria-hidden="true" tabIndex={-1}
         onChange={e => { if (e.target.files?.[0]) onFile(e.target.files[0]); }}
       />
       <motion.div
