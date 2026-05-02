@@ -239,7 +239,11 @@ interface DropZoneProps {
 function DropZone({ onFile, fileInputRef }: DropZoneProps) {
   const [dragging, setDragging] = useState(false);
   return (
-    <div
+    <>
+      <span className="sr-only" aria-live="polite" aria-atomic="true">
+        {dragging ? 'Arquivo sobre a área de soltar. Solte para importar.' : ''}
+      </span>
+      <div
       onDragOver={e => { e.preventDefault(); setDragging(true); }}
       onDragLeave={() => setDragging(false)}
       onDrop={e => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]); }}
@@ -287,6 +291,7 @@ function DropZone({ onFile, fileInputRef }: DropZoneProps) {
         ))}
       </div>
     </div>
+    </>
   );
 }
 
@@ -300,7 +305,7 @@ const LOADING_MSGS: Record<LoadingStatus, { title: string; sub: string }> = {
 function LoadingPanel({ status }: { status: LoadingStatus }) {
   const msg = LOADING_MSGS[status] ?? { title: 'A processar...', sub: '' };
   return (
-    <div className="py-14 flex flex-col items-center text-center gap-4">
+    <div role="status" aria-live="polite" className="py-14 flex flex-col items-center text-center gap-4">
       <div className="relative">
         <div className="absolute inset-0 bg-quantum-accent/20 rounded-full blur-2xl animate-pulse" />
         {status === 'ai_processing'
@@ -591,6 +596,8 @@ function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) 
 function SuccessPanel({ stats }: { stats: ImportStats }) {
   return (
     <motion.div
+      role="status"
+      aria-live="polite"
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       className="py-10 flex flex-col items-center text-center gap-5"
@@ -625,6 +632,7 @@ function SuccessPanel({ stats }: { stats: ImportStats }) {
 function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <motion.div
+      role="alert"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className="py-10 flex flex-col items-center text-center gap-4"

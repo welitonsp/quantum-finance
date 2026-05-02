@@ -941,7 +941,7 @@ export default function TransactionsManager({
       {/* ═══ LISTA DE TRANSAÇÕES ════════════════════════════════════════════ */}
       <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-1 custom-scrollbar">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+          <div role="status" className="flex flex-col items-center justify-center py-20 gap-4 text-center">
             <div className="p-5 bg-quantum-card rounded-3xl border border-quantum-border">
               <Filter className="w-10 h-10 text-quantum-fgMuted" />
             </div>

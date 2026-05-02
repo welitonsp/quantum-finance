@@ -144,7 +144,7 @@ function Drawer({ uid, onClose }: { uid: string; onClose: () => void }) {
 
           {/* Loading */}
           {loading && (
-            <div className="flex flex-col items-center justify-center py-16 gap-3 text-quantum-fgMuted">
+            <div role="status" className="flex flex-col items-center justify-center py-16 gap-3 text-quantum-fgMuted">
               <div className="w-6 h-6 border-2 border-quantum-accent/30 border-t-quantum-accent rounded-full animate-spin" />
               <span className="text-xs">Carregando histórico...</span>
             </div>
@@ -152,14 +152,14 @@ function Drawer({ uid, onClose }: { uid: string; onClose: () => void }) {
 
           {/* Erro */}
           {error && !loading && (
-            <div className="mx-4 mt-6 p-4 bg-quantum-redDim border border-quantum-red/30 rounded-xl">
+            <div role="alert" className="mx-4 mt-6 p-4 bg-quantum-redDim border border-quantum-red/30 rounded-xl">
               <p className="text-xs text-quantum-fg">{error}</p>
             </div>
           )}
 
           {/* Empty state */}
           {!loading && !error && logs.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 gap-4 text-center px-6">
+            <div role="status" className="flex flex-col items-center justify-center py-16 gap-4 text-center px-6">
               <div className="p-4 bg-quantum-card rounded-2xl border border-quantum-border">
                 <Clock className="w-8 h-8 text-quantum-fgMuted" />
               </div>
