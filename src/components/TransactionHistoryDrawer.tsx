@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { useCallback, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Clock, History, Tag, X } from 'lucide-react';
 import { useTransactionHistory, type TransactionHistoryView } from '../hooks/useTransactionHistory';
@@ -12,6 +13,15 @@ interface Props {
   uid: string;
   transaction: Transaction | null;
 }
+
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
 
 const ACTION_LABELS: Record<string, string> = {
   CREATE: 'Criada',
@@ -93,6 +103,12 @@ function eventDetails(event: TransactionHistoryView): string[] {
   return details;
 }
 
+function getFocusableElements(container: HTMLElement | null): HTMLElement[] {
+  if (!container) return [];
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+    .filter(element => !element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true');
+}
+
 function HistoryItem({ event, index }: { event: TransactionHistoryView; index: number }) {
   const details = eventDetails(event);
 
@@ -125,6 +141,45 @@ function HistoryItem({ event, index }: { event: TransactionHistoryView; index: n
 function Drawer({ uid, transaction, onClose }: Omit<Props, 'isOpen'>) {
   const transactionId = transaction?.id;
   const { events, loading, error } = useTransactionHistory(uid, transactionId);
+  const panelRef = useRef<HTMLElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    const focusTimer = window.setTimeout(() => {
+      closeButtonRef.current?.focus();
+    }, 0);
+
+    return () => window.clearTimeout(focusTimer);
+  }, []);
+
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+
+    if (event.key !== 'Tab') return;
+
+    const focusable = getFocusableElements(panelRef.current);
+    if (focusable.length === 0) {
+      event.preventDefault();
+      panelRef.current?.focus();
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+
+    if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+  }, [onClose]);
 
   return (
     <div
@@ -143,6 +198,7 @@ function Drawer({ uid, transaction, onClose }: Omit<Props, 'isOpen'>) {
       />
 
       <motion.aside
+        ref={panelRef}
         key="transaction-history-panel"
         initial={{ x: '100%' }}
         animate={{ x: 0 }}
@@ -150,6 +206,8 @@ function Drawer({ uid, transaction, onClose }: Omit<Props, 'isOpen'>) {
         transition={{ type: 'spring', damping: 28, stiffness: 280 }}
         className="relative z-10 flex flex-col w-full max-w-sm h-full bg-quantum-bg border-l border-quantum-border shadow-2xl"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleKeyDown}
+        tabIndex={-1}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-quantum-border shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -164,6 +222,7 @@ function Drawer({ uid, transaction, onClose }: Omit<Props, 'isOpen'>) {
             </div>
           </div>
           <button
+            ref={closeButtonRef}
             onClick={onClose}
             className="p-2 text-quantum-fgMuted hover:text-quantum-fg hover:bg-quantum-bgSecondary rounded-lg transition-all"
             aria-label="Fechar histórico da movimentação"
@@ -212,6 +271,24 @@ function Drawer({ uid, transaction, onClose }: Omit<Props, 'isOpen'>) {
 }
 
 export default function TransactionHistoryDrawer({ isOpen, onClose, uid, transaction }: Props) {
+  const triggerRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      triggerRef.current = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+      return;
+    }
+
+    const focusTimer = window.setTimeout(() => {
+      triggerRef.current?.focus();
+      triggerRef.current = null;
+    }, 0);
+
+    return () => window.clearTimeout(focusTimer);
+  }, [isOpen]);
+
   return createPortal(
     <AnimatePresence>
       {isOpen && transaction && (
