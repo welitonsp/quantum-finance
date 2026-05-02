@@ -95,6 +95,11 @@ interface DoneScreenProps {
   onCancel:  () => void;
 }
 function DoneScreen({ stats, onConfirm, onCancel }: DoneScreenProps) {
+  const confirmRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const id = setTimeout(() => confirmRef.current?.focus(), 0);
+    return () => clearTimeout(id);
+  }, []);
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
@@ -126,6 +131,7 @@ function DoneScreen({ stats, onConfirm, onCancel }: DoneScreenProps) {
 
       <div className="flex flex-col gap-3 w-full">
         <motion.button
+          ref={confirmRef}
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={onConfirm}
@@ -159,8 +165,10 @@ export default function ReconciliationEngine({
   const [isDone,   setIsDone]   = useState(false);
   const [hint,     setHint]     = useState<HintDir>(null);
 
-  const exitDirRef = useRef<ExitDir>('left');
-  const total      = useRef(initialQueue?.length ?? 0);
+  const exitDirRef   = useRef<ExitDir>('left');
+  const total        = useRef(initialQueue?.length ?? 0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const cancelBtnRef = useRef<HTMLButtonElement>(null);
 
   const advance = useCallback((dir: ExitDir, _tx: Transaction, replacement: ResolvedTransaction | null = null) => {
     exitDirRef.current = dir;
@@ -213,14 +221,42 @@ export default function ReconciliationEngine({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); onCancel(); return; }
+      if (e.key === 'Tab') {
+        if (!containerRef.current) return;
+        const focusable = Array.from(
+          containerRef.current.querySelectorAll<HTMLElement>(
+            'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+          )
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0]!;
+        const last  = focusable[focusable.length - 1]!;
+        if (e.shiftKey) {
+          if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+        } else {
+          if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+        }
+        return;
+      }
       if (isDone) return;
-      if (e.key === 'ArrowLeft')                           { e.preventDefault(); handleApprove(); }
-      else if (e.key === 'ArrowRight')                     { e.preventDefault(); handleMerge();   }
+      if (e.key === 'ArrowLeft')                            { e.preventDefault(); handleApprove(); }
+      else if (e.key === 'ArrowRight')                      { e.preventDefault(); handleMerge();   }
       else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); handleDiscard(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isDone, handleApprove, handleMerge, handleDiscard]);
+  }, [isDone, handleApprove, handleMerge, handleDiscard, onCancel]);
+
+  useEffect(() => {
+    const trigger = document.activeElement as HTMLElement | null;
+    return () => { trigger?.focus(); };
+  }, []);
+
+  useEffect(() => {
+    const id = setTimeout(() => cancelBtnRef.current?.focus(), 0);
+    return () => clearTimeout(id);
+  }, []);
 
   const card      = queue[0] ?? null;
   const remaining = queue.length;
@@ -230,6 +266,10 @@ export default function ReconciliationEngine({
 
   return (
     <motion.div
+      ref={containerRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="recon-title"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -246,7 +286,7 @@ export default function ReconciliationEngine({
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-cyan-400" />
-              <span className="font-black text-quantum-fg uppercase tracking-widest text-[10px]">Reconciliação</span>
+              <span id="recon-title" className="font-black text-quantum-fg uppercase tracking-widest text-[10px]">Reconciliação</span>
             </div>
             <span className="font-mono text-quantum-fgMuted">
               <span className="text-quantum-fg font-bold">{done}</span> / {total.current}
@@ -402,6 +442,7 @@ export default function ReconciliationEngine({
 
         {!isDone && (
           <button
+            ref={cancelBtnRef}
             onClick={onCancel}
             className="text-[11px] text-slate-600 hover:text-quantum-fgMuted transition-colors"
           >
