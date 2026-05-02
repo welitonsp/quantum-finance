@@ -1,7 +1,7 @@
 /**
  * ReconciliationEngine.tsx — Motor de Reconciliação "Tinder Financeiro"
  */
-import { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
@@ -219,33 +219,36 @@ export default function ReconciliationEngine({
     advance('down', tx, null);
   }, [queue, advance]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); onCancel(); return; }
-      if (e.key === 'Tab') {
-        if (!containerRef.current) return;
-        const focusable = Array.from(
-          containerRef.current.querySelectorAll<HTMLElement>(
-            'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
-          )
-        );
-        if (focusable.length === 0) return;
-        const first = focusable[0]!;
-        const last  = focusable[focusable.length - 1]!;
-        if (e.shiftKey) {
-          if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-        } else {
-          if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
-        }
-        return;
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') { e.preventDefault(); onCancel(); return; }
+    if (e.key === 'Tab') {
+      if (!containerRef.current) return;
+      const focusable = Array.from(
+        containerRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+        )
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0]!;
+      const last  = focusable[focusable.length - 1]!;
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
       }
-      if (isDone) return;
-      if (e.key === 'ArrowLeft')                            { e.preventDefault(); handleApprove(); }
-      else if (e.key === 'ArrowRight')                      { e.preventDefault(); handleMerge();   }
-      else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); handleDiscard(); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+      return;
+    }
+    const target = e.target as HTMLElement;
+    if (
+      target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.tagName === 'SELECT' ||
+      target.isContentEditable
+    ) return;
+    if (isDone) return;
+    if (e.key === 'ArrowLeft')                            { e.preventDefault(); handleApprove(); }
+    else if (e.key === 'ArrowRight')                      { e.preventDefault(); handleMerge();   }
+    else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); handleDiscard(); }
   }, [isDone, handleApprove, handleMerge, handleDiscard, onCancel]);
 
   useEffect(() => {
@@ -261,8 +264,10 @@ export default function ReconciliationEngine({
   const card      = queue[0] ?? null;
   const remaining = queue.length;
   const done      = total.current - remaining;
-  const progress  = total.current > 0 ? (done / total.current) * 100 : 0;
-  const isIncome  = checkIncome(card?.type ?? '');
+  const progress    = total.current > 0 ? (done / total.current) * 100 : 0;
+  const progressMax = Math.max(total.current, 1);
+  const progressNow = Math.min(done, progressMax);
+  const isIncome    = checkIncome(card?.type ?? '');
 
   return (
     <motion.div
@@ -270,6 +275,7 @@ export default function ReconciliationEngine({
       role="dialog"
       aria-modal="true"
       aria-labelledby="recon-title"
+      onKeyDown={handleKeyDown}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -292,7 +298,14 @@ export default function ReconciliationEngine({
               <span className="text-quantum-fg font-bold">{done}</span> / {total.current}
             </span>
           </div>
-          <div className="w-full h-1 bg-quantum-bgSecondary rounded-full overflow-hidden">
+          <div
+            className="w-full h-1 bg-quantum-bgSecondary rounded-full overflow-hidden"
+            role="progressbar"
+            aria-label="Progresso da reconciliação"
+            aria-valuemin={0}
+            aria-valuemax={progressMax}
+            aria-valuenow={progressNow}
+          >
             <motion.div
               className="h-full bg-gradient-to-r from-cyan-500 to-cyan-400 rounded-full"
               animate={{ width: `${progress}%` }}
@@ -393,6 +406,12 @@ export default function ReconciliationEngine({
         </AnimatePresence>
 
         {!isDone && card && (
+          <div className="sr-only" aria-live="polite" aria-atomic="true">
+            {`Transação ${done + 1} de ${total.current}: ${card.description}, ${isIncome ? '+' : '-'}${fmtBRL(fromCentavos(getTransactionAbsCentavos(card)))}`}
+          </div>
+        )}
+
+        {!isDone && card && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -404,6 +423,7 @@ export default function ReconciliationEngine({
               onClick={handleApprove}
               onMouseEnter={() => setHint('left')}
               onMouseLeave={() => setHint(null)}
+              aria-keyshortcuts="ArrowLeft"
               className="flex-1 min-w-0 flex flex-col items-center gap-1.5 py-3.5 px-2 sm:px-5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 rounded-2xl text-emerald-400 transition-all"
               title="Aprovar como Nova (←)"
             >
@@ -417,6 +437,7 @@ export default function ReconciliationEngine({
               onClick={handleDiscard}
               onMouseEnter={() => setHint('down')}
               onMouseLeave={() => setHint(null)}
+              aria-keyshortcuts="Delete Backspace"
               className="flex flex-col items-center gap-1.5 py-3.5 px-3 sm:px-5 bg-quantum-bgSecondary/60 hover:bg-red-500/10 border border-white/8 hover:border-red-500/25 rounded-2xl text-quantum-fgMuted hover:text-red-400 transition-all"
               title="Ignorar / Descartar (Del)"
             >
@@ -430,6 +451,7 @@ export default function ReconciliationEngine({
               onClick={handleMerge}
               onMouseEnter={() => setHint('right')}
               onMouseLeave={() => setHint(null)}
+              aria-keyshortcuts="ArrowRight"
               className="flex-1 min-w-0 flex flex-col items-center gap-1.5 py-3.5 px-2 sm:px-5 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/25 rounded-2xl text-cyan-400 transition-all"
               title="Merge / Conciliar (→)"
             >
