@@ -1,6 +1,6 @@
 // src/features/transactions/ImportButton.tsx
 // Fluxo de estados: idle → parsing → [col_mapping] → ai_processing → preview → importing → success | error | reconciliation
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -653,7 +653,10 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
   const [colMapState,         setColMapState]         = useState<ColMapState | null>(null);
   const [reconciliationQueue, setReconciliationQueue] = useState<ParsedTransaction[]>([]);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef   = useRef<HTMLInputElement>(null);
+  const triggerRef     = useRef<HTMLButtonElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const modalRef       = useRef<HTMLDivElement>(null);
 
   const { parseFile, parseFileWithMapping } = useParserWorker();
 
@@ -718,6 +721,35 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
     setColMapState(null);
     setErrorMessage('');
     if (fileInputRef.current) fileInputRef.current.value = '';
+    setTimeout(() => triggerRef.current?.focus(), 0);
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      const id = setTimeout(() => { (closeButtonRef.current ?? modalRef.current)?.focus(); }, 0);
+      return () => clearTimeout(id);
+    }
+  }, [isOpen]);
+
+  const handleModalKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') {
+      closeModal();
+      return;
+    }
+    if (e.key === 'Tab' && modalRef.current) {
+      const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      const els   = Array.from(focusable);
+      if (els.length === 0) return;
+      const first = els[0]!;
+      const last  = els[els.length - 1]!;
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+      }
+    }
   };
 
   const processFile = useCallback(async (file: File, customMapping: ColumnMapping | null = null, pdfPassword: string | null = null): Promise<void> => {
@@ -826,7 +858,7 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
 
   return (
     <>
-      <button onClick={() => setIsOpen(true)} className="btn-quantum-secondary flex items-center gap-2">
+      <button ref={triggerRef} onClick={() => setIsOpen(true)} className="btn-quantum-secondary flex items-center gap-2">
         <FileUp className="w-4 h-4" />
         <span className="hidden sm:inline">Importar Ficheiro</span>
       </button>
@@ -856,6 +888,12 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
           {isOpen && status !== 'reconciliation' && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
               <motion.div
+                ref={modalRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="import-dialog-title"
+                tabIndex={-1}
+                onKeyDown={handleModalKeyDown}
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -870,12 +908,12 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
                     <UploadCloud className="w-5 h-5 text-quantum-accent" />
                   </div>
                   <div>
-                    <h3 className="font-black text-quantum-fg text-sm tracking-wide">Ingestão Quântica</h3>
+                    <h3 id="import-dialog-title" className="font-black text-quantum-fg text-sm tracking-wide">Ingestão Quântica</h3>
                     <p className="text-[10px] text-quantum-fgMuted">CSV · OFX · PDF · IA Categorization</p>
                   </div>
                 </div>
                 {!(['parsing','ai_processing','importing'] as ImportStatus[]).includes(status) && (
-                  <button onClick={closeModal} className="p-2 text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/5 rounded-xl transition-colors">
+                  <button ref={closeButtonRef} onClick={closeModal} aria-label="Fechar diálogo de importação" className="p-2 text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/5 rounded-xl transition-colors">
                     <X className="w-5 h-5" />
                   </button>
                 )}
