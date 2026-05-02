@@ -1,3 +1,4 @@
+import { useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { History, X, Clock, RotateCcw, Tag } from 'lucide-react';
@@ -53,12 +54,49 @@ function TimelineItem({ log, index }: { log: AuditView; index: number }) {
 function Drawer({ uid, onClose }: { uid: string; onClose: () => void }) {
   const { logs, loading, error } = useAuditLogs(uid);
 
+  const containerRef  = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const triggerRef    = useRef<Element | null>(null);
+
+  useEffect(() => {
+    triggerRef.current = document.activeElement;
+    const id = setTimeout(() => closeButtonRef.current?.focus(), 0);
+    return () => {
+      clearTimeout(id);
+      (triggerRef.current as HTMLElement | null)?.focus();
+    };
+  }, []);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      onClose();
+      return;
+    }
+    if (e.key === 'Tab' && containerRef.current) {
+      const focusable = Array.from(
+        containerRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => !el.hasAttribute('disabled'));
+      const first = focusable[0];
+      const last  = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      } else {
+        if (document.activeElement === last)  { e.preventDefault(); first?.focus(); }
+      }
+    }
+  }, [onClose]);
+
   return (
     <div
+      ref={containerRef}
       className="fixed inset-0 z-50 flex items-stretch justify-end"
       role="dialog"
       aria-modal="true"
       aria-label="Histórico de ações"
+      onKeyDown={handleKeyDown}
     >
       {/* Backdrop */}
       <motion.div
@@ -92,6 +130,7 @@ function Drawer({ uid, onClose }: { uid: string; onClose: () => void }) {
             </div>
           </div>
           <button
+            ref={closeButtonRef}
             onClick={onClose}
             className="p-2 text-quantum-fgMuted hover:text-quantum-fg hover:bg-quantum-bgSecondary rounded-lg transition-all"
             aria-label="Fechar histórico"
