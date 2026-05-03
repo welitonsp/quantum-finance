@@ -571,6 +571,7 @@ export default function TransactionsManager({
                 key={v}
                 onClick={() => setFilterType(v)}
                 aria-pressed={filterType === v}
+                aria-label={label}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                   filterType === v
                     ? v === 'entrada' ? 'bg-quantum-accentDim text-quantum-accent border border-quantum-accent/20'
@@ -579,7 +580,7 @@ export default function TransactionsManager({
                     : 'text-quantum-fgMuted hover:text-quantum-fg'
                 }`}
               >
-                <Icon className="w-3 h-3" />
+                <Icon className="w-3 h-3" aria-hidden="true" />
                 <span className="hidden sm:inline">{label}</span>
               </button>
             ))}

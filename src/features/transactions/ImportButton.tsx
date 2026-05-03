@@ -868,8 +868,8 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
 
   return (
     <>
-      <button ref={triggerRef} onClick={() => setIsOpen(true)} className="btn-quantum-secondary flex items-center gap-2">
-        <FileUp className="w-4 h-4" />
+      <button ref={triggerRef} onClick={() => setIsOpen(true)} aria-label="Importar ficheiro de extrato" className="btn-quantum-secondary flex items-center gap-2">
+        <FileUp className="w-4 h-4" aria-hidden="true" />
         <span className="hidden sm:inline">Importar Ficheiro</span>
       </button>
 
