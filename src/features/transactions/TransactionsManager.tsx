@@ -305,6 +305,8 @@ export default function TransactionsManager({
   const [batchAction,   setBatchAction]   = useState<BatchAction>(null);
   const [newCat,        setNewCat]        = useState<string>(ALLOWED_CATEGORIES[0] ?? 'Outros');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [dateFrom,      setDateFrom]      = useState('');
+  const [dateTo,        setDateTo]        = useState('');
 
   const searchRef    = useRef<HTMLInputElement>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -365,6 +367,12 @@ export default function TransactionsManager({
     if (filterCat) {
       list = list.filter(tx => tx.category === filterCat);
     }
+    if (dateFrom) {
+      list = list.filter(tx => (tx.date ?? '') >= dateFrom);
+    }
+    if (dateTo) {
+      list = list.filter(tx => (tx.date ?? '') <= dateTo);
+    }
 
     return [...list].sort((a, b) => {
       if (sortBy === 'date_desc')  return (b.date ?? '').localeCompare(a.date ?? '');
@@ -374,7 +382,7 @@ export default function TransactionsManager({
       if (sortBy === 'cat')        return (a.category ?? '').localeCompare(b.category ?? '');
       return 0;
     });
-  }, [transactions, search, filterType, filterCat, sortBy]);
+  }, [transactions, search, filterType, filterCat, dateFrom, dateTo, sortBy]);
 
   const groups = useMemo<Group[]>(() => {
     if (groupBy === 'none') return [{ key: '', label: '', items: filtered }];
@@ -517,16 +525,20 @@ export default function TransactionsManager({
     }
   }, [selected, newCat, onBulkUpdate, undoLastBulkUpdate, clearBulkSnapshot, clearSelected]);
 
+  const fmtDateBR = (s: string) => s.split('-').reverse().join('/');
+
   interface ActiveFilter { label: string; clear: () => void }
   const activeFilters = (
     [
       filterType !== 'all' ? { label: filterType === 'entrada' ? '↑ Entradas' : '↓ Saídas', clear: () => setFilterType('all') } : null,
       filterCat            ? { label: filterCat, clear: () => setFilterCat('') }                                                 : null,
       search.trim()        ? { label: `"${search.trim()}"`, clear: () => setSearch('') }                                        : null,
+      dateFrom             ? { label: `A partir de ${fmtDateBR(dateFrom)}`, clear: () => setDateFrom('') }                      : null,
+      dateTo               ? { label: `Até ${fmtDateBR(dateTo)}`, clear: () => setDateTo('') }                                  : null,
     ] as (ActiveFilter | null)[]
   ).filter((f): f is ActiveFilter => f !== null);
 
-  const clearAllFilters = () => { setSearch(''); setFilterType('all'); setFilterCat(''); };
+  const clearAllFilters = () => { setSearch(''); setFilterType('all'); setFilterCat(''); setDateFrom(''); setDateTo(''); };
 
   if (loading) return (
     <div role="status" aria-label="Carregando movimentações" className="flex flex-col items-center justify-center py-20 gap-3 text-quantum-fgMuted">
@@ -591,7 +603,7 @@ export default function TransactionsManager({
             aria-label="Filtros avançados"
             aria-expanded={filtersOpen}
             className={`p-2.5 rounded-xl border transition-all shrink-0 ${
-              filtersOpen || filterCat
+              filtersOpen || filterCat || dateFrom || dateTo
                 ? 'bg-quantum-accentDim border-quantum-accent/30 text-quantum-accent'
                 : 'bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted hover:text-quantum-fg'
             }`}
@@ -676,6 +688,37 @@ export default function TransactionsManager({
                     <option value="category">Agrupar por Categoria</option>
                     <option value="none">Sem Agrupamento</option>
                   </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <div>
+                  <label htmlFor="filter-date-from" className="block text-[10px] text-quantum-fgMuted uppercase tracking-wider mb-1">
+                    Data início
+                  </label>
+                  <input
+                    id="filter-date-from"
+                    type="date"
+                    value={dateFrom}
+                    onChange={e => setDateFrom(e.target.value)}
+                    aria-label="Filtrar a partir de"
+                    max={dateTo || undefined}
+                    className="input-quantum py-2 text-xs w-full"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="filter-date-to" className="block text-[10px] text-quantum-fgMuted uppercase tracking-wider mb-1">
+                    Data fim
+                  </label>
+                  <input
+                    id="filter-date-to"
+                    type="date"
+                    value={dateTo}
+                    onChange={e => setDateTo(e.target.value)}
+                    aria-label="Filtrar até"
+                    min={dateFrom || undefined}
+                    className="input-quantum py-2 text-xs w-full"
+                  />
                 </div>
               </div>
             </motion.div>
