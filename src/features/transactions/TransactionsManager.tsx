@@ -132,8 +132,8 @@ function FilterChip({ label, onRemove }: FilterChipProps) {
       className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-quantum-accent/10 border border-quantum-accent/20 text-quantum-accent rounded-lg text-xs font-bold"
     >
       {label}
-      <button onClick={onRemove} className="hover:text-quantum-fg transition-colors">
-        <X className="w-3 h-3" />
+      <button onClick={onRemove} aria-label={`Remover filtro ${label || 'ativo'}`} className="hover:text-quantum-fg transition-colors">
+        <X className="w-3 h-3" aria-hidden="true" />
       </button>
     </motion.span>
   );
@@ -198,6 +198,7 @@ const TransactionRow = React.memo(({ tx, isSelected, onToggle, onEdit, onDelete,
     >
       <button
         onClick={() => onToggle(tx.id)}
+        aria-label={`${isSelected ? 'Desmarcar' : 'Selecionar'} movimentação ${tx.description || 'sem descrição'}`}
         className="shrink-0 text-quantum-fgMuted hover:text-quantum-accent transition-colors"
       >
         {isSelected
@@ -205,7 +206,7 @@ const TransactionRow = React.memo(({ tx, isSelected, onToggle, onEdit, onDelete,
           : <Square className="w-4 h-4" />}
       </button>
 
-      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+      <div aria-hidden="true" className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
         isIncome ? 'bg-quantum-accentDim text-quantum-accent' : 'bg-quantum-redDim text-quantum-red'
       }`}>
         {isIncome
@@ -237,7 +238,7 @@ const TransactionRow = React.memo(({ tx, isSelected, onToggle, onEdit, onDelete,
           }}
           className="p-1.5 text-quantum-fgMuted hover:text-quantum-accent hover:bg-quantum-accentDim rounded-lg transition-all"
           title="Histórico"
-          aria-label="Ver histórico da movimentação"
+          aria-label={`Ver histórico da movimentação ${tx.description || 'sem descrição'}`}
         >
           <History className="w-3.5 h-3.5" />
         </button>
@@ -248,7 +249,7 @@ const TransactionRow = React.memo(({ tx, isSelected, onToggle, onEdit, onDelete,
           }}
           className="p-1.5 text-quantum-fgMuted hover:text-quantum-accent hover:bg-quantum-accentDim rounded-lg transition-all"
           title="Editar (E)"
-          aria-label="Editar movimentação"
+          aria-label={`Editar movimentação ${tx.description || 'sem descrição'}`}
         >
           <Edit3 className="w-3.5 h-3.5" />
         </button>
@@ -259,7 +260,7 @@ const TransactionRow = React.memo(({ tx, isSelected, onToggle, onEdit, onDelete,
           }}
           className="p-1.5 text-quantum-fgMuted hover:text-quantum-red hover:bg-quantum-redDim rounded-lg transition-all"
           title="Apagar (Del)"
-          aria-label="Excluir movimentação"
+          aria-label={`Excluir movimentação ${tx.description || 'sem descrição'}`}
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
@@ -528,7 +529,7 @@ export default function TransactionsManager({
   const clearAllFilters = () => { setSearch(''); setFilterType('all'); setFilterCat(''); };
 
   if (loading) return (
-    <div className="flex flex-col items-center justify-center py-20 gap-3 text-quantum-fgMuted">
+    <div role="status" aria-label="Carregando movimentações" className="flex flex-col items-center justify-center py-20 gap-3 text-quantum-fgMuted">
       <div className="w-8 h-8 border-2 border-quantum-accent/30 border-t-quantum-accent rounded-full animate-spin" />
       <span className="text-xs uppercase tracking-widest animate-pulse">A Sincronizar Matriz...</span>
     </div>
@@ -551,14 +552,15 @@ export default function TransactionsManager({
             <input
               ref={searchRef}
               type="text"
+              aria-label="Pesquisar por descrição ou categoria"
               placeholder="Pesquisar por descrição ou categoria... (Alt+F)"
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="input-quantum pl-10 pr-8 py-2.5 text-sm"
             />
             {search && (
-              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-quantum-fgMuted hover:text-quantum-fg transition-colors">
-                <X className="w-3.5 h-3.5" />
+              <button onClick={() => setSearch('')} aria-label="Limpar busca" className="absolute right-3 top-1/2 -translate-y-1/2 text-quantum-fgMuted hover:text-quantum-fg transition-colors">
+                <X className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
             )}
           </div>
@@ -568,6 +570,7 @@ export default function TransactionsManager({
               <button
                 key={v}
                 onClick={() => setFilterType(v)}
+                aria-pressed={filterType === v}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                   filterType === v
                     ? v === 'entrada' ? 'bg-quantum-accentDim text-quantum-accent border border-quantum-accent/20'
@@ -584,6 +587,8 @@ export default function TransactionsManager({
 
           <button
             onClick={() => setFiltersOpen(o => !o)}
+            aria-label="Filtros avançados"
+            aria-expanded={filtersOpen}
             className={`p-2.5 rounded-xl border transition-all shrink-0 ${
               filtersOpen || filterCat
                 ? 'bg-quantum-accentDim border-quantum-accent/30 text-quantum-accent'
@@ -596,6 +601,7 @@ export default function TransactionsManager({
 
           <button
             onClick={() => setAuditOpen(true)}
+            aria-label="Histórico de ações"
             className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-quantum-border bg-quantum-bgSecondary text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/20 transition-all shrink-0 text-xs font-bold"
             title="Histórico de ações"
           >
@@ -631,6 +637,7 @@ export default function TransactionsManager({
                   <select
                     value={filterCat}
                     onChange={e => setFilterCat(e.target.value)}
+                    aria-label="Filtrar por categoria"
                     className="input-quantum pl-9 py-2 text-xs appearance-none"
                   >
                     <option value="">Todas as categorias</option>
@@ -645,6 +652,7 @@ export default function TransactionsManager({
                   <select
                     value={sortBy}
                     onChange={e => setSortBy(e.target.value as SortBy)}
+                    aria-label="Ordenar movimentações"
                     className="input-quantum pl-9 py-2 text-xs appearance-none"
                   >
                     <option value="date_desc">Data (mais recente)</option>
@@ -660,6 +668,7 @@ export default function TransactionsManager({
                   <select
                     value={groupBy}
                     onChange={e => setGroupBy(e.target.value as GroupByOption)}
+                    aria-label="Agrupar movimentações"
                     className="input-quantum pl-9 py-2 text-xs appearance-none"
                   >
                     <option value="date">Agrupar por Data</option>
@@ -767,7 +776,7 @@ export default function TransactionsManager({
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-2">
                   <CheckSquare className="w-4 h-4 text-quantum-accent" />
-                  <span className="text-sm font-black text-quantum-fg">
+                  <span aria-live="polite" aria-atomic="true" className="text-sm font-black text-quantum-fg">
                     {selected.size} selecionada{selected.size > 1 ? 's' : ''}
                   </span>
                   {allTransactionsSelected && (
@@ -895,6 +904,7 @@ export default function TransactionsManager({
                     <select
                       value={newCat}
                       onChange={e => setNewCat(e.target.value)}
+                      aria-label="Selecionar nova categoria"
                       className="input-quantum py-1.5 text-xs flex-1 min-w-[160px]"
                     >
                       {categoryOptions.map(c => (
