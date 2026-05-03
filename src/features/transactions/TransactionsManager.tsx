@@ -560,17 +560,17 @@ export default function TransactionsManager({
 
   const fmtDateBR = (s: string) => s.split('-').reverse().join('/');
 
-  interface ActiveFilter { label: string; clear: () => void }
+  interface ActiveFilter { id: string; label: string; clear: () => void }
   const activeFilters = (
     [
-      filterType !== 'all' ? { label: filterType === 'entrada' ? '↑ Entradas' : '↓ Saídas', clear: () => setFilterType('all') } : null,
-      filterCat            ? { label: filterCat, clear: () => setFilterCat('') }                                                 : null,
-      search.trim()        ? { label: `"${search.trim()}"`, clear: () => setSearch('') }                                        : null,
-      dateFrom             ? { label: `A partir de ${fmtDateBR(dateFrom)}`, clear: () => setDateFrom('') }                      : null,
-      dateTo               ? { label: `Até ${fmtDateBR(dateTo)}`, clear: () => setDateTo('') }                                  : null,
-      minCents !== null    ? { label: `Mínimo ${formatCurrency(fromCentavos(minCents))}`, clear: () => setValueMin('') }        : null,
-      maxCents !== null    ? { label: `Máximo ${formatCurrency(fromCentavos(maxCents))}`, clear: () => setValueMax('') }        : null,
-      filterOrigin         ? { label: `Origem: ${SOURCE_LABELS[filterOrigin] ?? filterOrigin}`, clear: () => setFilterOrigin('') } : null,
+      filterType !== 'all' ? { id: 'type',       label: filterType === 'entrada' ? '↑ Entradas' : '↓ Saídas', clear: () => setFilterType('all') } : null,
+      filterCat            ? { id: 'cat',        label: filterCat, clear: () => setFilterCat('') }                                                 : null,
+      search.trim()        ? { id: 'search',     label: `"${search.trim()}"`, clear: () => setSearch('') }                                        : null,
+      dateFrom             ? { id: 'date-from',  label: `A partir de ${fmtDateBR(dateFrom)}`, clear: () => setDateFrom('') }                      : null,
+      dateTo               ? { id: 'date-to',    label: `Até ${fmtDateBR(dateTo)}`, clear: () => setDateTo('') }                                  : null,
+      minCents !== null    ? { id: 'value-min',  label: `Mínimo ${formatCurrency(fromCentavos(minCents))}`, clear: () => setValueMin('') }        : null,
+      maxCents !== null    ? { id: 'value-max',  label: `Máximo ${formatCurrency(fromCentavos(maxCents))}`, clear: () => setValueMax('') }        : null,
+      filterOrigin         ? { id: 'origin',     label: `Origem: ${SOURCE_LABELS[filterOrigin] ?? filterOrigin}`, clear: () => setFilterOrigin('') } : null,
     ] as (ActiveFilter | null)[]
   ).filter((f): f is ActiveFilter => f !== null);
 
@@ -620,8 +620,8 @@ export default function TransactionsManager({
             <input
               ref={searchRef}
               type="text"
-              aria-label="Pesquisar por descrição ou categoria"
-              placeholder="Pesquisar por descrição ou categoria... (Alt+F)"
+              aria-label="Pesquisar descrição ou categoria"
+              placeholder="Pesquisar descrição ou categoria... (Alt+F)"
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="input-quantum pl-10 pr-8 py-2.5 text-sm"
@@ -684,11 +684,12 @@ export default function TransactionsManager({
               const date = new Date().toISOString().slice(0, 10);
               downloadCSV(`quantum-finance-transacoes-${date}.csv`, csv);
             }}
+            aria-label="Exportar CSV"
             className="flex items-center gap-2 px-3 py-2 bg-quantum-card border border-quantum-border rounded-xl text-xs font-bold text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/40 transition-all"
             title="Exportar transações filtradas como CSV"
           >
             <Download className="w-3.5 h-3.5" />
-            Exportar CSV
+            <span className="hidden sm:inline">Exportar CSV</span>
           </button>
         </div>
 
@@ -856,8 +857,8 @@ export default function TransactionsManager({
               className="flex flex-wrap items-center gap-1.5 rounded-lg border border-quantum-border bg-quantum-bgSecondary/50 px-2.5 py-2"
             >
               <span className="text-[10px] text-quantum-fgMuted uppercase tracking-wider">Filtros aplicados:</span>
-              {activeFilters.map((f, i) => (
-                <FilterChip key={i} label={f.label} onRemove={f.clear} />
+              {activeFilters.map((f) => (
+                <FilterChip key={f.id} label={f.label} onRemove={f.clear} />
               ))}
               <button onClick={clearAllFilters} className="text-[10px] text-quantum-fgMuted hover:text-quantum-red transition-colors inline-flex items-center gap-1">
                 <RotateCcw className="w-3 h-3" /> Limpar tudo
