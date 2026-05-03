@@ -343,11 +343,11 @@ export default function TransactionsManager({
         e.preventDefault();
         searchRef.current?.focus();
       }
-      if (e.key === 'Escape') { setBatchAction(null); setConfirmDelete(false); }
+      if (e.key === 'Escape' && !auditOpen && historyTx === null) { setBatchAction(null); setConfirmDelete(false); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [auditOpen, historyTx]);
 
   const categoryOptions = useMemo(() => {
     const byName = new Map<string, string>();
@@ -445,14 +445,36 @@ export default function TransactionsManager({
     return { count: filtered.length, ...totals };
   }, [filtered]);
 
+  const baseForCategoryCounts = useMemo(() => {
+    let list = transactions;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(tx =>
+        (tx.description ?? '').toLowerCase().includes(q) ||
+        (tx.category    ?? '').toLowerCase().includes(q)
+      );
+    }
+    if (filterType !== 'all') {
+      list = list.filter(tx =>
+        filterType === 'entrada' ? checkIncome(tx.type) : checkExpense(tx.type)
+      );
+    }
+    if (dateFrom)          list = list.filter(tx => (tx.date ?? '') >= dateFrom);
+    if (dateTo)            list = list.filter(tx => (tx.date ?? '') <= dateTo);
+    if (minCents !== null) list = list.filter(tx => getTransactionAbsCentavos(tx) >= minCents);
+    if (maxCents !== null) list = list.filter(tx => getTransactionAbsCentavos(tx) <= maxCents);
+    if (filterOrigin)      list = list.filter(tx => (tx.source ?? 'manual') === filterOrigin);
+    return list;
+  }, [transactions, search, filterType, dateFrom, dateTo, minCents, maxCents, filterOrigin]);
+
   const catCounts = useMemo(() => {
     const map: Record<string, number> = {};
-    transactions.forEach(tx => {
+    baseForCategoryCounts.forEach(tx => {
       const c = tx.category ?? 'Outros';
       map[c] = (map[c] ?? 0) + 1;
     });
     return map;
-  }, [transactions]);
+  }, [baseForCategoryCounts]);
 
   const toggleOne = useCallback((id: string) => setSelected(s => {
     const n = new Set(s);
@@ -610,10 +632,10 @@ export default function TransactionsManager({
   ];
 
   return (
-    <div className="flex flex-col h-full select-none">
+    <div className="flex flex-col h-full">
 
       {/* ═══ BARRA DE FILTROS ═══════════════════════════════════════════════ */}
-      <div className="p-4 md:p-5 border-b border-quantum-border bg-quantum-bg/40 space-y-4">
+      <div className="p-4 md:p-5 border-b border-quantum-border bg-quantum-bg/40 space-y-4 select-none">
         <div className="flex gap-2 items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-quantum-fgMuted" />
@@ -860,8 +882,8 @@ export default function TransactionsManager({
               {activeFilters.map((f) => (
                 <FilterChip key={f.id} label={f.label} onRemove={f.clear} />
               ))}
-              <button onClick={clearAllFilters} className="text-[10px] text-quantum-fgMuted hover:text-quantum-red transition-colors inline-flex items-center gap-1">
-                <RotateCcw className="w-3 h-3" /> Limpar tudo
+              <button onClick={clearAllFilters} aria-label="Limpar todos os filtros" className="text-[10px] text-quantum-fgMuted hover:text-quantum-red transition-colors inline-flex items-center gap-1">
+                <RotateCcw className="w-3 h-3" aria-hidden="true" /> Limpar tudo
               </button>
             </motion.div>
           )}
@@ -939,7 +961,7 @@ export default function TransactionsManager({
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden border-b border-quantum-accent/20 bg-quantum-accentDim/50"
           >
-            <div className="px-4 py-3 space-y-3">
+            <div className="px-4 py-3 space-y-3 select-none">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-2">
                   <CheckSquare className="w-4 h-4 text-quantum-accent" />
