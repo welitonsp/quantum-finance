@@ -195,6 +195,7 @@ function Drawer({ uid, transaction, onClose }: Omit<Props, 'isOpen'>) {
         exit={{ opacity: 0 }}
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
+        aria-hidden="true"
       />
 
       <motion.aside
