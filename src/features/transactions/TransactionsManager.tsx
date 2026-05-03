@@ -147,7 +147,7 @@ function FilterChip({ label, onRemove }: FilterChipProps) {
       initial={{ opacity: 0, scale: 0.85 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.85 }}
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-quantum-accent/10 border border-quantum-accent/20 text-quantum-accent rounded-lg text-xs font-bold"
+      className="inline-flex items-center gap-1 px-2 py-0.5 bg-quantum-accent/10 border border-quantum-accent/20 text-quantum-accent rounded-md text-[11px] font-bold"
     >
       {label}
       <button onClick={onRemove} aria-label={`Remover filtro ${label || 'ativo'}`} className="hover:text-quantum-fg transition-colors">
@@ -575,6 +575,24 @@ export default function TransactionsManager({
   ).filter((f): f is ActiveFilter => f !== null);
 
   const hasDateFilterActive = Boolean(dateFrom || dateTo);
+  const loadedDateRange = useMemo<{ min: string; max: string } | null>(() => {
+    let minDate: string | null = null;
+    let maxDate: string | null = null;
+
+    for (const tx of transactions) {
+      const date = tx.date;
+      if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      if (minDate === null || date < minDate) minDate = date;
+      if (maxDate === null || date > maxDate) maxDate = date;
+    }
+
+    return minDate && maxDate ? { min: minDate, max: maxDate } : null;
+  }, [transactions]);
+  const shouldShowDateScopeNotice = hasDateFilterActive && (
+    !loadedDateRange ||
+    (dateFrom ? dateFrom < loadedDateRange.min : false) ||
+    (dateTo ? dateTo > loadedDateRange.max : false)
+  );
 
   const clearAllFilters = () => { setSearch(''); setFilterType('all'); setFilterCat(''); setDateFrom(''); setDateTo(''); setValueMin(''); setValueMax(''); setFilterOrigin(''); };
 
@@ -812,18 +830,18 @@ export default function TransactionsManager({
         </AnimatePresence>
 
         <AnimatePresence>
-          {hasDateFilterActive && (
+          {shouldShowDateScopeNotice && (
             <motion.div
               role="note"
               aria-live="polite"
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
-              className="flex items-start gap-2 rounded-xl border border-quantum-accent/20 bg-quantum-accentDim/30 px-3 py-2.5"
+              className="flex items-start gap-1.5 rounded-lg border border-quantum-gold/25 bg-quantum-goldDim/35 px-2.5 py-2"
             >
-              <AlertTriangle className="w-4 h-4 text-quantum-accent shrink-0 mt-0.5" aria-hidden="true" />
-              <p className="text-xs leading-relaxed text-quantum-fgMuted">
-                Os filtros de data são aplicados apenas às movimentações carregadas no escopo atual. Se o período filtrado estiver em outro mês, altere o mês no topo ou limpe o filtro de data.
+              <AlertTriangle className="w-3.5 h-3.5 text-quantum-gold shrink-0 mt-0.5" aria-hidden="true" />
+              <p className="text-[11px] leading-snug text-quantum-fgMuted">
+                Atenção: o filtro de data atua apenas sobre as movimentações carregadas. Para consultar outro mês, altere o mês no topo.
               </p>
             </motion.div>
           )}
@@ -835,14 +853,12 @@ export default function TransactionsManager({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="rounded-xl border border-quantum-border bg-quantum-bgSecondary/50 px-3 py-3 space-y-2"
+              className="flex flex-wrap items-center gap-1.5 rounded-lg border border-quantum-border bg-quantum-bgSecondary/50 px-2.5 py-2"
             >
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] text-quantum-fgMuted uppercase tracking-wider">Filtros aplicados:</span>
-                {activeFilters.map((f, i) => (
-                  <FilterChip key={i} label={f.label} onRemove={f.clear} />
-                ))}
-              </div>
+              <span className="text-[10px] text-quantum-fgMuted uppercase tracking-wider">Filtros aplicados:</span>
+              {activeFilters.map((f, i) => (
+                <FilterChip key={i} label={f.label} onRemove={f.clear} />
+              ))}
               <button onClick={clearAllFilters} className="text-[10px] text-quantum-fgMuted hover:text-quantum-red transition-colors inline-flex items-center gap-1">
                 <RotateCcw className="w-3 h-3" /> Limpar tudo
               </button>
