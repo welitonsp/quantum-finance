@@ -324,9 +324,9 @@ export default function ReconciliationEngine({
           )}
 
           <AnimatePresence>
-            {hint === 'left'  && <motion.div key="hint-left"  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 rounded-3xl border-2 border-emerald-400/60 bg-emerald-500/5 pointer-events-none z-20" />}
-            {hint === 'right' && <motion.div key="hint-right" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 rounded-3xl border-2 border-cyan-400/60    bg-cyan-500/5    pointer-events-none z-20" />}
-            {hint === 'down'  && <motion.div key="hint-down"  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 rounded-3xl border-2 border-red-400/60     bg-red-500/5     pointer-events-none z-20" />}
+            {hint === 'left'  && <motion.div key="hint-left"  aria-hidden="true" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 rounded-3xl border-2 border-emerald-400/60 bg-emerald-500/5 pointer-events-none z-20" />}
+            {hint === 'right' && <motion.div key="hint-right" aria-hidden="true" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 rounded-3xl border-2 border-cyan-400/60    bg-cyan-500/5    pointer-events-none z-20" />}
+            {hint === 'down'  && <motion.div key="hint-down"  aria-hidden="true" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 rounded-3xl border-2 border-red-400/60     bg-red-500/5     pointer-events-none z-20" />}
           </AnimatePresence>
 
           <AnimatePresence mode="wait" custom={exitDirRef}>
