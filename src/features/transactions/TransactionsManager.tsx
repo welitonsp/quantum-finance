@@ -40,11 +40,15 @@ interface Group {
   key: string;
   label: string;
   items: Transaction[];
+  count: number;
+  totalInCents: number;
+  totalOutCents: number;
+  netCents: number;
 }
 
 type TransactionTotalSource = Pick<Transaction, 'type' | 'value_cents' | 'value' | 'schemaVersion'>;
 
-export function calculateTransactionTotals(transactions: TransactionTotalSource[]) {
+function calculateTransactionTotalsCents(transactions: TransactionTotalSource[]) {
   let totalInCents = 0;
   let totalOutCents = 0;
 
@@ -54,10 +58,26 @@ export function calculateTransactionTotals(transactions: TransactionTotalSource[
     else                     totalOutCents += cents;
   });
 
+  return { totalInCents, totalOutCents, netCents: totalInCents - totalOutCents };
+}
+
+export function calculateTransactionTotals(transactions: TransactionTotalSource[]) {
+  const totals = calculateTransactionTotalsCents(transactions);
+
   return {
-    totalIn:  fromCentavos(totalInCents),
-    totalOut: fromCentavos(totalOutCents),
-    net:      fromCentavos(totalInCents - totalOutCents),
+    totalIn:  fromCentavos(totals.totalInCents),
+    totalOut: fromCentavos(totals.totalOutCents),
+    net:      fromCentavos(totals.netCents),
+  };
+}
+
+function buildTransactionGroup(key: string, label: string, items: Transaction[]): Group {
+  return {
+    key,
+    label,
+    items,
+    count: items.length,
+    ...calculateTransactionTotalsCents(items),
   };
 }
 
@@ -161,28 +181,28 @@ function FilterChip({ label, onRemove }: FilterChipProps) {
 interface GroupHeaderProps {
   label: string;
   count: number;
-  totalIn: number;
-  totalOut: number;
+  totalInCents: number;
+  totalOutCents: number;
+  netCents: number;
 }
-function GroupHeader({ label, count, totalIn, totalOut }: GroupHeaderProps) {
-  const net = totalIn - totalOut;
+function GroupHeader({ label, count, totalInCents, totalOutCents, netCents }: GroupHeaderProps) {
   return (
     <div className="flex items-center gap-3 py-2 px-1">
       <span className="text-xs font-black text-quantum-fg uppercase tracking-wider whitespace-nowrap">{label}</span>
       <div className="flex-1 h-px bg-quantum-border" />
       <span className="text-[10px] text-quantum-fgMuted font-mono">{count} reg.</span>
-      {totalIn > 0 && (
+      {totalInCents > 0 && (
         <span className="text-[10px] text-quantum-accent font-mono font-bold">
-          +{formatCurrency(totalIn)}
+          +{formatCurrency(totalInCents, { cents: true })}
         </span>
       )}
-      {totalOut > 0 && (
+      {totalOutCents > 0 && (
         <span className="text-[10px] text-quantum-red font-mono font-bold">
-          -{formatCurrency(totalOut)}
+          -{formatCurrency(totalOutCents, { cents: true })}
         </span>
       )}
-      <span className={`text-[10px] font-mono font-black ${net >= 0 ? 'text-quantum-accent' : 'text-quantum-red'}`}>
-        {net >= 0 ? '+' : ''}{formatCurrency(net)}
+      <span className={`text-[10px] font-mono font-black ${netCents >= 0 ? 'text-quantum-accent' : 'text-quantum-red'}`}>
+        {netCents >= 0 ? '+' : ''}{formatCurrency(netCents, { cents: true })}
       </span>
     </div>
   );
@@ -418,7 +438,7 @@ export default function TransactionsManager({
   }, [transactions, search, filterType, filterCat, dateFrom, dateTo, minCents, maxCents, filterOrigin, sortBy]);
 
   const groups = useMemo<Group[]>(() => {
-    if (groupBy === 'none') return [{ key: '', label: '', items: filtered }];
+    if (groupBy === 'none') return [buildTransactionGroup('', '', filtered)];
 
     const map = new Map<string, Transaction[]>();
     filtered.forEach(tx => {
@@ -433,15 +453,15 @@ export default function TransactionsManager({
     if (groupBy === 'date')     keys.sort((a, b) => b.localeCompare(a));
     if (groupBy === 'category') keys.sort();
 
-    return keys.map(k => ({
-      key:   k,
-      label: groupBy === 'date' ? getDateLabel(k) : k,
-      items: map.get(k)!,
-    }));
+    return keys.map(k => buildTransactionGroup(
+      k,
+      groupBy === 'date' ? getDateLabel(k) : k,
+      map.get(k)!
+    ));
   }, [filtered, groupBy]);
 
   const stats = useMemo(() => {
-    const totals = calculateTransactionTotals(filtered);
+    const totals = calculateTransactionTotalsCents(filtered);
     return { count: filtered.length, ...totals };
   }, [filtered]);
 
@@ -921,20 +941,28 @@ export default function TransactionsManager({
 
         <div className="w-px h-4 bg-quantum-border shrink-0" />
         <span className="text-quantum-fgMuted shrink-0">
-          <span className="font-black text-quantum-fg">{stats.count}</span> registos
+          Resultado filtrado/carregado: <span className="font-black text-quantum-fg">{stats.count}</span> registos
+        </span>
+        {loadedCount !== undefined && (
+          <>
+            <div className="w-px h-3 bg-quantum-border shrink-0" />
+            <span className="text-quantum-fgMuted shrink-0">
+              Carregadas: <span className="font-bold text-quantum-fg">{loadedCount}</span>
+            </span>
+          </>
+        )}
+        <div className="w-px h-3 bg-quantum-border shrink-0" />
+        <span className="text-quantum-fgMuted shrink-0">
+          Entradas: <span className="font-bold text-quantum-accent">{formatCurrency(stats.totalInCents, { cents: true })}</span>
         </span>
         <div className="w-px h-3 bg-quantum-border shrink-0" />
         <span className="text-quantum-fgMuted shrink-0">
-          Entradas: <span className="font-bold text-quantum-accent">{formatCurrency(stats.totalIn)}</span>
+          Saídas: <span className="font-bold text-quantum-red">{formatCurrency(stats.totalOutCents, { cents: true })}</span>
         </span>
         <div className="w-px h-3 bg-quantum-border shrink-0" />
         <span className="text-quantum-fgMuted shrink-0">
-          Saídas: <span className="font-bold text-quantum-red">{formatCurrency(stats.totalOut)}</span>
-        </span>
-        <div className="w-px h-3 bg-quantum-border shrink-0" />
-        <span className="text-quantum-fgMuted shrink-0">
-          Saldo: <span className={`font-black ${stats.net >= 0 ? 'text-quantum-accent' : 'text-quantum-red'}`}>
-            {stats.net >= 0 ? '+' : ''}{formatCurrency(stats.net)}
+          Saldo: <span className={`font-black ${stats.netCents >= 0 ? 'text-quantum-accent' : 'text-quantum-red'}`}>
+            {stats.netCents >= 0 ? '+' : ''}{formatCurrency(stats.netCents, { cents: true })}
           </span>
         </span>
 
@@ -1167,25 +1195,15 @@ export default function TransactionsManager({
             <AnimatePresence mode="popLayout">
               {groups.map(group => (
                 <div key={group.key || 'ungrouped'}>
-                  {group.key && (() => {
-                    let gInCents = 0;
-                    let gOutCents = 0;
-                    group.items.forEach(t => {
-                      const cents = getTransactionAbsCentavos(t);
-                      if (checkIncome(t.type))  gInCents  += cents;
-                      if (checkExpense(t.type)) gOutCents += cents;
-                    });
-                    const gIn  = fromCentavos(gInCents);
-                    const gOut = fromCentavos(gOutCents);
-                    return (
-                      <GroupHeader
-                        label={group.label}
-                        count={group.items.length}
-                        totalIn={gIn}
-                        totalOut={gOut}
-                      />
-                    );
-                  })()}
+                  {group.key && (
+                    <GroupHeader
+                      label={group.label}
+                      count={group.count}
+                      totalInCents={group.totalInCents}
+                      totalOutCents={group.totalOutCents}
+                      netCents={group.netCents}
+                    />
+                  )}
                   <div className="space-y-1.5 mb-2">
                     {group.items.map(tx => (
                       <TransactionRow
