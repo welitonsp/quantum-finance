@@ -150,6 +150,33 @@ function buildImportStats(
   };
 }
 
+function normalizeImportDescriptionForDedupe(description: string): string {
+  return description
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(/\s+/)
+    .filter(token => token && !/^\d{8,}$/.test(token))
+    .join(' ')
+    .trim();
+}
+
+function buildImportDedupeFingerprint(tx: Pick<Transaction, 'date' | 'description' | 'type' | 'source' | 'fitId' | 'value_cents' | 'value' | 'schemaVersion'>): string {
+  const valueCents = getTransactionAbsCentavos(tx);
+  const type = tx.type ?? '';
+  const source = tx.source ?? '';
+  const fitId = tx.fitId?.trim();
+
+  if (fitId) {
+    return ['fitid', source, fitId, valueCents, type].join('|');
+  }
+
+  const date = (tx.date ?? '').substring(0, 10);
+  const description = normalizeImportDescriptionForDedupe(tx.description ?? '');
+  return ['tx', date, valueCents, type, source, description].join('|');
+}
+
 
 // ─── Reconcile Routing ────────────────────────────────────────────────────────
 
@@ -796,18 +823,12 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
   const deduplicate = useCallback((parsed: ParsedTransaction[]) => {
     const existingHashes = new Set<string>();
     existingTransactions.forEach(t => {
-      const val  = getTransactionAbsCentavos(t);
-      const desc = (t.description ?? '').substring(0, 12).toLowerCase().trim();
-      const date = (t.date ?? '').substring(0, 10);
-      existingHashes.add(`${date}-${val}-${desc}`);
+      existingHashes.add(buildImportDedupeFingerprint(t));
     });
 
     let duplicates = 0;
     const fresh = parsed.filter(tx => {
-      const val  = getTransactionAbsCentavos(tx);
-      const desc = tx.description.substring(0, 12).toLowerCase().trim();
-      const date = (tx.date ?? '').substring(0, 10);
-      const hash = `${date}-${val}-${desc}`;
+      const hash = buildImportDedupeFingerprint(tx);
       if (existingHashes.has(hash)) { duplicates++; return false; }
       existingHashes.add(hash);
       return true;
