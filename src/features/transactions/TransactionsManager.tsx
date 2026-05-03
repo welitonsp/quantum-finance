@@ -25,6 +25,13 @@ import type { UserCategory } from '../../shared/schemas/categorySchemas';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SortBy = 'date_desc' | 'date_asc' | 'value_desc' | 'value_asc' | 'cat';
+
+const SOURCE_LABELS: Record<string, string> = {
+  manual: 'Manual',
+  csv:    'CSV',
+  ofx:    'OFX',
+  pdf:    'PDF',
+};
 type GroupByOption = 'date' | 'category' | 'none';
 type BatchAction = 'delete' | 'recategorize' | null;
 type FilterType = 'all' | 'entrada' | 'saida';
@@ -320,6 +327,7 @@ export default function TransactionsManager({
   const [dateTo,        setDateTo]        = useState('');
   const [valueMin,      setValueMin]      = useState('');
   const [valueMax,      setValueMax]      = useState('');
+  const [filterOrigin,  setFilterOrigin]  = useState('');
 
   const searchRef    = useRef<HTMLInputElement>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -395,6 +403,9 @@ export default function TransactionsManager({
     if (maxCents !== null) {
       list = list.filter(tx => getTransactionAbsCentavos(tx) <= maxCents);
     }
+    if (filterOrigin) {
+      list = list.filter(tx => (tx.source ?? 'manual') === filterOrigin);
+    }
 
     return [...list].sort((a, b) => {
       if (sortBy === 'date_desc')  return (b.date ?? '').localeCompare(a.date ?? '');
@@ -404,7 +415,7 @@ export default function TransactionsManager({
       if (sortBy === 'cat')        return (a.category ?? '').localeCompare(b.category ?? '');
       return 0;
     });
-  }, [transactions, search, filterType, filterCat, dateFrom, dateTo, minCents, maxCents, sortBy]);
+  }, [transactions, search, filterType, filterCat, dateFrom, dateTo, minCents, maxCents, filterOrigin, sortBy]);
 
   const groups = useMemo<Group[]>(() => {
     if (groupBy === 'none') return [{ key: '', label: '', items: filtered }];
@@ -559,10 +570,11 @@ export default function TransactionsManager({
       dateTo               ? { label: `Até ${fmtDateBR(dateTo)}`, clear: () => setDateTo('') }                                  : null,
       minCents !== null    ? { label: `Mínimo ${formatCurrency(fromCentavos(minCents))}`, clear: () => setValueMin('') }        : null,
       maxCents !== null    ? { label: `Máximo ${formatCurrency(fromCentavos(maxCents))}`, clear: () => setValueMax('') }        : null,
+      filterOrigin         ? { label: `Origem: ${SOURCE_LABELS[filterOrigin] ?? filterOrigin}`, clear: () => setFilterOrigin('') } : null,
     ] as (ActiveFilter | null)[]
   ).filter((f): f is ActiveFilter => f !== null);
 
-  const clearAllFilters = () => { setSearch(''); setFilterType('all'); setFilterCat(''); setDateFrom(''); setDateTo(''); setValueMin(''); setValueMax(''); };
+  const clearAllFilters = () => { setSearch(''); setFilterType('all'); setFilterCat(''); setDateFrom(''); setDateTo(''); setValueMin(''); setValueMax(''); setFilterOrigin(''); };
 
   if (loading) return (
     <div role="status" aria-label="Carregando movimentações" className="flex flex-col items-center justify-center py-20 gap-3 text-quantum-fgMuted">
@@ -627,7 +639,7 @@ export default function TransactionsManager({
             aria-label="Filtros avançados"
             aria-expanded={filtersOpen}
             className={`p-2.5 rounded-xl border transition-all shrink-0 ${
-              filtersOpen || filterCat || dateFrom || dateTo || valueMin || valueMax
+              filtersOpen || filterCat || dateFrom || dateTo || valueMin || valueMax || filterOrigin
                 ? 'bg-quantum-accentDim border-quantum-accent/30 text-quantum-accent'
                 : 'bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted hover:text-quantum-fg'
             }`}
@@ -668,7 +680,7 @@ export default function TransactionsManager({
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden"
             >
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
                 <div className="relative">
                   <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-quantum-fgMuted" />
                   <select
@@ -680,6 +692,21 @@ export default function TransactionsManager({
                     <option value="">Todas as categorias</option>
                     {categoryOptions.map(c => (
                       <option key={c} value={c}>{c} ({catCounts[c] ?? 0})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="relative">
+                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-quantum-fgMuted" />
+                  <select
+                    value={filterOrigin}
+                    onChange={e => setFilterOrigin(e.target.value)}
+                    aria-label="Filtrar por origem"
+                    className="input-quantum pl-9 py-2 text-xs appearance-none"
+                  >
+                    <option value="">Todas as origens</option>
+                    {Object.entries(SOURCE_LABELS).map(([val, label]) => (
+                      <option key={val} value={val}>{label}</option>
                     ))}
                   </select>
                 </div>
