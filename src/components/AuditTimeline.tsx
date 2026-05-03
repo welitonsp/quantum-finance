@@ -106,6 +106,7 @@ function Drawer({ uid, onClose }: { uid: string; onClose: () => void }) {
         exit={{ opacity: 0 }}
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
+        aria-hidden="true"
       />
 
       {/* Painel lateral */}

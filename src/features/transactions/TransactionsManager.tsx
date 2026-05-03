@@ -167,7 +167,7 @@ interface GroupHeaderProps {
 function GroupHeader({ label, count, totalIn, totalOut }: GroupHeaderProps) {
   const net = totalIn - totalOut;
   return (
-    <div className="flex items-center gap-3 py-2 px-1 select-none">
+    <div className="flex items-center gap-3 py-2 px-1">
       <span className="text-xs font-black text-quantum-fg uppercase tracking-wider whitespace-nowrap">{label}</span>
       <div className="flex-1 h-px bg-quantum-border" />
       <span className="text-[10px] text-quantum-fgMuted font-mono">{count} reg.</span>

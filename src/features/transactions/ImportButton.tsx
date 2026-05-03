@@ -750,7 +750,7 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
       const focusable = modalRef.current.querySelectorAll<HTMLElement>(
         'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
       );
-      const els   = Array.from(focusable);
+      const els   = Array.from(focusable).filter(el => !el.closest('[aria-hidden="true"]'));
       if (els.length === 0) return;
       const first = els[0]!;
       const last  = els[els.length - 1]!;

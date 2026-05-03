@@ -227,7 +227,7 @@ export default function ReconciliationEngine({
         containerRef.current.querySelectorAll<HTMLElement>(
           'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
         )
-      );
+      ).filter(el => !el.closest('[aria-hidden="true"]'));
       if (focusable.length === 0) return;
       const first = focusable[0]!;
       const last  = focusable[focusable.length - 1]!;
@@ -282,7 +282,7 @@ export default function ReconciliationEngine({
       transition={{ duration: 0.2 }}
       className="fixed inset-0 z-[60] bg-quantum-bg/90 backdrop-blur-2xl flex flex-col items-center justify-center p-4 overflow-hidden"
     >
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
+      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-[100px]" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-violet-500/5 rounded-full blur-[100px]" />
       </div>
@@ -319,7 +319,7 @@ export default function ReconciliationEngine({
             <div
               className="absolute inset-x-4 -bottom-3 h-full rounded-3xl bg-quantum-bgSecondary/40 border border-quantum-border"
               style={{ zIndex: 0 }}
-              aria-hidden
+              aria-hidden="true"
             />
           )}
 
@@ -336,7 +336,7 @@ export default function ReconciliationEngine({
                 initial={CARD_ENTER}
                 animate={CARD_CENTER}
                 exit={exitVariant(exitDirRef.current)}
-                className="relative z-10 w-full bg-quantum-card/80 border border-quantum-border backdrop-blur-xl rounded-3xl p-6 shadow-2xl shadow-black/60 select-none"
+                className="relative z-10 w-full bg-quantum-card/80 border border-quantum-border backdrop-blur-xl rounded-3xl p-6 shadow-2xl shadow-black/60"
               >
                 <div className="flex items-center justify-between mb-5">
                   <div className="flex items-center gap-2">
