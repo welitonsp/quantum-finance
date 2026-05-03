@@ -210,7 +210,7 @@ function StepBar({ current }: { current: ImportStatus }) {
     <div className="flex items-center gap-1 px-6 py-3 bg-quantum-bg/50 border-b border-quantum-border">
       {STEPS.map((label, i) => (
         <React.Fragment key={label}>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5" aria-current={i === active ? 'step' : undefined}>
             <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black transition-all duration-300 ${
               i < active   ? 'bg-quantum-accent text-quantum-bg' :
               i === active ? 'bg-quantum-accent/20 border border-quantum-accent text-quantum-accent animate-pulse' :
@@ -378,11 +378,11 @@ function ColumnMapper({ headers, previewRows, autoMap, onApply, onCancel }: Colu
             Pré-visualização (primeiras {previewRows.length} linhas)
           </p>
           <div className="overflow-x-auto rounded-xl border border-quantum-border">
-            <table className="w-full text-xs">
+            <table className="w-full text-xs" aria-label="Pré-visualização do arquivo">
               <thead>
                 <tr className="bg-quantum-bgSecondary">
                   {headers.map((h, i) => (
-                    <th key={i} className={`px-3 py-2 text-left font-bold border-b border-quantum-border truncate max-w-[100px] ${
+                    <th key={i} scope="col" className={`px-3 py-2 text-left font-bold border-b border-quantum-border truncate max-w-[100px] ${
                       i === Number(mapping.dateIdx)  ? 'text-cyan-400' :
                       i === Number(mapping.descIdx)  ? 'text-quantum-fg' :
                       i === Number(mapping.valueIdx) ? 'text-quantum-accent' :
@@ -497,7 +497,7 @@ function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) 
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <button onClick={toggleAll} className="flex items-center gap-2 text-xs text-quantum-fgMuted hover:text-quantum-fg transition-colors">
+          <button onClick={toggleAll} aria-pressed={allChecked} className="flex items-center gap-2 text-xs text-quantum-fgMuted hover:text-quantum-fg transition-colors">
             {allChecked ? <CheckSquare className="w-4 h-4 text-quantum-accent" /> : <Square className="w-4 h-4" />}
             {allChecked ? 'Desmarcar tudo' : 'Selecionar tudo'}
           </button>
@@ -507,14 +507,14 @@ function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) 
         </div>
 
         <div className="border border-quantum-border rounded-xl overflow-hidden max-h-60 overflow-y-auto custom-scrollbar">
-          <table className="w-full text-xs">
+          <table className="w-full text-xs" aria-label="Pré-visualização das transações a importar">
             <thead className="sticky top-0 bg-quantum-bg z-10">
               <tr className="border-b border-quantum-border">
-                <th className="w-8 px-3 py-2" />
-                <th className="px-3 py-2 text-left text-quantum-fgMuted font-bold uppercase tracking-wider">Data</th>
-                <th className="px-3 py-2 text-left text-quantum-fgMuted font-bold uppercase tracking-wider">Descrição</th>
-                <th className="px-3 py-2 text-left text-quantum-fgMuted font-bold uppercase tracking-wider">Categoria</th>
-                <th className="px-3 py-2 text-right text-quantum-fgMuted font-bold uppercase tracking-wider">Valor</th>
+                <th scope="col" aria-label="Selecionar" className="w-8 px-3 py-2" />
+                <th scope="col" className="px-3 py-2 text-left text-quantum-fgMuted font-bold uppercase tracking-wider">Data</th>
+                <th scope="col" className="px-3 py-2 text-left text-quantum-fgMuted font-bold uppercase tracking-wider">Descrição</th>
+                <th scope="col" className="px-3 py-2 text-left text-quantum-fgMuted font-bold uppercase tracking-wider">Categoria</th>
+                <th scope="col" className="px-3 py-2 text-right text-quantum-fgMuted font-bold uppercase tracking-wider">Valor</th>
               </tr>
             </thead>
             <tbody>
@@ -530,7 +530,7 @@ function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) 
                     }`}
                   >
                     <td className="px-3 py-2">
-                      <button onClick={() => toggle(tx.id)} className="flex items-center justify-center w-full">
+                      <button onClick={() => toggle(tx.id)} aria-label={`${tx._selected ? 'Desmarcar' : 'Selecionar'} transação ${tx.description || 'sem descrição'}`} className="flex items-center justify-center w-full">
                         {tx._selected
                           ? <CheckSquare className="w-3.5 h-3.5 text-quantum-accent" />
                           : <Square     className="w-3.5 h-3.5 text-quantum-fgMuted" />
@@ -548,6 +548,7 @@ function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) 
                           value={tx.category ?? ''}
                           onChange={e => { setCat(tx.id, e.target.value); setEditingId(null); }}
                           onBlur={() => setEditingId(null)}
+                          aria-label={`Selecionar categoria da transação ${tx.description || 'sem descrição'}`}
                           className="bg-quantum-bgSecondary border border-quantum-accent/30 rounded-lg px-1 py-0.5 text-[10px] text-quantum-fg outline-none"
                         >
                           {ALLOWED_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -557,6 +558,7 @@ function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) 
                           onClick={() => setEditingId(tx.id)}
                           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] font-bold transition-all hover:opacity-80 ${catClass(tx.category)}`}
                           title="Clique para editar"
+                          aria-label={`Editar categoria da transação ${tx.description || 'sem descrição'}`}
                         >
                           {tx.category ?? 'Diversos'}
                           <ChevronDown className="w-2.5 h-2.5" />
