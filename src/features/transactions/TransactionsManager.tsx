@@ -118,6 +118,17 @@ function formatDateShort(dateStr: string | undefined): string {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
 
+// ─── Parser BRL → centavos (strict) ──────────────────────────────────────────
+function parseBRLToCents(s: string): number | null {
+  const cleaned = s.trim().replace(/^R\$\s*/, '').replace(/\s/g, '');
+  if (!cleaned) return null;
+  // Aceita: "50", "50,00", "1.234,56", "1.234" — rejeita "50abc", "-50", etc.
+  if (!/^(\d{1,3}(\.\d{3})*(,\d{1,2})?|\d+(,\d{1,2})?)$/.test(cleaned)) return null;
+  const n = Number(cleaned.replace(/\./g, '').replace(',', '.'));
+  if (isNaN(n) || n < 0) return null;
+  return Math.round(n * 100);
+}
+
 // ─── Chip de Filtro Ativo ─────────────────────────────────────────────────────
 interface FilterChipProps {
   label: string;
@@ -307,6 +318,8 @@ export default function TransactionsManager({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [dateFrom,      setDateFrom]      = useState('');
   const [dateTo,        setDateTo]        = useState('');
+  const [valueMin,      setValueMin]      = useState('');
+  const [valueMax,      setValueMax]      = useState('');
 
   const searchRef    = useRef<HTMLInputElement>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -347,6 +360,9 @@ export default function TransactionsManager({
     }
   }, [categoryOptions, newCat]);
 
+  const minCents = parseBRLToCents(valueMin);
+  const maxCents = parseBRLToCents(valueMax);
+
   const filtered = useMemo(() => {
     let list = transactions;
 
@@ -373,6 +389,12 @@ export default function TransactionsManager({
     if (dateTo) {
       list = list.filter(tx => (tx.date ?? '') <= dateTo);
     }
+    if (minCents !== null) {
+      list = list.filter(tx => getTransactionAbsCentavos(tx) >= minCents);
+    }
+    if (maxCents !== null) {
+      list = list.filter(tx => getTransactionAbsCentavos(tx) <= maxCents);
+    }
 
     return [...list].sort((a, b) => {
       if (sortBy === 'date_desc')  return (b.date ?? '').localeCompare(a.date ?? '');
@@ -382,7 +404,7 @@ export default function TransactionsManager({
       if (sortBy === 'cat')        return (a.category ?? '').localeCompare(b.category ?? '');
       return 0;
     });
-  }, [transactions, search, filterType, filterCat, dateFrom, dateTo, sortBy]);
+  }, [transactions, search, filterType, filterCat, dateFrom, dateTo, minCents, maxCents, sortBy]);
 
   const groups = useMemo<Group[]>(() => {
     if (groupBy === 'none') return [{ key: '', label: '', items: filtered }];
@@ -535,10 +557,12 @@ export default function TransactionsManager({
       search.trim()        ? { label: `"${search.trim()}"`, clear: () => setSearch('') }                                        : null,
       dateFrom             ? { label: `A partir de ${fmtDateBR(dateFrom)}`, clear: () => setDateFrom('') }                      : null,
       dateTo               ? { label: `Até ${fmtDateBR(dateTo)}`, clear: () => setDateTo('') }                                  : null,
+      minCents !== null    ? { label: `Mínimo ${formatCurrency(fromCentavos(minCents))}`, clear: () => setValueMin('') }        : null,
+      maxCents !== null    ? { label: `Máximo ${formatCurrency(fromCentavos(maxCents))}`, clear: () => setValueMax('') }        : null,
     ] as (ActiveFilter | null)[]
   ).filter((f): f is ActiveFilter => f !== null);
 
-  const clearAllFilters = () => { setSearch(''); setFilterType('all'); setFilterCat(''); setDateFrom(''); setDateTo(''); };
+  const clearAllFilters = () => { setSearch(''); setFilterType('all'); setFilterCat(''); setDateFrom(''); setDateTo(''); setValueMin(''); setValueMax(''); };
 
   if (loading) return (
     <div role="status" aria-label="Carregando movimentações" className="flex flex-col items-center justify-center py-20 gap-3 text-quantum-fgMuted">
@@ -603,7 +627,7 @@ export default function TransactionsManager({
             aria-label="Filtros avançados"
             aria-expanded={filtersOpen}
             className={`p-2.5 rounded-xl border transition-all shrink-0 ${
-              filtersOpen || filterCat || dateFrom || dateTo
+              filtersOpen || filterCat || dateFrom || dateTo || valueMin || valueMax
                 ? 'bg-quantum-accentDim border-quantum-accent/30 text-quantum-accent'
                 : 'bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted hover:text-quantum-fg'
             }`}
@@ -717,6 +741,37 @@ export default function TransactionsManager({
                     onChange={e => setDateTo(e.target.value)}
                     aria-label="Filtrar até"
                     min={dateFrom || undefined}
+                    className="input-quantum py-2 text-xs w-full"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <div>
+                  <label htmlFor="filter-value-min" className="block text-[10px] text-quantum-fgMuted uppercase tracking-wider mb-1">
+                    Valor mínimo
+                  </label>
+                  <input
+                    id="filter-value-min"
+                    type="text"
+                    value={valueMin}
+                    onChange={e => setValueMin(e.target.value)}
+                    aria-label="Valor mínimo"
+                    placeholder="R$ 0,00"
+                    className="input-quantum py-2 text-xs w-full"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="filter-value-max" className="block text-[10px] text-quantum-fgMuted uppercase tracking-wider mb-1">
+                    Valor máximo
+                  </label>
+                  <input
+                    id="filter-value-max"
+                    type="text"
+                    value={valueMax}
+                    onChange={e => setValueMax(e.target.value)}
+                    aria-label="Valor máximo"
+                    placeholder="R$ 0,00"
                     className="input-quantum py-2 text-xs w-full"
                   />
                 </div>
