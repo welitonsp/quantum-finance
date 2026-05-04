@@ -31,7 +31,7 @@ interface Stats {
   discarded: number;
 }
 
-type MergeCandidateInfo = {
+export type MergeCandidateInfo = {
   transaction:     Transaction;
   dayDiff:         number;
   pctDiff:         number;
@@ -71,7 +71,7 @@ const catClass = (cat: string | undefined): string =>
   CAT_COLORS[cat ?? ''] ?? 'text-quantum-fgMuted bg-white/5 border-white/15';
 
 // ─── Lógica de Merge ──────────────────────────────────────────────────────────
-function findMergeCandidate(tx: Transaction, existing: Transaction[]): MergeCandidateInfo {
+export function findMergeCandidate(tx: Transaction, existing: Transaction[]): MergeCandidateInfo {
   if (!existing?.length) return null;
   const txDate  = new Date(tx.date ?? '');
   const txValue = getTransactionAbsCentavos(tx);
