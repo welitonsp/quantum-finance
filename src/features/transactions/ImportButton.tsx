@@ -76,6 +76,310 @@ interface ColumnMapping {
   valueIdx: number;
 }
 
+const COLUMN_MAPPING_KEYS = ['dateIdx', 'descIdx', 'valueIdx'] as const;
+type ColumnMappingField = typeof COLUMN_MAPPING_KEYS[number];
+type ColumnMappingDraft = Record<ColumnMappingField, number | ''>;
+type BankMappingTemplateId =
+  | 'nubank'
+  | 'inter'
+  | 'itau'
+  | 'bradesco'
+  | 'banco-do-brasil'
+  | 'caixa'
+  | 'santander'
+  | 'c6'
+  | 'mercado-pago'
+  | 'picpay'
+  | 'generic-br';
+
+interface BankColumnAliases {
+  dateIdx:         string[];
+  descIdx:         string[];
+  valueIdx:        string[];
+  debitValueIdx:   string[];
+  creditValueIdx:  string[];
+}
+
+interface BankMappingTemplate {
+  id:      BankMappingTemplateId;
+  label:   string;
+  aliases: BankColumnAliases;
+}
+
+type ColumnMappingSuggestionId = 'auto' | BankMappingTemplateId;
+
+const COMMON_COLUMN_ALIASES: BankColumnAliases = {
+  dateIdx: [
+    'data', 'date', 'dt', 'data lançamento', 'data lancamento',
+    'lançamento data', 'lancamento data', 'data movimento', 'data mov',
+    'data operação', 'data operacao', 'data transação', 'data transacao',
+    'data de lançamento', 'data do lançamento', 'data da transação',
+    'posted date',
+  ],
+  descIdx: [
+    'descrição', 'descricao', 'histórico', 'historico', 'lançamento',
+    'lancamento', 'detalhes', 'estabelecimento', 'title', 'memo',
+    'description', 'descrição da transação', 'descricao da transacao',
+    'descrição lançamento', 'descricao lancamento', 'complemento', 'nome',
+    'identificador',
+  ],
+  valueIdx: [
+    'valor', 'amount', 'value', 'quantia', 'total', 'montante',
+    'valor lançamento', 'valor lancamento', 'valor transação',
+    'valor transacao', 'valor da transação', 'valor movimentação',
+    'valor movimentacao', 'valor r$', 'valor centavos',
+    'valor em centavos', 'value cents', 'value_cents', 'amount cents',
+    'amount_cents', 'centavos', 'vlr',
+  ],
+  debitValueIdx: [
+    'débito', 'debito', 'saída', 'saida', 'saídas', 'saidas', 'debit',
+    'valor débito', 'valor debito', 'valor saída', 'valor saida', 'despesa',
+  ],
+  creditValueIdx: [
+    'crédito', 'credito', 'entrada', 'entradas', 'credit', 'valor crédito',
+    'valor credito', 'valor entrada', 'receita',
+  ],
+};
+
+function uniqueAliases(aliases: string[]): string[] {
+  return Array.from(new Set(aliases));
+}
+
+function withCommonColumnAliases(overrides: Partial<BankColumnAliases> = {}): BankColumnAliases {
+  return {
+    dateIdx:        uniqueAliases([...COMMON_COLUMN_ALIASES.dateIdx,        ...(overrides.dateIdx        ?? [])]),
+    descIdx:        uniqueAliases([...COMMON_COLUMN_ALIASES.descIdx,        ...(overrides.descIdx        ?? [])]),
+    valueIdx:       uniqueAliases([...COMMON_COLUMN_ALIASES.valueIdx,       ...(overrides.valueIdx       ?? [])]),
+    debitValueIdx:  uniqueAliases([...COMMON_COLUMN_ALIASES.debitValueIdx,  ...(overrides.debitValueIdx  ?? [])]),
+    creditValueIdx: uniqueAliases([...COMMON_COLUMN_ALIASES.creditValueIdx, ...(overrides.creditValueIdx ?? [])]),
+  };
+}
+
+const BANK_MAPPING_TEMPLATES: BankMappingTemplate[] = [
+  {
+    id: 'nubank',
+    label: 'Nubank',
+    aliases: withCommonColumnAliases({
+      dateIdx:  ['data', 'date', 'data da compra'],
+      descIdx:  ['title', 'descrição', 'descricao', 'estabelecimento', 'identificador'],
+      valueIdx: ['amount', 'valor'],
+    }),
+  },
+  {
+    id: 'inter',
+    label: 'Inter',
+    aliases: withCommonColumnAliases({
+      dateIdx:        ['data lançamento', 'data lancamento', 'data movimento'],
+      descIdx:        ['histórico', 'historico', 'descrição', 'descricao'],
+      valueIdx:       ['valor'],
+      debitValueIdx:  ['débito', 'debito', 'saída', 'saida'],
+      creditValueIdx: ['crédito', 'credito', 'entrada'],
+    }),
+  },
+  {
+    id: 'itau',
+    label: 'Itaú',
+    aliases: withCommonColumnAliases({
+      dateIdx:  ['data', 'data lançamento', 'data lancamento'],
+      descIdx:  ['lançamento', 'lancamento', 'histórico', 'historico'],
+      valueIdx: ['valor', 'valor lançamento', 'valor lancamento'],
+    }),
+  },
+  {
+    id: 'bradesco',
+    label: 'Bradesco',
+    aliases: withCommonColumnAliases({
+      dateIdx:        ['data', 'data lançamento', 'data lancamento'],
+      descIdx:        ['histórico', 'historico', 'descrição', 'descricao', 'documento'],
+      valueIdx:       ['valor'],
+      debitValueIdx:  ['débito', 'debito'],
+      creditValueIdx: ['crédito', 'credito'],
+    }),
+  },
+  {
+    id: 'banco-do-brasil',
+    label: 'Banco do Brasil',
+    aliases: withCommonColumnAliases({
+      dateIdx:  ['data', 'data movimento'],
+      descIdx:  ['histórico', 'historico', 'lançamento', 'lancamento', 'documento'],
+      valueIdx: ['valor', 'valor r$'],
+    }),
+  },
+  {
+    id: 'caixa',
+    label: 'Caixa',
+    aliases: withCommonColumnAliases({
+      dateIdx:        ['data mov', 'data movimento', 'data'],
+      descIdx:        ['histórico', 'historico', 'descrição', 'descricao', 'nr doc'],
+      valueIdx:       ['valor'],
+      debitValueIdx:  ['débito', 'debito'],
+      creditValueIdx: ['crédito', 'credito'],
+    }),
+  },
+  {
+    id: 'santander',
+    label: 'Santander',
+    aliases: withCommonColumnAliases({
+      dateIdx:  ['data', 'data transação', 'data transacao'],
+      descIdx:  ['descrição', 'descricao', 'histórico', 'historico'],
+      valueIdx: ['valor', 'valor transação', 'valor transacao'],
+    }),
+  },
+  {
+    id: 'c6',
+    label: 'C6',
+    aliases: withCommonColumnAliases({
+      dateIdx:  ['data', 'data movimentação', 'data movimentacao'],
+      descIdx:  ['descrição', 'descricao', 'nome', 'detalhes'],
+      valueIdx: ['valor', 'amount'],
+    }),
+  },
+  {
+    id: 'mercado-pago',
+    label: 'Mercado Pago',
+    aliases: withCommonColumnAliases({
+      dateIdx:  ['data de criação', 'data de criacao', 'data aprovação', 'data aprovacao'],
+      descIdx:  ['descrição', 'descricao', 'operação', 'operacao', 'detalhes'],
+      valueIdx: ['valor da transação', 'valor da transacao', 'valor líquido', 'valor liquido'],
+    }),
+  },
+  {
+    id: 'picpay',
+    label: 'PicPay',
+    aliases: withCommonColumnAliases({
+      dateIdx:        ['data da transação', 'data da transacao', 'data'],
+      descIdx:        ['descrição', 'descricao', 'detalhes', 'nome'],
+      valueIdx:       ['valor'],
+      debitValueIdx:  ['saída', 'saida'],
+      creditValueIdx: ['entrada'],
+    }),
+  },
+  {
+    id: 'generic-br',
+    label: 'Genérico CSV BR',
+    aliases: withCommonColumnAliases(),
+  },
+];
+
+const COLUMN_MAPPING_SUGGESTION_OPTIONS: Array<{ id: ColumnMappingSuggestionId; label: string }> = [
+  { id: 'auto', label: 'Detectar automaticamente' },
+  ...BANK_MAPPING_TEMPLATES.map(({ id, label }) => ({ id, label })),
+];
+
+const AUTO_COLUMN_ALIASES: BankColumnAliases = {
+  dateIdx:        uniqueAliases(BANK_MAPPING_TEMPLATES.flatMap(template => template.aliases.dateIdx)),
+  descIdx:        uniqueAliases(BANK_MAPPING_TEMPLATES.flatMap(template => template.aliases.descIdx)),
+  valueIdx:       uniqueAliases(BANK_MAPPING_TEMPLATES.flatMap(template => template.aliases.valueIdx)),
+  debitValueIdx:  uniqueAliases(BANK_MAPPING_TEMPLATES.flatMap(template => template.aliases.debitValueIdx)),
+  creditValueIdx: uniqueAliases(BANK_MAPPING_TEMPLATES.flatMap(template => template.aliases.creditValueIdx)),
+};
+
+function normalizeColumnHeader(header: string): string {
+  return header
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function headerMatchesAlias(normalizedHeader: string, normalizedAlias: string): boolean {
+  if (!normalizedHeader || !normalizedAlias) return false;
+  if (normalizedHeader === normalizedAlias) return true;
+
+  const headerTokens = normalizedHeader.split(' ');
+  if (normalizedAlias.length <= 3) return headerTokens.includes(normalizedAlias);
+
+  const compactHeader = normalizedHeader.replace(/\s+/g, '');
+  const compactAlias = normalizedAlias.replace(/\s+/g, '');
+  return (
+    normalizedHeader.startsWith(`${normalizedAlias} `) ||
+    normalizedHeader.endsWith(` ${normalizedAlias}`) ||
+    normalizedHeader.includes(` ${normalizedAlias} `) ||
+    compactHeader === compactAlias ||
+    compactHeader.startsWith(compactAlias) ||
+    compactHeader.includes(compactAlias)
+  );
+}
+
+function findHeaderIndex(headers: string[], aliases: string[], usedIndexes: Set<number>): number | undefined {
+  const normalizedHeaders = headers.map((header, index) => ({
+    index,
+    normalized: normalizeColumnHeader(header),
+  }));
+  const normalizedAliases = uniqueAliases(aliases.map(normalizeColumnHeader).filter(Boolean));
+
+  for (const alias of normalizedAliases) {
+    const exact = normalizedHeaders.find(({ index, normalized }) =>
+      !usedIndexes.has(index) && normalized === alias
+    );
+    if (exact) return exact.index;
+  }
+
+  for (const alias of normalizedAliases) {
+    const partial = normalizedHeaders.find(({ index, normalized }) =>
+      !usedIndexes.has(index) && headerMatchesAlias(normalized, alias)
+    );
+    if (partial) return partial.index;
+  }
+
+  return undefined;
+}
+
+function findValueHeaderIndex(headers: string[], aliases: BankColumnAliases, usedIndexes: Set<number>): number | undefined {
+  const debitIndex = findHeaderIndex(headers, aliases.debitValueIdx, usedIndexes);
+  const creditIndex = findHeaderIndex(headers, aliases.creditValueIdx, usedIndexes);
+
+  const excludedSeparatedIndexes = new Set(usedIndexes);
+  if (debitIndex !== undefined) excludedSeparatedIndexes.add(debitIndex);
+  if (creditIndex !== undefined) excludedSeparatedIndexes.add(creditIndex);
+
+  const genericIndex = findHeaderIndex(headers, aliases.valueIdx, excludedSeparatedIndexes);
+  if (genericIndex !== undefined) return genericIndex;
+
+  if (debitIndex !== undefined && creditIndex !== undefined) {
+    return debitIndex === creditIndex ? debitIndex : undefined;
+  }
+
+  return debitIndex ?? creditIndex;
+}
+
+function suggestColumnMapping(headers: string[], template?: BankMappingTemplate): Partial<ColumnMapping> {
+  const aliases = template?.aliases ?? AUTO_COLUMN_ALIASES;
+  const usedIndexes = new Set<number>();
+  const suggestion: Partial<ColumnMapping> = {};
+
+  const dateIdx = findHeaderIndex(headers, aliases.dateIdx, usedIndexes);
+  if (dateIdx !== undefined) {
+    suggestion.dateIdx = dateIdx;
+    usedIndexes.add(dateIdx);
+  }
+
+  const descIdx = findHeaderIndex(headers, aliases.descIdx, usedIndexes);
+  if (descIdx !== undefined) {
+    suggestion.descIdx = descIdx;
+    usedIndexes.add(descIdx);
+  }
+
+  const valueIdx = findValueHeaderIndex(headers, aliases, usedIndexes);
+  if (valueIdx !== undefined) suggestion.valueIdx = valueIdx;
+
+  return suggestion;
+}
+
+function countSuggestedFields(suggestion: Partial<ColumnMapping>): number {
+  return COLUMN_MAPPING_KEYS.filter(key => suggestion[key] !== undefined && suggestion[key]! >= 0).length;
+}
+
+function mergeSuggestedMapping(current: ColumnMappingDraft, suggestion: Partial<ColumnMapping>): ColumnMappingDraft {
+  return COLUMN_MAPPING_KEYS.reduce<ColumnMappingDraft>((next, key) => {
+    const suggestedIndex = suggestion[key];
+    if (suggestedIndex !== undefined && suggestedIndex >= 0) next[key] = suggestedIndex;
+    return next;
+  }, { ...current });
+}
+
 interface ParseError extends Error {
   code?:       string;
   headers?:    string[];
@@ -442,14 +746,37 @@ interface ColumnMapperProps {
   onCancel:    () => void;
 }
 function ColumnMapper({ headers, previewRows, autoMap, onApply, onCancel }: ColumnMapperProps) {
-  const [mapping, setMapping] = useState<{ dateIdx: number | ''; descIdx: number | ''; valueIdx: number | '' }>({
+  const [mapping, setMapping] = useState<ColumnMappingDraft>({
     dateIdx:  autoMap.dateIdx  >= 0 ? autoMap.dateIdx  : '',
     descIdx:  autoMap.descIdx  >= 0 ? autoMap.descIdx  : '',
     valueIdx: autoMap.valueIdx >= 0 ? autoMap.valueIdx : '',
   });
+  const [selectedSuggestion, setSelectedSuggestion] = useState<ColumnMappingSuggestionId>('auto');
+  const [suggestionFeedback, setSuggestionFeedback] = useState('');
 
   const set = (k: keyof typeof mapping, v: number | '') => setMapping(m => ({ ...m, [k]: v }));
   const ready = mapping.dateIdx !== '' && mapping.descIdx !== '' && mapping.valueIdx !== '';
+
+  const handleApplySuggestion = () => {
+    const template = selectedSuggestion === 'auto'
+      ? undefined
+      : BANK_MAPPING_TEMPLATES.find(item => item.id === selectedSuggestion);
+    const suggestion = suggestColumnMapping(headers, template);
+    const foundFields = countSuggestedFields(suggestion);
+
+    if (foundFields === 0) {
+      setSuggestionFeedback('Não foi possível identificar colunas suficientes para este modelo.');
+      return;
+    }
+
+    const nextMapping = mergeSuggestedMapping(mapping, suggestion);
+    setMapping(nextMapping);
+    setSuggestionFeedback(
+      COLUMN_MAPPING_KEYS.every(key => nextMapping[key] !== '')
+        ? 'Mapeamento sugerido aplicado. Revise antes de continuar.'
+        : 'Mapeamento parcial aplicado. Complete as colunas restantes manualmente.'
+    );
+  };
 
   const FIELDS: { key: keyof typeof mapping; label: string; color: string }[] = [
     { key: 'dateIdx',  label: 'Coluna de Data',      color: 'text-cyan-400'       },
@@ -466,6 +793,42 @@ function ColumnMapper({ headers, previewRows, autoMap, onApply, onCancel }: Colu
         </p>
       </div>
 
+      <div className="space-y-3 rounded-xl border border-quantum-border bg-quantum-bgSecondary/40 p-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-quantum-fg">
+            Sugestões de mapeamento
+          </h4>
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <select
+            value={selectedSuggestion}
+            onChange={e => setSelectedSuggestion(e.target.value as ColumnMappingSuggestionId)}
+            aria-label="Selecionar sugestão de mapeamento por banco"
+            className="input-quantum flex-1 appearance-none pr-8"
+          >
+            {COLUMN_MAPPING_SUGGESTION_OPTIONS.map(option => (
+              <option key={option.id} value={option.id}>{option.label}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={handleApplySuggestion}
+            aria-label="Aplicar sugestão de mapeamento selecionada"
+            className="btn-quantum-secondary flex items-center justify-center gap-2 whitespace-nowrap"
+          >
+            <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
+            Aplicar
+          </button>
+        </div>
+
+        {suggestionFeedback && (
+          <p role="status" aria-live="polite" className="text-xs text-quantum-fgMuted">
+            {suggestionFeedback}
+          </p>
+        )}
+      </div>
+
       <div className="space-y-3">
         {FIELDS.map(({ key, label, color }) => (
           <div key={key}>
@@ -473,6 +836,7 @@ function ColumnMapper({ headers, previewRows, autoMap, onApply, onCancel }: Colu
             <select
               value={mapping[key]}
               onChange={e => set(key, e.target.value === '' ? '' : Number(e.target.value))}
+              aria-label={label}
               className="input-quantum appearance-none pr-8"
             >
               <option value="">— Selecionar coluna —</option>
