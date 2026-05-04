@@ -14,6 +14,8 @@ import { useParserWorker } from '../../shared/lib/useParserWorker';
 import { batchCategorizeDescriptions } from '../../utils/aiCategorize';
 import { ALLOWED_CATEGORIES, transactionCreateSchema } from '../../shared/schemas/financialSchemas';
 import { CATEGORY_KEYWORDS } from '../../shared/data/categoryKeywords';
+import { useCategories } from '../../hooks/useCategories';
+import type { UserCategory } from '../../shared/schemas/categorySchemas';
 import ReconciliationEngine from './ReconciliationEngine';
 import type { Transaction } from '../../shared/types/transaction';
 import type { AllowedCategory } from '../../shared/schemas/financialSchemas';
@@ -551,6 +553,7 @@ interface PreviewPanelProps {
   crossPageStatus?:              CrossPageStatus;
   crossPageMatchedFingerprints?: Set<string>;
   crossPageMatchCount?:          number;
+  categories?:                   UserCategory[];
 }
 
 type PreviewTotalSource = Pick<ParsedTransaction, 'type' | 'value_cents' | 'value' | 'schemaVersion'>;
@@ -571,7 +574,7 @@ export function calculatePreviewTotals(transactions: PreviewTotalSource[]) {
   };
 }
 
-function PreviewPanel({ transactions, onConfirm, onCancel, crossPageStatus, crossPageMatchedFingerprints, crossPageMatchCount }: PreviewPanelProps) {
+function PreviewPanel({ transactions, onConfirm, onCancel, crossPageStatus, crossPageMatchedFingerprints, crossPageMatchCount, categories }: PreviewPanelProps) {
   const [items, setItems]       = useState<PreviewItem[]>(() => transactions.map(tx => ({ ...tx, _selected: true })));
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -690,7 +693,23 @@ function PreviewPanel({ transactions, onConfirm, onCancel, crossPageStatus, cros
                           aria-label={`Selecionar categoria da transação ${tx.description || 'sem descrição'}`}
                           className="bg-quantum-bgSecondary border border-quantum-accent/30 rounded-lg px-1 py-0.5 text-[10px] text-quantum-fg outline-none"
                         >
-                          {ALLOWED_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                          {(() => {
+                            const defaults = (categories ?? []).filter(c => c.isDefault);
+                            const custom   = (categories ?? []).filter(c => !c.isDefault);
+                            const base     = defaults.length > 0 ? defaults : [...ALLOWED_CATEGORIES].map(n => ({ id: n, name: n } as UserCategory));
+                            return custom.length > 0 ? (
+                              <>
+                                <optgroup label="Padrão">
+                                  {base.map(c => <option key={c.id ?? c.name} value={c.name}>{c.name}</option>)}
+                                </optgroup>
+                                <optgroup label="Personalizadas">
+                                  {custom.map(c => <option key={c.id ?? c.name} value={c.name}>{c.name}</option>)}
+                                </optgroup>
+                              </>
+                            ) : (
+                              base.map(c => <option key={c.id ?? c.name} value={c.name}>{c.name}</option>)
+                            );
+                          })()}
                         </select>
                       ) : (
                         <button
@@ -949,6 +968,8 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
   const triggerRef     = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const modalRef       = useRef<HTMLDivElement>(null);
+
+  const { categories: userCategories } = useCategories(uid ?? '');
 
   const { parseFile, parseFileWithMapping } = useParserWorker();
 
@@ -1314,6 +1335,7 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
                         crossPageStatus={crossPageStatus}
                         crossPageMatchedFingerprints={crossPageMatchedFingerprints}
                         crossPageMatchCount={crossPageMatchCount}
+                        categories={userCategories}
                       />
                     </motion.div>
                   )}
