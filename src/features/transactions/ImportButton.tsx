@@ -27,7 +27,8 @@ import { findImportCandidateTransactions } from './importCandidateSearch';
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ImportStatus =
   | 'idle' | 'parsing' | 'col_mapping' | 'ai_processing'
-  | 'preview' | 'importing' | 'success' | 'error' | 'reconciliation';
+  | 'preview' | 'importing' | 'success' | 'error' | 'reconciliation'
+  | 'password_required';
 
 type CrossPageStatus = 'idle' | 'loading' | 'success' | 'skipped' | 'failed';
 
@@ -837,6 +838,98 @@ function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void
   );
 }
 
+// ─── PasswordPanel ────────────────────────────────────────────────────────────
+interface PasswordPanelProps {
+  file:         File;
+  wrongPassword: boolean;
+  onSubmit:     (pwd: string) => void;
+  onCancel:     () => void;
+}
+function PasswordPanel({ file, wrongPassword, onSubmit, onCancel }: PasswordPanelProps) {
+  const [password,    setPassword]    = useState('');
+  const [submitting,  setSubmitting]  = useState(false);
+
+  useEffect(() => {
+    if (wrongPassword) setSubmitting(false);
+  }, [wrongPassword]);
+
+  const handleSubmit = () => {
+    if (!password.trim() || submitting) return;
+    setSubmitting(true);
+    onSubmit(password);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="space-y-5"
+    >
+      <div className="flex items-start gap-3 p-3.5 bg-quantum-bgSecondary border border-quantum-border rounded-xl">
+        <AlertTriangle className="w-4 h-4 text-quantum-gold shrink-0 mt-0.5" aria-hidden="true" />
+        <div className="text-xs text-quantum-fg leading-relaxed">
+          <p className="font-bold mb-0.5">PDF Protegido por Senha</p>
+          <p className="text-quantum-fgMuted truncate max-w-xs" title={file.name}>{file.name}</p>
+        </div>
+      </div>
+
+      <div>
+        <label htmlFor="pdf-password-input" className="block text-xs font-bold uppercase tracking-wider text-quantum-fgMuted mb-1.5">
+          Senha do PDF
+        </label>
+        <input
+          id="pdf-password-input"
+          type="password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); }}
+          autoFocus
+          autoComplete="new-password"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          data-form-type="other"
+          aria-label="Senha do PDF"
+          aria-describedby={wrongPassword ? 'pdf-password-error' : undefined}
+          aria-invalid={wrongPassword ? true : undefined}
+          placeholder="Digite a senha..."
+          className="input-quantum w-full"
+        />
+        {wrongPassword && (
+          <span
+            id="pdf-password-error"
+            role="alert"
+            className="block mt-1.5 text-xs text-quantum-red"
+          >
+            Senha incorreta. Tente novamente.
+          </span>
+        )}
+      </div>
+
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="btn-quantum-secondary flex-1"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={submitting || !password.trim()}
+          className="btn-quantum-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {submitting
+            ? <><Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> A verificar...</>
+            : <><ArrowRight className="w-3.5 h-3.5" aria-hidden="true" /> Confirmar</>
+          }
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
 // ─── Componente Principal ─────────────────────────────────────────────────────
 export default function ImportButton({ onImportTransactions, uid, existingTransactions = [], userRules }: Props) {
   const [isOpen,              setIsOpen]              = useState(false);
@@ -849,6 +942,8 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
   const [crossPageStatus,              setCrossPageStatus]              = useState<CrossPageStatus>('idle');
   const [crossPageMatchCount,          setCrossPageMatchCount]          = useState(0);
   const [crossPageMatchedFingerprints, setCrossPageMatchedFingerprints] = useState<Set<string>>(new Set());
+  const [pdfPasswordFile,              setPdfPasswordFile]              = useState<File | null>(null);
+  const [pdfPasswordWrong,             setPdfPasswordWrong]             = useState(false);
 
   const fileInputRef   = useRef<HTMLInputElement>(null);
   const triggerRef     = useRef<HTMLButtonElement>(null);
@@ -915,6 +1010,8 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
     setCrossPageStatus('idle');
     setCrossPageMatchCount(0);
     setCrossPageMatchedFingerprints(new Set());
+    setPdfPasswordFile(null);
+    setPdfPasswordWrong(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
     setTimeout(() => triggerRef.current?.focus(), 0);
   };
@@ -928,6 +1025,12 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
 
   const handleModalKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') {
+      if (status === 'password_required') {
+        setPdfPasswordFile(null);
+        setPdfPasswordWrong(false);
+        setStatus('idle');
+        return;
+      }
       closeModal();
       return;
     }
@@ -970,9 +1073,10 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
           return;
         }
         if (err.message === 'PASSWORD_REQUIRED') {
-          const pwd = window.prompt('Este PDF está protegido. Introduza a password:');
-          if (pwd) { void processFile(file, null, pwd); return; }
-          throw new Error('Password necessária para abrir este PDF.');
+          setPdfPasswordFile(file);
+          setPdfPasswordWrong(pdfPassword !== null);
+          setStatus('password_required');
+          return;
         }
         throw err;
       }
@@ -1182,6 +1286,21 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
                         autoMap={colMapState.autoMap}
                         onApply={handleApplyMapping}
                         onCancel={closeModal}
+                      />
+                    </motion.div>
+                  )}
+
+                  {status === 'password_required' && pdfPasswordFile && (
+                    <motion.div key="password_required" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <PasswordPanel
+                        file={pdfPasswordFile}
+                        wrongPassword={pdfPasswordWrong}
+                        onSubmit={pwd => void processFile(pdfPasswordFile, null, pwd)}
+                        onCancel={() => {
+                          setPdfPasswordFile(null);
+                          setPdfPasswordWrong(false);
+                          setStatus('idle');
+                        }}
                       />
                     </motion.div>
                   )}
