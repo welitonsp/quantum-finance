@@ -1,7 +1,7 @@
 /**
  * ReconciliationEngine.tsx — Motor de Reconciliação "Tinder Financeiro"
  */
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
@@ -30,6 +30,14 @@ interface Stats {
   merged:    number;
   discarded: number;
 }
+
+type MergeCandidateInfo = {
+  transaction:     Transaction;
+  dayDiff:         number;
+  pctDiff:         number;
+  confidenceLabel: 'Exato' | 'Alto' | 'Médio';
+  reasons:         string[];
+} | null;
 
 interface Props {
   queue:                ImportTransaction[];
@@ -63,7 +71,7 @@ const catClass = (cat: string | undefined): string =>
   CAT_COLORS[cat ?? ''] ?? 'text-quantum-fgMuted bg-white/5 border-white/15';
 
 // ─── Lógica de Merge ──────────────────────────────────────────────────────────
-function findMergeCandidate(tx: Transaction, existing: Transaction[]): Transaction | null {
+function findMergeCandidate(tx: Transaction, existing: Transaction[]): MergeCandidateInfo {
   if (!existing?.length) return null;
   const txDate  = new Date(tx.date ?? '');
   const txValue = getTransactionAbsCentavos(tx);
@@ -75,7 +83,16 @@ function findMergeCandidate(tx: Transaction, existing: Transaction[]): Transacti
     const dayDiff = Math.abs((txDate.getTime() - exDate.getTime()) / 86_400_000);
     if (dayDiff > 3) continue;
     const pctDiff = Math.abs(txValue - exValue) / Math.max(txValue, 0.01);
-    if (pctDiff <= 0.01) return ex;
+    if (pctDiff <= 0.01) {
+      const reasons: string[] = [
+        pctDiff === 0 ? 'Valor exato' : 'Valor compatível',
+        dayDiff === 0 ? 'Data igual'  : `Data próxima: ${Math.round(dayDiff)} dia(s)`,
+      ];
+      const confidenceLabel: 'Exato' | 'Alto' | 'Médio' =
+        dayDiff === 0 && pctDiff === 0 ? 'Exato' :
+        dayDiff <= 1                   ? 'Alto'  : 'Médio';
+      return { transaction: ex, dayDiff, pctDiff, confidenceLabel, reasons };
+    }
   }
   return null;
 }
@@ -189,28 +206,36 @@ export default function ReconciliationEngine({
     advance('left', tx, tx);
   }, [queue, advance]);
 
+  const mergeCandidate = useMemo(
+    () => {
+      const tx = queue[0] ?? null;
+      return tx ? findMergeCandidate(tx, existingTransactions) : null;
+    },
+    [queue, existingTransactions],
+  );
+
   const handleMerge = useCallback(() => {
     const tx = queue[0];
     if (!tx) return;
 
-    const match = findMergeCandidate(tx, existingTransactions);
-    if (match) {
+    const candidate = mergeCandidate;
+    if (candidate) {
       const merged: ResolvedTransaction = {
-        ...match,
-        description: match.description || tx.description,
-        category:    match.category    || tx.category,
+        ...candidate.transaction,
+        description: candidate.transaction.description || tx.description,
+        category:    candidate.transaction.category    || tx.category,
         _reconciled: true,
         _mergedWith: tx.id,
       };
       setStats(s => ({ ...s, merged: s.merged + 1 }));
-      toast.success(`Conciliado: ${match.description?.substring(0, 30)}`, { icon: '🔗', duration: 2500 });
+      toast.success(`Conciliado: ${candidate.transaction.description?.substring(0, 30)}`, { icon: '🔗', duration: 2500 });
       advance('right', tx, merged);
     } else {
       toast(`Sem correspondência — aprovado como novo.`, { icon: '➕', duration: 2500 });
       setStats(s => ({ ...s, approved: s.approved + 1 }));
       advance('right', tx, tx);
     }
-  }, [queue, existingTransactions, advance]);
+  }, [queue, mergeCandidate, advance]);
 
   const handleDiscard = useCallback(() => {
     const tx = queue[0];
@@ -357,11 +382,65 @@ export default function ReconciliationEngine({
                     {(card as ImportTransaction & { source?: string }).source?.toUpperCase() ?? 'IMPORT'}
                   </span>
                 </div>
-                <div className="mb-6">
+                <div className="mb-3">
                   <p className="text-xl font-black text-quantum-fg leading-tight line-clamp-3" title={card.description}>
                     {card.description}
                   </p>
                 </div>
+
+                {mergeCandidate ? (
+                  <div
+                    className="mb-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-3 space-y-1.5"
+                    aria-label={`Correspondência encontrada: ${mergeCandidate.transaction.description}, confiança ${mergeCandidate.confidenceLabel}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-cyan-400">
+                        Correspondência
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${
+                        mergeCandidate.confidenceLabel === 'Exato'
+                          ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+                          : mergeCandidate.confidenceLabel === 'Alto'
+                          ? 'text-cyan-400    border-cyan-500/30    bg-cyan-500/10'
+                          : 'text-amber-400   border-amber-500/30   bg-amber-500/10'
+                      }`}>
+                        {mergeCandidate.confidenceLabel}
+                      </span>
+                    </div>
+                    <p
+                      className="text-sm font-semibold text-quantum-fg line-clamp-1"
+                      title={mergeCandidate.transaction.description}
+                    >
+                      {mergeCandidate.transaction.description}
+                    </p>
+                    <div className="flex items-center justify-between text-xs text-quantum-fgMuted">
+                      <span>{fmtDate(mergeCandidate.transaction.date)}</span>
+                      <span className="font-mono">
+                        {fmtBRL(fromCentavos(getTransactionAbsCentavos(mergeCandidate.transaction)))}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1 pt-0.5">
+                      {mergeCandidate.reasons.map(r => (
+                        <span
+                          key={r}
+                          className="text-[9px] px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 text-quantum-fgMuted"
+                        >
+                          {r}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className="mb-4 rounded-2xl border border-white/8 bg-white/3 p-3"
+                    aria-label="Sem correspondência encontrada; será importada como nova se aprovada"
+                  >
+                    <p className="text-[11px] text-quantum-fgMuted leading-relaxed">
+                      Sem correspondência provável encontrada. Se aprovada, será importada como nova.
+                    </p>
+                  </div>
+                )}
+
                 <div className="flex flex-wrap items-end justify-between gap-y-3 gap-x-2 mt-2">
                   <div className="shrink-0">
                     <p className="text-[10px] text-quantum-fgMuted uppercase tracking-wider mb-1">Data</p>
