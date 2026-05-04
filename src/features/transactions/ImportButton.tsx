@@ -22,11 +22,14 @@ import { fromCentavos, toCentavos, type Centavos } from '../../shared/types/mone
 import { FirestoreService } from '../../shared/services/FirestoreService';
 import { AuditService } from '../../shared/services/AuditService';
 import { formatCurrency } from '../../utils/formatters';
+import { findImportCandidateTransactions } from './importCandidateSearch';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ImportStatus =
   | 'idle' | 'parsing' | 'col_mapping' | 'ai_processing'
   | 'preview' | 'importing' | 'success' | 'error' | 'reconciliation';
+
+type CrossPageStatus = 'idle' | 'loading' | 'success' | 'skipped' | 'failed';
 
 interface ParsedTransaction extends Omit<Transaction, 'id'> {
   id:              string;
@@ -99,6 +102,8 @@ const EMPTY_IMPORT_STATS: ImportStats = {
   totalOutCents: 0,
   netCents:      0,
 };
+
+const CROSS_PAGE_CANDIDATE_TIMEOUT_MS = 5000;
 
 function getImportSource(file: File): ImportStats['source'] {
   const ext = file.name.split('.').pop()?.toLowerCase();
@@ -539,9 +544,12 @@ function ColumnMapper({ headers, previewRows, autoMap, onApply, onCancel }: Colu
 // ─── PreviewPanel ─────────────────────────────────────────────────────────────
 interface PreviewItem extends ParsedTransaction { _selected: boolean }
 interface PreviewPanelProps {
-  transactions: ParsedTransaction[];
-  onConfirm:    (txs: ParsedTransaction[]) => void;
-  onCancel:     () => void;
+  transactions:                  ParsedTransaction[];
+  onConfirm:                     (txs: ParsedTransaction[]) => void;
+  onCancel:                      () => void;
+  crossPageStatus?:              CrossPageStatus;
+  crossPageMatchedFingerprints?: Set<string>;
+  crossPageMatchCount?:          number;
 }
 
 type PreviewTotalSource = Pick<ParsedTransaction, 'type' | 'value_cents' | 'value' | 'schemaVersion'>;
@@ -562,7 +570,7 @@ export function calculatePreviewTotals(transactions: PreviewTotalSource[]) {
   };
 }
 
-function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) {
+function PreviewPanel({ transactions, onConfirm, onCancel, crossPageStatus, crossPageMatchedFingerprints, crossPageMatchCount }: PreviewPanelProps) {
   const [items, setItems]       = useState<PreviewItem[]>(() => transactions.map(tx => ({ ...tx, _selected: true })));
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -574,6 +582,7 @@ function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) 
   const setCat    = (id: string, cat: string) => setItems(prev => prev.map(t => t.id === id ? { ...t, category: cat } : t));
 
   const { totEntry, totExit } = calculatePreviewTotals(selected);
+  const crossPageCount = crossPageMatchCount ?? 0;
 
   const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -598,6 +607,23 @@ function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) 
           <p className="text-xs font-black text-quantum-red font-mono">{fmt(totExit)}</p>
         </div>
       </div>
+
+      {crossPageStatus === 'loading' && (
+        <div role="status" aria-live="polite" className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs border bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted">
+          <Loader2 className="w-3 h-3 shrink-0 animate-spin" aria-hidden="true" />
+          <span>Verificando duplicatas no histórico...</span>
+        </div>
+      )}
+      {crossPageStatus === 'success' && crossPageCount > 0 && (
+        <div role="status" aria-live="polite" className="px-3 py-2 rounded-xl text-xs border bg-quantum-goldDim border-quantum-gold/20 text-quantum-gold">
+          {crossPageCount} duplicata{crossPageCount !== 1 ? 's' : ''} provável{crossPageCount !== 1 ? 'is' : ''} encontrada{crossPageCount !== 1 ? 's' : ''} no histórico
+        </div>
+      )}
+      {crossPageStatus === 'success' && crossPageCount === 0 && (
+        <div role="status" aria-live="polite" className="px-3 py-2 rounded-xl text-xs border bg-quantum-accentDim border-quantum-accent/20 text-quantum-accent">
+          Nenhuma duplicata adicional encontrada
+        </div>
+      )}
 
       <div>
         <div className="flex items-center justify-between mb-2">
@@ -642,8 +668,16 @@ function PreviewPanel({ transactions, onConfirm, onCancel }: PreviewPanelProps) 
                       </button>
                     </td>
                     <td className="px-3 py-2 font-mono text-quantum-fgMuted whitespace-nowrap">{tx.date}</td>
-                    <td className="px-3 py-2 text-quantum-fg max-w-[140px] truncate" title={tx.description}>
-                      {tx.description}
+                    <td className="px-3 py-2 text-quantum-fg max-w-[140px]" title={tx.description}>
+                      <span className="truncate block">{tx.description}</span>
+                      {crossPageMatchedFingerprints?.has(buildImportDedupeFingerprint(tx)) && (
+                        <span
+                          aria-label="Duplicata provável no histórico"
+                          className="inline-flex mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-quantum-goldDim border border-quantum-gold/30 text-quantum-gold leading-none"
+                        >
+                          Duplicata provável no histórico
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       {editingId === tx.id ? (
@@ -812,6 +846,9 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
   const [stats,               setStats]               = useState<ImportStats>(EMPTY_IMPORT_STATS);
   const [colMapState,         setColMapState]         = useState<ColMapState | null>(null);
   const [reconciliationQueue, setReconciliationQueue] = useState<ParsedTransaction[]>([]);
+  const [crossPageStatus,              setCrossPageStatus]              = useState<CrossPageStatus>('idle');
+  const [crossPageMatchCount,          setCrossPageMatchCount]          = useState(0);
+  const [crossPageMatchedFingerprints, setCrossPageMatchedFingerprints] = useState<Set<string>>(new Set());
 
   const fileInputRef   = useRef<HTMLInputElement>(null);
   const triggerRef     = useRef<HTMLButtonElement>(null);
@@ -875,6 +912,9 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
     setColMapState(null);
     setStats(EMPTY_IMPORT_STATS);
     setErrorMessage('');
+    setCrossPageStatus('idle');
+    setCrossPageMatchCount(0);
+    setCrossPageMatchedFingerprints(new Set());
     if (fileInputRef.current) fileInputRef.current.value = '';
     setTimeout(() => triggerRef.current?.focus(), 0);
   };
@@ -949,6 +989,42 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
         return;
       }
 
+      // Busca cross-page em background — não bloqueia o fluxo de importação
+      setCrossPageStatus('loading');
+      if (uid && parsedStats.periodStart && parsedStats.periodEnd) {
+        const _uid   = uid;
+        const _start = parsedStats.periodStart;
+        const _end   = parsedStats.periodEnd;
+        void (async () => {
+          try {
+            const timeoutProm = new Promise<null>(resolve =>
+              setTimeout(() => resolve(null), CROSS_PAGE_CANDIDATE_TIMEOUT_MS)
+            );
+            const result = await Promise.race([
+              findImportCandidateTransactions({ uid: _uid, periodStart: _start, periodEnd: _end }),
+              timeoutProm,
+            ]);
+            if (result === null) {
+              setCrossPageStatus('skipped');
+              return;
+            }
+            const candidateFps = new Set(result.map(buildImportDedupeFingerprint));
+            const matched = new Set<string>();
+            fresh.forEach(tx => {
+              const fp = buildImportDedupeFingerprint(tx);
+              if (candidateFps.has(fp)) matched.add(fp);
+            });
+            setCrossPageMatchedFingerprints(matched);
+            setCrossPageMatchCount(matched.size);
+            setCrossPageStatus('success');
+          } catch {
+            setCrossPageStatus('failed');
+          }
+        })();
+      } else {
+        setCrossPageStatus('skipped');
+      }
+
       setStatus('ai_processing');
       // Local dictionary first — items not matched go to AI
       const forAI = localCategorize(fresh);
@@ -977,7 +1053,7 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
       setErrorMessage(err.message || 'Falha desconhecida ao processar o ficheiro.');
       setStatus('error');
     }
-  }, [deduplicate, parseFile, parseFileWithMapping]);  
+  }, [deduplicate, parseFile, parseFileWithMapping, uid]);
 
   const handleConfirmImport = useCallback(async (selectedTxs: ParsedTransaction[]) => {
     setStatus('importing');
@@ -1032,7 +1108,8 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
               queue={reconciliationQueue}
               existingTransactions={existingTransactions}
               onComplete={(resolvedTxs: Transaction[]) => {
-                void handleConfirmImport(resolvedTxs as ParsedTransaction[]);
+                setPreview(resolvedTxs as ParsedTransaction[]);
+                setStatus('preview');
               }}
               onCancel={() => {
                 setReconciliationQueue([]);
@@ -1115,6 +1192,9 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
                         transactions={preview}
                         onConfirm={txs => void handleConfirmImport(txs)}
                         onCancel={() => setStatus('idle')}
+                        crossPageStatus={crossPageStatus}
+                        crossPageMatchedFingerprints={crossPageMatchedFingerprints}
+                        crossPageMatchCount={crossPageMatchCount}
                       />
                     </motion.div>
                   )}
