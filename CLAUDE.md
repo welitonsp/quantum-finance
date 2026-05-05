@@ -2,6 +2,159 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
+## Estado Consolidado — FASE 4 Conciliação Avançada — após PRs #55 e #56
+
+### Estado Atual
+
+- Branch principal: `main`.
+- Topo da main: `88ba74d fix(reconciliation): audit all changed fields on reconcile (#56)`.
+- Working tree confirmado limpo no QA checkpoint da FASE 4A-4D.
+- Nenhum PR aberto no QA checkpoint da FASE 4A-4D.
+- Testes atuais: 22 arquivos / 196 testes.
+
+### FASE 4C — Label específico de conciliação no histórico — PR #55
+
+- Commit: `128421e feat(reconciliation): label reconciled history entries (#55)`.
+- Arquivo alterado:
+  - `src/components/TransactionHistoryDrawer.tsx`.
+
+Entrega:
+
+- `UPDATE + origin=reconcile` agora aparece visualmente como `Conciliada`.
+- Origem visual `reconcile` aparece como `Conciliação`.
+- `UPDATE` comum segue como `Atualizada`.
+- Action persistida continua `UPDATE`.
+- Histórico antigo com `origin=reconcile` passa a ser reinterpretado visualmente como `Conciliada`.
+
+Escopo preservado:
+
+- Não alterou `ImportButton`.
+- Não alterou `AuditService`.
+- Não alterou `ReconciliationEngine`.
+- Não alterou schemas.
+- Não alterou Firestore rules.
+- Não alterou `LedgerService`.
+- Não alterou `importHash`.
+- Não alterou parser/persistência/package files.
+
+Validações:
+
+- `npm run typecheck`: passou.
+- `npm run lint`: passou.
+- `npm run test -- --run`: passou com 22 arquivos / 195 testes.
+- `npm run build`: passou.
+
+### FASE 4D — Auditoria completa dos campos alterados na conciliação — PR #56
+
+- Commit: `88ba74d fix(reconciliation): audit all changed fields on reconcile (#56)`.
+- Arquivos alterados:
+  - `src/features/transactions/ImportButton.tsx`.
+  - `src/features/transactions/__tests__/reconciliationRouting.test.ts`.
+
+Entrega:
+
+- Adicionado helper local `buildReconciliationHistoryDelta`.
+- `processResolvedImportBatch` passou a receber/usar `existingTransactions` para comparar "before" em memória com o payload final conciliado.
+- `changedFields` é calculado com `Object.is`.
+- Campos auditados:
+  - `category`.
+  - `description`.
+  - `date`.
+  - `type`.
+  - `source`.
+  - `value_cents`.
+  - `fitId`.
+- `before`/`after` parciais contêm apenas campos realmente alterados.
+- Exclui `id`, `uid`, `importHash`, `value` legado.
+- Preserva `action: 'UPDATE'`.
+- Preserva `origin: 'reconcile'`.
+- Reconciliadas continuam por `FirestoreService.updateTransaction`.
+- Novas continuam por `onImportTransactions`.
+
+Teste:
+
+- `reconciliationRouting.test.ts` agora cobre auditoria de conciliação com campos alterados, before/after esperados, `origin=reconcile` e ausência de campos proibidos.
+
+Escopo preservado:
+
+- Não alterou `ReconciliationEngine`.
+- Não alterou `TransactionHistoryDrawer`.
+- Não alterou `AuditService`.
+- Não alterou `FirestoreService`.
+- Não alterou `LedgerService`.
+- Não alterou schemas.
+- Não alterou Firestore rules.
+- Não alterou `importHash`.
+- Não alterou parser/package files.
+
+Validações:
+
+- `npm run typecheck`: passou.
+- `npm run lint`: passou.
+- `npm run test -- --run`: passou com 22 arquivos / 196 testes.
+- `npm run build`: passou.
+
+### QA Checkpoint da FASE 4A-4D
+
+- Veredito: **APROVADO**.
+- Branch: `main`.
+- Working tree: clean.
+- Topo: `88ba74d fix(reconciliation): audit all changed fields on reconcile (#56)`.
+
+Validações:
+
+- `npm run typecheck`: OK.
+- `npm run lint`: OK.
+- `npm run test -- --run`: OK, 22 arquivos / 196 testes.
+- `npm run build`: OK.
+
+Checklist:
+
+- 4A OK: candidato visível antes do clique; mesmo `mergeCandidate` usado no `handleMerge`; critérios data até 3 dias e valor até 1% preservados.
+- 4B OK: `findMergeCandidate` testado com cobertura de null/data/valor/match/primeiro válido/labels/reasons/value_cents.
+- 4C OK: `UPDATE + origin=reconcile` aparece como `Conciliada`; origem visual como `Conciliação`; `UPDATE` comum segue `Atualizada`; action persistida segue `UPDATE`.
+- 4D OK: reconciliadas continuam por `updateTransaction`; novas por `onImportTransactions`; histórico preserva `action=UPDATE` e `origin=reconcile`; delta cobre campos relevantes e exclui `id`, `uid`, `importHash`, `value`.
+- Integridade financeira OK: `value_cents` canônico, sem nova soma float, `LedgerService`, `importHash`, parser, rules e schemas intactos.
+
+Achados:
+
+- P0: nenhum.
+- P1: nenhum.
+- P2: nenhum.
+- P3: nenhum defeito funcional identificado.
+
+### Riscos e Lacunas Ainda Abertas
+
+- Delta detalhado depende de `existingTransactions` conter a transação conciliada no momento do commit do import.
+- Sem "before" confiável, histórico registra conciliação mas pode ficar sem delta detalhado.
+- Semântica persistida continua sendo `action=UPDATE + origin=reconcile`.
+- Ainda não há status persistente de conciliação no Firestore.
+- Match ainda seleciona o primeiro candidato válido, não o melhor global.
+- Descrição ainda não participa do critério de match.
+- Sem filtros de conciliadas/não conciliadas no `TransactionsManager`.
+- Sem teste `.test.tsx`/E2E do fluxo visual completo de conciliação.
+
+### Próxima Fase Recomendada
+
+**FASE 4E — status persistente de conciliação**.
+
+- Deve começar com investigação read-only.
+- Pode envolver `transaction.ts`, schemas e `firestore.rules`.
+- Não alterar `LedgerService`.
+- Não alterar `importHash`.
+- Não alterar parser.
+- Não alterar rota de persistência sem análise.
+- Avaliar se o status persistente deve incluir:
+  - `reconciliationStatus`.
+  - `reconciledAt`.
+  - `reconciledBy`.
+  - `matchedTransactionId`.
+  - `reconciliationSource`.
+  - `confidenceScore`.
+- Não implementar tudo de uma vez sem plano.
+
+> As seções históricas abaixo foram preservadas para manter contexto. Em caso de divergência, o estado consolidado da FASE 4 após PRs #55 e #56 é a referência mais recente.
+
 ## Estado Consolidado — FASE 4 Conciliação Avançada — após PRs #52 e #53
 
 ### Estado Atual
@@ -100,7 +253,7 @@ Observação:
 - Sem filtros de conciliadas/não conciliadas no `TransactionsManager`.
 - Sem teste `.test.tsx`/E2E do fluxo visual completo de conciliação.
 
-> As seções históricas abaixo foram preservadas para manter contexto. Em caso de divergência, o estado consolidado da FASE 4 após PRs #52 e #53 é a referência mais recente.
+> Registro histórico de 4A/4B preservado para contexto. Em caso de divergência, o estado consolidado da FASE 4 após PRs #55 e #56 no topo deste arquivo é a referência mais recente.
 
 ## Estado Consolidado — Pós FASE 3 Importação Avançada — 2026-05-04
 
