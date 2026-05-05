@@ -88,6 +88,29 @@ describe('financialSchemas - transações', () => {
     expect(transactionUpdateSchema.safeParse({}).success).toBe(false);
     expect(transactionUpdateSchema.safeParse({ createdAt: new Date() }).success).toBe(false);
   });
+
+  it('aceita contrato opcional de conciliação em create e update', () => {
+    const reconciliationFields = {
+      reconciliationStatus: 'reconciled',
+      reconciliationSource: 'import',
+      reconciledAt: new Date('2026-04-02T12:00:00Z'),
+      reconciledBy: 'uid1',
+    } as const;
+
+    expect(transactionCreateSchema.safeParse({
+      ...baseTransaction,
+      ...reconciliationFields,
+    }).success).toBe(true);
+    expect(transactionUpdateSchema.safeParse(reconciliationFields).success).toBe(true);
+  });
+
+  it('rejeita contrato inválido de conciliação e campos ainda não aprovados', () => {
+    expect(transactionCreateSchema.safeParse({ ...baseTransaction, reconciliationStatus: 'none' }).success).toBe(false);
+    expect(transactionUpdateSchema.safeParse({ reconciliationStatus: 'pending' }).success).toBe(false);
+    expect(transactionUpdateSchema.safeParse({ reconciliationSource: 'manual' }).success).toBe(false);
+    expect(transactionUpdateSchema.safeParse({ confidenceScore: 90 }).success).toBe(false);
+    expect(transactionUpdateSchema.safeParse({ matchedTransactionId: 'tx-123' }).success).toBe(false);
+  });
 });
 
 describe('financialSchemas - contas, recorrências e cartões', () => {

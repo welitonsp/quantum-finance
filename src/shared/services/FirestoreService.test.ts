@@ -11,6 +11,7 @@ const {
   mockGetDoc,
   mockLedgerImport,
   mockServerTimestamp,
+  mockUpdateDoc,
   mockWriteBatch,
 } = vi.hoisted(() => {
   const mockAddDoc = vi.fn().mockResolvedValue({ id: 'new-doc-id' });
@@ -36,6 +37,7 @@ const {
   });
   const mockLedgerImport = vi.fn().mockResolvedValue({ added: 1, duplicates: 0, invalid: 0 });
   const mockServerTimestamp = vi.fn().mockReturnValue({ _serverTimestamp: true });
+  const mockUpdateDoc = vi.fn().mockResolvedValue(undefined);
 
   return {
     mockAddDoc,
@@ -46,6 +48,7 @@ const {
     mockGetDoc,
     mockLedgerImport,
     mockServerTimestamp,
+    mockUpdateDoc,
     mockWriteBatch,
   };
 });
@@ -60,7 +63,7 @@ vi.mock('firebase/firestore', () => ({
   orderBy: vi.fn(),
   query: vi.fn((collectionRef: unknown) => collectionRef),
   serverTimestamp: mockServerTimestamp,
-  updateDoc: vi.fn().mockResolvedValue(undefined),
+  updateDoc: mockUpdateDoc,
   writeBatch: mockWriteBatch,
   deleteField: vi.fn().mockReturnValue({ _deleteField: true }),
 }));
@@ -149,6 +152,31 @@ describe('FirestoreService.addTransaction', () => {
     const [, data] = mockAddDoc.mock.calls[0] as [unknown, Record<string, unknown>];
     expect(data['value']).toBeUndefined();
     expect(data['value_cents']).toBe(123456);
+  });
+});
+
+describe('FirestoreService.updateTransaction', () => {
+  it('aceita contrato persistente opcional de conciliação', async () => {
+    const reconciledAt = { _serverTimestamp: true };
+
+    await FirestoreService.updateTransaction('uid1', 'tx-reconciled', {
+      reconciliationStatus: 'reconciled',
+      reconciliationSource: 'import',
+      reconciledAt,
+      reconciledBy: 'uid1',
+    });
+
+    const [, data] = mockUpdateDoc.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(data).toEqual(expect.objectContaining({
+      reconciliationStatus: 'reconciled',
+      reconciliationSource: 'import',
+      reconciledAt,
+      reconciledBy: 'uid1',
+      updatedAt: { _serverTimestamp: true },
+    }));
+    expect(data['value']).toEqual({ _deleteField: true });
+    expect(data['id']).toEqual({ _deleteField: true });
+    expect(data['uid']).toEqual({ _deleteField: true });
   });
 });
 

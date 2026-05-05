@@ -4,6 +4,8 @@ import type { Centavos } from './money';
 export type CanonicalTransactionType = 'entrada' | 'saida';
 export type LegacyTransactionType = 'receita' | 'despesa';
 export type TransactionType = CanonicalTransactionType | LegacyTransactionType;
+export type ReconciliationStatus = 'reconciled';
+export type ReconciliationSource = 'import';
 
 export type AllowedCategory =
   | 'Alimentação' | 'Transporte' | 'Assinaturas' | 'Educação' | 'Saúde'
@@ -31,6 +33,10 @@ export interface Transaction {
   importHash?: string;
   isDeleted?: boolean;
   deletedAt?: Timestamp | number | string | null;
+  reconciliationStatus?: ReconciliationStatus;
+  reconciliationSource?: ReconciliationSource;
+  reconciledAt?: Timestamp | number | string | null;
+  reconciledBy?: string;
   uid?: string;
   createdAt?: Timestamp | number | string | null;
   updatedAt?: Timestamp | number | string | null;

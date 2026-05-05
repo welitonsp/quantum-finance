@@ -53,6 +53,9 @@ export const transactionTypeSchema = z.enum(['entrada', 'saida'], {
   message: "O tipo deve ser 'entrada' ou 'saida'.",
 });
 export const sourceSchema = z.enum(SOURCE_VALUES, { message: 'Fonte inválida.' });
+export const reconciliationStatusSchema = z.literal('reconciled');
+export const reconciliationSourceSchema = z.literal('import');
+const reconciledBySchema = z.string().trim().min(1).max(128);
 
 const tagsSchema = z.array(z.string().trim().min(1).max(32)).max(20).optional();
 
@@ -71,6 +74,10 @@ const transactionBaseSchema = z.object({
   fitId: z.string().trim().min(1).max(160).nullable().optional(),
   tags: tagsSchema,
   isRecurring: z.boolean().optional(),
+  reconciliationStatus: reconciliationStatusSchema.optional(),
+  reconciliationSource: reconciliationSourceSchema.optional(),
+  reconciledAt: z.unknown().optional(),
+  reconciledBy: reconciledBySchema.optional(),
 }).strict();
 
 export const transactionCreateSchema = transactionBaseSchema;
@@ -92,6 +99,10 @@ export const transactionUpdateSchema = z.object({
   isRecurring: z.boolean().optional(),
   isDeleted: z.boolean().optional(),
   deletedAt: z.unknown().optional(),
+  reconciliationStatus: reconciliationStatusSchema.optional(),
+  reconciliationSource: reconciliationSourceSchema.optional(),
+  reconciledAt: z.unknown().optional(),
+  reconciledBy: reconciledBySchema.optional(),
 }).strict().refine(value => Object.keys(value).length > 0, 'Atualização vazia.');
 
 export const accountTypeSchema = z.enum(['corrente', 'poupanca', 'investimento', 'cartao', 'divida']);

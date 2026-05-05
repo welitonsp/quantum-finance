@@ -18,13 +18,15 @@ import { db } from '../api/firebase/index';
 import {
   centavosSchema,
   dateSchema,
+  reconciliationSourceSchema,
+  reconciliationStatusSchema,
   sourceSchema,
   transactionTypeSchema,
   SOURCE_VALUES,
   type FinancialSource,
 } from '../schemas/financialSchemas';
 import { fromCentavos, toCentavos, type Centavos, type MoneyInput } from '../types/money';
-import type { ImportResult, Transaction } from '../types/transaction';
+import type { ImportResult, ReconciliationSource, ReconciliationStatus, Transaction } from '../types/transaction';
 import {
   canonicalizeTransactionType,
   getTransactionCentavos,
@@ -52,6 +54,10 @@ const transactionWriteCreateSchema = z.object({
   fitId: z.string().trim().min(1).max(160).nullable().optional(),
   tags: z.array(z.string().trim().min(1).max(32)).max(20).optional(),
   isRecurring: z.boolean().optional(),
+  reconciliationStatus: reconciliationStatusSchema.optional(),
+  reconciliationSource: reconciliationSourceSchema.optional(),
+  reconciledAt: z.unknown().optional(),
+  reconciledBy: z.string().trim().min(1).max(128).optional(),
 }).strict();
 
 const transactionWriteUpdateSchema = transactionWriteCreateSchema.partial()
@@ -75,6 +81,10 @@ export interface TransactionCreateDTO {
   tags?: string[];
   source?: FinancialSource;
   fitId?: string | null;
+  reconciliationStatus?: ReconciliationStatus;
+  reconciliationSource?: ReconciliationSource;
+  reconciledAt?: unknown;
+  reconciledBy?: string;
 }
 
 export interface TransactionUpdateDTO {
@@ -93,6 +103,10 @@ export interface TransactionUpdateDTO {
   fitId?: string | null;
   isDeleted?: boolean;
   deletedAt?: unknown;
+  reconciliationStatus?: ReconciliationStatus;
+  reconciliationSource?: ReconciliationSource;
+  reconciledAt?: unknown;
+  reconciledBy?: string;
 }
 
 type TransactionCreatePayload = z.infer<typeof transactionWriteCreateSchema>;
@@ -123,6 +137,10 @@ function normalizeCreatePayload(data: TransactionCreateDTO) {
     ...(data.account ? { account: data.account } : {}),
     ...(data.accountId ? { accountId: data.accountId } : {}),
     ...(data.cardId ? { cardId: data.cardId } : {}),
+    ...(data.reconciliationStatus !== undefined ? { reconciliationStatus: data.reconciliationStatus } : {}),
+    ...(data.reconciliationSource !== undefined ? { reconciliationSource: data.reconciliationSource } : {}),
+    ...(data.reconciledAt !== undefined ? { reconciledAt: data.reconciledAt } : {}),
+    ...(data.reconciledBy !== undefined ? { reconciledBy: data.reconciledBy } : {}),
   };
 
   const parsed = transactionWriteCreateSchema.safeParse(raw);
@@ -232,6 +250,10 @@ function normalizeUpdatePayload(data: TransactionUpdateDTO): Record<string, unkn
   if (data.isRecurring !== undefined) payload['isRecurring'] = data.isRecurring;
   if (data.isDeleted !== undefined) payload['isDeleted'] = data.isDeleted;
   if (data.deletedAt !== undefined) payload['deletedAt'] = data.deletedAt;
+  if (data.reconciliationStatus !== undefined) payload['reconciliationStatus'] = data.reconciliationStatus;
+  if (data.reconciliationSource !== undefined) payload['reconciliationSource'] = data.reconciliationSource;
+  if (data.reconciledAt !== undefined) payload['reconciledAt'] = data.reconciledAt;
+  if (data.reconciledBy !== undefined) payload['reconciledBy'] = data.reconciledBy;
 
   const parsed = transactionWriteUpdateSchema.safeParse(payload);
   if (!parsed.success) {
