@@ -256,6 +256,48 @@ function sanitizeForHistory(tx: Partial<Transaction>): Record<string, unknown> {
   return result;
 }
 
+const MANUAL_CREATE_HISTORY_FIELDS = [
+  'category',
+  'description',
+  'date',
+  'type',
+  'source',
+  'value_cents',
+  'isRecurring',
+  'account',
+  'accountId',
+  'cardId',
+  'fitId',
+  'tags',
+] as const;
+
+function buildManualCreateHistoryAfter(tx: Partial<Transaction>): Record<string, unknown> {
+  const created: Partial<Transaction> = {
+    description:   tx.description ?? '',
+    value_cents:   getTxCentavos(tx),
+    schemaVersion: tx.schemaVersion ?? 2,
+    type:          tx.type ?? 'saida',
+    category:      tx.category ?? 'Outros',
+    date:          tx.date ?? new Date().toISOString().slice(0, 10),
+    source:        tx.source ?? 'manual',
+    isRecurring:   tx.isRecurring ?? false,
+  };
+
+  setIfDefined(created, 'account', tx.account);
+  setIfDefined(created, 'accountId', tx.accountId);
+  setIfDefined(created, 'cardId', tx.cardId);
+  setIfDefined(created, 'fitId', tx.fitId);
+  setIfDefined(created, 'tags', tx.tags);
+
+  return sanitizeForHistory(created);
+}
+
+function buildManualCreateChangedFields(after: Record<string, unknown>): string[] {
+  return MANUAL_CREATE_HISTORY_FIELDS.filter(field =>
+    Object.prototype.hasOwnProperty.call(after, field)
+  );
+}
+
 /**
  * Retorna os nomes dos campos que diferem entre before e after.
  * Usa JSON.stringify para comparação — suficiente para tipos primitivos e objetos simples.
@@ -471,6 +513,16 @@ export function useTransactions(
             });
             const realId = await FirestoreService.addTransaction(uid, op.data);
             debugSync('gravação confirmada', { uid, tempId: op.tempId, realId });
+            const after = buildManualCreateHistoryAfter(op.data);
+            void AuditService.logTransactionHistory(uid, realId, {
+              action:        'CREATE',
+              txId:          realId,
+              after,
+              changedFields: buildManualCreateChangedFields(after),
+              origin:        'manual',
+              ...(typeof after['value_cents'] === 'number' ? { amount_cents: after['value_cents'] } : {}),
+              ...(typeof after['category'] === 'string' ? { category: after['category'] } : {}),
+            });
             // Dispara callback de IA (se registado) com o docId real — fire-and-forget
             const aiCb = postAddCallbacks.current.get(op.tempId);
             if (aiCb) {
