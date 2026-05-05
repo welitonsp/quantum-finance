@@ -34,8 +34,18 @@ const ACTION_LABELS: Record<string, string> = {
   DELETEBATCH: 'Exclusão em lote',
 };
 
-function actionLabel(action: string): string {
-  return ACTION_LABELS[action] ?? action;
+function getHistoryActionLabel(entry: TransactionHistoryView): string {
+  if (entry.action === 'UPDATE' && entry.origin === 'reconcile') {
+    return 'Conciliada';
+  }
+
+  return ACTION_LABELS[entry.action] ?? entry.action;
+}
+
+function originLabel(origin: string): string {
+  if (origin === 'reconcile') return 'Conciliação';
+
+  return origin;
 }
 
 function formatDate(timestamp: number): string {
@@ -92,7 +102,7 @@ function eventDetails(event: TransactionHistoryView): string[] {
   const details: string[] = [];
   const changed = formatChangedFieldDeltas(event) ?? [formatChangedFields(event)].filter((detail): detail is string => Boolean(detail));
 
-  if (event.origin) details.push(`Origem: ${event.origin}`);
+  if (event.origin) details.push(`Origem: ${originLabel(event.origin)}`);
   details.push(...changed);
   if (event.category) details.push(`Categoria: ${event.category}`);
   if (typeof event.amount_cents === 'number') {
@@ -124,7 +134,7 @@ function HistoryItem({ event, index }: { event: TransactionHistoryView; index: n
       </div>
 
       <div className="flex-1 min-w-0 bg-quantum-bgSecondary/60 border border-quantum-border rounded-xl p-3">
-        <p className="text-xs font-bold text-quantum-fg leading-tight">{actionLabel(event.action)}</p>
+        <p className="text-xs font-bold text-quantum-fg leading-tight">{getHistoryActionLabel(event)}</p>
         {details.length > 0 && (
           <div className="mt-1 space-y-0.5">
             {details.map(detail => (
