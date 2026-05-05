@@ -35,6 +35,13 @@ const SOURCE_LABELS: Record<string, string> = {
 type GroupByOption = 'date' | 'category' | 'none';
 type BatchAction = 'delete' | 'recategorize' | null;
 type FilterType = 'all' | 'entrada' | 'saida';
+type ReconciliationStatusFilter = 'all' | 'reconciled' | 'unreconciled';
+
+const RECONCILIATION_FILTER_LABELS: Record<ReconciliationStatusFilter, string> = {
+  all:          'Todas',
+  reconciled:   'Conciliadas',
+  unreconciled: 'Não conciliadas',
+};
 
 interface Group {
   key: string;
@@ -348,6 +355,7 @@ export default function TransactionsManager({
   const [valueMin,      setValueMin]      = useState('');
   const [valueMax,      setValueMax]      = useState('');
   const [filterOrigin,  setFilterOrigin]  = useState('');
+  const [filterReconciliationStatus, setFilterReconciliationStatus] = useState<ReconciliationStatusFilter>('all');
 
   const searchRef    = useRef<HTMLInputElement>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -426,6 +434,12 @@ export default function TransactionsManager({
     if (filterOrigin) {
       list = list.filter(tx => (tx.source ?? 'manual') === filterOrigin);
     }
+    if (filterReconciliationStatus === 'reconciled') {
+      list = list.filter(tx => tx.reconciliationStatus === 'reconciled');
+    }
+    if (filterReconciliationStatus === 'unreconciled') {
+      list = list.filter(tx => tx.reconciliationStatus !== 'reconciled');
+    }
 
     return [...list].sort((a, b) => {
       if (sortBy === 'date_desc')  return (b.date ?? '').localeCompare(a.date ?? '');
@@ -435,7 +449,7 @@ export default function TransactionsManager({
       if (sortBy === 'cat')        return (a.category ?? '').localeCompare(b.category ?? '');
       return 0;
     });
-  }, [transactions, search, filterType, filterCat, dateFrom, dateTo, minCents, maxCents, filterOrigin, sortBy]);
+  }, [transactions, search, filterType, filterCat, dateFrom, dateTo, minCents, maxCents, filterOrigin, filterReconciliationStatus, sortBy]);
 
   const groups = useMemo<Group[]>(() => {
     if (groupBy === 'none') return [buildTransactionGroup('', '', filtered)];
@@ -484,8 +498,10 @@ export default function TransactionsManager({
     if (minCents !== null) list = list.filter(tx => getTransactionAbsCentavos(tx) >= minCents);
     if (maxCents !== null) list = list.filter(tx => getTransactionAbsCentavos(tx) <= maxCents);
     if (filterOrigin)      list = list.filter(tx => (tx.source ?? 'manual') === filterOrigin);
+    if (filterReconciliationStatus === 'reconciled')   list = list.filter(tx => tx.reconciliationStatus === 'reconciled');
+    if (filterReconciliationStatus === 'unreconciled') list = list.filter(tx => tx.reconciliationStatus !== 'reconciled');
     return list;
-  }, [transactions, search, filterType, dateFrom, dateTo, minCents, maxCents, filterOrigin]);
+  }, [transactions, search, filterType, dateFrom, dateTo, minCents, maxCents, filterOrigin, filterReconciliationStatus]);
 
   const catCounts = useMemo(() => {
     const map: Record<string, number> = {};
@@ -613,6 +629,9 @@ export default function TransactionsManager({
       minCents !== null    ? { id: 'value-min',  label: `Mínimo ${formatCurrency(fromCentavos(minCents))}`, clear: () => setValueMin('') }        : null,
       maxCents !== null    ? { id: 'value-max',  label: `Máximo ${formatCurrency(fromCentavos(maxCents))}`, clear: () => setValueMax('') }        : null,
       filterOrigin         ? { id: 'origin',     label: `Origem: ${SOURCE_LABELS[filterOrigin] ?? filterOrigin}`, clear: () => setFilterOrigin('') } : null,
+      filterReconciliationStatus !== 'all'
+        ? { id: 'reconciliation', label: `Conciliação: ${RECONCILIATION_FILTER_LABELS[filterReconciliationStatus]}`, clear: () => setFilterReconciliationStatus('all') }
+        : null,
     ] as (ActiveFilter | null)[]
   ).filter((f): f is ActiveFilter => f !== null);
 
@@ -636,7 +655,7 @@ export default function TransactionsManager({
     (dateTo ? dateTo > loadedDateRange.max : false)
   );
 
-  const clearAllFilters = () => { setSearch(''); setFilterType('all'); setFilterCat(''); setDateFrom(''); setDateTo(''); setValueMin(''); setValueMax(''); setFilterOrigin(''); };
+  const clearAllFilters = () => { setSearch(''); setFilterType('all'); setFilterCat(''); setDateFrom(''); setDateTo(''); setValueMin(''); setValueMax(''); setFilterOrigin(''); setFilterReconciliationStatus('all'); };
 
   if (loading) return (
     <div role="status" aria-label="Carregando movimentações" className="flex flex-col items-center justify-center py-20 gap-3 text-quantum-fgMuted">
@@ -701,7 +720,7 @@ export default function TransactionsManager({
             aria-label="Filtros avançados"
             aria-expanded={filtersOpen}
             className={`p-2.5 rounded-xl border transition-all shrink-0 ${
-              filtersOpen || filterCat || dateFrom || dateTo || valueMin || valueMax || filterOrigin
+              filtersOpen || filterCat || dateFrom || dateTo || valueMin || valueMax || filterOrigin || filterReconciliationStatus !== 'all'
                 ? 'bg-quantum-accentDim border-quantum-accent/30 text-quantum-accent'
                 : 'bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted hover:text-quantum-fg'
             }`}
@@ -772,6 +791,23 @@ export default function TransactionsManager({
                       {Object.entries(SOURCE_LABELS).map(([val, label]) => (
                         <option key={val} value={val}>{label}</option>
                       ))}
+                    </select>
+                  </div>
+
+                  <div className="relative">
+                    <span className="pointer-events-none absolute -top-1.5 left-2 z-10 rounded bg-quantum-bgSecondary px-1 text-[9px] font-bold uppercase text-quantum-fgMuted">
+                      Conciliação
+                    </span>
+                    <CheckSquare className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-quantum-fgMuted" />
+                    <select
+                      value={filterReconciliationStatus}
+                      onChange={e => setFilterReconciliationStatus(e.target.value as ReconciliationStatusFilter)}
+                      aria-label="Filtrar por status de conciliação"
+                      className="input-quantum pl-9 py-2 text-xs appearance-none"
+                    >
+                      <option value="all">Todas</option>
+                      <option value="reconciled">Conciliadas</option>
+                      <option value="unreconciled">Não conciliadas</option>
                     </select>
                   </div>
 
