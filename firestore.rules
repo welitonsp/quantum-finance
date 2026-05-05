@@ -23,6 +23,78 @@ service cloud.firestore {
       return value is string && value.size() >= min && value.size() <= max;
     }
 
+    function isValidHistoryAction(value) {
+      return value in [
+        'CREATE',
+        'UPDATE',
+        'SOFT_DELETE',
+        'RESTORE',
+        'BULK_UPDATE',
+        'UNDO_BULK_UPDATE',
+        'IMPORT'
+      ];
+    }
+
+    function isValidHistoryOrigin(value) {
+      return value in [
+        'manual',
+        'import',
+        'reconcile',
+        'bulk',
+        'system',
+        'recurring',
+        'ai'
+      ];
+    }
+
+    function isValidHistoryChangedFields(value) {
+      return value is list
+          && value.size() <= 32
+          && value.hasOnly([
+            'description', 'value_cents', 'schemaVersion', 'type', 'category',
+            'date', 'source', 'account', 'accountId', 'cardId', 'fitId',
+            'tags', 'isRecurring', 'createdAt', 'updatedAt', 'isDeleted',
+            'deletedAt', 'reconciliationStatus', 'reconciliationSource',
+            'reconciledAt', 'reconciledBy'
+          ]);
+    }
+
+    function isValidHistorySnapshot(value) {
+      return value is map
+          && !value.keys().hasAny(['id', 'uid', 'value', 'importHash']);
+    }
+
+    function isValidAuditAction(value) {
+      return value in [
+        'IMPORT_TRANSACTION',
+        'BULK_UPDATE',
+        'UNDO_BULK_UPDATE'
+      ];
+    }
+
+    function isValidAuditEntity(value) {
+      return value in [
+        'TRANSACTION',
+        'transaction',
+        'transactions',
+        'import',
+        'bulk',
+        'audit'
+      ];
+    }
+
+    function isValidAuditSource(value) {
+      return value in [
+        'manual',
+        'import',
+        'csv',
+        'ofx',
+        'pdf',
+        'bulk',
+        'system'
+      ];
+    }
+
     function txAllowedKeys() {
       return [
         'description', 'value_cents', 'schemaVersion', 'type', 'category',
@@ -109,18 +181,27 @@ service cloud.firestore {
           && request.resource.data.updatedAt == request.time;
     }
 
-    function isValidTransactionHistory(data) {
+    function isValidTransactionHistory(data, txId) {
       return data.keys().hasAll(['action', 'txId', 'createdAt', 'schemaVersion'])
           && data.keys().hasOnly([
             'action', 'txId', 'before', 'after', 'changedFields', 'origin',
             'reason', 'correlationId', 'importHash', 'amount_cents', 'category',
             'createdAt', 'schemaVersion'
           ])
-          && isStringSized(data.action, 2, 40)
+          && isValidHistoryAction(data.action)
           && isStringSized(data.txId, 1, 128)
+          && data.txId == txId
           && data.createdAt == request.time
           && data.schemaVersion == 1
-          && (!('amount_cents' in data) || isSafeInt(data.amount_cents));
+          && (!('before' in data) || isValidHistorySnapshot(data.before))
+          && (!('after' in data) || isValidHistorySnapshot(data.after))
+          && (!('changedFields' in data) || isValidHistoryChangedFields(data.changedFields))
+          && (!('origin' in data) || isValidHistoryOrigin(data.origin))
+          && (!('reason' in data) || isStringSized(data.reason, 1, 240))
+          && (!('correlationId' in data) || isStringSized(data.correlationId, 1, 128))
+          && (!('importHash' in data) || isStringSized(data.importHash, 64, 64))
+          && (!('amount_cents' in data) || isSafeInt(data.amount_cents))
+          && (!('category' in data) || isStringSized(data.category, 1, 80));
     }
 
     function isValidAuditLog(data) {
@@ -130,11 +211,17 @@ service cloud.firestore {
             'amount_cents', 'amount_display', 'details', 'metadata',
             'createdAt', 'schemaVersion'
           ])
-          && isStringSized(data.action, 2, 80)
-          && isStringSized(data.entity, 2, 80)
+          && isValidAuditAction(data.action)
+          && isValidAuditEntity(data.entity)
           && data.createdAt == request.time
           && data.schemaVersion == 2
-          && (!('amount_cents' in data) || isSafeInt(data.amount_cents));
+          && (!('txId' in data) || isStringSized(data.txId, 1, 128))
+          && (!('importHash' in data) || isStringSized(data.importHash, 64, 64))
+          && (!('source' in data) || isValidAuditSource(data.source))
+          && (!('amount_cents' in data) || isSafeInt(data.amount_cents))
+          && (!('amount_display' in data) || (data.amount_display is number) || isStringSized(data.amount_display, 1, 80))
+          && (!('details' in data) || isStringSized(data.details, 1, 500))
+          && (!('metadata' in data) || data.metadata is map);
     }
 
     function isValidSystemLog(data) {
@@ -336,7 +423,7 @@ service cloud.firestore {
 
         match /history/{historyId} {
           allow read: if isOwner(userId);
-          allow create: if isOwner(userId) && isValidTransactionHistory(request.resource.data);
+          allow create: if isOwner(userId) && isValidTransactionHistory(request.resource.data, txId);
           allow update, delete: if false;
         }
       }
