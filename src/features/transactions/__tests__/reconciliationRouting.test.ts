@@ -99,7 +99,14 @@ describe('processResolvedImportBatch — roteamento de reconciliação', () => {
     expect(mockUpdateTransaction).toHaveBeenCalledWith(
       uid,
       existingDocId,
-      expect.objectContaining({ description: 'Pagamento de teste', category: 'Moradia' }),
+      expect.objectContaining({
+        description:          'Pagamento de teste',
+        category:             'Moradia',
+        reconciliationStatus: 'reconciled',
+        reconciliationSource: 'import',
+        reconciledAt:         { _serverTimestamp: true },
+        reconciledBy:         uid,
+      }),
     );
 
     // onImportTransactions → LedgerService NÃO deve ser acionado para este tx
@@ -119,6 +126,11 @@ describe('processResolvedImportBatch — roteamento de reconciliação', () => {
 
     expect(mockUpdateTransaction).not.toHaveBeenCalled();
     expect(onImport).toHaveBeenCalledOnce();
+    const importedPayload = onImport.mock.calls[0]?.[0]?.[0] as Record<string, unknown>;
+    expect(importedPayload).not.toHaveProperty('reconciliationStatus');
+    expect(importedPayload).not.toHaveProperty('reconciliationSource');
+    expect(importedPayload).not.toHaveProperty('reconciledAt');
+    expect(importedPayload).not.toHaveProperty('reconciledBy');
     expect(result.added).toBe(1);
     expect(result.reconciledCount).toBe(0);
   });
@@ -209,6 +221,14 @@ describe('processResolvedImportBatch — roteamento de reconciliação', () => {
     expect(onImport).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).toHaveBeenCalledOnce();
 
+    const updatePayload = mockUpdateTransaction.mock.calls[0]?.[2] as Record<string, unknown>;
+    expect(updatePayload).toEqual(expect.objectContaining({
+      reconciliationStatus: 'reconciled',
+      reconciliationSource: 'import',
+      reconciledAt:         { _serverTimestamp: true },
+      reconciledBy:         uid,
+    }));
+
     const historyEvent = mockLogTransactionHistory.mock.calls[0]?.[2] as {
       action?: string;
       txId?: string;
@@ -236,24 +256,36 @@ describe('processResolvedImportBatch — roteamento de reconciliação', () => {
       'source',
       'value_cents',
       'fitId',
+      'reconciliationStatus',
+      'reconciliationSource',
+      'reconciledAt',
+      'reconciledBy',
     ]);
     expect(historyEvent.before).toEqual({
-      category:    'Diversos',
-      description: 'Compra manual',
-      date:        '2024-03-14',
-      type:        'entrada',
-      source:      'manual',
-      value_cents: 12000,
-      fitId:       'manual-fit-1',
+      category:             'Diversos',
+      description:          'Compra manual',
+      date:                 '2024-03-14',
+      type:                 'entrada',
+      source:               'manual',
+      value_cents:          12000,
+      fitId:                'manual-fit-1',
+      reconciliationStatus: null,
+      reconciliationSource: null,
+      reconciledAt:         null,
+      reconciledBy:         null,
     });
     expect(historyEvent.after).toEqual({
-      category:    'Alimentação',
-      description: 'Supermercado X',
-      date:        '2024-03-15',
-      type:        'saida',
-      source:      'csv',
-      value_cents: 7525,
-      fitId:       'csv-fit-2',
+      category:             'Alimentação',
+      description:          'Supermercado X',
+      date:                 '2024-03-15',
+      type:                 'saida',
+      source:               'csv',
+      value_cents:          7525,
+      fitId:                'csv-fit-2',
+      reconciliationStatus: 'reconciled',
+      reconciliationSource: 'import',
+      reconciledAt:         updatePayload['reconciledAt'],
+      reconciledBy:         uid,
     });
 
     expect(historyEvent).not.toHaveProperty('importHash');
