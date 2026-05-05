@@ -2,6 +2,124 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
+## Estado Consolidado — FASE 4 Conciliação Avançada — encerramento
+
+### Estado Atual
+
+- Branch principal: `main`.
+- Topo da main: `febd3e4 feat(reconciliation): add status filter to transactions (#60)`.
+- Working tree confirmado limpo no QA final da FASE 4.
+- Nenhum PR aberto no QA final da FASE 4.
+- Testes atuais: 22 arquivos / 199 testes.
+
+### PR #58 — Contrato persistente de conciliação
+
+- Commit: `c485b95 feat(reconciliation): add persistent status contract (#58)`.
+- Arquivos principais:
+  - `src/shared/types/transaction.ts`.
+  - `src/shared/schemas/financialSchemas.ts`.
+  - `src/shared/services/FirestoreService.ts`.
+  - `firestore.rules`.
+
+Campos opcionais adicionados:
+
+- `reconciliationStatus?: 'reconciled'`.
+- `reconciliationSource?: 'import'`.
+- `reconciledAt?`.
+- `reconciledBy?`.
+
+Regras:
+
+- Ausência de `reconciliationStatus` significa não conciliada.
+- Schemas aceitam somente `reconciled` e `import`.
+- `confidenceScore` e `matchedTransactionId` seguem rejeitados.
+- Documentos antigos seguem compatíveis.
+- Status não é obrigatório.
+
+### PR #59 — Escrita do status na conciliação
+
+- Commit: `adeb539 feat(reconciliation): persist status on reconcile (#59)`.
+- Arquivos principais:
+  - `src/features/transactions/ImportButton.tsx`.
+  - `src/features/transactions/__tests__/reconciliationRouting.test.ts`.
+
+Entrega:
+
+- Transações reconciliadas recebem:
+  - `reconciliationStatus: 'reconciled'`.
+  - `reconciliationSource: 'import'`.
+  - `reconciledAt: serverTimestamp()`.
+  - `reconciledBy: uid`.
+- Novas importadas não recebem campos de conciliação.
+- Reconciliadas continuam via `FirestoreService.updateTransaction`.
+- Novas continuam via `onImportTransactions`.
+- Histórico mantém `action=UPDATE + origin=reconcile`.
+- Delta audita campos persistentes e exclui `id`, `uid`, `importHash`, `value`.
+
+### PR #60 — Filtro operacional
+
+- Commit: `febd3e4 feat(reconciliation): add status filter to transactions (#60)`.
+- Arquivo principal:
+  - `src/features/transactions/TransactionsManager.tsx`.
+
+Entrega:
+
+- Filtro `Conciliação` no painel avançado.
+- Opções:
+  - Todas.
+  - Conciliadas.
+  - Não conciliadas.
+- Regra:
+  - `reconciliationStatus === 'reconciled'` significa conciliada.
+  - Ausência ou valor diferente de `reconciled` significa não conciliada.
+- Chip ativo:
+  - `Conciliação: Conciliadas`.
+  - `Conciliação: Não conciliadas`.
+- `clearAllFilters` reseta o filtro.
+- Botão de filtros avançados considera o novo filtro.
+- Filtro é client-side sobre transações carregadas.
+
+### QA Final da FASE 4
+
+- Veredito: **APROVADO**.
+
+Validações:
+
+- `npm run typecheck`: OK.
+- `npm run lint`: OK.
+- `npm run test -- --run`: OK, 22 arquivos / 199 testes.
+- `npm run build`: OK.
+
+Achados:
+
+- P0: nenhum.
+- P1: nenhum.
+- P2: nenhum.
+- P3: nenhum defeito funcional identificado.
+
+Integridade financeira:
+
+- `value_cents` continua canônico.
+- Nenhum cálculo financeiro novo com float.
+- `LedgerService` intacto.
+- `importHash` intacto.
+- Parser intacto.
+
+### Riscos Residuais
+
+- Filtro de conciliação é client-side e atua apenas sobre movimentações carregadas.
+- Documentos antigos sem `reconciliationStatus` aparecem como não conciliados.
+- Ainda não há filtro server-side/indexado.
+- Ainda não há teste visual/E2E dedicado para o select de conciliação.
+- Histórico continua sendo trilha auditável separada; se o log falhar após update bem-sucedido, pode haver divergência parcial entre documento e histórico.
+
+### Estado Final da FASE 4
+
+- **FASE 4 — Conciliação Avançada: concluída.**
+- Próxima fase recomendada: **FASE 5 — Auditoria Forte**.
+
+> As seções históricas abaixo foram preservadas para manter contexto. Em caso de divergência, o estado consolidado de encerramento da FASE 4 é a referência mais recente.
+
 ## Estado Consolidado — FASE 4 Conciliação Avançada — após PRs #55 e #56
 
 ### Estado Atual
@@ -153,7 +271,7 @@ Achados:
   - `confidenceScore`.
 - Não implementar tudo de uma vez sem plano.
 
-> As seções históricas abaixo foram preservadas para manter contexto. Em caso de divergência, o estado consolidado da FASE 4 após PRs #55 e #56 é a referência mais recente.
+> As seções históricas abaixo foram preservadas para manter contexto. Em caso de divergência, o estado consolidado de encerramento da FASE 4 no topo deste arquivo é a referência mais recente.
 
 ## Estado Consolidado — FASE 4 Conciliação Avançada — após PRs #52 e #53
 
@@ -253,7 +371,7 @@ Observação:
 - Sem filtros de conciliadas/não conciliadas no `TransactionsManager`.
 - Sem teste `.test.tsx`/E2E do fluxo visual completo de conciliação.
 
-> Registro histórico de 4A/4B preservado para contexto. Em caso de divergência, o estado consolidado da FASE 4 após PRs #55 e #56 no topo deste arquivo é a referência mais recente.
+> Registro histórico de 4A/4B preservado para contexto. Em caso de divergência, o estado consolidado de encerramento da FASE 4 no topo deste arquivo é a referência mais recente.
 
 ## Estado Consolidado — Pós FASE 3 Importação Avançada — 2026-05-04
 
