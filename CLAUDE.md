@@ -2,6 +2,106 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
+## Estado Consolidado — FASE 4 Conciliação Avançada — após PRs #52 e #53
+
+### Estado Atual
+
+- Branch principal: `main`.
+- Topo da main: `2172796 test(reconciliation): cover merge candidate matching logic (#53)`.
+- Working tree confirmado limpo.
+- Nenhum PR aberto no encerramento das FASES 4A e 4B.
+
+### FASE 4A — Explicabilidade visual da conciliação — PR #52
+
+- Commit: `34d378d feat(reconciliation): explain merge candidate matches (#52)`.
+- Arquivo alterado: `src/features/transactions/ReconciliationEngine.tsx`.
+
+Entrega:
+
+- `findMergeCandidate` passou a retornar informações explicáveis do candidato.
+- O card de conciliação agora mostra a transação existente candidata antes do clique em "Conciliar".
+- Exibe descrição, data, valor, confiança e razões do match.
+- Confiança visual: `Exato`, `Alto`, `Médio`.
+- Razões: valor exato/compatível e data igual/próxima.
+- O candidato exibido é o mesmo usado no clique de conciliação.
+
+Escopo preservado:
+
+- Não alterou `ImportButton`.
+- Não alterou persistência.
+- Não alterou `LedgerService`.
+- Não alterou `importHash`.
+- Não alterou schemas.
+- Não alterou Firestore rules.
+- Não alterou parser/useParserWorker.
+- Não alterou package files.
+
+Risco residual:
+
+- A lógica ainda escolhe o primeiro candidato válido, não necessariamente o melhor candidato global.
+- A confiança visual deverá ser revista se thresholds mudarem.
+
+### FASE 4B — Testes unitários da lógica de match — PR #53
+
+- Commit: `2172796 test(reconciliation): cover merge candidate matching logic (#53)`.
+- Arquivos:
+  - `src/features/transactions/ReconciliationEngine.tsx`.
+  - `src/features/transactions/__tests__/reconciliationMatch.test.ts`.
+
+Entrega:
+
+- Exporta `findMergeCandidate`.
+- Exporta `MergeCandidateInfo`.
+- Adiciona teste unitário da função pura de match.
+- Testes cobrem:
+  - retorno `null` sem existentes;
+  - data acima de 3 dias;
+  - valor acima de 1%;
+  - match dentro de 3 dias/1%;
+  - primeiro candidato válido na ordem do array;
+  - `confidenceLabel` `Exato`, `Alto`, `Médio`;
+  - reasons de valor exato/compatível;
+  - reasons de data igual/próxima;
+  - uso canônico de `value_cents`;
+  - independência de descrição no critério atual.
+
+Validação:
+
+- `npm run typecheck`: passou.
+- `npm run lint`: passou.
+- `npm run test -- --run`: passou com 22 arquivos / 195 testes.
+- `npm run build`: passou.
+
+Observação:
+
+- PR #53 teve falha de Firebase Hosting Preview por cota de canais (`channel quota reached`), mas CI principal de Typecheck/Lint/Test/Build passou. O merge foi autorizado por falha de infraestrutura, não de código.
+
+### Estado Atual dos Testes
+
+- Antes da FASE 4B: 21 arquivos / 183 testes.
+- Depois da FASE 4B: 22 arquivos / 195 testes.
+
+### Próxima Fase Recomendada
+
+**FASE 4C — label específico de conciliação no histórico**.
+
+- Deve começar com investigação read-only.
+- Não alterar schema/rules inicialmente.
+- Não alterar `LedgerService`.
+- Não alterar `importHash`.
+- Preferir solução incremental e auditável.
+
+### Riscos e Lacunas Ainda Abertas
+
+- Match ainda seleciona o primeiro candidato válido, não o melhor global.
+- Descrição ainda não participa do critério de match.
+- Não há status persistente de conciliação no Firestore.
+- Histórico ainda pode exibir reconciliação como `UPDATE`/"Atualizada", sem label semântico específico.
+- Sem filtros de conciliadas/não conciliadas no `TransactionsManager`.
+- Sem teste `.test.tsx`/E2E do fluxo visual completo de conciliação.
+
+> As seções históricas abaixo foram preservadas para manter contexto. Em caso de divergência, o estado consolidado da FASE 4 após PRs #52 e #53 é a referência mais recente.
+
 ## Estado Consolidado — Pós FASE 3 Importação Avançada — 2026-05-04
 
 - Branch principal: `main`.
