@@ -2,6 +2,7 @@
 // Fluxo de estados: idle → parsing → [col_mapping] → ai_processing → preview → importing → success | error | reconciliation
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { serverTimestamp } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   UploadCloud, Loader2, AlertTriangle, CheckCircle2,
@@ -497,7 +498,15 @@ const RECONCILIATION_HISTORY_FIELDS = [
   'source',
   'value_cents',
   'fitId',
+  'reconciliationStatus',
+  'reconciliationSource',
+  'reconciledAt',
+  'reconciledBy',
 ] as const satisfies readonly (keyof Transaction)[];
+
+function historyDeltaValue(value: unknown): unknown {
+  return value === undefined ? null : value;
+}
 
 function buildReconciliationHistoryDelta(
   before: Transaction | undefined,
@@ -523,8 +532,8 @@ function buildReconciliationHistoryDelta(
     if (Object.is(previousValue, nextValue)) continue;
 
     changedFields.push(field);
-    beforeDelta[field] = previousValue;
-    afterDelta[field] = nextValue;
+    beforeDelta[field] = historyDeltaValue(previousValue);
+    afterDelta[field] = historyDeltaValue(nextValue);
   }
 
   return changedFields.length > 0
@@ -603,7 +612,17 @@ export async function processResolvedImportBatch(
 
     // Reconciled against an existing Firestore doc: update in place so no duplicate is created at the hash path
     if (_reconciled === true && !!previewId && !previewId.startsWith('__temp_') && !!uid) {
-      toUpdate.push({ id: previewId, data: validData, before: existingTransactionById.get(previewId) });
+      toUpdate.push({
+        id: previewId,
+        data: {
+          ...validData,
+          reconciliationStatus: 'reconciled',
+          reconciliationSource: 'import',
+          reconciledAt: serverTimestamp() as unknown as Exclude<Transaction['reconciledAt'], undefined>,
+          reconciledBy: uid,
+        },
+        before: existingTransactionById.get(previewId),
+      });
     } else {
       toImport.push(validData);
     }
