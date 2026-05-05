@@ -489,6 +489,49 @@ function buildImportDedupeFingerprint(tx: Pick<Transaction, 'date' | 'descriptio
   return ['tx', date, valueCents, type, source, description].join('|');
 }
 
+const RECONCILIATION_HISTORY_FIELDS = [
+  'category',
+  'description',
+  'date',
+  'type',
+  'source',
+  'value_cents',
+  'fitId',
+] as const satisfies readonly (keyof Transaction)[];
+
+function buildReconciliationHistoryDelta(
+  before: Transaction | undefined,
+  after: Partial<Transaction>,
+): {
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+  changedFields: string[];
+} {
+  if (!before) {
+    return { changedFields: [] };
+  }
+
+  const beforeDelta: Record<string, unknown> = {};
+  const afterDelta: Record<string, unknown> = {};
+  const changedFields: string[] = [];
+
+  for (const field of RECONCILIATION_HISTORY_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(after, field)) continue;
+
+    const previousValue = before[field];
+    const nextValue = after[field];
+    if (Object.is(previousValue, nextValue)) continue;
+
+    changedFields.push(field);
+    beforeDelta[field] = previousValue;
+    afterDelta[field] = nextValue;
+  }
+
+  return changedFields.length > 0
+    ? { before: beforeDelta, after: afterDelta, changedFields }
+    : { changedFields };
+}
+
 
 // ─── Reconcile Routing ────────────────────────────────────────────────────────
 
@@ -500,6 +543,7 @@ export async function processResolvedImportBatch(
   uid: string | undefined,
   selectedTxs: ParsedTransaction[],
   onImportTransactions: (txs: ParsedTransaction[]) => Promise<ImportResult | void>,
+  existingTransactions: Transaction[] = [],
 ): Promise<{
   added:           number;
   reconciledCount: number;
@@ -508,7 +552,8 @@ export async function processResolvedImportBatch(
   validCount:      number;
 }> {
   const toImport: Partial<Transaction>[] = [];
-  const toUpdate: Array<{ id: string; data: Partial<Transaction> }> = [];
+  const toUpdate: Array<{ id: string; data: Partial<Transaction>; before: Transaction | undefined }> = [];
+  const existingTransactionById = new Map(existingTransactions.map(tx => [tx.id, tx]));
   let invalidCount = 0;
 
   for (const tx of selectedTxs) {
@@ -558,20 +603,20 @@ export async function processResolvedImportBatch(
 
     // Reconciled against an existing Firestore doc: update in place so no duplicate is created at the hash path
     if (_reconciled === true && !!previewId && !previewId.startsWith('__temp_') && !!uid) {
-      toUpdate.push({ id: previewId, data: validData });
+      toUpdate.push({ id: previewId, data: validData, before: existingTransactionById.get(previewId) });
     } else {
       toImport.push(validData);
     }
   }
 
-  for (const { id, data } of toUpdate) {
+  for (const { id, data, before } of toUpdate) {
     if (!uid) continue;
     await FirestoreService.updateTransaction(uid, id, data);
+    const historyDelta = buildReconciliationHistoryDelta(before, data);
     void AuditService.logTransactionHistory(uid, id, {
       action:        'UPDATE',
       txId:          id,
-      after:         { category: data.category },
-      changedFields: ['category'],
+      ...historyDelta,
       origin:        'reconcile',
       ...(data.value_cents !== undefined ? { amount_cents: data.value_cents as number } : {}),
       ...(data.category    !== undefined ? { category:     data.category              } : {}),
@@ -1548,7 +1593,7 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
     setStatus('importing');
     try {
       const { added, reconciledCount, invalidCount, duplicates, validCount } =
-        await processResolvedImportBatch(uid, selectedTxs, onImportTransactions);
+        await processResolvedImportBatch(uid, selectedTxs, onImportTransactions, existingTransactions);
 
       if (invalidCount > 0) {
         toast.error(`${invalidCount} transação(ões) inválida(s) ignorada(s).`);
@@ -1575,7 +1620,7 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
       setErrorMessage(err.message || 'Falha ao guardar as transações. Tente novamente.');
       setStatus('error');
     }
-  }, [uid, onImportTransactions]);  
+  }, [uid, onImportTransactions, existingTransactions]);
 
   const handleApplyMapping = useCallback((mapping: ColumnMapping) => {
     if (colMapState?.file) void processFile(colMapState.file, mapping);

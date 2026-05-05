@@ -9,6 +9,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { toCentavos } from '../../../shared/types/money';
 import type { Centavos } from '../../../shared/types/money';
+import type { Transaction } from '../../../shared/types/transaction';
 
 // ─── Mocks hoisted (executam antes dos vi.mock) ───────────────────────────────
 const { mockUpdateTransaction, mockLogTransactionHistory } = vi.hoisted(() => ({
@@ -57,6 +58,7 @@ type TxInput = {
   category:       string;
   date:           string;
   source?:        'csv' | 'ofx' | 'pdf' | 'manual';
+  fitId?:         string | null;
   schemaVersion?: number;
   _reconciled?:   boolean;
   _mergedWith?:   string;
@@ -168,6 +170,102 @@ describe('processResolvedImportBatch — roteamento de reconciliação', () => {
       existingId,
       expect.objectContaining({ action: 'UPDATE', txId: existingId, origin: 'reconcile' }),
     );
+  });
+
+  it('audita todos os campos alterados da conciliação com before/after parciais', async () => {
+    const existingId = 'auditDeltaDocId';
+    const beforeTx: Transaction = {
+      id:            existingId,
+      description:   'Compra manual',
+      value:         120,
+      value_cents:   12000 as Centavos,
+      type:          'entrada',
+      category:      'Diversos',
+      date:          '2024-03-14',
+      source:        'manual',
+      fitId:         'manual-fit-1',
+      importHash:    'existing-import-hash',
+      uid,
+      schemaVersion: 2,
+    };
+    const reconciledTx = makeTx({
+      id:            existingId,
+      _reconciled:   true,
+      description:   'Supermercado X',
+      value_cents:   7525 as Centavos,
+      type:          'saida',
+      category:      'Alimentação',
+      date:          '2024-03-15',
+      source:        'csv',
+      fitId:         'csv-fit-2',
+      schemaVersion: 2,
+    });
+    const onImport = vi.fn();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await processResolvedImportBatch(uid, [reconciledTx] as any, onImport, [beforeTx]);
+
+    expect(mockUpdateTransaction).toHaveBeenCalledOnce();
+    expect(onImport).not.toHaveBeenCalled();
+    expect(mockLogTransactionHistory).toHaveBeenCalledOnce();
+
+    const historyEvent = mockLogTransactionHistory.mock.calls[0]?.[2] as {
+      action?: string;
+      txId?: string;
+      before?: Record<string, unknown>;
+      after?: Record<string, unknown>;
+      changedFields?: string[];
+      origin?: string;
+      amount_cents?: number;
+      category?: string;
+      importHash?: string;
+    };
+
+    expect(historyEvent).toMatchObject({
+      action:       'UPDATE',
+      txId:         existingId,
+      origin:       'reconcile',
+      amount_cents: 7525,
+      category:     'Alimentação',
+    });
+    expect(historyEvent.changedFields).toEqual([
+      'category',
+      'description',
+      'date',
+      'type',
+      'source',
+      'value_cents',
+      'fitId',
+    ]);
+    expect(historyEvent.before).toEqual({
+      category:    'Diversos',
+      description: 'Compra manual',
+      date:        '2024-03-14',
+      type:        'entrada',
+      source:      'manual',
+      value_cents: 12000,
+      fitId:       'manual-fit-1',
+    });
+    expect(historyEvent.after).toEqual({
+      category:    'Alimentação',
+      description: 'Supermercado X',
+      date:        '2024-03-15',
+      type:        'saida',
+      source:      'csv',
+      value_cents: 7525,
+      fitId:       'csv-fit-2',
+    });
+
+    expect(historyEvent).not.toHaveProperty('importHash');
+    expect(historyEvent.changedFields).not.toEqual(expect.arrayContaining(['id', 'uid', 'importHash', 'value']));
+    expect(historyEvent.before).not.toHaveProperty('id');
+    expect(historyEvent.before).not.toHaveProperty('uid');
+    expect(historyEvent.before).not.toHaveProperty('importHash');
+    expect(historyEvent.before).not.toHaveProperty('value');
+    expect(historyEvent.after).not.toHaveProperty('id');
+    expect(historyEvent.after).not.toHaveProperty('uid');
+    expect(historyEvent.after).not.toHaveProperty('importHash');
+    expect(historyEvent.after).not.toHaveProperty('value');
   });
 
   it('sem uid: não chama updateTransaction nem lança erro', async () => {
