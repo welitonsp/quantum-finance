@@ -28,7 +28,8 @@ service cloud.firestore {
         'description', 'value_cents', 'schemaVersion', 'type', 'category',
         'date', 'source', 'account', 'accountId', 'cardId', 'fitId', 'tags',
         'isRecurring', 'importHash', 'createdAt', 'updatedAt', 'isDeleted',
-        'deletedAt'
+        'deletedAt', 'reconciliationStatus', 'reconciliationSource',
+        'reconciledAt', 'reconciledBy'
       ];
     }
 
@@ -52,10 +53,14 @@ service cloud.firestore {
           && (!('accountId' in data) || isStringSized(data.accountId, 1, 120))
           && (!('cardId' in data) || isStringSized(data.cardId, 1, 120))
           && (!('importHash' in data) || isStringSized(data.importHash, 64, 64))
-          && (!('isDeleted' in data) || data.isDeleted is bool);
+          && (!('isDeleted' in data) || data.isDeleted is bool)
+          && (!('reconciliationStatus' in data) || data.reconciliationStatus == 'reconciled')
+          && (!('reconciliationSource' in data) || data.reconciliationSource == 'import')
+          && (!('reconciledAt' in data) || data.reconciledAt is timestamp)
+          && (!('reconciledBy' in data) || isStringSized(data.reconciledBy, 1, 128));
     }
 
-    function isValidTransactionCreate() {
+    function isValidTransactionCreate(userId) {
       let data = request.resource.data;
       return isValidTransactionBase(data)
           && data.createdAt == request.time
@@ -63,10 +68,12 @@ service cloud.firestore {
           && !('deletedAt' in data)
           && !('uid' in data)
           && !('id' in data)
-          && !('value' in data);
+          && !('value' in data)
+          && (!('reconciledAt' in data) || data.reconciledAt == request.time)
+          && (!('reconciledBy' in data) || data.reconciledBy == userId);
     }
 
-    function isValidTransactionUpdate() {
+    function isValidTransactionUpdate(userId) {
       let data = request.resource.data;
       let changed = request.resource.data.diff(resource.data).changedKeys();
       return isValidTransactionBase(data)
@@ -76,7 +83,9 @@ service cloud.firestore {
           && !('uid' in data)
           && !('id' in data)
           && !('value' in data)
-          && (!changed.hasAny(['deletedAt']) || data.deletedAt == request.time);
+          && (!changed.hasAny(['deletedAt']) || data.deletedAt == request.time)
+          && (!changed.hasAny(['reconciledAt']) || data.reconciledAt == request.time)
+          && (!changed.hasAny(['reconciledBy']) || data.reconciledBy == userId);
     }
 
     function isValidAccount(data) {
@@ -321,8 +330,8 @@ service cloud.firestore {
 
       match /transactions/{txId} {
         allow read: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidTransactionCreate();
-        allow update: if isOwner(userId) && isValidTransactionUpdate();
+        allow create: if isOwner(userId) && isValidTransactionCreate(userId);
+        allow update: if isOwner(userId) && isValidTransactionUpdate(userId);
         allow delete: if false;
 
         match /history/{historyId} {
