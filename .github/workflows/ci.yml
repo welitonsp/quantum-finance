@@ -64,3 +64,17 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Functions Build
+        working-directory: functions
+        run: npm run build
