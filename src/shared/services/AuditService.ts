@@ -3,7 +3,7 @@ import { db } from '../api/firebase/index';
 
 // ─── Audit Model (replayable) ─────────────────────────────────────────────────
 
-export type AuditAction = 'BULK_UPDATE' | 'UNDO_BULK_UPDATE' | 'ADD_RECURRING' | 'UPDATE_RECURRING' | 'DELETE_RECURRING';
+export type AuditAction = 'IMPORT_TRANSACTION' | 'BULK_UPDATE' | 'UNDO_BULK_UPDATE' | 'ADD_RECURRING' | 'UPDATE_RECURRING' | 'DELETE_RECURRING';
 export type AuditEntity = 'TRANSACTION' | 'RECURRING_TASK';
 
 // ─── Transaction History Model ────────────────────────────────────────────────
@@ -56,6 +56,7 @@ export interface AuditLog {
   details?:   string;
   metadata?:  AuditMetadata;
   createdAt:  ReturnType<typeof serverTimestamp>;
+  /** @deprecated Nunca escrito — presente apenas em documentos antigos lidos como fallback em useAuditLogs. */
   timestamp?: ReturnType<typeof serverTimestamp>;
   schemaVersion: 2;
 }

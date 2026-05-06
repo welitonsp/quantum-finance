@@ -228,6 +228,20 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       await assertFails(addDoc(bobRef, validHistoryPayload()));
     });
 
+    // A8b: origin='ai' (autocategorização) deve ser aceita pelo owner
+    it('A8b — origin ai deve passar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL, 'history');
+      await assertSucceeds(addDoc(ref, {
+        ...validHistoryPayload(),
+        action: 'UPDATE' as const,
+        origin: 'ai',
+        before: { category: 'Outros' },
+        after:  { category: 'Alimentação' },
+        changedFields: ['category'],
+      }));
+    });
+
     // A9: transação pai não existe → exists() falha
     it('A9 — history para transação inexistente deve falhar', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
@@ -316,6 +330,32 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
         entity: 'transaction' as never,
         createdAt: serverTimestamp(),
         schemaVersion: 2,
+      }));
+    });
+
+    // B17: UPDATE_RECURRING com entity RECURRING_TASK deve passar
+    it('B17 — UPDATE_RECURRING válido deve passar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'audit_logs');
+      await assertSucceeds(addDoc(ref, {
+        action: 'UPDATE_RECURRING' as const,
+        entity: 'RECURRING_TASK' as const,
+        createdAt: serverTimestamp(),
+        schemaVersion: 2,
+        details: 'id:task-123 fields:description,value',
+      }));
+    });
+
+    // B18: DELETE_RECURRING com entity RECURRING_TASK deve passar
+    it('B18 — DELETE_RECURRING válido deve passar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'audit_logs');
+      await assertSucceeds(addDoc(ref, {
+        action: 'DELETE_RECURRING' as const,
+        entity: 'RECURRING_TASK' as const,
+        createdAt: serverTimestamp(),
+        schemaVersion: 2,
+        details: 'id:task-456',
       }));
     });
   });
