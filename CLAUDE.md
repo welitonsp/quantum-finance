@@ -2,6 +2,202 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
+## Estado Consolidado — FASE 5A Auditoria Forte
+
+### Estado Atual
+
+- Branch principal: `main`.
+- Topo da main: `76065bb test(audit): cover firestore rules for audit logs (#64)`.
+- Working tree confirmado limpo.
+- Nenhum PR aberto no checkpoint de consolidação da FASE 5A.
+- FASE 5A parcialmente consolidada com PRs #62, #63 e #64.
+
+### Contexto da FASE 5
+
+- A FASE 5 iniciou após o encerramento da FASE 4 — Conciliação Avançada.
+- Investigação inicial encontrou P0 de auditoria:
+  - auditoria era client-side e semanticamente forjável;
+  - criação manual não gerava histórico por transação;
+  - rules de audit/history eram permissivas demais em create client-side;
+  - não havia teste automatizado de Firestore Rules.
+- Estratégia adotada:
+  - modelo híbrido incremental;
+  - não bloquear create client-side ainda;
+  - primeiro corrigir cobertura mínima;
+  - depois endurecer rules;
+  - depois criar harness de rules com emulator;
+  - Cloud Functions/server-trusted fica para fase posterior.
+
+### PR #62 — Criação manual registra histórico
+
+- Commit: `4cbf6b8 fix(audit): record history for manual transaction creation (#62)`.
+- Arquivos principais:
+  - `src/hooks/useTransactions.ts`.
+  - `src/hooks/useTransactions.test.ts`.
+
+Entrega:
+
+- Criação manual chama `FirestoreService.addTransaction`.
+- Após obter o ID real, registra `AuditService.logTransactionHistory`.
+- History usa `action='CREATE'`.
+- History usa `origin='manual'`.
+- `after` usa payload canônico sanitizado.
+- `changedFields` contém campos criados relevantes.
+- `amount_cents` vem de `value_cents`.
+- `id`, `uid`, `importHash` e `value` legado não entram no delta.
+- Falha no log não impede criação, mantendo padrão fail-silent do `AuditService`.
+
+Validação:
+
+- Teste em `src/hooks/useTransactions.test.ts`.
+- Suíte passou com 23 arquivos / 200 testes após a fase.
+
+### PR #63 — Hardening client-compatible das Firestore Rules
+
+- Commit: `101affe security(audit): harden audit log rules (#63)`.
+- Arquivo principal:
+  - `firestore.rules`.
+
+Entrega em `transactions/{txId}/history`:
+
+- Create client-side do owner preservado.
+- Update/delete bloqueados.
+- `data.txId == txId` do path.
+- Action whitelist:
+  - `CREATE`.
+  - `UPDATE`.
+  - `SOFT_DELETE`.
+  - `RESTORE`.
+  - `BULK_UPDATE`.
+  - `UNDO_BULK_UPDATE`.
+  - `IMPORT`.
+- Origin whitelist:
+  - `manual`.
+  - `import`.
+  - `reconcile`.
+  - `bulk`.
+  - `system`.
+  - `recurring`.
+  - `ai`.
+- `changedFields` limitado e com campos conhecidos.
+- `before`/`after` rejeitam:
+  - `id`.
+  - `uid`.
+  - `value`.
+  - `importHash`.
+- `createdAt == request.time`.
+- `schemaVersion == 1`.
+- `amount_cents` inteiro seguro.
+
+Entrega em `audit_logs`:
+
+- Create client-side do owner preservado.
+- Update/delete bloqueados.
+- Actions aceitas:
+  - `IMPORT_TRANSACTION`.
+  - `BULK_UPDATE`.
+  - `UNDO_BULK_UPDATE`.
+- Validações conservadoras de `txId`, `importHash`, `amount_cents`, `details`, `metadata` e `amount_display`.
+- Compatibilidade preservada com `LedgerService`, inclusive `amount_display` numérico.
+
+Observação:
+
+- Rules foram endurecidas, mas auditoria ainda não é server-trusted.
+
+### PR #64 — Harness/testes de Firestore Rules
+
+- Commit: `76065bb test(audit): cover firestore rules for audit logs (#64)`.
+- Arquivos principais:
+  - `src/__tests__/firestoreRules.audit.test.ts`.
+  - `firebase.json`.
+  - `package.json`.
+  - `package-lock.json`.
+
+Entrega:
+
+- Adicionou `@firebase/rules-unit-testing`.
+- Adicionou script `npm run test:rules`.
+- Adicionou configuração de emulator no `firebase.json`.
+- Criou cobertura automatizada para rules de:
+  - `users/{uid}/transactions/{txId}/history`;
+  - `users/{uid}/audit_logs`;
+  - proteção de `importHash` em transactions.
+
+Cobertura confirmada:
+
+- History CREATE válido pelo owner.
+- History com `txId` divergente rejeitado.
+- Action inválida rejeitada.
+- Origin inválida rejeitada.
+- Before/after com `id`, `uid`, `value`, `importHash` rejeitados.
+- Update/delete em history bloqueados.
+- Usuário A bloqueado no path do usuário B.
+- Audit_log `IMPORT_TRANSACTION` válido.
+- Audit_log `BULK_UPDATE` válido.
+- Audit_log com action inválida rejeitado.
+- Update/delete em audit_logs bloqueados.
+- Usuário A bloqueado no path do usuário B.
+- Update tentando alterar `importHash` rejeitado.
+
+Observação importante:
+
+- `npm run test -- --run` deixa os testes de rules como skipped.
+- Os testes de rules rodam separadamente por `npm run test:rules`.
+
+### Validação Final Conhecida
+
+- `npm run typecheck`: OK.
+- `npm run lint`: OK.
+- `npm run test -- --run`: OK.
+  - 23 arquivos passaram.
+  - 200 testes passaram.
+  - 18 testes de rules aparecem como skipped na suíte padrão.
+- `npm run build`: OK.
+- `npm run test:rules`: OK.
+  - Firestore Emulator iniciado com Java/JDK Temurin 21.
+  - 1 arquivo de rules testado.
+  - 18 testes passaram.
+  - 0 falhas.
+  - Script saiu com code 0.
+- `git status`: clean.
+- `gh pr status`: nenhum PR aberto.
+
+### Requisito de Ambiente
+
+- `npm run test:rules` exige Java/JDK instalado e disponível no PATH.
+- Ambiente validado com OpenJDK Temurin 21.0.11 LTS.
+- Se falhar com `Could not spawn java -version`, instalar JDK:
+
+```bash
+winget install EclipseAdoptium.Temurin.21.JDK
+```
+
+- Após instalar, fechar e reabrir PowerShell/VS Code antes de rodar:
+
+```bash
+java -version
+npm run test:rules
+```
+
+### Riscos Residuais
+
+- Auditoria ainda é client-side.
+- Usuário autenticado ainda pode criar logs semanticamente válidos no próprio path.
+- Rules reduzem superfície de fraude/erro, mas não substituem autoridade server-side.
+- Auditoria server-trusted real ainda depende de fase futura com Cloud Functions/Admin SDK ou arquitetura equivalente.
+- `npm run test:rules` ainda precisa estar integrado ao CI para impedir regressões automáticas em PRs futuros.
+
+### Próxima Etapa Recomendada
+
+**FASE 5A-2C — integrar `npm run test:rules` ao CI/GitHub Actions**.
+
+Depois:
+
+- Avaliar server-trusted audit via Cloud Functions/Admin SDK.
+- Ou continuar cobertura de auditoria para recorrentes, IA/autocategoria, exclusão/restauração e bulk/undo.
+
+> As seções históricas abaixo foram preservadas para manter contexto. Em caso de divergência, o estado consolidado da FASE 5A no topo deste arquivo é a referência mais recente.
+
 ## Estado Consolidado — FASE 4 Conciliação Avançada — encerramento
 
 ### Estado Atual
