@@ -4,7 +4,8 @@ import {
   getDocs, startAfter,
   type QueryDocumentSnapshot, type DocumentData, type Timestamp,
 } from 'firebase/firestore';
-import { db } from '../shared/api/firebase/index';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../shared/api/firebase/index';
 import { FirestoreService } from '../shared/services/FirestoreService';
 import { AuditService } from '../shared/services/AuditService';
 import type { Transaction } from '../shared/types/transaction';
@@ -14,6 +15,13 @@ import { categorizeTransaction } from '../utils/aiCategorize';
 import { categorizeWithAI } from '../services/AICategorizationService';
 import { PAGE_SIZE, mergeTransactionPages, hasMorePages } from '../utils/transactionPagination';
 import toast from 'react-hot-toast';
+
+// ─── Callable server-trusted ─────────────────────────────────────────────────
+
+const createTransactionCallable = httpsCallable<Record<string, unknown>, { id: string }>(
+  functions,
+  'createTransaction',
+);
 
 // ─── Bulk Update — tipo restrito (não expõe Partial<Transaction> livre) ────────
 export type BulkUpdate = {
@@ -193,6 +201,7 @@ function shouldRetrySyncError(err: unknown): boolean {
   const code = getErrorCode(err);
   const message = getErrorMessage(err).toLowerCase();
   if (code?.includes('permission-denied') || message.includes('permission')) return false;
+  if (code?.includes('invalid-argument') || code?.includes('unauthenticated')) return false;
   if (message.includes('transação inválida') || message.includes('atualização inválida')) return false;
   if (message.includes('invalid') || message.includes('inválid')) return false;
   return true;
@@ -205,6 +214,12 @@ function userFacingSyncError(err: unknown): Error {
 
   if (code?.includes('permission-denied') || lower.includes('permission')) {
     return new Error('A movimentação foi recusada pelas regras do Firebase. Verifique campos proibidos no payload.');
+  }
+  if (code?.includes('invalid-argument')) {
+    return new Error(message || 'Dados inválidos para criação da movimentação.');
+  }
+  if (code?.includes('unauthenticated')) {
+    return new Error('Sessão expirada. Faça login novamente.');
   }
   if (code?.includes('unavailable') || lower.includes('network') || lower.includes('offline')) {
     return new Error('Falha de conexão. A movimentação não foi confirmada.');
@@ -254,48 +269,6 @@ function sanitizeForHistory(tx: Partial<Transaction>): Record<string, unknown> {
     }
   }
   return result;
-}
-
-const MANUAL_CREATE_HISTORY_FIELDS = [
-  'category',
-  'description',
-  'date',
-  'type',
-  'source',
-  'value_cents',
-  'isRecurring',
-  'account',
-  'accountId',
-  'cardId',
-  'fitId',
-  'tags',
-] as const;
-
-function buildManualCreateHistoryAfter(tx: Partial<Transaction>): Record<string, unknown> {
-  const created: Partial<Transaction> = {
-    description:   tx.description ?? '',
-    value_cents:   getTxCentavos(tx),
-    schemaVersion: tx.schemaVersion ?? 2,
-    type:          tx.type ?? 'saida',
-    category:      tx.category ?? 'Outros',
-    date:          tx.date ?? new Date().toISOString().slice(0, 10),
-    source:        tx.source ?? 'manual',
-    isRecurring:   tx.isRecurring ?? false,
-  };
-
-  setIfDefined(created, 'account', tx.account);
-  setIfDefined(created, 'accountId', tx.accountId);
-  setIfDefined(created, 'cardId', tx.cardId);
-  setIfDefined(created, 'fitId', tx.fitId);
-  setIfDefined(created, 'tags', tx.tags);
-
-  return sanitizeForHistory(created);
-}
-
-function buildManualCreateChangedFields(after: Record<string, unknown>): string[] {
-  return MANUAL_CREATE_HISTORY_FIELDS.filter(field =>
-    Object.prototype.hasOwnProperty.call(after, field)
-  );
 }
 
 /**
@@ -496,34 +469,37 @@ export function useTransactions(
       try {
         switch (op.type) {
           case 'add': {
-            // serverTimestamp() injetado pelo FirestoreService.addTransaction
-            debugSync('iniciando gravação de nova movimentação', {
+            // Criação server-trusted via callable — transação + history gravados atomicamente no servidor
+            debugSync('iniciando criação server-trusted via callable', {
               uid,
               tempId: op.tempId,
-              path: `users/${uid}/transactions`,
               payload: {
-                type: op.data.type,
-                category: op.data.category,
-                date: op.data.date,
-                source: op.data.source ?? 'manual',
-                value_cents: op.data.value_cents,
-                schemaVersion: op.data.schemaVersion ?? 2,
+                type:           op.data.type,
+                category:       op.data.category,
+                date:           op.data.date,
+                source:         op.data.source ?? 'manual',
+                value_cents:    op.data.value_cents,
                 hasDescription: Boolean(op.data.description),
               },
             });
-            const realId = await FirestoreService.addTransaction(uid, op.data);
-            debugSync('gravação confirmada', { uid, tempId: op.tempId, realId });
-            const after = buildManualCreateHistoryAfter(op.data);
-            void AuditService.logTransactionHistory(uid, realId, {
-              action:        'CREATE',
-              txId:          realId,
-              after,
-              changedFields: buildManualCreateChangedFields(after),
-              origin:        'manual',
-              ...(typeof after['value_cents'] === 'number' ? { amount_cents: after['value_cents'] } : {}),
-              ...(typeof after['category'] === 'string' ? { category: after['category'] } : {}),
-            });
-            // Dispara callback de IA (se registado) com o docId real — fire-and-forget
+            const callablePayload: Record<string, unknown> = {
+              description: op.data.description ?? '',
+              value_cents: op.data.value_cents ?? 0,
+              type:        op.data.type ?? 'saida',
+              category:    op.data.category ?? 'Outros',
+              date:        op.data.date ?? new Date().toISOString().slice(0, 10),
+              source:      op.data.source ?? 'manual',
+              ...(op.data.fitId      !== undefined ? { fitId:      op.data.fitId      } : {}),
+              ...(op.data.tags       !== undefined ? { tags:       op.data.tags       } : {}),
+              ...(op.data.isRecurring !== undefined ? { isRecurring: op.data.isRecurring } : {}),
+              ...(op.data.account    !== undefined ? { account:    op.data.account    } : {}),
+              ...(op.data.accountId  !== undefined ? { accountId:  op.data.accountId  } : {}),
+              ...(op.data.cardId     !== undefined ? { cardId:     op.data.cardId     } : {}),
+            };
+            const callResult = await createTransactionCallable(callablePayload);
+            const realId = callResult.data.id;
+            debugSync('callable confirmada', { uid, tempId: op.tempId, realId });
+            // Callable já escreveu transação + history de forma atômica — sem log client-side
             const aiCb = postAddCallbacks.current.get(op.tempId);
             if (aiCb) {
               postAddCallbacks.current.delete(op.tempId);
