@@ -19,6 +19,100 @@ const admin                  = require('firebase-admin');
 admin.initializeApp();
 const adminDb = admin.firestore();
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNÇÃO 0 — createTransaction (server-trusted — auditoria atômica)
+// ═══════════════════════════════════════════════════════════════════════════════
+exports.createTransaction = onCall(
+  { region: 'southamerica-east1' },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Acesso negado.');
+    }
+
+    // uid SEMPRE do servidor — nunca do payload do cliente
+    const uid  = request.auth.uid;
+    const data = request.data ?? {};
+
+    // ── Validação de campos obrigatórios ────────────────────────────────────
+    const { description, value_cents, type, category, date, source } = data;
+
+    if (typeof description !== 'string' || description.trim().length < 2 || description.trim().length > 160) {
+      throw new HttpsError('invalid-argument', 'description deve ter entre 2 e 160 caracteres.');
+    }
+    if (!Number.isSafeInteger(value_cents) || value_cents <= 0) {
+      throw new HttpsError('invalid-argument', 'value_cents deve ser um inteiro positivo seguro.');
+    }
+    if (!['entrada', 'saida'].includes(type)) {
+      throw new HttpsError('invalid-argument', 'type deve ser "entrada" ou "saida".');
+    }
+    if (typeof category !== 'string' || category.trim().length === 0 || category.trim().length > 80) {
+      throw new HttpsError('invalid-argument', 'category deve ser uma string não vazia com até 80 caracteres.');
+    }
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new HttpsError('invalid-argument', 'date deve estar no formato YYYY-MM-DD.');
+    }
+    if (!['csv', 'ofx', 'pdf', 'manual'].includes(source)) {
+      throw new HttpsError('invalid-argument', 'source deve ser "csv", "ofx", "pdf" ou "manual".');
+    }
+
+    // ── Payload canônico da transação ────────────────────────────────────────
+    const txRef  = adminDb.collection(`users/${uid}/transactions`).doc();
+    const txPayload = {
+      description:   description.trim(),
+      value_cents,
+      type,
+      category:      category.trim(),
+      date,
+      source,
+      schemaVersion: 2,
+      fitId:         typeof data.fitId === 'string' ? data.fitId : null,
+      tags:          Array.isArray(data.tags) ? data.tags : [],
+      isRecurring:   Boolean(data.isRecurring),
+      createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt:     admin.firestore.FieldValue.serverTimestamp(),
+      ...(typeof data.account   === 'string' && data.account.trim()   ? { account:   data.account.trim().slice(0, 120)   } : {}),
+      ...(typeof data.accountId === 'string' && data.accountId.trim() ? { accountId: data.accountId.trim().slice(0, 120) } : {}),
+      ...(typeof data.cardId    === 'string' && data.cardId.trim()    ? { cardId:    data.cardId.trim().slice(0, 120)    } : {}),
+    };
+
+    // ── Payload de histórico ─────────────────────────────────────────────────
+    const histRef = adminDb
+      .collection(`users/${uid}/transactions`)
+      .doc(txRef.id)
+      .collection('history')
+      .doc();
+
+    const histPayload = {
+      action:        'CREATE',
+      txId:          txRef.id,
+      createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+      schemaVersion: 1,
+      origin:        'manual',
+      amount_cents:  value_cents,
+      category:      category.trim(),
+      after: {
+        description:   description.trim(),
+        value_cents,
+        schemaVersion: 2,
+        type,
+        category:      category.trim(),
+        date,
+        source,
+        isRecurring:   Boolean(data.isRecurring),
+      },
+      changedFields: ['description', 'value_cents', 'schemaVersion', 'type', 'category', 'date', 'source', 'isRecurring'],
+    };
+
+    // ── Escrita atômica via runTransaction ───────────────────────────────────
+    await adminDb.runTransaction(async (t) => {
+      t.set(txRef,   txPayload);
+      t.set(histRef, histPayload);
+    });
+
+    return { id: txRef.id };
+  }
+);
+
 const GEMINI_API_KEY  = defineSecret('GEMINI_API_KEY');
 const DAILY_AI_LIMIT  = 50;
 const MAX_BATCH_SIZE  = 100;

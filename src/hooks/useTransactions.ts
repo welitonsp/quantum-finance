@@ -781,6 +781,15 @@ export function useTransactions(
           // Guard: only update when AI returned something meaningful
           if (aiCat && aiCat !== 'Outros') {
             void FirestoreService.updateTransaction(capturedUid, realId, { category: aiCat });
+            void AuditService.logTransactionHistory(capturedUid, realId, {
+              action:        'UPDATE',
+              txId:          realId,
+              before:        { category: 'Outros' },
+              after:         { category: aiCat },
+              changedFields: ['category'],
+              origin:        'ai',
+              category:      aiCat,
+            });
           }
         });
       });
@@ -884,6 +893,15 @@ export function useTransactions(
           void categorizeWithAI(desc, capturedUid).then(aiCat => {
             if (aiCat && aiCat !== 'Outros') {
               void FirestoreService.updateTransaction(capturedUid, realId, { category: aiCat });
+              void AuditService.logTransactionHistory(capturedUid, realId, {
+                action:        'UPDATE',
+                txId:          realId,
+                before:        { category: 'Outros' },
+                after:         { category: aiCat },
+                changedFields: ['category'],
+                origin:        'ai',
+                category:      aiCat,
+              });
             }
           });
         });

@@ -3,6 +3,7 @@ import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
 import { toCentavos, fromCentavos } from '../shared/schemas/financialSchemas';
 import { FirestoreService } from '../shared/services/FirestoreService';
+import { AuditService } from '../shared/services/AuditService';
 import type { RecurringTask } from '../shared/types/transaction';
 
 interface UseRecurringReturn {
@@ -49,7 +50,14 @@ export function useRecurring(uid: string): UseRecurringReturn {
   const addRecurring = useCallback(async (data: Omit<RecurringTask, 'id'>) => {
     if (!uid) return;
     const finalData = { ...data, value: toCentavos(data.value) };
-    return await FirestoreService.addRecurringTask(uid, finalData as Record<string, unknown>);
+    const result = await FirestoreService.addRecurringTask(uid, finalData as Record<string, unknown>);
+    void AuditService.logAction({
+      userId: uid,
+      action: 'ADD_RECURRING',
+      entity: 'RECURRING_TASK',
+      details: typeof data.description === 'string' ? String(data.description).slice(0, 160) : 'Nova tarefa recorrente',
+    });
+    return result;
   }, [uid]);
 
   const updateRecurring = useCallback(async (id: string, data: Partial<RecurringTask>): Promise<void> => {
@@ -58,11 +66,24 @@ export function useRecurring(uid: string): UseRecurringReturn {
     if (data.value !== undefined) finalData['value'] = toCentavos(data.value);
     const docRef = doc(db, 'users', uid, 'recurringTasks', id);
     await updateDoc(docRef, finalData);
+    void AuditService.logAction({
+      userId: uid,
+      action: 'UPDATE_RECURRING',
+      entity: 'RECURRING_TASK',
+      details: id.slice(0, 160),
+    });
   }, [uid]);
 
   const removeRecurring = useCallback(async (id: string) => {
     if (!uid || !id) return;
-    return await FirestoreService.deleteRecurringTask(uid, id);
+    const result = await FirestoreService.deleteRecurringTask(uid, id);
+    void AuditService.logAction({
+      userId: uid,
+      action: 'DELETE_RECURRING',
+      entity: 'RECURRING_TASK',
+      details: id.slice(0, 160),
+    });
+    return result;
   }, [uid]);
 
   return { recurringTasks, loading, error, addRecurring, updateRecurring, removeRecurring };

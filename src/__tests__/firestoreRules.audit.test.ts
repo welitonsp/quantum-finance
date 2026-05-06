@@ -227,6 +227,19 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       );
       await assertFails(addDoc(bobRef, validHistoryPayload()));
     });
+
+    // A9: transação pai não existe → exists() falha
+    it('A9 — history para transação inexistente deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(
+        alice.firestore(),
+        'users', UID_A, 'transactions', 'tx-does-not-exist-999', 'history',
+      );
+      await assertFails(addDoc(ref, {
+        ...validHistoryPayload(),
+        txId: 'tx-does-not-exist-999',
+      }));
+    });
   });
 
   // ── B. users/{uid}/audit_logs ────────────────────────────────────────────────
@@ -279,6 +292,31 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const bobRef = collection(alice.firestore(), 'users', UID_B, 'audit_logs');
       await assertFails(addDoc(bobRef, validAuditPayload()));
+    });
+
+    // B15: nova action ADD_RECURRING com entity RECURRING_TASK deve passar
+    it('B15 — ADD_RECURRING válido deve passar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'audit_logs');
+      await assertSucceeds(addDoc(ref, {
+        action: 'ADD_RECURRING' as const,
+        entity: 'RECURRING_TASK' as const,
+        createdAt: serverTimestamp(),
+        schemaVersion: 2,
+        details: 'Aluguel mensal',
+      }));
+    });
+
+    // B16: entity lowercase ('transaction') antes aceita (variante morta), agora recusada
+    it('B16 — entity lowercase (antes aceita, agora recusada) deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'audit_logs');
+      await assertFails(addDoc(ref, {
+        action: 'BULK_UPDATE' as const,
+        entity: 'transaction' as never,
+        createdAt: serverTimestamp(),
+        schemaVersion: 2,
+      }));
     });
   });
 

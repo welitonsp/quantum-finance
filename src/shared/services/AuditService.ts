@@ -3,8 +3,8 @@ import { db } from '../api/firebase/index';
 
 // ─── Audit Model (replayable) ─────────────────────────────────────────────────
 
-export type AuditAction = 'BULK_UPDATE' | 'UNDO_BULK_UPDATE';
-export type AuditEntity = 'TRANSACTION';
+export type AuditAction = 'BULK_UPDATE' | 'UNDO_BULK_UPDATE' | 'ADD_RECURRING' | 'UPDATE_RECURRING' | 'DELETE_RECURRING';
+export type AuditEntity = 'TRANSACTION' | 'RECURRING_TASK';
 
 // ─── Transaction History Model ────────────────────────────────────────────────
 
@@ -49,13 +49,13 @@ export interface AuditMetadata {
 }
 
 export interface AuditLog {
-  id?:       string;
-  userId:    string;
-  action:    AuditAction;
-  entity:    AuditEntity;
-  details:   string;
-  metadata:  AuditMetadata;
-  createdAt: ReturnType<typeof serverTimestamp>;
+  id?:        string;
+  userId:     string;
+  action:     AuditAction;
+  entity:     AuditEntity;
+  details?:   string;
+  metadata?:  AuditMetadata;
+  createdAt:  ReturnType<typeof serverTimestamp>;
   timestamp?: ReturnType<typeof serverTimestamp>;
   schemaVersion: 2;
 }
@@ -83,19 +83,18 @@ export const AuditService = {
 
     try {
       const ref = collection(db, 'users', log.userId, 'audit_logs');
-      await addDoc(ref, {
+      const payload: Record<string, unknown> = {
         action:        log.action,
         entity:        log.entity,
-        details:       log.details,
-        metadata:      log.metadata,
         createdAt:     serverTimestamp(),
         schemaVersion: 2,
-      });
+      };
+      if (log.details  !== undefined) payload['details']  = log.details;
+      if (log.metadata !== undefined) payload['metadata'] = log.metadata;
+      await addDoc(ref, payload);
     } catch (error) {
       // FAIL SILENT — UI nunca quebra por falha de auditoria
-      if (import.meta.env.DEV) {
-        console.warn('[AuditService] log failed:', error);
-      }
+      console.error('[AuditService] logAction failed:', error);
     }
   },
 
@@ -138,9 +137,7 @@ export const AuditService = {
       await addDoc(histRef, payload);
     } catch (error) {
       // FAIL SILENT — UI nunca quebra por falha de auditoria
-      if (import.meta.env.DEV) {
-        console.warn('[AuditService] logTransactionHistory failed:', error);
-      }
+      console.error('[AuditService] logTransactionHistory failed:', error);
     }
   },
 };

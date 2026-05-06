@@ -68,18 +68,17 @@ service cloud.firestore {
       return value in [
         'IMPORT_TRANSACTION',
         'BULK_UPDATE',
-        'UNDO_BULK_UPDATE'
+        'UNDO_BULK_UPDATE',
+        'ADD_RECURRING',
+        'UPDATE_RECURRING',
+        'DELETE_RECURRING'
       ];
     }
 
     function isValidAuditEntity(value) {
       return value in [
         'TRANSACTION',
-        'transaction',
-        'transactions',
-        'import',
-        'bulk',
-        'audit'
+        'RECURRING_TASK'
       ];
     }
 
@@ -219,7 +218,7 @@ service cloud.firestore {
           && (!('importHash' in data) || isStringSized(data.importHash, 64, 64))
           && (!('source' in data) || isValidAuditSource(data.source))
           && (!('amount_cents' in data) || isSafeInt(data.amount_cents))
-          && (!('amount_display' in data) || (data.amount_display is number) || isStringSized(data.amount_display, 1, 80))
+          && (!('amount_display' in data) || data.amount_display is number)
           && (!('details' in data) || isStringSized(data.details, 1, 500))
           && (!('metadata' in data) || data.metadata is map);
     }
@@ -423,7 +422,9 @@ service cloud.firestore {
 
         match /history/{historyId} {
           allow read: if isOwner(userId);
-          allow create: if isOwner(userId) && isValidTransactionHistory(request.resource.data, txId);
+          allow create: if isOwner(userId)
+            && isValidTransactionHistory(request.resource.data, txId)
+            && exists(/databases/$(database)/documents/users/$(userId)/transactions/$(txId));
           allow update, delete: if false;
         }
       }
