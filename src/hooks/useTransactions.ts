@@ -774,8 +774,9 @@ export function useTransactions(
 
     // 2. AI fallback — only when deterministic returned nothing; fire-and-forget after Firestore write
     if (!enriched.category && enriched.description) {
-      const desc        = enriched.description;
-      const capturedUid = uid;
+      const desc            = enriched.description;
+      const capturedUid     = uid;
+      const initialCategory = optimistic.category;
       postAddCallbacks.current.set(tempId, (realId: string) => {
         void categorizeWithAI(desc, capturedUid).then(aiCat => {
           // Guard: only update when AI returned something meaningful
@@ -784,7 +785,7 @@ export function useTransactions(
             void AuditService.logTransactionHistory(capturedUid, realId, {
               action:        'UPDATE',
               txId:          realId,
-              before:        { category: 'Outros' },
+              before:        { category: initialCategory },
               after:         { category: aiCat },
               changedFields: ['category'],
               origin:        'ai',
@@ -887,8 +888,9 @@ export function useTransactions(
 
       // 2. AI fallback per item — concurrency controlled by AICategorizationService
       if (!enriched.category && enriched.description) {
-        const desc        = enriched.description;
-        const capturedUid = uid;
+        const desc            = enriched.description;
+        const capturedUid     = uid;
+        const initialCategory = optimistic.category;
         postAddCallbacks.current.set(tempId, (realId: string) => {
           void categorizeWithAI(desc, capturedUid).then(aiCat => {
             if (aiCat && aiCat !== 'Outros') {
@@ -896,7 +898,7 @@ export function useTransactions(
               void AuditService.logTransactionHistory(capturedUid, realId, {
                 action:        'UPDATE',
                 txId:          realId,
-                before:        { category: 'Outros' },
+                before:        { category: initialCategory },
                 after:         { category: aiCat },
                 changedFields: ['category'],
                 origin:        'ai',

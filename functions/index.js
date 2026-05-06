@@ -23,7 +23,7 @@ const adminDb = admin.firestore();
 // FUNÇÃO 0 — createTransaction (server-trusted — auditoria atômica)
 // ═══════════════════════════════════════════════════════════════════════════════
 exports.createTransaction = onCall(
-  { region: 'southamerica-east1' },
+  { region: 'southamerica-east1', timeoutSeconds: 30 },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Acesso negado.');
@@ -82,6 +82,31 @@ exports.createTransaction = onCall(
       .collection('history')
       .doc();
 
+    const afterSnapshot = {
+      description:   description.trim(),
+      value_cents,
+      schemaVersion: 2,
+      type,
+      category:      category.trim(),
+      date,
+      source,
+      isRecurring:   Boolean(data.isRecurring),
+      ...(typeof data.fitId     === 'string' && data.fitId.trim()     ? { fitId:     data.fitId.trim()     } : {}),
+      ...(Array.isArray(data.tags) && data.tags.length > 0             ? { tags:      data.tags             } : {}),
+      ...(typeof data.account   === 'string' && data.account.trim()   ? { account:   data.account.trim().slice(0, 120)   } : {}),
+      ...(typeof data.accountId === 'string' && data.accountId.trim() ? { accountId: data.accountId.trim().slice(0, 120) } : {}),
+      ...(typeof data.cardId    === 'string' && data.cardId.trim()    ? { cardId:    data.cardId.trim().slice(0, 120)    } : {}),
+    };
+
+    const changedFields = [
+      'description', 'value_cents', 'schemaVersion', 'type', 'category', 'date', 'source', 'isRecurring',
+      ...(afterSnapshot.fitId     !== undefined ? ['fitId']     : []),
+      ...(afterSnapshot.tags      !== undefined ? ['tags']      : []),
+      ...(afterSnapshot.account   !== undefined ? ['account']   : []),
+      ...(afterSnapshot.accountId !== undefined ? ['accountId'] : []),
+      ...(afterSnapshot.cardId    !== undefined ? ['cardId']    : []),
+    ];
+
     const histPayload = {
       action:        'CREATE',
       txId:          txRef.id,
@@ -90,17 +115,8 @@ exports.createTransaction = onCall(
       origin:        'manual',
       amount_cents:  value_cents,
       category:      category.trim(),
-      after: {
-        description:   description.trim(),
-        value_cents,
-        schemaVersion: 2,
-        type,
-        category:      category.trim(),
-        date,
-        source,
-        isRecurring:   Boolean(data.isRecurring),
-      },
-      changedFields: ['description', 'value_cents', 'schemaVersion', 'type', 'category', 'date', 'source', 'isRecurring'],
+      after:         afterSnapshot,
+      changedFields,
     };
 
     // ── Escrita atômica via runTransaction ───────────────────────────────────

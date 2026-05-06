@@ -66,11 +66,12 @@ export function useRecurring(uid: string): UseRecurringReturn {
     if (data.value !== undefined) finalData['value'] = toCentavos(data.value);
     const docRef = doc(db, 'users', uid, 'recurringTasks', id);
     await updateDoc(docRef, finalData);
+    const changedKeys = Object.keys(data).join(',').slice(0, 200);
     void AuditService.logAction({
       userId: uid,
       action: 'UPDATE_RECURRING',
       entity: 'RECURRING_TASK',
-      details: id.slice(0, 160),
+      details: `id:${id.slice(0, 80)} fields:${changedKeys}`.slice(0, 500),
     });
   }, [uid]);
 
