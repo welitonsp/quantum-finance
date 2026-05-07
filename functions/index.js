@@ -22,6 +22,170 @@ const adminDb = admin.firestore();
 // ═══════════════════════════════════════════════════════════════════════════════
 // FUNÇÃO 0 — createTransaction (server-trusted — auditoria atômica)
 // ═══════════════════════════════════════════════════════════════════════════════
+
+const CREATE_TRANSACTION_ALLOWED_KEYS = new Set([
+  'description',
+  'value_cents',
+  'type',
+  'category',
+  'date',
+  'source',
+  'fitId',
+  'tags',
+  'isRecurring',
+  'account',
+  'accountId',
+  'cardId',
+]);
+
+const CREATE_TRANSACTION_FORBIDDEN_KEYS = new Set([
+  'id',
+  'uid',
+  'value',
+  'importHash',
+  'schemaVersion',
+  'createdAt',
+  'updatedAt',
+  'deletedAt',
+  'isDeleted',
+  'reconciliationStatus',
+  'reconciliationSource',
+  'reconciledAt',
+  'reconciledBy',
+]);
+
+function invalidCreateArgument(message) {
+  throw new HttpsError('invalid-argument', message);
+}
+
+function assertPlainObject(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    invalidCreateArgument('Payload deve ser um objeto.');
+  }
+  return value;
+}
+
+function assertAllowedKeys(data) {
+  const keys = Object.keys(data);
+  const forbidden = keys.filter((key) => CREATE_TRANSACTION_FORBIDDEN_KEYS.has(key));
+  if (forbidden.length > 0) {
+    invalidCreateArgument(`Campos proibidos no payload: ${forbidden.sort().join(', ')}.`);
+  }
+
+  const unknown = keys.filter((key) => !CREATE_TRANSACTION_ALLOWED_KEYS.has(key));
+  if (unknown.length > 0) {
+    invalidCreateArgument(`Campos desconhecidos no payload: ${unknown.sort().join(', ')}.`);
+  }
+}
+
+function assertStringSized(data, field, min, max) {
+  const value = data[field];
+  if (typeof value !== 'string') {
+    invalidCreateArgument(`${field} deve ser uma string.`);
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length < min || trimmed.length > max) {
+    invalidCreateArgument(`${field} deve ter entre ${min} e ${max} caracteres.`);
+  }
+  return trimmed;
+}
+
+function assertOptionalStringSized(data, field, max, emptyValue = undefined) {
+  const value = data[field];
+  if (value === undefined || value === null) return emptyValue;
+  if (typeof value !== 'string') {
+    invalidCreateArgument(`${field} deve ser uma string ou null.`);
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length < 1 || trimmed.length > max) {
+    invalidCreateArgument(`${field} deve ter entre 1 e ${max} caracteres.`);
+  }
+  return trimmed;
+}
+
+function assertTags(value) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) {
+    invalidCreateArgument('tags deve ser um array de strings ou null.');
+  }
+  if (value.length > 20) {
+    invalidCreateArgument('tags deve conter no maximo 20 itens.');
+  }
+
+  return value.map((tag, index) => {
+    if (typeof tag !== 'string') {
+      invalidCreateArgument(`tags[${index}] deve ser uma string.`);
+    }
+
+    const trimmed = tag.trim();
+    if (trimmed.length < 1 || trimmed.length > 32) {
+      invalidCreateArgument(`tags[${index}] deve ter entre 1 e 32 caracteres.`);
+    }
+    return trimmed;
+  });
+}
+
+function assertIsoDateYYYYMMDD(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    invalidCreateArgument('date deve ser uma data valida no formato YYYY-MM-DD.');
+  }
+
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    invalidCreateArgument('date deve ser uma data valida no formato YYYY-MM-DD.');
+  }
+  return value;
+}
+
+function assertSafeIntegerCents(value) {
+  if (!Number.isSafeInteger(value) || value === 0) {
+    invalidCreateArgument('value_cents deve ser um inteiro seguro diferente de zero.');
+  }
+  return value;
+}
+
+function assertOptionalBoolean(data, field, defaultValue) {
+  const value = data[field];
+  if (value === undefined || value === null) return defaultValue;
+  if (typeof value !== 'boolean') {
+    invalidCreateArgument(`${field} deve ser booleano ou null.`);
+  }
+  return value;
+}
+
+function assertTransactionType(value) {
+  if (!['entrada', 'saida'].includes(value)) {
+    invalidCreateArgument('type deve ser "entrada" ou "saida".');
+  }
+  return value;
+}
+
+function validateCreateTransactionPayload(rawData) {
+  const data = assertPlainObject(rawData);
+  assertAllowedKeys(data);
+
+  if (data.source !== 'manual') {
+    invalidCreateArgument('source deve ser "manual".');
+  }
+
+  return {
+    description: assertStringSized(data, 'description', 1, 500),
+    value_cents: assertSafeIntegerCents(data.value_cents),
+    type: assertTransactionType(data.type),
+    category: assertStringSized(data, 'category', 1, 120),
+    date: assertIsoDateYYYYMMDD(data.date),
+    source: 'manual',
+    fitId: assertOptionalStringSized(data, 'fitId', 160, null),
+    tags: assertTags(data.tags),
+    isRecurring: assertOptionalBoolean(data, 'isRecurring', false),
+    account: assertOptionalStringSized(data, 'account', 120),
+    accountId: assertOptionalStringSized(data, 'accountId', 120),
+    cardId: assertOptionalStringSized(data, 'cardId', 120),
+  };
+}
+
 exports.createTransaction = onCall(
   { region: 'southamerica-east1', timeoutSeconds: 30 },
   async (request) => {
@@ -31,48 +195,26 @@ exports.createTransaction = onCall(
 
     // uid SEMPRE do servidor — nunca do payload do cliente
     const uid  = request.auth.uid;
-    const data = request.data ?? {};
-
-    // ── Validação de campos obrigatórios ────────────────────────────────────
-    const { description, value_cents, type, category, date, source } = data;
-
-    if (typeof description !== 'string' || description.trim().length < 2 || description.trim().length > 160) {
-      throw new HttpsError('invalid-argument', 'description deve ter entre 2 e 160 caracteres.');
-    }
-    if (!Number.isSafeInteger(value_cents) || value_cents <= 0) {
-      throw new HttpsError('invalid-argument', 'value_cents deve ser um inteiro positivo seguro.');
-    }
-    if (!['entrada', 'saida'].includes(type)) {
-      throw new HttpsError('invalid-argument', 'type deve ser "entrada" ou "saida".');
-    }
-    if (typeof category !== 'string' || category.trim().length === 0 || category.trim().length > 80) {
-      throw new HttpsError('invalid-argument', 'category deve ser uma string não vazia com até 80 caracteres.');
-    }
-    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      throw new HttpsError('invalid-argument', 'date deve estar no formato YYYY-MM-DD.');
-    }
-    if (!['csv', 'ofx', 'pdf', 'manual'].includes(source)) {
-      throw new HttpsError('invalid-argument', 'source deve ser "csv", "ofx", "pdf" ou "manual".');
-    }
+    const data = validateCreateTransactionPayload(request.data ?? {});
 
     // ── Payload canônico da transação ────────────────────────────────────────
     const txRef  = adminDb.collection(`users/${uid}/transactions`).doc();
     const txPayload = {
-      description:   description.trim(),
-      value_cents,
-      type,
-      category:      category.trim(),
-      date,
-      source,
+      description:   data.description,
+      value_cents:   data.value_cents,
+      type:          data.type,
+      category:      data.category,
+      date:          data.date,
+      source:        data.source,
       schemaVersion: 2,
-      fitId:         typeof data.fitId === 'string' ? data.fitId : null,
-      tags:          Array.isArray(data.tags) ? data.tags : [],
-      isRecurring:   Boolean(data.isRecurring),
+      fitId:         data.fitId,
+      tags:          data.tags,
+      isRecurring:   data.isRecurring,
       createdAt:     admin.firestore.FieldValue.serverTimestamp(),
       updatedAt:     admin.firestore.FieldValue.serverTimestamp(),
-      ...(typeof data.account   === 'string' && data.account.trim()   ? { account:   data.account.trim().slice(0, 120)   } : {}),
-      ...(typeof data.accountId === 'string' && data.accountId.trim() ? { accountId: data.accountId.trim().slice(0, 120) } : {}),
-      ...(typeof data.cardId    === 'string' && data.cardId.trim()    ? { cardId:    data.cardId.trim().slice(0, 120)    } : {}),
+      ...(data.account   !== undefined ? { account:   data.account   } : {}),
+      ...(data.accountId !== undefined ? { accountId: data.accountId } : {}),
+      ...(data.cardId    !== undefined ? { cardId:    data.cardId    } : {}),
     };
 
     // ── Payload de histórico ─────────────────────────────────────────────────
@@ -83,19 +225,19 @@ exports.createTransaction = onCall(
       .doc();
 
     const afterSnapshot = {
-      description:   description.trim(),
-      value_cents,
+      description:   data.description,
+      value_cents:   data.value_cents,
       schemaVersion: 2,
-      type,
-      category:      category.trim(),
-      date,
-      source,
-      isRecurring:   Boolean(data.isRecurring),
-      ...(typeof data.fitId     === 'string' && data.fitId.trim()     ? { fitId:     data.fitId.trim()     } : {}),
-      ...(Array.isArray(data.tags) && data.tags.length > 0             ? { tags:      data.tags             } : {}),
-      ...(typeof data.account   === 'string' && data.account.trim()   ? { account:   data.account.trim().slice(0, 120)   } : {}),
-      ...(typeof data.accountId === 'string' && data.accountId.trim() ? { accountId: data.accountId.trim().slice(0, 120) } : {}),
-      ...(typeof data.cardId    === 'string' && data.cardId.trim()    ? { cardId:    data.cardId.trim().slice(0, 120)    } : {}),
+      type:          data.type,
+      category:      data.category,
+      date:          data.date,
+      source:        data.source,
+      isRecurring:   data.isRecurring,
+      ...(data.fitId     !== null      ? { fitId:     data.fitId     } : {}),
+      ...(data.tags.length > 0         ? { tags:      data.tags      } : {}),
+      ...(data.account   !== undefined ? { account:   data.account   } : {}),
+      ...(data.accountId !== undefined ? { accountId: data.accountId } : {}),
+      ...(data.cardId    !== undefined ? { cardId:    data.cardId    } : {}),
     };
 
     const changedFields = [
@@ -113,8 +255,8 @@ exports.createTransaction = onCall(
       createdAt:     admin.firestore.FieldValue.serverTimestamp(),
       schemaVersion: 1,
       origin:        'manual',
-      amount_cents:  value_cents,
-      category:      category.trim(),
+      amount_cents:  data.value_cents,
+      category:      data.category,
       after:         afterSnapshot,
       changedFields,
     };
