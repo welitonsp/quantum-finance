@@ -50,7 +50,6 @@ vi.mock('../shared/api/firebase/index', () => ({
 
 vi.mock('../shared/services/FirestoreService', () => ({
   FirestoreService: {
-    addTransaction:          vi.fn(),
     updateTransaction:       vi.fn(),
     deleteTransaction:       vi.fn(),
     deleteBatchTransactions: vi.fn(),
