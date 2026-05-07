@@ -22,6 +22,13 @@ import { fromCentavos } from '../../shared/types/money';
 import AuditTimeline from '../../components/AuditTimeline';
 import TransactionHistoryDrawer from '../../components/TransactionHistoryDrawer';
 import type { UserCategory } from '../../shared/schemas/categorySchemas';
+import { useVirtualizer } from '@tanstack/react-virtual';
+
+const VIRTUAL_THRESHOLD = 100;
+
+type VirtualRowEntry =
+  | { kind: 'header'; group: Group }
+  | { kind: 'row'; tx: Transaction };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SortBy = 'date_desc' | 'date_asc' | 'value_desc' | 'value_asc' | 'cat';
@@ -359,6 +366,7 @@ export default function TransactionsManager({
 
   const searchRef    = useRef<HTMLInputElement>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const listRef      = useRef<HTMLDivElement>(null);
 
   // Limpa timer de undo ao desmontar (evita clearBulkSnapshot em componente morto)
   useEffect(() => () => {
@@ -478,6 +486,25 @@ export default function TransactionsManager({
     const totals = calculateTransactionTotalsCents(filtered);
     return { count: filtered.length, ...totals };
   }, [filtered]);
+
+  const virtualRowEntries = useMemo<VirtualRowEntry[]>(() => {
+    const rows: VirtualRowEntry[] = [];
+    for (const group of groups) {
+      if (group.key) rows.push({ kind: 'header', group });
+      for (const tx of group.items) rows.push({ kind: 'row', tx });
+    }
+    return rows;
+  }, [groups]);
+
+  const useVirtualList = filtered.length > VIRTUAL_THRESHOLD;
+
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const rowVirtualizer = useVirtualizer({
+    count: virtualRowEntries.length,
+    getScrollElement: () => listRef.current,
+    estimateSize: (i) => (virtualRowEntries[i]?.kind === 'header' ? 48 : 80),
+    overscan: 10,
+  });
 
   const baseForCategoryCounts = useMemo(() => {
     let list = transactions;
@@ -1202,7 +1229,7 @@ export default function TransactionsManager({
       />
 
       {/* ═══ LISTA DE TRANSAÇÕES ════════════════════════════════════════════ */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-5 space-y-3 custom-scrollbar">
+      <div ref={listRef} className="flex-1 overflow-y-auto p-4 md:p-5 space-y-3 custom-scrollbar">
         {filtered.length === 0 ? (
           <div role="status" className="flex flex-col items-center justify-center py-20 gap-4 text-center">
             <div className="p-5 bg-quantum-card rounded-3xl border border-quantum-border">
@@ -1226,6 +1253,77 @@ export default function TransactionsManager({
               </button>
             )}
           </div>
+        ) : useVirtualList ? (
+          <>
+            <div
+              aria-label="Lista de movimentações"
+              style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}
+            >
+              {rowVirtualizer.getVirtualItems().map(virtualItem => {
+                const entry = virtualRowEntries[virtualItem.index];
+                return (
+                  <div
+                    key={virtualItem.key}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualItem.start}px)`,
+                      paddingBottom: entry?.kind === 'row' ? '6px' : '4px',
+                    }}
+                  >
+                    {entry?.kind === 'header' ? (
+                      <GroupHeader
+                        label={entry.group.label}
+                        count={entry.group.count}
+                        totalInCents={entry.group.totalInCents}
+                        totalOutCents={entry.group.totalOutCents}
+                        netCents={entry.group.netCents}
+                      />
+                    ) : entry?.kind === 'row' ? (
+                      <TransactionRow
+                        tx={entry.tx}
+                        isSelected={selected.has(entry.tx.id)}
+                        onToggle={toggleOne}
+                        onEdit={onEdit}
+                        onDelete={onDeleteRequest}
+                        onHistory={setHistoryTx}
+                      />
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ═══ CARREGAR MAIS ═══════════════════════════════════════════════ */}
+            {(hasMoreTransactions || isLoadingMore) && (
+              <div className="flex flex-col items-center gap-1.5 py-5">
+                <button
+                  onClick={() => void loadMoreTransactions?.()}
+                  disabled={isLoadingMore || !loadMoreTransactions}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-quantum-bgSecondary border border-quantum-border rounded-xl text-sm font-bold text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoadingMore ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-quantum-fgMuted/30 border-t-quantum-fgMuted rounded-full animate-spin" />
+                      A carregar mais...
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="w-4 h-4" />
+                      Carregar mais movimentações
+                    </>
+                  )}
+                </button>
+                {loadedCount !== undefined && (
+                  <span className="text-[10px] text-quantum-fgMuted font-mono">
+                    {loadedCount} movimentações carregadas
+                  </span>
+                )}
+              </div>
+            )}
+          </>
         ) : (
           <>
             <AnimatePresence mode="popLayout">
