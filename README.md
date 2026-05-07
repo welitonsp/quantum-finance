@@ -1,32 +1,44 @@
-# 🌌 Quantum Finance
+# Quantum Finance Cloud
 
-Um sistema de gestão financeira pessoal de alta precisão, orientado a dados, com uso de Inteligência Artificial via Cloud Functions, projetado para entregar análises de nível institucional (Pareto, Burn Rate, Evolução Patrimonial).
+> Aplicação de gestão financeira pessoal com precisão contábil, auditoria completa e IA assistiva.
 
-## 🚀 Stack Tecnológica
-- **Frontend:** React 19 + Vite 7 + Tailwind CSS 3 (Glassmorphism)
-- **Backend/BaaS:** Firebase (Auth, Firestore, Cloud Functions)
-- **Inteligência Artificial:** Google Gemini via Firebase Cloud Functions e Secret Manager
-- **Precisão Financeira:** centavos inteiros canônicos + `decimal.js`
-- **Gráficos:** Recharts & Chart.js
-- **Validação:** Zod
+## Visão Geral
 
-## 🛡️ Arquitetura e Segurança (Regras de Ouro)
-1. **Precisão Bancária:** Todos os valores monetários persistidos usam `value_cents` como inteiro seguro. `value` é apenas compatibilidade temporária de leitura e nunca deve ser base de cálculo.
-2. **Isolamento de Dados:** Toda a informação sensível reside obrigatoriamente sob o path `users/{uid}/...`. **É estritamente proibido** salvar dados financeiros na raiz do Firestore.
-3. **IA sem segredos no cliente:** O frontend chama apenas `httpsCallable`. Chaves Gemini, OpenAI, Firebase Admin e outros segredos ficam exclusivamente em Cloud Functions/Secret Manager.
-4. **Importação idempotente:** CSV/OFX/PDF são gravados por hash determinístico em `users/{uid}/transactions/{hash}` via `LedgerService`; importação não usa `addDoc`.
+Quantum Finance é uma aplicação web voltada para pessoas físicas que precisam de controle financeiro rigoroso.
+Permite importar extratos bancários de múltiplos formatos e bancos, categorizar transações automaticamente com IA,
+conciliar lançamentos contra extratos com explicabilidade visual e acompanhar orçamentos, projeções e indicadores
+de saúde financeira em tempo real. O modelo de dados usa centavos inteiros como fonte canônica, eliminando erros
+de arredondamento e garantindo precisão bancária em todos os cálculos.
 
-## ⚙️ Configuração do Ambiente
+## Stack
 
-### 1. Clonar e Instalar
+React 19 · TypeScript · Vite · Tailwind CSS · Firebase/Firestore · Cloud Functions · Framer Motion · Chart.js · pdfjs-dist · Gemini AI
+
+## Features Principais
+
+- Importação de extratos: CSV, OFX, PDF (com suporte a senha)
+- Templates de mapeamento para 10+ bancos brasileiros (Nubank, Inter, Itaú, Bradesco, BB, Caixa, Santander, C6, Mercado Pago, PicPay)
+- Deduplicação tricamada: fingerprint local, SHA-256 (importHash) e busca cross-page no Firestore
+- Conciliação interativa com explicabilidade (confiança, razões do match) e status persistente
+- Filtros avançados: data, valor, origem, tipo, categoria, status de conciliação
+- Auditoria por transação com snapshot before/after e timeline global
+- Auto-categorização via Gemini AI com regras persistidas
+- Orçamentos por categoria com acompanhamento mensal
+- Previsão financeira Monte Carlo
+- Acessibilidade WCAG 2.1 AA (focus trap, aria-live, retorno de foco, navegação por teclado)
+- Segurança: isolamento por usuário (`users/{uid}/...`), Firestore Rules com schema versionado, Cloud Functions server-trusted
+
+## Como Rodar
+
 ```bash
-git clone https://github.com/seu-usuario/quantum-finance.git
+git clone https://github.com/welitonsp/quantum-finance.git
 cd quantum-finance
 npm install
+npm run dev
 ```
 
-### 2. Variáveis de Ambiente
-Crie um ficheiro `.env.local` na raiz do projeto copiando a estrutura do `.env.example`:
+Crie um arquivo `.env.local` na raiz com as variáveis do Firebase:
+
 ```env
 VITE_FIREBASE_API_KEY="sua_api_key"
 VITE_FIREBASE_AUTH_DOMAIN="seu_projeto.firebaseapp.com"
@@ -36,39 +48,51 @@ VITE_FIREBASE_MESSAGING_SENDER_ID="123456789"
 VITE_FIREBASE_APP_ID="1:123456789:web:abcdef"
 ```
 
-Não crie variáveis `VITE_*` para provedores de IA. Configure Gemini somente no backend:
+Chaves de IA (Gemini) devem ser configuradas exclusivamente no backend via Firebase Secret Manager:
 
 ```bash
 firebase functions:secrets:set GEMINI_API_KEY
 firebase deploy --only functions
 ```
 
-### 3. Executar o Servidor de Desenvolvimento
-```bash
-npm run dev
-```
-
-## 📦 Estrutura de Pastas (FSD - Feature-Sliced Design)
-- `/src/components` - Componentes UI globais e de layout (Dashboard, Header, Sidebar).
-- `/src/contexts` - Contextos globais (Theme, Privacy, Navigation).
-- `/src/features` - Módulos de negócio isolados (ai-chat, reports, transactions).
-- `/src/hooks` - Hooks de ligação ao Firestore (`useTransactions`, `useAccounts`).
-- `/src/shared` - Schemas Zod, APIs do Firebase, parsers de ficheiros e serviços globais.
-- `/src/utils` - Formatadores e motores matemáticos independentes de UI.
-
-## ✅ Qualidade
+## Comandos
 
 ```bash
-npm run typecheck
-npm run lint
-npm run test
-npm run build
+npm run dev          # servidor de desenvolvimento
+npm run build        # build de produção
+npm run typecheck    # verificação de tipos
+npm run lint         # linting
+npm run test         # testes unitários (watch)
+npm run test -- --run  # testes unitários (one-shot)
+npm run test:rules   # testes de Firestore Rules (requer Java/JDK e emulator)
 ```
 
-Documentação de integridade e segurança:
-- `docs/FINANCIAL_INTEGRITY.md`
-- `docs/SECURITY.md`
-- `docs/IMPORT_PIPELINE.md`
+> `npm run test:rules` requer Java instalado. Em caso de erro `Could not spawn java -version`:
+> ```bash
+> winget install EclipseAdoptium.Temurin.21.JDK
+> ```
 
----
-*Desenvolvido com rigor militar e arquitetura de elite.*
+## Arquitetura
+
+O projeto segue Feature-Sliced Design (FSD):
+
+```
+src/
+  components/     # Componentes UI globais e de layout (Dashboard, Header, Sidebar)
+  contexts/       # Contextos globais (Theme, Privacy, Navigation)
+  features/       # Módulos de negócio isolados
+    ai-chat/      # Chat com IA assistiva
+    reports/      # Relatórios e análises
+    transactions/ # Movimentações, importação, conciliação
+  hooks/          # Hooks de acesso ao Firestore (useTransactions, useAccounts, ...)
+  shared/         # Schemas Zod, serviços Firebase, parsers de arquivo, tipos centrais
+  utils/          # Formatadores e motores matemáticos independentes de UI
+```
+
+Toda persistência financeira passa por `LedgerService` ou `FirestoreService`.
+Auditoria é registrada em `users/{uid}/transactions/{txId}/history` e `users/{uid}/audit_logs`.
+Firestore Rules implementam validação de schema na camada de segurança (schema version 2).
+
+## Licença
+
+MIT
