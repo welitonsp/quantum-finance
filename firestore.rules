@@ -134,6 +134,7 @@ service cloud.firestore {
     function isValidTransactionCreate(userId) {
       let data = request.resource.data;
       return isValidTransactionBase(data)
+          && data.source != 'manual'
           && data.createdAt == request.time
           && data.updatedAt == request.time
           && !('deletedAt' in data)
@@ -188,6 +189,7 @@ service cloud.firestore {
             'createdAt', 'schemaVersion'
           ])
           && isValidHistoryAction(data.action)
+          && !(data.action == 'CREATE' && ('origin' in data) && data.origin == 'manual')
           && isStringSized(data.txId, 1, 128)
           && data.txId == txId
           && data.createdAt == request.time

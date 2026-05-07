@@ -50,7 +50,7 @@ const IMPORT_HASH_A = 'a'.repeat(64);
 const IMPORT_HASH_B = 'b'.repeat(64);
 
 const validHistoryPayload = () => ({
-  action: 'CREATE' as const,
+  action: 'UPDATE' as const,
   txId: TX_REAL,
   createdAt: serverTimestamp(),
   schemaVersion: 1,
@@ -130,8 +130,8 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
   // ── A. transactions/{txId}/history ──────────────────────────────────────────
 
   describe('A. transactions/{txId}/history', () => {
-    // A1: payload mínimo válido com serverTimestamp satisfaz createdAt == request.time
-    it('A1 — CREATE válido pelo owner deve passar', async () => {
+    // A1: baseline UPDATE + origin='manual' continua aceito (FASE 5D mantém UPDATE/manual)
+    it('A1 — UPDATE + manual baseline pelo owner deve passar', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const ref = collection(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL, 'history');
       await assertSucceeds(addDoc(ref, validHistoryPayload()));
@@ -252,6 +252,63 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       await assertFails(addDoc(ref, {
         ...validHistoryPayload(),
         txId: 'tx-does-not-exist-999',
+      }));
+    });
+
+    // A10 (FASE 5D): CREATE + origin='manual' direto pelo cliente deve falhar.
+    // Criação manual agora exige callable server-trusted (Admin SDK bypassa rules).
+    it('A10 — CREATE + manual client-side deve falhar (FASE 5D)', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL, 'history');
+      await assertFails(addDoc(ref, {
+        action: 'CREATE' as const,
+        txId: TX_REAL,
+        createdAt: serverTimestamp(),
+        schemaVersion: 1,
+        origin: 'manual',
+        amount_cents: 10000,
+        category: 'Alimentação',
+      }));
+    });
+
+    // A11 (FASE 5D): UPDATE + origin='reconcile' (fluxo de conciliação no import) deve passar.
+    it('A11 — UPDATE + reconcile deve passar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL, 'history');
+      await assertSucceeds(addDoc(ref, {
+        ...validHistoryPayload(),
+        action: 'UPDATE' as const,
+        origin: 'reconcile',
+        before: { category: 'Outros' },
+        after:  { category: 'Mercado' },
+        changedFields: ['category'],
+      }));
+    });
+
+    // A12 (FASE 5D): SOFT_DELETE + origin='manual' (delete/batch delete manual) deve passar.
+    it('A12 — SOFT_DELETE + manual deve passar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL, 'history');
+      await assertSucceeds(addDoc(ref, {
+        ...validHistoryPayload(),
+        action: 'SOFT_DELETE' as const,
+        origin: 'manual',
+        before: { description: 'Alimento', value_cents: 10000 },
+      }));
+    });
+
+    // A13 (FASE 5D): BULK_UPDATE + origin='bulk' (bulk de categoria) deve passar.
+    it('A13 — BULK_UPDATE + bulk deve passar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL, 'history');
+      await assertSucceeds(addDoc(ref, {
+        ...validHistoryPayload(),
+        action: 'BULK_UPDATE' as const,
+        origin: 'bulk',
+        correlationId: 'batch-001',
+        before: { category: 'Outros' },
+        after:  { category: 'Mercado' },
+        changedFields: ['category'],
       }));
     });
   });
@@ -380,6 +437,37 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
         createdAt: FIXED_TS,       // preservado (data.createdAt == resource.data.createdAt)
         updatedAt: serverTimestamp(),
       }));
+    });
+  });
+
+  // ── D. transactions CREATE — FASE 5D ─────────────────────────────────────────
+
+  describe('D. transactions create (FASE 5D)', () => {
+    const baseCreatePayload = (source: 'manual' | 'csv' | 'ofx' | 'pdf') => ({
+      description: 'New transaction',
+      value_cents: 25000,
+      schemaVersion: 2,
+      type: 'saida' as const,
+      category: 'Mercado',
+      date: '2026-02-01',
+      source,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    // D1 (FASE 5D): CREATE direto com source='manual' deve falhar.
+    // Criação manual agora exige callable server-trusted (Admin SDK bypassa rules).
+    it('D1 — CREATE direto com source=manual deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'transactions');
+      await assertFails(addDoc(ref, baseCreatePayload('manual')));
+    });
+
+    // D2 (FASE 5D): CREATE direto com source='csv' (caminho LedgerService import) deve passar.
+    it('D2 — CREATE com source=csv (import LedgerService) deve passar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'transactions');
+      await assertSucceeds(addDoc(ref, baseCreatePayload('csv')));
     });
   });
 });
