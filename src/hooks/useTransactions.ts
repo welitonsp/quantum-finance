@@ -257,11 +257,11 @@ function toMillis(ts: Transaction['updatedAt'] | Transaction['createdAt']): numb
 
 /**
  * Serializa uma transação para o payload de histórico.
- * Exclui id, uid e value (legado) — campos proibidos ou redundantes com o path.
+ * Exclui id, uid, value (legado) e importHash — campos proibidos ou redundantes com o path.
  * Filtra undefined para garantir escrita válida no Firestore.
  */
-function sanitizeForHistory(tx: Partial<Transaction>): Record<string, unknown> {
-  const excluded = new Set<string>(['id', 'uid', 'value']);
+export function sanitizeForHistory(tx: Partial<Transaction>): Record<string, unknown> {
+  const excluded = new Set<string>(['id', 'uid', 'value', 'importHash']);
   const result: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(tx)) {
     if (!excluded.has(k) && v !== undefined) {
