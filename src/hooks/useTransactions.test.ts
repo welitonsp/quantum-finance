@@ -77,7 +77,7 @@ vi.mock('react-hot-toast', () => ({
   default: { error: vi.fn() },
 }));
 
-import { useTransactions } from './useTransactions';
+import { sanitizeForHistory, useTransactions } from './useTransactions';
 
 describe('useTransactions - criação server-trusted via callable', () => {
   beforeEach(() => {
@@ -154,6 +154,41 @@ describe('useTransactions - criação server-trusted via callable', () => {
     expect(createCalls).toHaveLength(0);
 
     unmount();
+  });
+
+  it('remove importHash apenas do payload sanitizado para history', () => {
+    const importHash = 'a'.repeat(64);
+    const sanitized = sanitizeForHistory({
+      id:            'tx-imported-1',
+      uid:           'uid-1',
+      value:         123.45,
+      importHash,
+      description:   'Compra importada',
+      value_cents:   12345 as Centavos,
+      schemaVersion: 2,
+      type:          'saida',
+      category:      'Alimentação',
+      date:          '2026-05-05',
+      source:        'csv',
+      fitId:         'fit-123',
+      tags:          ['cartao'],
+    });
+
+    expect(sanitized).not.toHaveProperty('id');
+    expect(sanitized).not.toHaveProperty('uid');
+    expect(sanitized).not.toHaveProperty('value');
+    expect(sanitized).not.toHaveProperty('importHash');
+    expect(sanitized).toEqual(expect.objectContaining({
+      description:   'Compra importada',
+      value_cents:   12345,
+      schemaVersion: 2,
+      type:          'saida',
+      category:      'Alimentação',
+      date:          '2026-05-05',
+      source:        'csv',
+      fitId:         'fit-123',
+      tags:          ['cartao'],
+    }));
   });
 
   it('registra UPDATE + origin=ai quando IA categoriza transação sem categoria', async () => {
