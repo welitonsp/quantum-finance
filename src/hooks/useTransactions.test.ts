@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Centavos } from '../shared/types/money';
 
 const {
-  mockAddTransaction,
+  mockCallable,
   mockCollection,
+  mockHttpsCallable,
   mockLimit,
   mockLogAction,
   mockLogTransactionHistory,
@@ -12,17 +13,21 @@ const {
   mockOrderBy,
   mockQuery,
   mockStartAfter,
-} = vi.hoisted(() => ({
-  mockAddTransaction:        vi.fn(),
-  mockCollection:            vi.fn(() => ({ kind: 'collection' })),
-  mockLimit:                 vi.fn((count: number) => ({ kind: 'limit', count })),
-  mockLogAction:             vi.fn(),
-  mockLogTransactionHistory: vi.fn(),
-  mockOnSnapshot:            vi.fn(),
-  mockOrderBy:               vi.fn((field: string, direction: string) => ({ kind: 'orderBy', field, direction })),
-  mockQuery:                 vi.fn(() => ({ kind: 'query' })),
-  mockStartAfter:            vi.fn(),
-}));
+} = vi.hoisted(() => {
+  const callable = vi.fn().mockResolvedValue({ data: { id: 'tx-created-1' } });
+  return {
+    mockCallable:              callable,
+    mockCollection:            vi.fn(() => ({ kind: 'collection' })),
+    mockHttpsCallable:         vi.fn(() => callable),
+    mockLimit:                 vi.fn((count: number) => ({ kind: 'limit', count })),
+    mockLogAction:             vi.fn(),
+    mockLogTransactionHistory: vi.fn(),
+    mockOnSnapshot:            vi.fn(),
+    mockOrderBy:               vi.fn((field: string, direction: string) => ({ kind: 'orderBy', field, direction })),
+    mockQuery:                 vi.fn(() => ({ kind: 'query' })),
+    mockStartAfter:            vi.fn(),
+  };
+});
 
 vi.mock('firebase/firestore', () => ({
   collection: mockCollection,
@@ -34,13 +39,18 @@ vi.mock('firebase/firestore', () => ({
   startAfter: mockStartAfter,
 }));
 
+vi.mock('firebase/functions', () => ({
+  httpsCallable: mockHttpsCallable,
+}));
+
 vi.mock('../shared/api/firebase/index', () => ({
-  db: { _isMock: true },
+  db:        { _isMock: true },
+  functions: { _isMock: true },
 }));
 
 vi.mock('../shared/services/FirestoreService', () => ({
   FirestoreService: {
-    addTransaction:          mockAddTransaction,
+    addTransaction:          vi.fn(),
     updateTransaction:       vi.fn(),
     deleteTransaction:       vi.fn(),
     deleteBatchTransactions: vi.fn(),
@@ -64,26 +74,24 @@ vi.mock('../services/AICategorizationService', () => ({
 }));
 
 vi.mock('react-hot-toast', () => ({
-  default: {
-    error: vi.fn(),
-  },
+  default: { error: vi.fn() },
 }));
 
 import { useTransactions } from './useTransactions';
 
-describe('useTransactions - auditoria da criação manual', () => {
+describe('useTransactions - criação server-trusted via callable', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockAddTransaction.mockResolvedValue('tx-created-1');
+    mockCallable.mockResolvedValue({ data: { id: 'tx-created-1' } });
     mockLogAction.mockResolvedValue(undefined);
     mockLogTransactionHistory.mockResolvedValue(undefined);
-    mockOnSnapshot.mockImplementation((_queryArg, onNext) => {
+    mockOnSnapshot.mockImplementation((_queryArg: unknown, onNext: (snap: { docs: never[] }) => void) => {
       onNext({ docs: [] });
       return vi.fn();
     });
   });
 
-  it('registra history CREATE com origin manual após criação bem-sucedida', async () => {
+  it('chama callable com payload canônico excluindo campos proibidos', async () => {
     const { result, unmount } = renderHook(() => useTransactions('uid-1'));
 
     let createdId = '';
@@ -104,66 +112,80 @@ describe('useTransactions - auditoria da criação manual', () => {
     });
 
     expect(createdId).toBe('tx-created-1');
-    expect(mockAddTransaction).toHaveBeenCalledWith('uid-1', expect.objectContaining({
+
+    expect(mockCallable).toHaveBeenCalledWith(expect.objectContaining({
       description: 'Café manual',
       value_cents: 1234,
       type:        'saida',
       category:    'Alimentação',
       date:        '2026-05-05',
       source:      'manual',
-      schemaVersion: 2,
     }));
 
-    await waitFor(() => expect(mockLogTransactionHistory).toHaveBeenCalledTimes(1));
+    // id, uid e importHash nunca chegam ao servidor
+    const [payload] = mockCallable.mock.calls[0] as [Record<string, unknown>];
+    expect(payload).not.toHaveProperty('id');
+    expect(payload).not.toHaveProperty('uid');
+    expect(payload).not.toHaveProperty('importHash');
+    expect(payload).not.toHaveProperty('value');
+    expect(payload).not.toHaveProperty('schemaVersion');
 
-    const [uid, txId, event] = mockLogTransactionHistory.mock.calls[0] as [
-      string,
-      string,
-      {
-        action: string;
-        txId: string;
-        origin: string;
-        after: Record<string, unknown>;
-        changedFields: string[];
-        amount_cents: number;
-        category: string;
-      },
-    ];
+    unmount();
+  });
 
-    expect(uid).toBe('uid-1');
-    expect(txId).toBe('tx-created-1');
-    expect(event).toMatchObject({
-      action:       'CREATE',
-      txId:         'tx-created-1',
-      origin:       'manual',
-      amount_cents: 1234,
-      category:     'Alimentação',
+  it('não chama logTransactionHistory para CREATE — o servidor é o único writer', async () => {
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+
+    await act(async () => {
+      await result.current.add({
+        description: 'Almoço',
+        value_cents: 3500 as Centavos,
+        type:        'saida',
+        category:    'Alimentação',
+        date:        '2026-05-05',
+        source:      'manual',
+      });
     });
-    expect(event).not.toHaveProperty('before');
-    expect(event.after).toEqual(expect.objectContaining({
-      description:   'Café manual',
-      value_cents:   1234,
-      type:          'saida',
-      category:      'Alimentação',
-      date:          '2026-05-05',
-      source:        'manual',
-      isRecurring:   false,
-      schemaVersion: 2,
-    }));
-    expect(event.changedFields).toEqual(expect.arrayContaining([
-      'category',
-      'description',
-      'date',
-      'type',
-      'source',
-      'value_cents',
-      'isRecurring',
-    ]));
-    expect(event.changedFields).not.toEqual(expect.arrayContaining(['id', 'uid', 'importHash', 'value']));
-    expect(event.after).not.toHaveProperty('id');
-    expect(event.after).not.toHaveProperty('uid');
-    expect(event.after).not.toHaveProperty('importHash');
-    expect(event.after).not.toHaveProperty('value');
+
+    // Nenhum log de CREATE client-side — callable escreve atomicamente
+    const createCalls = mockLogTransactionHistory.mock.calls.filter(
+      (c) => (c[2] as { action: string }).action === 'CREATE',
+    );
+    expect(createCalls).toHaveLength(0);
+
+    unmount();
+  });
+
+  it('registra UPDATE + origin=ai quando IA categoriza transação sem categoria', async () => {
+    const { categorizeWithAI } = await import('../services/AICategorizationService');
+    vi.mocked(categorizeWithAI).mockResolvedValue('Transporte');
+
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+
+    await act(async () => {
+      await result.current.add({
+        description: 'Uber corrida',
+        value_cents: 2500 as Centavos,
+        type:        'saida',
+        date:        '2026-05-05',
+        source:      'manual',
+        // sem category — dispara AI fallback
+      });
+    });
+
+    await waitFor(() =>
+      expect(mockLogTransactionHistory).toHaveBeenCalledWith(
+        'uid-1',
+        'tx-created-1',
+        expect.objectContaining({
+          action:        'UPDATE',
+          origin:        'ai',
+          before:        { category: 'Outros' },
+          after:         { category: 'Transporte' },
+          changedFields: ['category'],
+        }),
+      ),
+    );
 
     unmount();
   });

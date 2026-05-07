@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
 import { toCentavos, fromCentavos } from '../shared/schemas/financialSchemas';
 import { FirestoreService } from '../shared/services/FirestoreService';
-import { AuditService } from '../shared/services/AuditService';
+import { AuditService, type AuditChange } from '../shared/services/AuditService';
 import type { RecurringTask } from '../shared/types/transaction';
 
 interface UseRecurringReturn {
@@ -19,6 +19,7 @@ export function useRecurring(uid: string): UseRecurringReturn {
   const [recurringTasks, setRecurringTasks] = useState<RecurringTask[]>([]);
   const [loading, setLoading]               = useState(true);
   const [error, setError]                   = useState<string | null>(null);
+  const recurringTasksRef                   = useRef<RecurringTask[]>([]);
 
   useEffect(() => {
     if (!uid) { setRecurringTasks([]); setLoading(false); return; }
@@ -33,6 +34,7 @@ export function useRecurring(uid: string): UseRecurringReturn {
           value: docSnap.data()['value'] !== undefined ? fromCentavos(docSnap.data()['value'] as number) : 0,
           id: docSnap.id
         }));
+        recurringTasksRef.current = data;
         setRecurringTasks(data);
         setLoading(false);
         setError(null);
@@ -66,12 +68,21 @@ export function useRecurring(uid: string): UseRecurringReturn {
     if (data.value !== undefined) finalData['value'] = toCentavos(data.value);
     const docRef = doc(db, 'users', uid, 'recurringTasks', id);
     await updateDoc(docRef, finalData);
+    const current  = recurringTasksRef.current.find(t => t.id === id);
+    const changes: AuditChange[] = Object.keys(data)
+      .filter(k => k !== 'id')
+      .map(k => ({
+        id:   k,
+        from: String(current?.[k as keyof RecurringTask] ?? '').slice(0, 200),
+        to:   String(data[k as keyof Partial<RecurringTask>] ?? '').slice(0, 200),
+      }));
     const changedKeys = Object.keys(data).join(',').slice(0, 200);
     void AuditService.logAction({
       userId: uid,
       action: 'UPDATE_RECURRING',
       entity: 'RECURRING_TASK',
       details: `id:${id.slice(0, 80)} fields:${changedKeys}`.slice(0, 500),
+      ...(changes.length > 0 ? { metadata: { count: changes.length, changes } } : {}),
     });
   }, [uid]);
 
