@@ -93,6 +93,20 @@ Toda persistência financeira passa por `LedgerService` ou `FirestoreService`.
 Auditoria é registrada em `users/{uid}/transactions/{txId}/history` e `users/{uid}/audit_logs`.
 Firestore Rules implementam validação de schema na camada de segurança (schema version 2).
 
+## Firebase App Check
+
+Quantum Finance usa Firebase App Check com reCAPTCHA v3 para proteger os endpoints do Firebase contra abusos.
+
+**Fase atual: monitor-only** — tokens são enviados mas nenhuma requisição é bloqueada.
+Observe as métricas no painel App Check por ≥ 7 dias antes de ativar enforcement.
+
+| Variável | Visibilidade | Uso |
+|---|---|---|
+| `VITE_RECAPTCHA_SITE_KEY` | Pública | Identificador da Web App no reCAPTCHA; seguro no `.env.local` |
+| `VITE_FIREBASE_APPCHECK_DEBUG_TOKEN` | **Sensível** | Apenas local/CI; nunca commitar valor real |
+
+App Check é ignorado quando `VITE_USE_EMULATOR=true` ou quando `VITE_RECAPTCHA_SITE_KEY` não está definido.
+
 ## Licença
 
 MIT
