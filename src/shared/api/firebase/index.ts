@@ -25,8 +25,9 @@ if (import.meta.env.DEV && import.meta.env.VITE_USE_EMULATOR === 'true') {
 
 const _siteKey    = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined;
 const _isEmulator = import.meta.env.VITE_USE_EMULATOR === 'true';
+const _isTest     = import.meta.env.MODE === 'test' || import.meta.env.VITEST === 'true';
 
-if (_siteKey && !_isEmulator) {
+if (_siteKey && !_isEmulator && !_isTest) {
   if (import.meta.env.DEV) {
     const _dbgToken = import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN as string | undefined;
     if (_dbgToken) {
