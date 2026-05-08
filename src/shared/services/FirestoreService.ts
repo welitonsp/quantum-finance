@@ -67,26 +67,6 @@ const transactionWriteUpdateSchema = transactionWriteCreateSchema.partial()
   })
   .refine(value => Object.keys(value).length > 0, 'Atualização vazia.');
 
-export interface TransactionCreateDTO {
-  description?: string;
-  value_cents?: Centavos | number;
-  value?: MoneyInput;
-  type?: string;
-  category?: string;
-  date?: string;
-  account?: string;
-  accountId?: string;
-  cardId?: string;
-  isRecurring?: boolean;
-  tags?: string[];
-  source?: FinancialSource;
-  fitId?: string | null;
-  reconciliationStatus?: ReconciliationStatus;
-  reconciliationSource?: ReconciliationSource;
-  reconciledAt?: unknown;
-  reconciledBy?: string;
-}
-
 export interface TransactionUpdateDTO {
   description?: string;
   value_cents?: Centavos | number;
@@ -109,79 +89,10 @@ export interface TransactionUpdateDTO {
   reconciledBy?: string;
 }
 
-type TransactionCreatePayload = z.infer<typeof transactionWriteCreateSchema>;
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function resolveCentavos(data: Pick<TransactionCreateDTO, 'value' | 'value_cents'>): Centavos {
+function resolveCentavos(data: Pick<TransactionUpdateDTO, 'value' | 'value_cents'>): Centavos {
   if (data.value_cents !== undefined) return Math.abs(Math.round(data.value_cents)) as Centavos;
   if (data.value !== undefined) return Math.abs(toCentavos(data.value)) as Centavos;
   return 0 as Centavos;
-}
-
-function normalizeCreatePayload(data: TransactionCreateDTO) {
-  const value_cents = resolveCentavos(data);
-  const raw = {
-    description: data.description?.trim() ?? '',
-    value_cents,
-    schemaVersion: 2 as const,
-    type: canonicalizeTransactionType(data.type),
-    category: data.category ?? 'Outros',
-    date: data.date ?? todayIso(),
-    source: data.source ?? 'manual',
-    fitId: data.fitId ?? null,
-    tags: data.tags ?? [],
-    isRecurring: data.isRecurring ?? false,
-    ...(data.account ? { account: data.account } : {}),
-    ...(data.accountId ? { accountId: data.accountId } : {}),
-    ...(data.cardId ? { cardId: data.cardId } : {}),
-    ...(data.reconciliationStatus !== undefined ? { reconciliationStatus: data.reconciliationStatus } : {}),
-    ...(data.reconciliationSource !== undefined ? { reconciliationSource: data.reconciliationSource } : {}),
-    ...(data.reconciledAt !== undefined ? { reconciledAt: data.reconciledAt } : {}),
-    ...(data.reconciledBy !== undefined ? { reconciledBy: data.reconciledBy } : {}),
-  };
-
-  const parsed = transactionWriteCreateSchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new Error(`Transação inválida: ${parsed.error.issues.map(issue => issue.message).join('; ')}`);
-  }
-  return parsed.data;
-}
-
-function debugAddPayload(payload: TransactionCreatePayload): void {
-  if (!import.meta.env.DEV) return;
-  console.warn('[Firestore][addTransaction][payload]', {
-    keys: Object.keys(payload).sort(),
-    type: payload.type,
-    category: payload.category,
-    date: payload.date,
-    source: payload.source,
-    value_cents: payload.value_cents,
-    schemaVersion: payload.schemaVersion,
-    hasDescription: payload.description.length > 0,
-    hasForbiddenFields: false,
-  });
-}
-
-function debugRejectedAddPayload(payload: TransactionCreatePayload, err: unknown): void {
-  if (!import.meta.env.DEV) return;
-  const code = typeof err === 'object' && err !== null && 'code' in err
-    ? String((err as { code?: unknown }).code ?? '')
-    : undefined;
-  if (code !== 'permission-denied') return;
-  console.warn('[Firestore][addTransaction][permission-denied]', {
-    keys: Object.keys(payload).sort(),
-    type: payload.type,
-    category: payload.category,
-    date: payload.date,
-    source: payload.source,
-    value_cents: payload.value_cents,
-    schemaVersion: payload.schemaVersion,
-    forbiddenFieldsPresent: ['uid', 'id', 'value', 'createdAt', 'updatedAt']
-      .filter(field => field in (payload as unknown as Record<string, unknown>)),
-  });
 }
 
 function getFirebaseErrorCode(err: unknown): string | undefined {
@@ -329,23 +240,6 @@ export const FirestoreService = {
           ...(d.data() as Omit<Transaction, 'id'>),
         }))
         .filter(isActiveTransaction);
-    }
-  },
-
-  async addTransaction(uid: string, data: TransactionCreateDTO): Promise<string> {
-    if (!uid) throw new Error('[Firestore][addTransaction] UID ausente.');
-    const payload = normalizeCreatePayload(data);
-    debugAddPayload(payload);
-    try {
-      const docRef = await addDoc(txCol(uid), {
-        ...payload,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      return docRef.id;
-    } catch (err) {
-      debugRejectedAddPayload(payload, err);
-      throw err;
     }
   },
 

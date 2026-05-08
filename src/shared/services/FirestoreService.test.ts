@@ -124,37 +124,6 @@ describe('FirestoreService.saveAllTransactions', () => {
   });
 });
 
-describe('FirestoreService.addTransaction', () => {
-  it('não grava value como fonte primária em criação manual', async () => {
-    await FirestoreService.addTransaction('uid1', {
-      ...baseCreate,
-      value: 999999,
-    });
-
-    const [, data] = mockAddDoc.mock.calls[0] as [unknown, Record<string, unknown>];
-    expect(data['value']).toBeUndefined();
-    expect(data['value_cents']).toBe(12345);
-    expect(data['schemaVersion']).toBe(2);
-    expect(data['createdAt']).toEqual({ _serverTimestamp: true });
-    expect(data['updatedAt']).toEqual({ _serverTimestamp: true });
-  });
-
-  it('converte value legado para value_cents apenas na borda de criação manual', async () => {
-    await FirestoreService.addTransaction('uid1', {
-      description: 'Freela',
-      value: '1.234,56',
-      type: 'entrada',
-      category: 'Freelance',
-      date: '2026-04-02',
-      source: 'manual',
-    });
-
-    const [, data] = mockAddDoc.mock.calls[0] as [unknown, Record<string, unknown>];
-    expect(data['value']).toBeUndefined();
-    expect(data['value_cents']).toBe(123456);
-  });
-});
-
 describe('FirestoreService.updateTransaction', () => {
   it('aceita contrato persistente opcional de conciliação', async () => {
     const reconciledAt = { _serverTimestamp: true };
