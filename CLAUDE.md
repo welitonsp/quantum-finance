@@ -2,6 +2,16 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
+## Status Auditoria de Recorrentes — FASE 6C
+
+Auditoria de recorrentes (`ADD_RECURRING` / `UPDATE_RECURRING` / `DELETE_RECURRING`) permanece **client-side fail-silent** como **P3 controlado**.
+
+- Fluxo em `src/hooks/useRecurring.ts` grava operação principal e dispara `AuditService.logAction` em `void` (fire-and-forget). Não-atômico.
+- Risco contido em **self-forgery dentro do próprio uid** — usuário pode gravar audit_log semanticamente válido sem operação principal correlata, porque `firestore.rules:isValidAuditLog` valida sintaxe mas não coerência action↔entity.
+- **Sem impacto em** `value_cents`, `importHash` ou `LedgerService`. `recurringTasks` é metadado de intenção; ocorrências reais materializadas viram `Transaction` via callable server-trusted (FASE 5).
+- Migração para Cloud Functions adiada até que recorrentes ganhem semântica de auto-execução de movimento. Reavaliar como **FASE 6D** se essa semântica surgir ou se auditoria externa exigir trilha não-forjável.
+- Cobertura de Firestore Rules reforçada com **bloco B19 (5 testes negativos)** em `src/__tests__/firestoreRules.audit.test.ts`: entity inválida, cross-uid, schemaVersion incorreta, chave extra fora da whitelist, `details` acima de 500 chars.
+
 ## Estado Consolidado — FASE 5A Auditoria Forte
 
 ### Estado Atual

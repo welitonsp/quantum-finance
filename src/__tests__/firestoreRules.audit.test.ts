@@ -415,6 +415,72 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
         details: 'id:task-456',
       }));
     });
+
+    // B19a (FASE 6C-1): entity fora da whitelist deve falhar (isValidAuditEntity).
+    it('B19a — ADD_RECURRING com entity inválida deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'audit_logs');
+      await assertFails(addDoc(ref, {
+        action: 'ADD_RECURRING' as const,
+        entity: 'OTHER' as never,
+        createdAt: serverTimestamp(),
+        schemaVersion: 2,
+        details: 'forjado',
+      }));
+    });
+
+    // B19b (FASE 6C-1): cross-uid em recorrentes — alice tentando logar no path de bob.
+    it('B19b — UPDATE_RECURRING no path de outro uid deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const bobRef = collection(alice.firestore(), 'users', UID_B, 'audit_logs');
+      await assertFails(addDoc(bobRef, {
+        action: 'UPDATE_RECURRING' as const,
+        entity: 'RECURRING_TASK' as const,
+        createdAt: serverTimestamp(),
+        schemaVersion: 2,
+        details: 'id:task-bob fields:value',
+      }));
+    });
+
+    // B19c (FASE 6C-1): schemaVersion incorreta deve falhar (audit_logs exige 2).
+    it('B19c — DELETE_RECURRING com schemaVersion 1 deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'audit_logs');
+      await assertFails(addDoc(ref, {
+        action: 'DELETE_RECURRING' as const,
+        entity: 'RECURRING_TASK' as const,
+        createdAt: serverTimestamp(),
+        schemaVersion: 1 as never,
+        details: 'id:task-789',
+      }));
+    });
+
+    // B19d (FASE 6C-1): chave fora da whitelist (hasOnly) deve falhar.
+    it('B19d — ADD_RECURRING com chave extra (userId) deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'audit_logs');
+      await assertFails(addDoc(ref, {
+        action: 'ADD_RECURRING' as const,
+        entity: 'RECURRING_TASK' as const,
+        createdAt: serverTimestamp(),
+        schemaVersion: 2,
+        details: 'task ABC',
+        userId: UID_A,
+      } as never));
+    });
+
+    // B19e (FASE 6C-1): details > 500 chars deve falhar (isStringSized 1..500).
+    it('B19e — ADD_RECURRING com details acima do limite deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'audit_logs');
+      await assertFails(addDoc(ref, {
+        action: 'ADD_RECURRING' as const,
+        entity: 'RECURRING_TASK' as const,
+        createdAt: serverTimestamp(),
+        schemaVersion: 2,
+        details: 'x'.repeat(501),
+      }));
+    });
   });
 
   // ── C. transaction protection ────────────────────────────────────────────────
