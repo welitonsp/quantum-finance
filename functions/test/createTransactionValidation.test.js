@@ -64,6 +64,14 @@ describe('validateCreateTransactionPayload', () => {
     assertInvalid(canonicalPayload({ importHash: 'a'.repeat(64) }), /Campos proibidos/);
   });
 
+  it('rejects server-owned transaction fields explicitly', () => {
+    assertInvalid(canonicalPayload({ uid: 'user-1' }), /Campos proibidos/);
+    assertInvalid(canonicalPayload({ id: 'tx-1' }), /Campos proibidos/);
+    assertInvalid(canonicalPayload({ value: 123.45 }), /Campos proibidos/);
+    assertInvalid(canonicalPayload({ createdAt: '2026-05-07T00:00:00Z' }), /Campos proibidos/);
+    assertInvalid(canonicalPayload({ updatedAt: '2026-05-07T00:00:00Z' }), /Campos proibidos/);
+  });
+
   it('rejects unknown keys explicitly', () => {
     assertInvalid(canonicalPayload({ unexpected: true }), /Campos desconhecidos/);
   });

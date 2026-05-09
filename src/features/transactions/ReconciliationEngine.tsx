@@ -11,6 +11,7 @@ import {
 import type { Transaction } from '../../shared/types/transaction';
 import { getTransactionAbsCentavos, isIncome as checkIncome } from '../../utils/transactionUtils';
 import { fromCentavos } from '../../shared/types/money';
+import { getCategoryBadgeClass, MUTED_CATEGORY_BADGE_CLASS } from '../../shared/lib/categoryStyles';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type HintDir = 'left' | 'right' | 'down' | null;
@@ -56,19 +57,8 @@ const fmtDate = (iso: string | undefined): string => {
   return `${d}/${m}/${y}`;
 };
 
-const CAT_COLORS: Record<string, string> = {
-  'Alimentação':   'text-amber-400  bg-amber-400/10  border-amber-400/25',
-  'Transporte':    'text-blue-400   bg-blue-400/10   border-blue-400/25',
-  'Assinaturas':   'text-cyan-400   bg-cyan-400/10   border-cyan-400/25',
-  'Saúde':         'text-rose-400   bg-rose-400/10   border-rose-400/25',
-  'Moradia':       'text-orange-400 bg-orange-400/10 border-orange-400/25',
-  'Educação':      'text-indigo-400 bg-indigo-400/10 border-indigo-400/25',
-  'Lazer':         'text-pink-400   bg-pink-400/10   border-pink-400/25',
-  'Salário':       'text-emerald-400 bg-emerald-400/10 border-emerald-400/25',
-  'Investimento':  'text-emerald-400 bg-emerald-400/10 border-emerald-400/25',
-};
 const catClass = (cat: string | undefined): string =>
-  CAT_COLORS[cat ?? ''] ?? 'text-quantum-fgMuted bg-white/5 border-white/15';
+  getCategoryBadgeClass(cat, MUTED_CATEGORY_BADGE_CLASS);
 
 // ─── Lógica de Merge ──────────────────────────────────────────────────────────
 export function findMergeCandidate(tx: Transaction, existing: Transaction[]): MergeCandidateInfo {
