@@ -32,6 +32,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore';
 
 // ─── Configuração do emulador ─────────────────────────────────────────────────
@@ -255,9 +256,9 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       }));
     });
 
-    // A10 (FASE 5D): CREATE + origin='manual' direto pelo cliente deve falhar.
-    // Criação manual agora exige callable server-trusted (Admin SDK bypassa rules).
-    it('A10 — CREATE + manual client-side deve falhar (FASE 5D)', async () => {
+    // A10: CREATE + origin='manual' isolado deve falhar.
+    // Criação manual Spark exige transaction + history/create no mesmo writeBatch.
+    it('A10 — CREATE + manual isolado deve falhar', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const ref = collection(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL, 'history');
       await assertFails(addDoc(ref, {
@@ -508,7 +509,7 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
 
   // ── D. transactions CREATE — FASE 5D ─────────────────────────────────────────
 
-  describe('D. transactions create (FASE 5D)', () => {
+  describe('D. transactions create — modo Spark', () => {
     const baseCreatePayload = (source: 'manual' | 'csv' | 'ofx' | 'pdf') => ({
       description: 'New transaction',
       value_cents: 25000,
@@ -521,19 +522,142 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       updatedAt: serverTimestamp(),
     });
 
-    // D1 (FASE 5D): CREATE direto com source='manual' deve falhar.
-    // Criação manual agora exige callable server-trusted (Admin SDK bypassa rules).
-    it('D1 — CREATE direto com source=manual deve falhar', async () => {
+    const manualAfterPayload = (overrides: Record<string, unknown> = {}) => ({
+      description: 'New transaction',
+      value_cents: 25000,
+      schemaVersion: 2,
+      type: 'saida' as const,
+      category: 'Mercado',
+      date: '2026-02-01',
+      source: 'manual' as const,
+      isRecurring: false,
+      ...overrides,
+    });
+
+    const manualHistoryPayload = (
+      txId: string,
+      overrides: Record<string, unknown> = {},
+    ) => {
+      const afterOverrides = (
+        typeof overrides['after'] === 'object'
+        && overrides['after'] !== null
+        && !Array.isArray(overrides['after'])
+      )
+        ? overrides['after'] as Record<string, unknown>
+        : undefined;
+      const { after: _after, ...restOverrides } = overrides;
+      void _after;
+      return {
+        action: 'CREATE' as const,
+        txId,
+        createdAt: serverTimestamp(),
+        schemaVersion: 1,
+        origin: 'manual',
+        amount_cents: 25000,
+        category: 'Mercado',
+        changedFields: [
+          'description',
+          'value_cents',
+          'schemaVersion',
+          'type',
+          'category',
+          'date',
+          'source',
+          'isRecurring',
+        ],
+        ...restOverrides,
+        after: manualAfterPayload(afterOverrides),
+      };
+    };
+
+    const commitManualCreateBatch = async (
+      txId: string,
+      txOverrides: Record<string, unknown> = {},
+      historyOverrides: Record<string, unknown> = {},
+    ) => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'users', UID_A, 'transactions', txId), {
+        ...baseCreatePayload('manual'),
+        isRecurring: false,
+        ...txOverrides,
+      });
+      batch.set(
+        doc(db, 'users', UID_A, 'transactions', txId, 'history', 'create'),
+        manualHistoryPayload(txId, historyOverrides),
+      );
+      return batch.commit();
+    };
+
+    it('D1 — CREATE direto com source=manual sem history deve falhar', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const ref = collection(alice.firestore(), 'users', UID_A, 'transactions');
       await assertFails(addDoc(ref, baseCreatePayload('manual')));
     });
 
-    // D2 (FASE 5D): CREATE direto com source='csv' (caminho LedgerService import) deve passar.
-    it('D2 — CREATE com source=csv (import LedgerService) deve passar', async () => {
+    it('D2 — CREATE manual com history válido no mesmo batch deve passar', async () => {
+      await assertSucceeds(commitManualCreateBatch('tx-manual-batch-ok'));
+    });
+
+    it('D3 — CREATE manual com history ausente deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txRef = doc(alice.firestore(), 'users', UID_A, 'transactions', 'tx-manual-no-history');
+      await assertFails(setDoc(txRef, {
+        ...baseCreatePayload('manual'),
+        isRecurring: false,
+      }));
+    });
+
+    it('D4 — CREATE manual com amount_cents divergente no history deve falhar', async () => {
+      await assertFails(commitManualCreateBatch(
+        'tx-manual-amount-mismatch',
+        {},
+        { amount_cents: 26000 },
+      ));
+    });
+
+    it('D5 — CREATE manual com after.value_cents divergente deve falhar', async () => {
+      await assertFails(commitManualCreateBatch(
+        'tx-manual-after-value-mismatch',
+        {},
+        { after: { value_cents: 26000 } },
+      ));
+    });
+
+    it('D6 — CREATE manual com campos proibidos deve falhar', async () => {
+      await assertFails(commitManualCreateBatch('tx-manual-forbidden-fields', {
+        importHash: IMPORT_HASH_A,
+        id: 'forged-id',
+        uid: UID_A,
+        value: 250,
+      }));
+    });
+
+    it('D7 — history CREATE/manual isolado deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const historyRef = doc(
+        alice.firestore(),
+        'users', UID_A, 'transactions', TX_REAL, 'history', 'create',
+      );
+      await assertFails(setDoc(historyRef, manualHistoryPayload(TX_REAL, {
+        amount_cents: 10000,
+        category: 'Alimentação',
+        after: {
+          description: 'Test transaction',
+          value_cents: 10000,
+          category: 'Alimentação',
+          date: '2026-01-01',
+        },
+      })));
+    });
+
+    it('D8 — CREATE de importação csv/ofx/pdf continua passando', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const ref = collection(alice.firestore(), 'users', UID_A, 'transactions');
       await assertSucceeds(addDoc(ref, baseCreatePayload('csv')));
+      await assertSucceeds(addDoc(ref, baseCreatePayload('ofx')));
+      await assertSucceeds(addDoc(ref, baseCreatePayload('pdf')));
     });
   });
 });

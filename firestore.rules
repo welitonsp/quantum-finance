@@ -104,6 +104,14 @@ service cloud.firestore {
       ];
     }
 
+    function txPath(userId, txId) {
+      return /databases/$(database)/documents/users/$(userId)/transactions/$(txId);
+    }
+
+    function txHistoryCreatePath(userId, txId) {
+      return /databases/$(database)/documents/users/$(userId)/transactions/$(txId)/history/create;
+    }
+
     function isValidTransactionBase(data) {
       return data.keys().hasAll([
             'description', 'value_cents', 'schemaVersion', 'type',
@@ -131,10 +139,9 @@ service cloud.firestore {
           && (!('reconciledBy' in data) || isStringSized(data.reconciledBy, 1, 128));
     }
 
-    function isValidTransactionCreate(userId) {
+    function isValidTransactionCreateBase(userId) {
       let data = request.resource.data;
       return isValidTransactionBase(data)
-          && data.source != 'manual'
           && data.createdAt == request.time
           && data.updatedAt == request.time
           && !('deletedAt' in data)
@@ -143,6 +150,31 @@ service cloud.firestore {
           && !('value' in data)
           && (!('reconciledAt' in data) || data.reconciledAt == request.time)
           && (!('reconciledBy' in data) || data.reconciledBy == userId);
+    }
+
+    function isValidImportTransactionCreate(userId) {
+      let data = request.resource.data;
+      return isValidTransactionCreateBase(userId)
+          && data.source != 'manual';
+    }
+
+    function isValidManualTransactionCreate(userId, txId) {
+      let data = request.resource.data;
+      let historyPath = txHistoryCreatePath(userId, txId);
+      return isValidTransactionCreateBase(userId)
+          && data.source == 'manual'
+          && !data.keys().hasAny([
+            'importHash', 'isDeleted', 'deletedAt',
+            'reconciliationStatus', 'reconciliationSource',
+            'reconciledAt', 'reconciledBy'
+          ])
+          && !exists(historyPath)
+          && existsAfter(historyPath);
+    }
+
+    function isValidTransactionCreate(userId, txId) {
+      return isValidImportTransactionCreate(userId)
+          || isValidManualTransactionCreate(userId, txId);
     }
 
     function isValidTransactionUpdate(userId) {
@@ -189,7 +221,6 @@ service cloud.firestore {
             'createdAt', 'schemaVersion'
           ])
           && isValidHistoryAction(data.action)
-          && !(data.action == 'CREATE' && ('origin' in data) && data.origin == 'manual')
           && isStringSized(data.txId, 1, 128)
           && data.txId == txId
           && data.createdAt == request.time
@@ -203,6 +234,66 @@ service cloud.firestore {
           && (!('importHash' in data) || isStringSized(data.importHash, 64, 64))
           && (!('amount_cents' in data) || isSafeInt(data.amount_cents))
           && (!('category' in data) || isStringSized(data.category, 1, 80));
+    }
+
+    function isManualCreateHistory(data) {
+      return data.action == 'CREATE'
+          && ('origin' in data)
+          && data.origin == 'manual';
+    }
+
+    function optionalHistoryFieldMatches(tx, after, field) {
+      return (!(field in tx) && !(field in after))
+          || ((field in tx) && (field in after) && tx[field] == after[field]);
+    }
+
+    function isValidManualCreateHistoryForTransaction(data, txId, tx) {
+      return tx.source == 'manual'
+          && !tx.keys().hasAny([
+            'importHash', 'uid', 'id', 'value', 'isDeleted', 'deletedAt',
+            'reconciliationStatus', 'reconciliationSource',
+            'reconciledAt', 'reconciledBy'
+          ])
+          && isManualCreateHistory(data)
+          && ('amount_cents' in data)
+          && data.amount_cents == tx.value_cents
+          && ('category' in data)
+          && data.category == tx.category
+          && ('after' in data)
+          && data.after.keys().hasOnly([
+            'description', 'value_cents', 'schemaVersion', 'type', 'category',
+            'date', 'source', 'account', 'accountId', 'cardId', 'fitId',
+            'tags', 'isRecurring'
+          ])
+          && data.after.description == tx.description
+          && data.after.value_cents == tx.value_cents
+          && data.after.schemaVersion == 2
+          && data.after.type == tx.type
+          && data.after.category == tx.category
+          && data.after.date == tx.date
+          && data.after.source == 'manual'
+          && ('isRecurring' in tx)
+          && ('isRecurring' in data.after)
+          && data.after.isRecurring == tx.isRecurring
+          && optionalHistoryFieldMatches(tx, data.after, 'account')
+          && optionalHistoryFieldMatches(tx, data.after, 'accountId')
+          && optionalHistoryFieldMatches(tx, data.after, 'cardId')
+          && optionalHistoryFieldMatches(tx, data.after, 'fitId')
+          && optionalHistoryFieldMatches(tx, data.after, 'tags')
+          && ('changedFields' in data)
+          && data.changedFields.hasAll([
+            'description', 'value_cents', 'schemaVersion', 'type',
+            'category', 'date', 'source', 'isRecurring'
+          ]);
+    }
+
+    function isValidManualCreateHistoryInSameBatch(data, userId, txId, historyId) {
+      let transactionPath = txPath(userId, txId);
+      return historyId == 'create'
+          && isManualCreateHistory(data)
+          && !exists(transactionPath)
+          && existsAfter(transactionPath)
+          && isValidManualCreateHistoryForTransaction(data, txId, getAfter(transactionPath).data);
     }
 
     function isValidAuditLog(data) {
@@ -418,7 +509,7 @@ service cloud.firestore {
 
       match /transactions/{txId} {
         allow read: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidTransactionCreate(userId);
+        allow create: if isOwner(userId) && isValidTransactionCreate(userId, txId);
         allow update: if isOwner(userId) && isValidTransactionUpdate(userId);
         allow delete: if false;
 
@@ -426,7 +517,10 @@ service cloud.firestore {
           allow read: if isOwner(userId);
           allow create: if isOwner(userId)
             && isValidTransactionHistory(request.resource.data, txId)
-            && exists(/databases/$(database)/documents/users/$(userId)/transactions/$(txId));
+            && (
+              isValidManualCreateHistoryInSameBatch(request.resource.data, userId, txId, historyId)
+              || (!isManualCreateHistory(request.resource.data) && exists(txPath(userId, txId)))
+            );
           allow update, delete: if false;
         }
       }

@@ -89,10 +89,60 @@ export interface TransactionUpdateDTO {
   reconciledBy?: string;
 }
 
+export type ManualTransactionCreateDTO = Partial<Transaction>;
+
 function resolveCentavos(data: Pick<TransactionUpdateDTO, 'value' | 'value_cents'>): Centavos {
   if (data.value_cents !== undefined) return Math.abs(Math.round(data.value_cents)) as Centavos;
   if (data.value !== undefined) return Math.abs(toCentavos(data.value)) as Centavos;
   return 0 as Centavos;
+}
+
+const MANUAL_CREATE_CHANGED_FIELDS = [
+  'description',
+  'value_cents',
+  'schemaVersion',
+  'type',
+  'category',
+  'date',
+  'source',
+  'isRecurring',
+  'fitId',
+  'tags',
+  'account',
+  'accountId',
+  'cardId',
+] as const;
+
+function buildManualCreatePayload(data: ManualTransactionCreateDTO): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    description: data.description ?? '',
+    value_cents: resolveCentavos(data),
+    schemaVersion: 2,
+    type: canonicalizeTransactionType(data.type ?? 'saida'),
+    category: data.category ?? 'Outros',
+    date: data.date ?? new Date().toISOString().slice(0, 10),
+    source: 'manual',
+    isRecurring: data.isRecurring ?? false,
+  };
+
+  if (data.fitId !== undefined) payload['fitId'] = data.fitId;
+  if (data.tags !== undefined) payload['tags'] = data.tags;
+  if (data.account !== undefined) payload['account'] = data.account;
+  if (data.accountId !== undefined) payload['accountId'] = data.accountId;
+  if (data.cardId !== undefined) payload['cardId'] = data.cardId;
+
+  const parsed = transactionWriteCreateSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new Error(`Transação inválida: ${parsed.error.issues.map(issue => issue.message).join('; ')}`);
+  }
+  return parsed.data;
+}
+
+function buildManualCreateAfterSnapshot(txPayload: Record<string, unknown>): Record<string, unknown> {
+  return MANUAL_CREATE_CHANGED_FIELDS.reduce<Record<string, unknown>>((acc, field) => {
+    if (txPayload[field] !== undefined) acc[field] = txPayload[field];
+    return acc;
+  }, {});
 }
 
 function getFirebaseErrorCode(err: unknown): string | undefined {
@@ -241,6 +291,42 @@ export const FirestoreService = {
         }))
         .filter(isActiveTransaction);
     }
+  },
+
+  async createManualTransactionWithHistory(
+    uid: string,
+    data: ManualTransactionCreateDTO,
+  ): Promise<string> {
+    if (!uid) throw new Error('[Firestore][createManualTransactionWithHistory] UID ausente.');
+
+    const canonicalPayload = buildManualCreatePayload(data);
+    const txRef = doc(txCol(uid));
+    const historyRef = doc(collection(db, 'users', uid, 'transactions', txRef.id, 'history'), 'create');
+    const timestamp = serverTimestamp();
+    const txPayload = {
+      ...canonicalPayload,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    const afterSnapshot = buildManualCreateAfterSnapshot(canonicalPayload);
+    const changedFields = MANUAL_CREATE_CHANGED_FIELDS.filter(field => afterSnapshot[field] !== undefined);
+    const historyPayload = {
+      action: 'CREATE',
+      txId: txRef.id,
+      createdAt: timestamp,
+      schemaVersion: 1,
+      origin: 'manual',
+      amount_cents: canonicalPayload['value_cents'],
+      category: canonicalPayload['category'],
+      after: afterSnapshot,
+      changedFields,
+    };
+
+    const batch = writeBatch(db);
+    batch.set(txRef, txPayload);
+    batch.set(historyRef, historyPayload);
+    await batch.commit();
+    return txRef.id;
   },
 
   async updateTransaction(uid: string, id: string, data: TransactionUpdateDTO): Promise<void> {

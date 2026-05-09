@@ -2,6 +2,16 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
+## Decisão Operacional — Spark Manual Create — 2026-05-09
+
+- O projeto `quantum-finance-39235` está no plano Firebase Spark/free; deploy de Cloud Functions exige Blaze por depender de `cloudbuild.googleapis.com` e `artifactregistry.googleapis.com`.
+- Criação manual de movimentações **não pode depender obrigatoriamente** da callable `createTransaction` enquanto o projeto permanecer no Spark.
+- Caminho ativo Spark: `useTransactions.add` -> `FirestoreService.createManualTransactionWithHistory` -> `writeBatch` criando `users/{uid}/transactions/{txId}` e `users/{uid}/transactions/{txId}/history/create` no mesmo commit.
+- `firestore.rules` permite `source=manual` somente quando o `history/create` consistente existe no estado pós-batch; history `CREATE/manual` isolado continua bloqueado e history segue append-only.
+- Campos proibidos em criação manual client-side permanecem bloqueados: `id`, `uid`, `value`, `importHash` e metadados de conciliação/importação.
+- A callable `createTransaction` permanece no código como caminho server-trusted futuro para Blaze; `enforceAppCheck: true` não deve ser removido por engano.
+- Rebaixamento aceito: sem Admin SDK não há autoridade server-trusted plena; a mitigação Spark depende de Rules rigorosas e testes de emulator.
+
 ## Sincronização — 2026-05-09
 
 - Topo da main: 65412ba (#82)
