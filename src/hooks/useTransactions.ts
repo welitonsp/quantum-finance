@@ -197,9 +197,19 @@ function getErrorCode(err: unknown): string | undefined {
     : undefined;
 }
 
+function isAppCheckFailure(code: string | undefined, message: string): boolean {
+  return Boolean(
+    code?.includes('failed-precondition')
+    || message.includes('app check')
+    || message.includes('appcheck')
+    || message.includes('app-check')
+  );
+}
+
 function shouldRetrySyncError(err: unknown): boolean {
   const code = getErrorCode(err);
   const message = getErrorMessage(err).toLowerCase();
+  if (isAppCheckFailure(code, message)) return false;
   if (code?.includes('permission-denied') || message.includes('permission')) return false;
   if (code?.includes('invalid-argument') || code?.includes('unauthenticated')) return false;
   if (message.includes('transação inválida') || message.includes('atualização inválida')) return false;
@@ -212,6 +222,9 @@ function userFacingSyncError(err: unknown): Error {
   const message = getErrorMessage(err);
   const lower = message.toLowerCase();
 
+  if (isAppCheckFailure(code, lower)) {
+    return new Error('Falha na verificação de segurança do App Check. Atualize a página e tente novamente.');
+  }
   if (code?.includes('permission-denied') || lower.includes('permission')) {
     return new Error('A movimentação foi recusada pelas regras do Firebase. Verifique campos proibidos no payload.');
   }

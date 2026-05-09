@@ -2,6 +2,56 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
+## Sincronização — 2026-05-09
+
+- Topo da main: 65412ba (#82)
+- PRs consolidados #64–#82:
+  - #64 testes de Firestore Rules com emulator
+  - #65 CLAUDE.md atualizado pós-audit 5A
+  - #66 CI para testes de rules
+  - #67 Cloud Functions skeleton
+  - #68 server-trusted createTransaction + audit coverage
+  - #69 QA P2/P3 do PR #68
+  - #70 integração callable + recurring diff
+  - #71 refactor ImportButton + virtualização
+  - #72 sanitizar importHash do history
+  - #73 bloquear create manual client-side
+  - #74 validação estrita payload callable
+  - #75 testes de payload validation
+  - #76 remover legacy addTransaction
+  - #77 testes negativos para recurring rules
+  - #78 CI para functions tests
+  - #79 App Check frontend monitor-only
+  - #80 skip App Check em testes
+  - #81 preparar testes callable com App Check context
+  - #82 enforceAppCheck ativo em createTransaction
+- Fase 5 Auditoria Forte: concluída
+- Fase 7B App Check:
+  - enforceAppCheck ativo SOMENTE em createTransaction
+  - consumeAppCheckToken: NÃO ativo
+  - callables IA: SEM enforcement
+  - rollback: remover enforceAppCheck da linha 30 de functions/index.js + deploy
+- Testes: 200+ unitários + testes de rules com emulator + testes de callable
+- CI: typecheck + lint + test + functions test + rules test + build
+- Itens resolvidos neste PR:
+  - Teste da callable createTransaction agora valida exatamente 2 writes atômicos: transaction + history
+  - Teste da callable valida payloads seguros e ausência de uid, id, value legado e importHash
+  - Teste negativo cobre chamada unauthenticated sem escrita
+  - Validação strict cobre campos server-owned adicionais: uid, id, value, createdAt e updatedAt
+  - Guardrail estático garante enforceAppCheck somente em createTransaction e consumeAppCheckToken desativado
+  - Mensagem frontend para falha de App Check/failed-precondition ficou explícita
+  - AuditTimeline ganhou paginação incremental com load more
+  - AllowedCategory consolidado em um único export de schema
+  - Estilos/metadados de categoria consolidados em helper compartilhado
+  - Branches locais obsoletas soltas removidas, preservando main e a branch atual; branches presas a worktrees foram mantidas por segurança
+- Próximas pendências:
+  - App Check enforcement nas callables de IA (após observação)
+  - consumeAppCheckToken (replay protection)
+  - Sentry/Crashlytics
+  - E2E Playwright
+  - P1-5 busca server-side
+  - Fase 6 IA e automações
+
 ## Status Auditoria de Recorrentes — FASE 6C
 
 Auditoria de recorrentes (`ADD_RECURRING` / `UPDATE_RECURRING` / `DELETE_RECURRING`) permanece **client-side fail-silent** como **P3 controlado**.

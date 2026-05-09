@@ -27,7 +27,18 @@ const adminDb = admin.firestore();
 // FUNÇÃO 0 — createTransaction (server-trusted — auditoria atômica)
 // ═══════════════════════════════════════════════════════════════════════════════
 exports.createTransaction = onCall(
-  { region: 'southamerica-east1', timeoutSeconds: 30, enforceAppCheck: true },
+  {
+    region: 'southamerica-east1',
+    timeoutSeconds: 30,
+    enforceAppCheck: true,
+    cors: [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'https://quantum-finance-39235.web.app',
+      'https://quantum-finance-39235.firebaseapp.com',
+      /https:\/\/.*\.vercel\.app$/,
+    ],
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Acesso negado.');

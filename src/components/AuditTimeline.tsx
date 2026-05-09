@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { History, X, Clock, RotateCcw, Tag } from 'lucide-react';
+import { History, X, Clock, RotateCcw, Tag, ChevronDown } from 'lucide-react';
 import { useAuditLogs } from '../hooks/useAuditLogs';
 import type { AuditView } from '../hooks/useAuditLogs';
 
@@ -52,7 +52,7 @@ function TimelineItem({ log, index }: { log: AuditView; index: number }) {
 // ─── Drawer ───────────────────────────────────────────────────────────────────
 
 function Drawer({ uid, onClose }: { uid: string; onClose: () => void }) {
-  const { logs, loading, error } = useAuditLogs(uid);
+  const { logs, loading, error, hasMoreLogs, isLoadingMore, loadMoreLogs } = useAuditLogs(uid);
 
   const containerRef  = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -127,7 +127,7 @@ function Drawer({ uid, onClose }: { uid: string; onClose: () => void }) {
             </div>
             <div>
               <h2 className="text-sm font-black text-quantum-fg">Histórico de Ações</h2>
-              <p className="text-[10px] text-quantum-fgMuted">Últimas 50 operações registradas</p>
+              <p className="text-[10px] text-quantum-fgMuted">Operações registradas</p>
             </div>
           </div>
           <button
@@ -185,10 +185,21 @@ function Drawer({ uid, onClose }: { uid: string; onClose: () => void }) {
 
         {/* Rodapé */}
         {!loading && logs.length > 0 && (
-          <div className="px-5 py-3 border-t border-quantum-border shrink-0">
+          <div className="px-5 py-3 border-t border-quantum-border shrink-0 space-y-2">
             <p className="text-[10px] text-quantum-fgMuted/50 text-center">
               {logs.length} registro{logs.length !== 1 ? 's' : ''} carregado{logs.length !== 1 ? 's' : ''}
             </p>
+            {hasMoreLogs && (
+              <button
+                type="button"
+                onClick={() => { void loadMoreLogs(); }}
+                disabled={isLoadingMore}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-quantum-border bg-quantum-bgSecondary px-3 py-2 text-xs font-bold text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+                {isLoadingMore ? 'Carregando...' : 'Carregar mais'}
+              </button>
+            )}
           </div>
         )}
       </motion.aside>

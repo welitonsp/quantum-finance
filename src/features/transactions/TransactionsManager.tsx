@@ -23,6 +23,7 @@ import AuditTimeline from '../../components/AuditTimeline';
 import TransactionHistoryDrawer from '../../components/TransactionHistoryDrawer';
 import type { UserCategory } from '../../shared/schemas/categorySchemas';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { getCategoryStyle as catStyle } from '../../shared/lib/categoryStyles';
 
 const VIRTUAL_THRESHOLD = 100;
 
@@ -95,12 +96,6 @@ function buildTransactionGroup(key: string, label: string, items: Transaction[])
   };
 }
 
-interface CatStyleEntry {
-  bg: string;
-  text: string;
-  border: string;
-}
-
 interface Props {
   transactions?: Transaction[];
   loading: boolean;
@@ -122,25 +117,6 @@ interface Props {
   loadedCount?: number;
   loadMoreTransactions?: () => Promise<void>;
 }
-
-// ─── Paleta de cores por categoria ───────────────────────────────────────────
-const CAT_STYLE: Record<string, CatStyleEntry> = {
-  'Alimentação':    { bg: 'bg-amber-500/10',   text: 'text-amber-400',       border: 'border-amber-500/20'   },
-  'Transporte':     { bg: 'bg-blue-500/10',     text: 'text-blue-400',        border: 'border-blue-500/20'    },
-  'Assinaturas':    { bg: 'bg-cyan-500/10',     text: 'text-cyan-400',        border: 'border-cyan-500/20'    },
-  'Saúde':          { bg: 'bg-rose-500/10',     text: 'text-rose-400',        border: 'border-rose-500/20'    },
-  'Moradia':        { bg: 'bg-orange-500/10',   text: 'text-orange-400',      border: 'border-orange-500/20'  },
-  'Educação':       { bg: 'bg-indigo-500/10',   text: 'text-indigo-400',      border: 'border-indigo-500/20'  },
-  'Lazer':          { bg: 'bg-pink-500/10',     text: 'text-pink-400',        border: 'border-pink-500/20'    },
-  'Salário':        { bg: 'bg-emerald-500/10',  text: 'text-emerald-400',     border: 'border-emerald-500/20' },
-  'Investimento':   { bg: 'bg-teal-500/10',     text: 'text-teal-400',        border: 'border-teal-500/20'    },
-  'Freelance':      { bg: 'bg-violet-500/10',   text: 'text-violet-400',      border: 'border-violet-500/20'  },
-  'Impostos/Taxas': { bg: 'bg-red-500/10',      text: 'text-red-400',         border: 'border-red-500/20'     },
-  'Vestuário':      { bg: 'bg-purple-500/10',   text: 'text-purple-400',      border: 'border-purple-500/20'  },
-  'Diversos':       { bg: 'bg-white/5',         text: 'text-quantum-fgMuted', border: 'border-quantum-border'       },
-  'Outros':         { bg: 'bg-white/5',         text: 'text-quantum-fgMuted', border: 'border-quantum-border'       },
-};
-const catStyle = (cat: string): CatStyleEntry => CAT_STYLE[cat] ?? CAT_STYLE['Diversos']!;
 
 // ─── Label amigável para datas ────────────────────────────────────────────────
 function getDateLabel(dateStr: string): string {

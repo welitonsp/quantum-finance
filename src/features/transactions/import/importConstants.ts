@@ -275,25 +275,10 @@ export function mergeSuggestedMapping(current: ColumnMappingDraft, suggestion: P
 
 // ─── Category colors ──────────────────────────────────────────────────────────
 
-export const CAT_COLORS: Record<string, string> = {
-  'Alimentação':    'text-amber-400  bg-amber-400/10  border-amber-400/20',
-  'Transporte':     'text-blue-400   bg-blue-400/10   border-blue-400/20',
-  'Assinaturas':    'text-cyan-400   bg-cyan-400/10   border-cyan-400/20',
-  'Saúde':          'text-rose-400   bg-rose-400/10   border-rose-400/20',
-  'Moradia':        'text-orange-400 bg-orange-400/10 border-orange-400/20',
-  'Educação':       'text-indigo-400 bg-indigo-400/10 border-indigo-400/20',
-  'Lazer':          'text-pink-400   bg-pink-400/10   border-pink-400/20',
-  'Salário':        'text-quantum-accent bg-quantum-accent/10 border-quantum-accent/20',
-  'Investimento':   'text-quantum-accent bg-quantum-accent/10 border-quantum-accent/20',
-  'Impostos/Taxas': 'text-red-400    bg-red-400/10    border-red-400/20',
-  'Vestuário':      'text-purple-400 bg-purple-400/10 border-purple-400/20',
-  'Freelance':      'text-teal-400   bg-teal-400/10   border-teal-400/20',
-  'Diversos':       'text-quantum-fgMuted bg-white/5   border-quantum-border',
-  'Outros':         'text-quantum-fgMuted bg-white/5   border-quantum-border',
-};
-
-export const catClass = (cat: string | undefined): string =>
-  CAT_COLORS[cat ?? 'Diversos'] ?? CAT_COLORS['Diversos']!;
+export {
+  CATEGORY_BADGE_CLASSES as CAT_COLORS,
+  getCategoryBadgeClass as catClass,
+} from '../../../shared/lib/categoryStyles';
 
 // ─── Import stats helpers ─────────────────────────────────────────────────────
 

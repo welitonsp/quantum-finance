@@ -1,16 +1,14 @@
 import type { Timestamp } from 'firebase/firestore';
 import type { Centavos } from './money';
+import type { AllowedCategory } from '../schemas/financialSchemas';
+
+export type { AllowedCategory } from '../schemas/financialSchemas';
 
 export type CanonicalTransactionType = 'entrada' | 'saida';
 export type LegacyTransactionType = 'receita' | 'despesa';
 export type TransactionType = CanonicalTransactionType | LegacyTransactionType;
 export type ReconciliationStatus = 'reconciled';
 export type ReconciliationSource = 'import';
-
-export type AllowedCategory =
-  | 'Alimentação' | 'Transporte' | 'Assinaturas' | 'Educação' | 'Saúde'
-  | 'Moradia' | 'Impostos/Taxas' | 'Lazer' | 'Vestuário' | 'Salário'
-  | 'Freelance' | 'Investimento' | 'Diversos' | 'Outros' | 'Importado';
 
 export interface Transaction {
   id: string;

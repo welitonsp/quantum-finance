@@ -10,24 +10,7 @@ import { formatBRL, fromCentavos, toCentavos } from '../../shared/types/money';
 import { isIncome } from '../../utils/transactionUtils';
 import { useCategories } from '../../hooks/useCategories';
 import { normalizeCategoryName, type UserCategory } from '../../shared/schemas/categorySchemas';
-
-interface CatMeta { emoji: string; color: string }
-const CAT_META: Record<string, CatMeta> = {
-  'Alimentação':    { emoji: '🍽️',  color: 'from-orange-500/20 to-orange-600/10 border-orange-500/30 text-orange-300'  },
-  'Transporte':     { emoji: '🚗',  color: 'from-blue-500/20 to-blue-600/10 border-blue-500/30 text-blue-300'           },
-  'Assinaturas':    { emoji: '📱',  color: 'from-purple-500/20 to-purple-600/10 border-purple-500/30 text-purple-300'  },
-  'Educação':       { emoji: '📚',  color: 'from-cyan-500/20 to-cyan-600/10 border-cyan-500/30 text-cyan-300'           },
-  'Saúde':          { emoji: '❤️',  color: 'from-rose-500/20 to-rose-600/10 border-rose-500/30 text-rose-300'           },
-  'Moradia':        { emoji: '🏠',  color: 'from-yellow-500/20 to-yellow-600/10 border-yellow-500/30 text-yellow-300'  },
-  'Impostos/Taxas': { emoji: '📋',  color: 'from-red-500/20 to-red-600/10 border-red-500/30 text-red-300'               },
-  'Lazer':          { emoji: '🎮',  color: 'from-pink-500/20 to-pink-600/10 border-pink-500/30 text-pink-300'           },
-  'Vestuário':      { emoji: '👗',  color: 'from-violet-500/20 to-violet-600/10 border-violet-500/30 text-violet-300'  },
-  'Salário':        { emoji: '💰',  color: 'from-emerald-500/20 to-emerald-600/10 border-emerald-500/30 text-emerald-300' },
-  'Freelance':      { emoji: '💼',  color: 'from-teal-500/20 to-teal-600/10 border-teal-500/30 text-teal-300'           },
-  'Investimento':   { emoji: '📈',  color: 'from-lime-500/20 to-lime-600/10 border-lime-500/30 text-lime-300'           },
-  'Diversos':       { emoji: '📦',  color: 'from-slate-500/20 to-slate-600/10 border-slate-500/30 text-quantum-fg'       },
-  'Outros':         { emoji: '•',   color: 'from-slate-500/20 to-slate-600/10 border-slate-500/30 text-quantum-fg'       },
-};
+import { getCategoryMeta } from '../../shared/lib/categoryStyles';
 
 function formatCurrencyDisplay(raw: string): string | null {
   if (!raw.trim()) return null;
@@ -116,7 +99,7 @@ function CategoryPicker({ value, onChange, categories, search, onSearchChange }:
       {displayCategories.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-52 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
           {displayCategories.map(cat => {
-            const meta     = CAT_META[cat.name] ?? CAT_META['Outros']!;
+            const meta     = getCategoryMeta(cat.name);
             const icon     = cat.icon ?? meta.emoji;
             const isActive = value === cat.name;
             return (
@@ -201,7 +184,7 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
           normalizedName: formData.category.toLowerCase(),
           type: 'ambos' as const,
           color: '#64748b',
-          icon: CAT_META[formData.category]?.emoji ?? '•',
+          icon: getCategoryMeta(formData.category).emoji,
           isDefault: false,
           isActive: true,
         },
@@ -417,7 +400,7 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
             <label className="flex items-center gap-1.5 text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">
               <Tag className="w-3 h-3" /> Categoria
               <span className="ml-auto text-slate-600 normal-case text-[10px]">
-                {loadingCategories ? 'Carregando…' : `${CAT_META[formData.category]?.emoji ?? '•'} ${formData.category}`}
+                {loadingCategories ? 'Carregando…' : `${getCategoryMeta(formData.category).emoji} ${formData.category}`}
               </span>
             </label>
             <CategoryPicker
