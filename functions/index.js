@@ -27,7 +27,7 @@ const adminDb = admin.firestore();
 // FUNÇÃO 0 — createTransaction (server-trusted — auditoria atômica)
 // ═══════════════════════════════════════════════════════════════════════════════
 exports.createTransaction = onCall(
-  { region: 'southamerica-east1', timeoutSeconds: 30 },
+  { region: 'southamerica-east1', timeoutSeconds: 30, enforceAppCheck: true },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Acesso negado.');
