@@ -4,8 +4,7 @@ import {
   getDocs, startAfter,
   type QueryDocumentSnapshot, type DocumentData, type Timestamp,
 } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { db, functions } from '../shared/api/firebase/index';
+import { db } from '../shared/api/firebase/index';
 import { FirestoreService } from '../shared/services/FirestoreService';
 import { AuditService } from '../shared/services/AuditService';
 import type { Transaction } from '../shared/types/transaction';
@@ -15,13 +14,6 @@ import { categorizeTransaction } from '../utils/aiCategorize';
 import { categorizeWithAI } from '../services/AICategorizationService';
 import { PAGE_SIZE, mergeTransactionPages, hasMorePages } from '../utils/transactionPagination';
 import toast from 'react-hot-toast';
-
-// ─── Callable server-trusted ─────────────────────────────────────────────────
-
-const createTransactionCallable = httpsCallable<Record<string, unknown>, { id: string }>(
-  functions,
-  'createTransaction',
-);
 
 // ─── Bulk Update — tipo restrito (não expõe Partial<Transaction> livre) ────────
 export type BulkUpdate = {
@@ -482,8 +474,8 @@ export function useTransactions(
       try {
         switch (op.type) {
           case 'add': {
-            // Criação server-trusted via callable — transação + history gravados atomicamente no servidor
-            debugSync('iniciando criação server-trusted via callable', {
+            // Modo Spark: transação + history gravados atomicamente por writeBatch validado em Rules.
+            debugSync('iniciando criação manual via batch Firestore', {
               uid,
               tempId: op.tempId,
               payload: {
@@ -495,24 +487,9 @@ export function useTransactions(
                 hasDescription: Boolean(op.data.description),
               },
             });
-            const callablePayload: Record<string, unknown> = {
-              description: op.data.description ?? '',
-              value_cents: op.data.value_cents ?? 0,
-              type:        op.data.type ?? 'saida',
-              category:    op.data.category ?? 'Outros',
-              date:        op.data.date ?? new Date().toISOString().slice(0, 10),
-              source:      op.data.source ?? 'manual',
-              ...(op.data.fitId      !== undefined ? { fitId:      op.data.fitId      } : {}),
-              ...(op.data.tags       !== undefined ? { tags:       op.data.tags       } : {}),
-              ...(op.data.isRecurring !== undefined ? { isRecurring: op.data.isRecurring } : {}),
-              ...(op.data.account    !== undefined ? { account:    op.data.account    } : {}),
-              ...(op.data.accountId  !== undefined ? { accountId:  op.data.accountId  } : {}),
-              ...(op.data.cardId     !== undefined ? { cardId:     op.data.cardId     } : {}),
-            };
-            const callResult = await createTransactionCallable(callablePayload);
-            const realId = callResult.data.id;
-            debugSync('callable confirmada', { uid, tempId: op.tempId, realId });
-            // Callable já escreveu transação + history de forma atômica — sem log client-side
+            const realId = await FirestoreService.createManualTransactionWithHistory(uid, op.data);
+            debugSync('batch Firestore confirmado', { uid, tempId: op.tempId, realId });
+            // O batch já escreveu transação + history de forma atômica — sem log CREATE separado
             const aiCb = postAddCallbacks.current.get(op.tempId);
             if (aiCb) {
               postAddCallbacks.current.delete(op.tempId);

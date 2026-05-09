@@ -5,6 +5,7 @@ import { toCentavos } from '../types/money';
 const {
   mockAddDoc,
   mockBatchCommit,
+  mockBatchSet,
   mockBatchUpdate,
   mockCollection,
   mockDoc,
@@ -16,8 +17,10 @@ const {
 } = vi.hoisted(() => {
   const mockAddDoc = vi.fn().mockResolvedValue({ id: 'new-doc-id' });
   const mockBatchCommit = vi.fn().mockResolvedValue(undefined);
+  const mockBatchSet = vi.fn();
   const mockBatchUpdate = vi.fn();
   const mockWriteBatch = vi.fn(() => ({
+    set: mockBatchSet,
     update: mockBatchUpdate,
     commit: mockBatchCommit,
   }));
@@ -42,6 +45,7 @@ const {
   return {
     mockAddDoc,
     mockBatchCommit,
+    mockBatchSet,
     mockBatchUpdate,
     mockCollection,
     mockDoc,
@@ -121,6 +125,85 @@ describe('FirestoreService.saveAllTransactions', () => {
       }),
     ]);
     expect(mockAddDoc).not.toHaveBeenCalled();
+  });
+});
+
+describe('FirestoreService.createManualTransactionWithHistory', () => {
+  it('monta batch com transaction + history CREATE/manual sem campos proibidos', async () => {
+    const txId = await FirestoreService.createManualTransactionWithHistory('uid1', {
+      ...baseCreate,
+      id: 'client-id',
+      uid: 'forged-uid',
+      value: 123.45,
+      importHash: 'x'.repeat(64),
+      fitId: null,
+      tags: ['casa'],
+      isRecurring: false,
+      account: 'Conta principal',
+      accountId: 'account-1',
+      cardId: 'card-1',
+    });
+
+    expect(txId).toBe('mock-doc-id');
+    expect(mockWriteBatch).toHaveBeenCalledTimes(1);
+    expect(mockBatchSet).toHaveBeenCalledTimes(2);
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+
+    const [, txPayload] = mockBatchSet.mock.calls[0] as [unknown, Record<string, unknown>];
+    const [, historyPayload] = mockBatchSet.mock.calls[1] as [unknown, Record<string, unknown>];
+
+    expect(txPayload).toEqual(expect.objectContaining({
+      description: 'Supermercado ABC',
+      value_cents: 12345,
+      type: 'saida',
+      category: 'Alimentação',
+      date: '2026-04-01',
+      source: 'manual',
+      schemaVersion: 2,
+      fitId: null,
+      tags: ['casa'],
+      isRecurring: false,
+      createdAt: { _serverTimestamp: true },
+      updatedAt: { _serverTimestamp: true },
+    }));
+    expect(txPayload).not.toHaveProperty('id');
+    expect(txPayload).not.toHaveProperty('uid');
+    expect(txPayload).not.toHaveProperty('value');
+    expect(txPayload).not.toHaveProperty('importHash');
+
+    expect(historyPayload).toEqual(expect.objectContaining({
+      action: 'CREATE',
+      origin: 'manual',
+      txId: 'mock-doc-id',
+      amount_cents: 12345,
+      category: 'Alimentação',
+      schemaVersion: 1,
+      createdAt: { _serverTimestamp: true },
+      changedFields: expect.arrayContaining([
+        'description',
+        'value_cents',
+        'schemaVersion',
+        'type',
+        'category',
+        'date',
+        'source',
+        'isRecurring',
+      ]),
+    }));
+    expect(historyPayload).not.toHaveProperty('id');
+    expect(historyPayload).not.toHaveProperty('uid');
+    expect(historyPayload).not.toHaveProperty('value');
+    expect(historyPayload).not.toHaveProperty('importHash');
+    expect(historyPayload['after']).toEqual(expect.objectContaining({
+      description: 'Supermercado ABC',
+      value_cents: 12345,
+      type: 'saida',
+      category: 'Alimentação',
+      date: '2026-04-01',
+      source: 'manual',
+      schemaVersion: 2,
+      isRecurring: false,
+    }));
   });
 });
 

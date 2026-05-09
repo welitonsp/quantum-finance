@@ -5,6 +5,7 @@ import type { Centavos } from '../shared/types/money';
 const {
   mockCallable,
   mockCollection,
+  mockCreateManualTransactionWithHistory,
   mockHttpsCallable,
   mockLimit,
   mockLogAction,
@@ -18,6 +19,7 @@ const {
   return {
     mockCallable:              callable,
     mockCollection:            vi.fn(() => ({ kind: 'collection' })),
+    mockCreateManualTransactionWithHistory: vi.fn().mockResolvedValue('tx-created-1'),
     mockHttpsCallable:         vi.fn(() => callable),
     mockLimit:                 vi.fn((count: number) => ({ kind: 'limit', count })),
     mockLogAction:             vi.fn(),
@@ -50,6 +52,7 @@ vi.mock('../shared/api/firebase/index', () => ({
 
 vi.mock('../shared/services/FirestoreService', () => ({
   FirestoreService: {
+    createManualTransactionWithHistory: mockCreateManualTransactionWithHistory,
     updateTransaction:       vi.fn(),
     deleteTransaction:       vi.fn(),
     deleteBatchTransactions: vi.fn(),
@@ -78,10 +81,11 @@ vi.mock('react-hot-toast', () => ({
 
 import { sanitizeForHistory, useTransactions } from './useTransactions';
 
-describe('useTransactions - criação server-trusted via callable', () => {
+describe('useTransactions - criação manual Spark via batch', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCallable.mockResolvedValue({ data: { id: 'tx-created-1' } });
+    mockCreateManualTransactionWithHistory.mockResolvedValue('tx-created-1');
     mockLogAction.mockResolvedValue(undefined);
     mockLogTransactionHistory.mockResolvedValue(undefined);
     mockOnSnapshot.mockImplementation((_queryArg: unknown, onNext: (snap: { docs: never[] }) => void) => {
@@ -90,7 +94,7 @@ describe('useTransactions - criação server-trusted via callable', () => {
     });
   });
 
-  it('chama callable com payload canônico excluindo campos proibidos', async () => {
+  it('chama FirestoreService.createManualTransactionWithHistory e não chama callable', async () => {
     const { result, unmount } = renderHook(() => useTransactions('uid-1'));
 
     let createdId = '';
@@ -112,27 +116,30 @@ describe('useTransactions - criação server-trusted via callable', () => {
 
     expect(createdId).toBe('tx-created-1');
 
-    expect(mockCallable).toHaveBeenCalledWith(expect.objectContaining({
-      description: 'Café manual',
-      value_cents: 1234,
-      type:        'saida',
-      category:    'Alimentação',
-      date:        '2026-05-05',
-      source:      'manual',
-    }));
+    expect(mockCreateManualTransactionWithHistory).toHaveBeenCalledWith(
+      'uid-1',
+      expect.objectContaining({
+        description: 'Café manual',
+        value_cents: 1234,
+        type:        'saida',
+        category:    'Alimentação',
+        date:        '2026-05-05',
+        source:      'manual',
+      }),
+    );
+    expect(mockHttpsCallable).not.toHaveBeenCalled();
+    expect(mockCallable).not.toHaveBeenCalled();
 
-    // id, uid e importHash nunca chegam ao servidor
-    const [payload] = mockCallable.mock.calls[0] as [Record<string, unknown>];
+    const [, payload] = mockCreateManualTransactionWithHistory.mock.calls[0] as [string, Record<string, unknown>];
     expect(payload).not.toHaveProperty('id');
     expect(payload).not.toHaveProperty('uid');
     expect(payload).not.toHaveProperty('importHash');
     expect(payload).not.toHaveProperty('value');
-    expect(payload).not.toHaveProperty('schemaVersion');
 
     unmount();
   });
 
-  it('não chama logTransactionHistory para CREATE — o servidor é o único writer', async () => {
+  it('não chama logTransactionHistory para CREATE — o batch escreve history junto', async () => {
     const { result, unmount } = renderHook(() => useTransactions('uid-1'));
 
     await act(async () => {
@@ -146,11 +153,35 @@ describe('useTransactions - criação server-trusted via callable', () => {
       });
     });
 
-    // Nenhum log de CREATE client-side — callable escreve atomicamente
+    // Nenhum log de CREATE separado — o helper escreve transaction + history no mesmo batch.
     const createCalls = mockLogTransactionHistory.mock.calls.filter(
       (c) => (c[2] as { action: string }).action === 'CREATE',
     );
     expect(createCalls).toHaveLength(0);
+
+    unmount();
+  });
+
+  it('remove o item otimista quando a criação manual falha', async () => {
+    const permissionError = Object.assign(new Error('permission denied'), {
+      code: 'permission-denied',
+    });
+    mockCreateManualTransactionWithHistory.mockRejectedValueOnce(permissionError);
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+
+    await act(async () => {
+      await expect(result.current.add({
+        description: 'Café manual',
+        value_cents: 1234 as Centavos,
+        type:        'saida',
+        category:    'Alimentação',
+        date:        '2026-05-05',
+        source:      'manual',
+      })).rejects.toThrow('A movimentação foi recusada pelas regras do Firebase');
+    });
+
+    await waitFor(() => expect(result.current.transactions).toHaveLength(0));
+    expect(mockCreateManualTransactionWithHistory).toHaveBeenCalledTimes(1);
 
     unmount();
   });
