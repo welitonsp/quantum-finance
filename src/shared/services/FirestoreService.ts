@@ -12,6 +12,7 @@ import {
   serverTimestamp,
   deleteField,
   type CollectionReference,
+  type DocumentReference,
 } from 'firebase/firestore';
 import { z } from 'zod';
 import { db } from '../api/firebase/index';
@@ -143,6 +144,102 @@ function buildManualCreateAfterSnapshot(txPayload: Record<string, unknown>): Rec
     if (txPayload[field] !== undefined) acc[field] = txPayload[field];
     return acc;
   }, {});
+}
+
+function buildManualCreateHistoryPayload(
+  txId: string,
+  canonicalPayload: Record<string, unknown>,
+  timestamp: unknown,
+  afterSnapshot: Record<string, unknown>,
+  changedFields: string[],
+): Record<string, unknown> {
+  return {
+    action: 'CREATE',
+    txId,
+    createdAt: timestamp,
+    schemaVersion: 1,
+    origin: 'manual',
+    amount_cents: canonicalPayload['value_cents'],
+    category: canonicalPayload['category'],
+    after: afterSnapshot,
+    changedFields,
+  };
+}
+
+function assertValidManualTxId(txId: string): void {
+  if (txId.length < 1 || txId.length > 128 || txId.includes('/') || txId === '.' || txId === '..') {
+    throw new Error('[Firestore][createManualTransactionWithHistory] txId manual inválido.');
+  }
+}
+
+function canonicalEquals(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+    return left.every((item, index) => canonicalEquals(item, right[index]));
+  }
+  if (
+    left !== null
+    && right !== null
+    && typeof left === 'object'
+    && typeof right === 'object'
+  ) {
+    const leftRecord = left as Record<string, unknown>;
+    const rightRecord = right as Record<string, unknown>;
+    const leftKeys = Object.keys(leftRecord).sort();
+    const rightKeys = Object.keys(rightRecord).sort();
+    if (leftKeys.length !== rightKeys.length) return false;
+    return leftKeys.every((key, index) => (
+      key === rightKeys[index] && canonicalEquals(leftRecord[key], rightRecord[key])
+    ));
+  }
+  return false;
+}
+
+function hasAnyKey(data: Record<string, unknown>, keys: readonly string[]): boolean {
+  return keys.some(key => key in data);
+}
+
+function manualCreateTransactionMatchesCanonical(
+  data: Record<string, unknown>,
+  canonicalPayload: Record<string, unknown>,
+): boolean {
+  if (hasAnyKey(data, ['id', 'uid', 'value', 'importHash'])) return false;
+
+  const allowedKeys = new Set([...Object.keys(canonicalPayload), 'createdAt', 'updatedAt']);
+  if (!Object.keys(data).every(key => allowedKeys.has(key))) return false;
+
+  return Object.entries(canonicalPayload).every(([key, value]) => (
+    canonicalEquals(data[key], value)
+  ));
+}
+
+function manualCreateHistoryMatchesCanonical(
+  data: Record<string, unknown>,
+  expectedHistory: Record<string, unknown>,
+): boolean {
+  const allowedKeys = new Set([...Object.keys(expectedHistory), 'createdAt']);
+  if (!Object.keys(data).every(key => allowedKeys.has(key))) return false;
+
+  return Object.entries(expectedHistory).every(([key, value]) => (
+    key === 'createdAt' || canonicalEquals(data[key], value)
+  ));
+}
+
+async function manualCreateAlreadyCommitted(
+  txRef: DocumentReference,
+  historyRef: DocumentReference,
+  canonicalPayload: Record<string, unknown>,
+  expectedHistory: Record<string, unknown>,
+): Promise<boolean> {
+  try {
+    const [txSnap, historySnap] = await Promise.all([getDoc(txRef), getDoc(historyRef)]);
+    if (!txSnap.exists() || !historySnap.exists()) return false;
+    return manualCreateTransactionMatchesCanonical(txSnap.data(), canonicalPayload)
+      && manualCreateHistoryMatchesCanonical(historySnap.data(), expectedHistory);
+  } catch {
+    return false;
+  }
 }
 
 function getFirebaseErrorCode(err: unknown): string | undefined {
@@ -296,11 +393,13 @@ export const FirestoreService = {
   async createManualTransactionWithHistory(
     uid: string,
     data: ManualTransactionCreateDTO,
+    txId?: string,
   ): Promise<string> {
     if (!uid) throw new Error('[Firestore][createManualTransactionWithHistory] UID ausente.');
+    if (txId !== undefined) assertValidManualTxId(txId);
 
     const canonicalPayload = buildManualCreatePayload(data);
-    const txRef = doc(txCol(uid));
+    const txRef = txId !== undefined ? doc(txCol(uid), txId) : doc(txCol(uid));
     const historyRef = doc(collection(db, 'users', uid, 'transactions', txRef.id, 'history'), 'create');
     const timestamp = serverTimestamp();
     const txPayload = {
@@ -310,22 +409,29 @@ export const FirestoreService = {
     };
     const afterSnapshot = buildManualCreateAfterSnapshot(canonicalPayload);
     const changedFields = MANUAL_CREATE_CHANGED_FIELDS.filter(field => afterSnapshot[field] !== undefined);
-    const historyPayload = {
-      action: 'CREATE',
-      txId: txRef.id,
-      createdAt: timestamp,
-      schemaVersion: 1,
-      origin: 'manual',
-      amount_cents: canonicalPayload['value_cents'],
-      category: canonicalPayload['category'],
-      after: afterSnapshot,
+    const historyPayload = buildManualCreateHistoryPayload(
+      txRef.id,
+      canonicalPayload,
+      timestamp,
+      afterSnapshot,
       changedFields,
-    };
+    );
 
     const batch = writeBatch(db);
     batch.set(txRef, txPayload);
     batch.set(historyRef, historyPayload);
-    await batch.commit();
+    try {
+      await batch.commit();
+    } catch (err) {
+      const alreadyCommitted = await manualCreateAlreadyCommitted(
+        txRef,
+        historyRef,
+        canonicalPayload,
+        historyPayload,
+      );
+      if (alreadyCommitted) return txRef.id;
+      throw err;
+    }
     return txRef.id;
   },
 

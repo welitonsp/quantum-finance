@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   collection, query, orderBy, onSnapshot, limit,
-  getDocs, startAfter,
+  doc, getDocs, startAfter,
   type QueryDocumentSnapshot, type DocumentData, type Timestamp,
 } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
@@ -38,6 +38,7 @@ const RETRY_INTERVAL_MS = 5_000;
 interface AddOp {
   type:    'add';
   tempId:  string;
+  txId:    string;
   data:    Partial<Transaction>;
   retries: number;
 }
@@ -96,6 +97,10 @@ interface UseTransactionsReturn {
 
 function makeTempId(): string {
   return `__temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+}
+
+function makeManualTransactionId(uid: string): string {
+  return doc(collection(db, 'users', uid, 'transactions')).id;
 }
 
 function isTemp(id: string): boolean {
@@ -478,6 +483,7 @@ export function useTransactions(
             debugSync('iniciando criação manual via batch Firestore', {
               uid,
               tempId: op.tempId,
+              txId: op.txId,
               payload: {
                 type:           op.data.type,
                 category:       op.data.category,
@@ -487,7 +493,7 @@ export function useTransactions(
                 hasDescription: Boolean(op.data.description),
               },
             });
-            const realId = await FirestoreService.createManualTransactionWithHistory(uid, op.data);
+            const realId = await FirestoreService.createManualTransactionWithHistory(uid, op.data, op.txId);
             debugSync('batch Firestore confirmado', { uid, tempId: op.tempId, realId });
             // O batch já escreveu transação + history de forma atômica — sem log CREATE separado
             const aiCb = postAddCallbacks.current.get(op.tempId);
@@ -722,6 +728,7 @@ export function useTransactions(
 
     const now    = Date.now();
     const tempId = makeTempId();
+    const txId   = makeManualTransactionId(uid);
     const optimisticCentavos = getTxCentavos(enriched);
     const optimistic: Transaction = {
       description: '',
@@ -767,7 +774,7 @@ export function useTransactions(
 
     return new Promise<string>((resolve, reject) => {
       pendingAddResolvers.current.set(tempId, { resolve, reject });
-      enqueue({ type: 'add', tempId, data: enriched, retries: 0 });
+      enqueue({ type: 'add', tempId, txId, data: enriched, retries: 0 });
     });
   }, [uid, enqueue]);
 
@@ -837,6 +844,7 @@ export function useTransactions(
       }
 
       const tempId: string = makeTempId();
+      const txId:   string = makeManualTransactionId(uid);
       const optimisticCentavos = getTxCentavos(enriched);
       const optimistic: Transaction = {
         description: '',
@@ -879,7 +887,7 @@ export function useTransactions(
       optimistics.push(optimistic);
       tempIds.push(tempId);
       // Push directly to avoid N processQueue triggers; one call below handles all
-      queueRef.current.push({ type: 'add', tempId, data: enriched, retries: 0 });
+      queueRef.current.push({ type: 'add', tempId, txId, data: enriched, retries: 0 });
     });
 
     setTransactions(prev => [...optimistics, ...prev]);

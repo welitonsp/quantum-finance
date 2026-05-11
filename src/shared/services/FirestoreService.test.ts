@@ -25,7 +25,10 @@ const {
     commit: mockBatchCommit,
   }));
   const mockCollection = vi.fn().mockReturnValue({ id: 'mock-col', path: 'mock-col/path' });
-  const mockDoc = vi.fn().mockReturnValue({ id: 'mock-doc-id', path: 'mock/path' });
+  const mockDoc = vi.fn((_parent?: unknown, explicitId?: string) => {
+    const id = explicitId ?? 'mock-doc-id';
+    return { id, path: `mock/path/${id}` };
+  });
   const mockGetDoc = vi.fn().mockResolvedValue({
     exists: () => true,
     data: () => ({
@@ -99,10 +102,68 @@ const baseCreate = {
   source: 'manual',
 } as const;
 
+const manualCreateAfter = {
+  description: 'Supermercado ABC',
+  value_cents: 12345,
+  schemaVersion: 2,
+  type: 'saida',
+  category: 'Alimentação',
+  date: '2026-04-01',
+  source: 'manual',
+  isRecurring: false,
+} as const;
+
+const manualCreateChangedFields = [
+  'description',
+  'value_cents',
+  'schemaVersion',
+  'type',
+  'category',
+  'date',
+  'source',
+  'isRecurring',
+];
+
+function existingSnap(data: Record<string, unknown> | undefined) {
+  return {
+    exists: () => data !== undefined,
+    data: () => data ?? {},
+  };
+}
+
+function compatibleManualTransaction(overrides: Record<string, unknown> = {}) {
+  return {
+    ...manualCreateAfter,
+    createdAt: { seconds: 1 },
+    updatedAt: { seconds: 1 },
+    ...overrides,
+  };
+}
+
+function compatibleManualHistory(txId: string, overrides: Record<string, unknown> = {}) {
+  return {
+    action: 'CREATE',
+    txId,
+    createdAt: { seconds: 1 },
+    schemaVersion: 1,
+    origin: 'manual',
+    amount_cents: 12345,
+    category: 'Alimentação',
+    after: manualCreateAfter,
+    changedFields: manualCreateChangedFields,
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  mockDoc.mockImplementation((_parent?: unknown, explicitId?: string) => {
+    const id = explicitId ?? 'mock-doc-id';
+    return { id, path: `mock/path/${id}` };
+  });
   mockAddDoc.mockResolvedValue({ id: 'new-doc-id' });
   mockBatchCommit.mockResolvedValue(undefined);
+  mockGetDoc.mockResolvedValue(existingSnap(compatibleManualTransaction()));
   mockLedgerImport.mockResolvedValue({ added: 1, duplicates: 0, invalid: 0 });
 });
 
@@ -142,15 +203,18 @@ describe('FirestoreService.createManualTransactionWithHistory', () => {
       account: 'Conta principal',
       accountId: 'account-1',
       cardId: 'card-1',
-    });
+    }, 'tx-stable-1');
 
-    expect(txId).toBe('mock-doc-id');
+    expect(txId).toBe('tx-stable-1');
     expect(mockWriteBatch).toHaveBeenCalledTimes(1);
     expect(mockBatchSet).toHaveBeenCalledTimes(2);
     expect(mockBatchCommit).toHaveBeenCalledTimes(1);
 
-    const [, txPayload] = mockBatchSet.mock.calls[0] as [unknown, Record<string, unknown>];
-    const [, historyPayload] = mockBatchSet.mock.calls[1] as [unknown, Record<string, unknown>];
+    const [txRef, txPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [historyRef, historyPayload] = mockBatchSet.mock.calls[1] as [Record<string, unknown>, Record<string, unknown>];
+
+    expect(txRef).toEqual(expect.objectContaining({ id: 'tx-stable-1' }));
+    expect(historyRef).toEqual(expect.objectContaining({ id: 'create' }));
 
     expect(txPayload).toEqual(expect.objectContaining({
       description: 'Supermercado ABC',
@@ -174,7 +238,7 @@ describe('FirestoreService.createManualTransactionWithHistory', () => {
     expect(historyPayload).toEqual(expect.objectContaining({
       action: 'CREATE',
       origin: 'manual',
-      txId: 'mock-doc-id',
+      txId: 'tx-stable-1',
       amount_cents: 12345,
       category: 'Alimentação',
       schemaVersion: 1,
@@ -204,6 +268,57 @@ describe('FirestoreService.createManualTransactionWithHistory', () => {
       schemaVersion: 2,
       isRecurring: false,
     }));
+  });
+
+  it('retorna sucesso com txId fornecido quando commit é ambíguo mas transaction + history já existem compatíveis', async () => {
+    const ambiguousError = Object.assign(new Error('deadline exceeded after commit'), {
+      code: 'deadline-exceeded',
+    });
+    mockBatchCommit.mockRejectedValueOnce(ambiguousError);
+    mockGetDoc
+      .mockResolvedValueOnce(existingSnap(compatibleManualTransaction()))
+      .mockResolvedValueOnce(existingSnap(compatibleManualHistory('tx-stable-1')));
+
+    await expect(FirestoreService.createManualTransactionWithHistory(
+      'uid1',
+      baseCreate,
+      'tx-stable-1',
+    )).resolves.toBe('tx-stable-1');
+
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+    expect(mockGetDoc).toHaveBeenCalledTimes(2);
+  });
+
+  it('propaga erro ambíguo quando transaction existente diverge do payload canônico', async () => {
+    const ambiguousError = Object.assign(new Error('deadline exceeded after commit'), {
+      code: 'deadline-exceeded',
+    });
+    mockBatchCommit.mockRejectedValueOnce(ambiguousError);
+    mockGetDoc
+      .mockResolvedValueOnce(existingSnap(compatibleManualTransaction({ value_cents: 9999 })))
+      .mockResolvedValueOnce(existingSnap(compatibleManualHistory('tx-stable-1')));
+
+    await expect(FirestoreService.createManualTransactionWithHistory(
+      'uid1',
+      baseCreate,
+      'tx-stable-1',
+    )).rejects.toThrow('deadline exceeded after commit');
+  });
+
+  it('propaga erro ambíguo quando history/create esperado está ausente', async () => {
+    const ambiguousError = Object.assign(new Error('deadline exceeded after commit'), {
+      code: 'deadline-exceeded',
+    });
+    mockBatchCommit.mockRejectedValueOnce(ambiguousError);
+    mockGetDoc
+      .mockResolvedValueOnce(existingSnap(compatibleManualTransaction()))
+      .mockResolvedValueOnce(existingSnap(undefined));
+
+    await expect(FirestoreService.createManualTransactionWithHistory(
+      'uid1',
+      baseCreate,
+      'tx-stable-1',
+    )).rejects.toThrow('deadline exceeded after commit');
   });
 });
 
