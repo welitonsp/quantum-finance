@@ -12,6 +12,16 @@
 - A callable `createTransaction` permanece no código como caminho server-trusted futuro para Blaze; `enforceAppCheck: true` não deve ser removido por engano.
 - Rebaixamento aceito: sem Admin SDK não há autoridade server-trusted plena; a mitigação Spark depende de Rules rigorosas e testes de emulator.
 
+## Decisão Técnica — FASE 7E-1 Idempotência Spark Manual — 2026-05-11
+
+- O `txId` final da criação manual Spark é reservado uma vez em `useTransactions.add`/`addBatch` antes de enfileirar a operação.
+- A `AddOp` pendente preserva esse `txId` entre retries; `processQueue` repassa sempre o mesmo ID para `FirestoreService.createManualTransactionWithHistory(uid, data, txId)`.
+- `FirestoreService.createManualTransactionWithHistory` aceita `txId` explícito fora do payload financeiro, usa esse ID no documento `transactions/{txId}` e mantém `history/create` como ID fixo.
+- O payload financeiro continua sem `id`, `uid`, `value` legado e `importHash`; `value_cents` segue como valor canônico.
+- Em erro ambíguo de commit, o helper lê `transactions/{txId}` e `history/create`; se ambos já existem e batem com o payload canônico, retorna sucesso com o mesmo `txId`. Documento divergente ou history ausente propagam o erro original.
+- `firestore.rules` não foi alterado nesta fase; a idempotência foi implementada apenas por ID estável no cliente e verificação segura pós-erro.
+- A callable `createTransaction` e `functions/index.js` permanecem intactos para futuro modo Blaze/server-trusted.
+
 ## Sincronização — 2026-05-09
 
 - Topo da main: 65412ba (#82)
