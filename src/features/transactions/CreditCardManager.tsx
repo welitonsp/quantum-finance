@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import { useCreditCards } from '../../hooks/useCreditCards';
 import { fromCentavos } from '../../shared/schemas/financialSchemas';
 import type { CreditCard as CreditCardType, CreditCardWithMetrics, Transaction } from '../../shared/types/transaction';
+import type { MoneyInput } from '../../shared/types/money';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Props {
@@ -24,6 +25,10 @@ interface CardFormData {
   color:      string;
   active:     boolean;
 }
+
+type CreditCardFormPayload = Omit<CreditCardType, 'id' | 'limit'> & {
+  limit: MoneyInput;
+};
 
 // ─── CardVisual ───────────────────────────────────────────────────────────────
 function CardVisual({ card }: { card: CreditCardWithMetrics }) {
@@ -113,7 +118,7 @@ const CARD_COLORS = ['#00E68A', '#A855F7', '#06B6D4', '#FFB800', '#FF4757', '#3B
 
 interface CardFormProps {
   initial?: CreditCardWithMetrics | null;
-  onSave:   (data: Omit<CreditCardType, 'id'>) => void;
+  onSave:   (data: CreditCardFormPayload) => void;
   onCancel: () => void;
 }
 function CardForm({ initial, onSave, onCancel }: CardFormProps) {
@@ -135,8 +140,7 @@ function CardForm({ initial, onSave, onCancel }: CardFormProps) {
       toast.error('Preencha nome e limite.');
       return;
     }
-    const limitEmCentavos = Math.round(Number(form.limit) * 100);
-    onSave({ ...form, limit: limitEmCentavos });
+    onSave({ ...form, name: form.name.trim(), limit: String(form.limit).trim() });
   };
 
   return (
@@ -226,7 +230,7 @@ export default function CreditCardManager({ uid, transactions = [] }: Props) {
   const [editingCard, setEditingCard] = useState<CreditCardWithMetrics | null>(null);
   const [deletingId,  setDeletingId]  = useState<string | null>(null);
 
-  const handleSave = async (data: Omit<CreditCardType, 'id'>) => {
+  const handleSave = async (data: CreditCardFormPayload) => {
     try {
       if (editingCard) {
         await updateCard(editingCard.id, data);

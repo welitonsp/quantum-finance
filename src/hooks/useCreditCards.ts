@@ -5,6 +5,7 @@ import {
 import { db } from '../shared/api/firebase/index';
 import { toCentavos, fromCentavos } from '../shared/schemas/financialSchemas';
 import type { CreditCard, CreditCardWithMetrics, CardMetrics, Transaction } from '../shared/types/transaction';
+import type { MoneyInput } from '../shared/types/money';
 import { getTransactionAbsCentavos, isExpense } from '../utils/transactionUtils';
 
 function calcCardMetrics(card: CreditCard, transactions: Transaction[]): CardMetrics {
@@ -53,10 +54,18 @@ function calcCardMetrics(card: CreditCard, transactions: Transaction[]): CardMet
 interface UseCreditCardsReturn {
   cards: CreditCardWithMetrics[];
   loading: boolean;
-  addCard: (data: Omit<CreditCard, 'id'>) => Promise<string>;
-  updateCard: (id: string, data: Partial<CreditCard>) => Promise<void>;
+  addCard: (data: CreditCardWriteInput) => Promise<string>;
+  updateCard: (id: string, data: CreditCardUpdateInput) => Promise<void>;
   removeCard: (id: string) => Promise<void>;
 }
+
+type CreditCardWriteInput = Omit<CreditCard, 'id' | 'limit'> & {
+  limit: MoneyInput;
+};
+
+type CreditCardUpdateInput = Partial<Omit<CreditCard, 'limit'>> & {
+  limit?: MoneyInput;
+};
 
 export function useCreditCards(uid: string, transactions: Transaction[] = []): UseCreditCardsReturn {
   const [cards, setCards]     = useState<CreditCard[]>([]);
@@ -90,7 +99,7 @@ export function useCreditCards(uid: string, transactions: Transaction[] = []): U
     return cards.map(card => ({ ...card, metrics: calcCardMetrics(card, transactions) }));
   }, [cards, transactions]);
 
-  const addCard = useCallback(async (data: Omit<CreditCard, 'id'>): Promise<string> => {
+  const addCard = useCallback(async (data: CreditCardWriteInput): Promise<string> => {
     if (!uid) throw new Error('Utilizador não autenticado.');
     const ref = collection(db, 'users', uid, 'creditCards');
     const docRef = await addDoc(ref, {
@@ -104,7 +113,7 @@ export function useCreditCards(uid: string, transactions: Transaction[] = []): U
     return docRef.id;
   }, [uid]);
 
-  const updateCard = useCallback(async (id: string, data: Partial<CreditCard>): Promise<void> => {
+  const updateCard = useCallback(async (id: string, data: CreditCardUpdateInput): Promise<void> => {
     if (!uid || !id) return;
     const payload: Record<string, unknown> = { ...data, updatedAt: serverTimestamp() };
     if (data.limit !== undefined) payload['limit'] = toCentavos(data.limit);
