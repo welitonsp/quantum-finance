@@ -527,23 +527,22 @@ export function useTransactions(
                 hasDescription: Boolean(op.data.description),
               },
             });
-            await FirestoreService.updateTransaction(uid, op.itemId, op.data);
-            pendingIds.current.delete(op.itemId);
-            // Histórico por transação — fire-and-forget, não bloqueia UI
+
             if (op.previous) {
               const before = sanitizeForHistory(op.previous);
               const after  = sanitizeForHistory({ ...op.previous, ...op.data });
-              void AuditService.logTransactionHistory(uid, op.itemId, {
-                action:        'UPDATE',
-                txId:          op.itemId,
+              await FirestoreService.updateTransactionWithHistory(uid, op.itemId, op.data, {
                 before,
                 after,
                 changedFields: computeChangedFields(before, after),
-                origin:        'manual',
                 ...(typeof after['value_cents'] === 'number' ? { amount_cents: after['value_cents'] } : {}),
                 ...(typeof after['category']   === 'string'  ? { category:     after['category']   } : {}),
               });
+            } else {
+              await FirestoreService.updateTransaction(uid, op.itemId, op.data);
             }
+
+            pendingIds.current.delete(op.itemId);
             break;
           case 'delete':
             await FirestoreService.deleteTransaction(uid, op.itemId);
@@ -784,14 +783,13 @@ export function useTransactions(
     if (isTemp(id)) return; // aguarda confirmação do add
 
     const current = transactionsRef.current.find(tx => tx.id === id);
+    const previous = current;
     const normalizedData = buildUpdateWriteData(current, data);
 
     // Regista como pendente antes do optimistic update
     pendingIds.current.add(id);
 
-    let previous: Transaction | undefined;
     setTransactions(prev => {
-      previous = current ?? prev.find(tx => tx.id === id);
       return prev.map(tx =>
         tx.id === id
           // updatedAt local em ms; será substituído por serverTimestamp() no snapshot

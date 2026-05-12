@@ -15,6 +15,8 @@ const {
   mockOrderBy,
   mockQuery,
   mockStartAfter,
+  mockUpdateTransaction,
+  mockUpdateTransactionWithHistory,
 } = vi.hoisted(() => {
   const callable = vi.fn().mockResolvedValue({ data: { id: 'tx-created-1' } });
   return {
@@ -30,6 +32,8 @@ const {
     mockOrderBy:               vi.fn((field: string, direction: string) => ({ kind: 'orderBy', field, direction })),
     mockQuery:                 vi.fn(() => ({ kind: 'query' })),
     mockStartAfter:            vi.fn(),
+    mockUpdateTransaction:     vi.fn().mockResolvedValue(undefined),
+    mockUpdateTransactionWithHistory: vi.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -56,7 +60,8 @@ vi.mock('../shared/api/firebase/index', () => ({
 vi.mock('../shared/services/FirestoreService', () => ({
   FirestoreService: {
     createManualTransactionWithHistory: mockCreateManualTransactionWithHistory,
-    updateTransaction:       vi.fn(),
+    updateTransaction:       mockUpdateTransaction,
+    updateTransactionWithHistory: mockUpdateTransactionWithHistory,
     deleteTransaction:       vi.fn(),
     deleteBatchTransactions: vi.fn(),
     batchUpdateTransactions: vi.fn(),
@@ -301,6 +306,127 @@ describe('useTransactions - criação manual Spark via batch', () => {
         }),
       ),
     );
+
+    unmount();
+  });
+});
+
+describe('useTransactions - atualização manual com batch + history', () => {
+  const transactionDoc = {
+    id: 'tx-1',
+    data: () => ({
+      id:          'tx-1',
+      uid:         'uid-1',
+      value:       10,
+      importHash:  'x'.repeat(64),
+      description: 'Compra original',
+      value_cents: 1000,
+      type:        'saida',
+      category:    'Outros',
+      date:        '2026-05-01',
+      source:      'manual',
+      schemaVersion: 2,
+      createdAt:   1000,
+      updatedAt:   1000,
+    }),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLogTransactionHistory.mockResolvedValue(undefined);
+    mockUpdateTransaction.mockResolvedValue(undefined);
+    mockUpdateTransactionWithHistory.mockResolvedValue(undefined);
+    mockOnSnapshot.mockImplementation((_queryArg: unknown, onNext: (snap: { docs: unknown[] }) => void) => {
+      onNext({ docs: [transactionDoc] });
+      return vi.fn();
+    });
+  });
+
+  it('chama updateTransactionWithHistory quando previous existe e não chama logTransactionHistory', async () => {
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.transactions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.update('tx-1', {
+        description: 'Compra alterada',
+        category: 'Alimentação',
+      });
+    });
+
+    await waitFor(() => expect(mockUpdateTransactionWithHistory).toHaveBeenCalledWith(
+      'uid-1',
+      'tx-1',
+      expect.objectContaining({
+        description: 'Compra alterada',
+        category: 'Alimentação',
+      }),
+      expect.objectContaining({
+        before: expect.objectContaining({ description: 'Compra original', category: 'Outros' }),
+        after: expect.objectContaining({ description: 'Compra alterada', category: 'Alimentação' }),
+        changedFields: expect.arrayContaining(['description', 'category']),
+        amount_cents: 1000,
+        category: 'Alimentação',
+      }),
+    ));
+
+    const [, , , historyEvent] = mockUpdateTransactionWithHistory.mock.calls[0] as [
+      string,
+      string,
+      Record<string, unknown>,
+      { before: Record<string, unknown>; after: Record<string, unknown> },
+    ];
+    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+      expect(historyEvent.before).not.toHaveProperty(forbidden);
+      expect(historyEvent.after).not.toHaveProperty(forbidden);
+    }
+    expect(mockLogTransactionHistory).not.toHaveBeenCalled();
+    expect(mockUpdateTransaction).not.toHaveBeenCalled();
+
+    unmount();
+  });
+
+  it('mantém fallback para updateTransaction quando previous não existe', async () => {
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.update('tx-unknown', { description: 'Fallback' });
+    });
+
+    expect(mockUpdateTransaction).toHaveBeenCalledWith('uid-1', 'tx-unknown', expect.anything());
+    expect(mockUpdateTransactionWithHistory).not.toHaveBeenCalled();
+    expect(mockLogTransactionHistory).not.toHaveBeenCalled();
+
+    unmount();
+  });
+
+  it('restaura o estado otimista quando updateTransactionWithHistory falha', async () => {
+    const permissionError = Object.assign(new Error('permission denied'), {
+      code: 'permission-denied',
+    });
+    mockUpdateTransactionWithHistory.mockRejectedValueOnce(permissionError);
+
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.transactions[0]?.description).toBe('Compra original'));
+
+    await act(async () => {
+      await result.current.update('tx-1', {
+        description: 'Compra alterada',
+        category:    'Alimentação',
+      });
+    });
+
+    await waitFor(() => expect(mockUpdateTransactionWithHistory).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(result.current.transactions[0]).toEqual(expect.objectContaining({
+        id:          'tx-1',
+        description: 'Compra original',
+        category:    'Outros',
+      }));
+    });
+
+    expect(mockUpdateTransaction).not.toHaveBeenCalled();
+    expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 
     unmount();
   });

@@ -323,6 +323,10 @@ describe('FirestoreService.createManualTransactionWithHistory', () => {
 });
 
 describe('FirestoreService.updateTransaction', () => {
+  it('continua disponível para fluxos não migrados', () => {
+    expect(typeof FirestoreService.updateTransaction).toBe('function');
+  });
+
   it('aceita contrato persistente opcional de conciliação', async () => {
     const reconciledAt = { _serverTimestamp: true };
 
@@ -344,6 +348,97 @@ describe('FirestoreService.updateTransaction', () => {
     expect(data['value']).toEqual({ _deleteField: true });
     expect(data['id']).toEqual({ _deleteField: true });
     expect(data['uid']).toEqual({ _deleteField: true });
+  });
+});
+
+describe('FirestoreService.updateTransactionWithHistory', () => {
+  it('monta batch com transaction update + history UPDATE sem campos proibidos', async () => {
+    const historyEvent = {
+      before: {
+        id: 'tx-forged',
+        uid: 'uid-forged',
+        value: 20,
+        importHash: 'x'.repeat(64),
+        description: 'Antigo',
+        category: 'Outros',
+      },
+      after: {
+        id: 'tx-forged',
+        uid: 'uid-forged',
+        value: 20,
+        importHash: 'x'.repeat(64),
+        description: 'Novo',
+        category: 'Alimentação',
+        value_cents: 2000,
+      },
+      changedFields: ['description', 'category', 'value_cents'],
+      amount_cents: 2000,
+      category: 'Alimentação',
+    };
+
+    await FirestoreService.updateTransactionWithHistory('uid1', 'tx-1', {
+      description: 'Novo',
+      category: 'Alimentação',
+      value_cents: 2000,
+    }, historyEvent);
+
+    expect(mockWriteBatch).toHaveBeenCalledTimes(1);
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
+    expect(mockBatchSet).toHaveBeenCalledTimes(1);
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+
+    const [txRef, txPayload] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [historyRef, historyPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+
+    expect(txRef).toEqual(expect.objectContaining({ id: 'tx-1' }));
+    expect(historyRef).toEqual(expect.objectContaining({ id: 'mock-doc-id' }));
+
+    expect(txPayload).toEqual(expect.objectContaining({
+      description: 'Novo',
+      category: 'Alimentação',
+      value_cents: 2000,
+      updatedAt: { _serverTimestamp: true },
+    }));
+    expect(txPayload['uid']).toEqual({ _deleteField: true });
+    expect(txPayload['id']).toEqual({ _deleteField: true });
+    expect(txPayload['value']).toEqual({ _deleteField: true });
+
+    expect(historyPayload).toEqual(expect.objectContaining({
+      action: 'UPDATE',
+      origin: 'manual',
+      txId: 'tx-1',
+      amount_cents: 2000,
+      category: 'Alimentação',
+      schemaVersion: 1,
+      createdAt: { _serverTimestamp: true },
+      before: { description: 'Antigo', category: 'Outros' },
+      after: { description: 'Novo', category: 'Alimentação', value_cents: 2000 },
+      changedFields: ['description', 'category', 'value_cents'],
+    }));
+    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+      expect(historyPayload['before']).not.toHaveProperty(forbidden);
+      expect(historyPayload['after']).not.toHaveProperty(forbidden);
+    }
+  });
+
+  it('rejeita quando o commit do batch falha', async () => {
+    mockBatchCommit.mockRejectedValueOnce(new Error('batch failed'));
+
+    await expect(FirestoreService.updateTransactionWithHistory('uid1', 'tx-1', {
+      description: 'Novo',
+      category: 'Alimentação',
+      value_cents: 2000,
+    }, {
+      before: { description: 'Antigo', category: 'Outros' },
+      after: { description: 'Novo', category: 'Alimentação', value_cents: 2000 },
+      changedFields: ['description', 'category', 'value_cents'],
+      amount_cents: 2000,
+      category: 'Alimentação',
+    })).rejects.toThrow('batch failed');
+
+    expect(mockWriteBatch).toHaveBeenCalledTimes(1);
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
+    expect(mockBatchSet).toHaveBeenCalledTimes(1);
   });
 });
 

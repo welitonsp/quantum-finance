@@ -68,6 +68,8 @@ const transactionWriteUpdateSchema = transactionWriteCreateSchema.partial()
   })
   .refine(value => Object.keys(value).length > 0, 'Atualização vazia.');
 
+const HISTORY_SNAPSHOT_FORBIDDEN_FIELDS = new Set(['id', 'uid', 'value', 'importHash']);
+
 export interface TransactionUpdateDTO {
   description?: string;
   value_cents?: Centavos | number;
@@ -320,6 +322,16 @@ function normalizeUpdatePayload(data: TransactionUpdateDTO): Record<string, unkn
   return parsed.data;
 }
 
+function sanitizeHistorySnapshot(snapshot: Record<string, unknown>): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(snapshot)) {
+    if (!HISTORY_SNAPSHOT_FORBIDDEN_FIELDS.has(key) && value !== undefined) {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
+
 function buildSoftDeletePatch(existing: Record<string, unknown>): Record<string, unknown> {
   const type = canonicalizeTransactionType(existing['type'] as string | undefined);
   const srcRaw = existing['source'] as string | undefined;
@@ -448,6 +460,59 @@ export const FirestoreService = {
     debugUpdatePayload(id, payload, true);
     try {
       await updateDoc(doc(txCol(uid), id), writePayload);
+    } catch (err) {
+      debugRejectedUpdatePayload(id, payload, err);
+      throw err;
+    }
+  },
+
+  async updateTransactionWithHistory(
+    uid: string,
+    id: string,
+    data: TransactionUpdateDTO,
+    historyEvent: {
+      before: Record<string, unknown>;
+      after: Record<string, unknown>;
+      changedFields: string[];
+      amount_cents?: number;
+      category?: string;
+    },
+  ): Promise<void> {
+    if (!uid || !id) throw new Error('[Firestore][updateTransactionWithHistory] UID ou ID ausente.');
+    const payload = normalizeUpdatePayload(data);
+    const txRef = doc(txCol(uid), id);
+    const historyRef = doc(collection(db, 'users', uid, 'transactions', id, 'history'));
+    const timestamp = serverTimestamp();
+
+    const writePayload = {
+      ...payload,
+      uid: deleteField(),
+      id: deleteField(),
+      value: deleteField(),
+      updatedAt: timestamp,
+    };
+
+    const historyPayload: Record<string, unknown> = {
+      action: 'UPDATE',
+      txId: id,
+      createdAt: timestamp,
+      schemaVersion: 1,
+      origin: 'manual',
+      before: sanitizeHistorySnapshot(historyEvent.before),
+      after: sanitizeHistorySnapshot(historyEvent.after),
+      changedFields: historyEvent.changedFields,
+    };
+
+    if (historyEvent.amount_cents !== undefined) historyPayload.amount_cents = historyEvent.amount_cents;
+    if (historyEvent.category !== undefined) historyPayload.category = historyEvent.category;
+
+    const batch = writeBatch(db);
+    batch.update(txRef, writePayload);
+    batch.set(historyRef, historyPayload);
+
+    debugUpdatePayload(id, payload, true);
+    try {
+      await batch.commit();
     } catch (err) {
       debugRejectedUpdatePayload(id, payload, err);
       throw err;
