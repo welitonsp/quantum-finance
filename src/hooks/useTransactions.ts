@@ -545,19 +545,17 @@ export function useTransactions(
             pendingIds.current.delete(op.itemId);
             break;
           case 'delete':
-            await FirestoreService.deleteTransaction(uid, op.itemId);
-            pendingIds.current.delete(op.itemId);
-            // Histórico por transação — fire-and-forget
             if (op.previous) {
-              void AuditService.logTransactionHistory(uid, op.itemId, {
-                action: 'SOFT_DELETE',
-                txId:   op.itemId,
-                before: sanitizeForHistory(op.previous),
-                origin: 'manual',
-                ...(op.previous.value_cents !== undefined ? { amount_cents: op.previous.value_cents } : {}),
-                ...(op.previous.category    !== undefined ? { category:     op.previous.category    } : {}),
+              const before = sanitizeForHistory(op.previous);
+              await FirestoreService.softDeleteTransactionWithHistory(uid, op.itemId, {
+                before,
+                ...(typeof before['value_cents'] === 'number' ? { amount_cents: before['value_cents'] } : {}),
+                ...(typeof before['category']   === 'string'  ? { category:     before['category']   } : {}),
               });
+            } else {
+              await FirestoreService.deleteTransaction(uid, op.itemId);
             }
+            pendingIds.current.delete(op.itemId);
             break;
           case 'deleteBatch':
             await FirestoreService.deleteBatchTransactions(uid, op.ids);
@@ -814,9 +812,8 @@ export function useTransactions(
 
     pendingIds.current.add(id);
 
-    let previous: Transaction | undefined;
+    const previous = transactionsRef.current.find(tx => tx.id === id);
     setTransactions(prev => {
-      previous = prev.find(tx => tx.id === id);
       return prev.filter(tx => tx.id !== id);
     });
 
