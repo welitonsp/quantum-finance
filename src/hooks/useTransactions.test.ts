@@ -23,6 +23,7 @@ const {
   mockUpdateTransactionWithHistory,
   mockBatchUpdateTransactions,
   mockBatchUpdateTransactionsWithHistory,
+  mockBatchUndoBulkUpdateTransactionsWithHistory,
 } = vi.hoisted(() => {
   const callable = vi.fn().mockResolvedValue({ data: { id: 'tx-created-1' } });
   return {
@@ -46,6 +47,7 @@ const {
     mockUpdateTransactionWithHistory: vi.fn().mockResolvedValue(undefined),
     mockBatchUpdateTransactions: vi.fn().mockResolvedValue(undefined),
     mockBatchUpdateTransactionsWithHistory: vi.fn().mockResolvedValue(undefined),
+    mockBatchUndoBulkUpdateTransactionsWithHistory: vi.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -80,6 +82,7 @@ vi.mock('../shared/services/FirestoreService', () => ({
     deleteBatchTransactionsWithHistory: mockDeleteBatchTransactionsWithHistory,
     batchUpdateTransactions: mockBatchUpdateTransactions,
     batchUpdateTransactionsWithHistory: mockBatchUpdateTransactionsWithHistory,
+    batchUndoBulkUpdateTransactionsWithHistory: mockBatchUndoBulkUpdateTransactionsWithHistory,
   },
 }));
 
@@ -669,6 +672,7 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
     mockLogTransactionHistory.mockResolvedValue(undefined);
     mockBatchUpdateTransactions.mockResolvedValue(undefined);
     mockBatchUpdateTransactionsWithHistory.mockResolvedValue(undefined);
+    mockBatchUndoBulkUpdateTransactionsWithHistory.mockResolvedValue(undefined);
     mockOnSnapshot.mockImplementation((_queryArg: unknown, onNext: (snap: { docs: unknown[] }) => void) => {
       onNext({ docs: [{ id: 'tx-a', data: () => transactionA }] });
       return vi.fn();
@@ -750,6 +754,133 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
     await waitFor(() => {
       expect(result.current.transactions[0]?.category).toBe('Lazer');
     });
+
+    unmount();
+  });
+
+  it('undoLastBulkUpdate chama helper atômico e não chama logTransactionHistory por item', async () => {
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.transactions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.bulkUpdateTransactions(['tx-a'], { category: 'Alimentação' });
+    });
+
+    await waitFor(() => expect(result.current.hasUndoSnapshot).toBe(true));
+
+    await act(async () => {
+      await result.current.undoLastBulkUpdate();
+    });
+
+    await waitFor(() => expect(mockBatchUndoBulkUpdateTransactionsWithHistory).toHaveBeenCalledWith(
+      'uid-1',
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'tx-a',
+          oldCategory: 'Lazer',
+          newCategory: 'Alimentação',
+          before: expect.objectContaining({
+            category: 'Lazer',
+            value_cents: 1000,
+          }),
+        }),
+      ]),
+      expect.stringMatching(/\S+/),
+    ));
+
+    const [, snapshot] = mockBatchUndoBulkUpdateTransactionsWithHistory.mock.calls[0] as [
+      string,
+      Array<{ before?: Record<string, unknown> }>,
+      string,
+    ];
+    const before = snapshot[0]?.before;
+    expect(before).toEqual(expect.objectContaining({
+      category: 'Lazer',
+      value_cents: 1000,
+      description: 'Compra A',
+    }));
+    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+      expect(before).not.toHaveProperty(forbidden);
+    }
+
+    expect(mockLogTransactionHistory).not.toHaveBeenCalled();
+    expect(mockLogAction).toHaveBeenCalledWith(expect.objectContaining({ action: 'UNDO_BULK_UPDATE' }));
+    expect(result.current.hasUndoSnapshot).toBe(false);
+
+    unmount();
+  });
+
+  it('undoLastBulkUpdate sem snapshot não faz writes', async () => {
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.undoLastBulkUpdate();
+    });
+
+    expect(mockBatchUndoBulkUpdateTransactionsWithHistory).not.toHaveBeenCalled();
+    expect(mockBatchUpdateTransactions).not.toHaveBeenCalled();
+    expect(mockLogAction).not.toHaveBeenCalled();
+    expect(mockLogTransactionHistory).not.toHaveBeenCalled();
+
+    unmount();
+  });
+
+  it('preserva snapshot e reseta flags quando helper de undo falha', async () => {
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.transactions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.bulkUpdateTransactions(['tx-a'], { category: 'Alimentação' });
+    });
+
+    await waitFor(() => expect(result.current.hasUndoSnapshot).toBe(true));
+    mockLogAction.mockClear();
+    mockLogTransactionHistory.mockClear();
+    mockBatchUndoBulkUpdateTransactionsWithHistory.mockRejectedValueOnce(new Error('undo failed'));
+
+    await act(async () => {
+      await expect(result.current.undoLastBulkUpdate()).rejects.toThrow('undo failed');
+    });
+
+    expect(result.current.hasUndoSnapshot).toBe(true);
+    expect(result.current.isUndoing).toBe(false);
+    expect(mockLogAction).not.toHaveBeenCalled();
+    expect(mockLogTransactionHistory).not.toHaveBeenCalled();
+
+    mockBatchUndoBulkUpdateTransactionsWithHistory.mockResolvedValueOnce(undefined);
+    await act(async () => {
+      await result.current.undoLastBulkUpdate();
+    });
+
+    expect(mockBatchUndoBulkUpdateTransactionsWithHistory).toHaveBeenCalledTimes(2);
+    expect(result.current.hasUndoSnapshot).toBe(false);
+
+    unmount();
+  });
+
+  it('ignora uma segunda chamada enquanto o undo está em execução', async () => {
+    const undoRef: { current?: () => Promise<void> } = {};
+    mockBatchUndoBulkUpdateTransactionsWithHistory.mockImplementationOnce(async () => {
+      await undoRef.current?.();
+    });
+
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.transactions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.bulkUpdateTransactions(['tx-a'], { category: 'Alimentação' });
+    });
+
+    await waitFor(() => expect(result.current.hasUndoSnapshot).toBe(true));
+    undoRef.current = result.current.undoLastBulkUpdate;
+
+    await act(async () => {
+      await result.current.undoLastBulkUpdate();
+    });
+
+    expect(mockBatchUndoBulkUpdateTransactionsWithHistory).toHaveBeenCalledTimes(1);
+    expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 
     unmount();
   });
