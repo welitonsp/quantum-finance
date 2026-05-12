@@ -686,6 +686,76 @@ export const FirestoreService = {
     }
   },
 
+  async batchUndoBulkUpdateTransactionsWithHistory(
+    uid: string,
+    snapshot: Array<{
+      id: string;
+      oldCategory: string;
+      newCategory?: string;
+      before?: Record<string, unknown>;
+    }>,
+    correlationId: string,
+  ): Promise<void> {
+    if (!uid) throw new Error('[Firestore][batchUndoBulkUpdateTransactionsWithHistory] UID ausente.');
+    if (!snapshot.length) return;
+
+    // 240 transações * 2 writes (update + history) = 480 writes (limite 500)
+    const BATCH_HISTORY_CHUNK_SIZE = 240;
+
+    for (let i = 0; i < snapshot.length; i += BATCH_HISTORY_CHUNK_SIZE) {
+      const chunk = snapshot.slice(i, i + BATCH_HISTORY_CHUNK_SIZE);
+      const batch = writeBatch(db);
+      const timestamp = serverTimestamp();
+
+      chunk.forEach(item => {
+        if (!item.id) throw new Error('[Firestore][batchUndoBulkUpdateTransactionsWithHistory] ID ausente.');
+
+        const txRef = doc(txCol(uid), item.id);
+        const historyRef = doc(collection(db, 'users', uid, 'transactions', item.id, 'history'));
+        const updatePayload = normalizeUpdatePayload({ category: item.oldCategory });
+        const restoredCategory = String(updatePayload['category']);
+        const currentCategory = item.newCategory ?? restoredCategory;
+        const base = sanitizeHistorySnapshot(item.before ?? { category: item.oldCategory });
+        const before = sanitizeHistorySnapshot({ ...base, category: currentCategory });
+        const after = sanitizeHistorySnapshot({ ...base, category: restoredCategory });
+
+        batch.update(txRef, {
+          ...updatePayload,
+          uid: deleteField(),
+          id: deleteField(),
+          value: deleteField(),
+          updatedAt: timestamp,
+        });
+
+        const historyPayload: Record<string, unknown> = {
+          action: 'UNDO_BULK_UPDATE',
+          origin: 'bulk',
+          txId: item.id,
+          createdAt: timestamp,
+          schemaVersion: 1,
+          before,
+          after,
+          changedFields: ['category'],
+          correlationId,
+          category: restoredCategory,
+        };
+
+        const valueCents = base['value_cents'];
+        if (
+          typeof valueCents === 'number' &&
+          Number.isSafeInteger(valueCents) &&
+          valueCents >= 0
+        ) {
+          historyPayload['amount_cents'] = valueCents;
+        }
+
+        batch.set(historyRef, historyPayload);
+      });
+
+      await batch.commit();
+    }
+  },
+
   async batchUpdateTransactions(
     uidOrNull: string | null | undefined,
     ids: string[],

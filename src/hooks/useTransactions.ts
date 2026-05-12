@@ -995,25 +995,12 @@ export function useTransactions(
 
     const snap = snapshotRef.current;
 
-    // Limpa imediatamente → garante execução única (sem race condition)
-    snapshotRef.current = null;
-    setHasUndoSnapshot(false);
-
     isUndoingRef.current = true;
     setIsUndoing(true);
 
     try {
-      // Agrupa por oldCategory para minimizar batches
-      const groups = new Map<string, string[]>();
-      snap.forEach(({ id, oldCategory }) => {
-        if (!groups.has(oldCategory)) groups.set(oldCategory, []);
-        groups.get(oldCategory)!.push(id);
-      });
-
-      // Aplica com chunking por grupo (reutiliza FirestoreService)
-      for (const [oldCategory, groupIds] of groups) {
-        await FirestoreService.batchUpdateTransactions(uid, groupIds, { category: oldCategory });
-      }
+      const undoCorrId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+      await FirestoreService.batchUndoBulkUpdateTransactionsWithHistory(uid, snap, undoCorrId);
 
       // Auditoria global — fire-and-forget após todos os commits (nunca bloqueia UI)
       void AuditService.logAction({
@@ -1027,20 +1014,9 @@ export function useTransactions(
           changes: snap.map(s => ({ id: s.id, from: s.newCategory ?? 'unknown', to: s.oldCategory })),
         },
       });
-      // Histórico por transação — fire-and-forget, correlacionado por lote de undo
-      const undoCorrId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-      snap.forEach(({ id, oldCategory, newCategory }) => {
-        void AuditService.logTransactionHistory(uid, id, {
-          action:        'UNDO_BULK_UPDATE',
-          txId:          id,
-          before:        { category: newCategory ?? 'unknown' },
-          after:         { category: oldCategory },
-          changedFields: ['category'],
-          origin:        'bulk',
-          correlationId: undoCorrId,
-          category:      oldCategory,
-        });
-      });
+
+      snapshotRef.current = null;
+      setHasUndoSnapshot(false);
     } finally {
       isUndoingRef.current = false;
       setIsUndoing(false);
