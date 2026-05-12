@@ -519,6 +519,39 @@ export const FirestoreService = {
     }
   },
 
+  async softDeleteTransactionWithHistory(
+    uid: string,
+    id: string,
+    historyEvent: {
+      before: Record<string, unknown>;
+      amount_cents?: number;
+      category?: string;
+    },
+  ): Promise<void> {
+    if (!uid || !id) throw new Error('[Firestore][softDeleteTransactionWithHistory] UID ou ID ausente.');
+    const txRef = doc(txCol(uid), id);
+    const snap = await getDoc(txRef);
+    if (!snap.exists()) return;
+
+    const historyRef = doc(collection(db, 'users', uid, 'transactions', id, 'history'));
+    const historyPayload: Record<string, unknown> = {
+      action: 'SOFT_DELETE',
+      txId: id,
+      createdAt: serverTimestamp(),
+      schemaVersion: 1,
+      origin: 'manual',
+      before: sanitizeHistorySnapshot(historyEvent.before),
+    };
+
+    if (historyEvent.amount_cents !== undefined) historyPayload.amount_cents = historyEvent.amount_cents;
+    if (historyEvent.category !== undefined) historyPayload.category = historyEvent.category;
+
+    const batch = writeBatch(db);
+    batch.update(txRef, buildSoftDeletePatch(snap.data() as Record<string, unknown>));
+    batch.set(historyRef, historyPayload);
+    await batch.commit();
+  },
+
   async deleteTransaction(uid: string, id: string): Promise<void> {
     if (!uid || !id) throw new Error('[Firestore][deleteTransaction] UID ou ID ausente.');
     const docRef = doc(txCol(uid), id);

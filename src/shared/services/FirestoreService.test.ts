@@ -442,6 +442,105 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
   });
 });
 
+describe('FirestoreService.deleteTransaction', () => {
+  it('continua disponível e usa updateDoc para o fluxo legado', async () => {
+    await FirestoreService.deleteTransaction('uid1', 'tx-legacy-delete');
+
+    expect(typeof FirestoreService.deleteTransaction).toBe('function');
+    expect(mockUpdateDoc).toHaveBeenCalledTimes(1);
+    expect(mockWriteBatch).not.toHaveBeenCalled();
+  });
+});
+
+describe('FirestoreService.softDeleteTransactionWithHistory', () => {
+  it('monta batch com soft delete + history SOFT_DELETE sem campos proibidos', async () => {
+    mockGetDoc.mockResolvedValueOnce(existingSnap({
+      description:   'Compra a apagar',
+      value:         20.34,
+      value_cents:   0,
+      schemaVersion: 2,
+      type:          'saida',
+      category:      'Outros',
+      date:          '2026-05-02',
+      source:        'manual',
+      createdAt:     { seconds: 1 },
+      updatedAt:     { seconds: 1 },
+      importHash:    'x'.repeat(64),
+    }));
+
+    await FirestoreService.softDeleteTransactionWithHistory('uid1', 'tx-delete-1', {
+      before: {
+        id:          'tx-delete-1',
+        uid:         'uid1',
+        value:       20.34,
+        importHash:  'x'.repeat(64),
+        description: 'Compra a apagar',
+        value_cents: 2034,
+        category:    'Outros',
+      },
+      amount_cents: 2034,
+      category:     'Outros',
+    });
+
+    expect(mockWriteBatch).toHaveBeenCalledTimes(1);
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
+    expect(mockBatchSet).toHaveBeenCalledTimes(1);
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+
+    const [txRef, txPayload] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [historyRef, historyPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+
+    expect(txRef).toEqual(expect.objectContaining({ id: 'tx-delete-1' }));
+    expect(historyRef).toEqual(expect.objectContaining({ id: 'mock-doc-id' }));
+
+    expect(txPayload).toEqual(expect.objectContaining({
+      isDeleted:     true,
+      deletedAt:     { _serverTimestamp: true },
+      updatedAt:     { _serverTimestamp: true },
+      schemaVersion: 2,
+      type:          'saida',
+      source:        'manual',
+      value_cents:   2034,
+    }));
+    expect(txPayload['uid']).toEqual({ _deleteField: true });
+    expect(txPayload['id']).toEqual({ _deleteField: true });
+    expect(txPayload['value']).toEqual({ _deleteField: true });
+    expect(txPayload).not.toHaveProperty('importHash');
+
+    expect(historyPayload).toEqual(expect.objectContaining({
+      action:       'SOFT_DELETE',
+      origin:       'manual',
+      txId:         'tx-delete-1',
+      amount_cents: 2034,
+      category:     'Outros',
+      schemaVersion: 1,
+      createdAt:    { _serverTimestamp: true },
+      before: {
+        description: 'Compra a apagar',
+        value_cents: 2034,
+        category:    'Outros',
+      },
+    }));
+    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+      expect(historyPayload['before']).not.toHaveProperty(forbidden);
+    }
+  });
+
+  it('rejeita quando o commit do batch falha', async () => {
+    mockBatchCommit.mockRejectedValueOnce(new Error('batch failed'));
+
+    await expect(FirestoreService.softDeleteTransactionWithHistory('uid1', 'tx-delete-1', {
+      before: { description: 'Compra a apagar', value_cents: 1000, category: 'Outros' },
+      amount_cents: 1000,
+      category: 'Outros',
+    })).rejects.toThrow('batch failed');
+
+    expect(mockWriteBatch).toHaveBeenCalledTimes(1);
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
+    expect(mockBatchSet).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('FirestoreService.deleteBatchTransactions', () => {
   it('usa soft delete em lote para transações financeiras', async () => {
     await FirestoreService.deleteBatchTransactions('uid1', ['tx-a', 'tx-b']);
