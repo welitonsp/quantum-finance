@@ -10,6 +10,8 @@ const {
   mockHttpsCallable,
   mockLimit,
   mockDeleteTransaction,
+  mockDeleteBatchTransactions,
+  mockDeleteBatchTransactionsWithHistory,
   mockLogAction,
   mockLogTransactionHistory,
   mockOnSnapshot,
@@ -26,6 +28,8 @@ const {
     mockCollection:            vi.fn(() => ({ kind: 'collection' })),
     mockCreateManualTransactionWithHistory: vi.fn().mockResolvedValue('tx-created-1'),
     mockDeleteTransaction:       vi.fn().mockResolvedValue(undefined),
+    mockDeleteBatchTransactions: vi.fn().mockResolvedValue(undefined),
+    mockDeleteBatchTransactionsWithHistory: vi.fn().mockResolvedValue(undefined),
     mockDoc:                   vi.fn(),
     mockHttpsCallable:         vi.fn(() => callable),
     mockLimit:                 vi.fn((count: number) => ({ kind: 'limit', count })),
@@ -68,7 +72,8 @@ vi.mock('../shared/services/FirestoreService', () => ({
     updateTransactionWithHistory: mockUpdateTransactionWithHistory,
     softDeleteTransactionWithHistory: mockSoftDeleteTransactionWithHistory,
     deleteTransaction:       mockDeleteTransaction,
-    deleteBatchTransactions: vi.fn(),
+    deleteBatchTransactions: mockDeleteBatchTransactions,
+    deleteBatchTransactionsWithHistory: mockDeleteBatchTransactionsWithHistory,
     batchUpdateTransactions: vi.fn(),
   },
 }));
@@ -543,6 +548,105 @@ describe('useTransactions - delete lógico manual com batch + history', () => {
 
     expect(mockDeleteTransaction).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
+
+    unmount();
+  });
+});
+
+describe('useTransactions - removeBatch com batch + history', () => {
+  const transactionA = {
+    id: 'tx-a',
+    description: 'Compra A',
+    value_cents: 1000,
+    category: 'Lazer',
+    type: 'saida',
+    date: '2026-05-12',
+    source: 'manual',
+    schemaVersion: 2,
+  };
+  const transactionB = {
+    id: 'tx-b',
+    description: 'Compra B',
+    value_cents: 2000,
+    category: 'Saúde',
+    type: 'saida',
+    date: '2026-05-12',
+    source: 'manual',
+    schemaVersion: 2,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockDeleteBatchTransactions.mockResolvedValue(undefined);
+    mockDeleteBatchTransactionsWithHistory.mockResolvedValue(undefined);
+    mockLogTransactionHistory.mockResolvedValue(undefined);
+    mockOnSnapshot.mockImplementation((_queryArg: unknown, onNext: (snap: { docs: unknown[] }) => void) => {
+      onNext({ docs: [
+        { id: 'tx-a', data: () => transactionA },
+        { id: 'tx-b', data: () => transactionB },
+      ] });
+      return vi.fn();
+    });
+  });
+
+  it('chama deleteBatchTransactionsWithHistory quando previousBatch existe e não chama logTransactionHistory', async () => {
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.transactions).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.removeBatch(['tx-a', 'tx-b']);
+    });
+
+    await waitFor(() => expect(mockDeleteBatchTransactionsWithHistory).toHaveBeenCalledWith(
+      'uid-1',
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'tx-a' }),
+        expect.objectContaining({ id: 'tx-b' }),
+      ]),
+    ));
+
+    expect(mockDeleteBatchTransactions).not.toHaveBeenCalled();
+    expect(mockLogTransactionHistory).not.toHaveBeenCalled();
+
+    unmount();
+  });
+
+  it('mantém fallback para deleteBatchTransactions quando previousBatch não existe', async () => {
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.removeBatch(['tx-unknown-1', 'tx-unknown-2']);
+    });
+
+    await waitFor(() => expect(mockDeleteBatchTransactions).toHaveBeenCalledWith(
+      'uid-1',
+      ['tx-unknown-1', 'tx-unknown-2'],
+    ));
+    expect(mockDeleteBatchTransactionsWithHistory).not.toHaveBeenCalled();
+    expect(mockLogTransactionHistory).not.toHaveBeenCalled();
+
+    unmount();
+  });
+
+  it('restaura o estado otimista quando deleteBatchTransactionsWithHistory falha', async () => {
+    mockDeleteBatchTransactionsWithHistory.mockRejectedValueOnce(new Error('invalid operation'));
+
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.transactions).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.removeBatch(['tx-a', 'tx-b']);
+    });
+
+    await waitFor(() => expect(mockDeleteBatchTransactionsWithHistory).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(result.current.transactions).toHaveLength(2);
+      expect(result.current.transactions).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'tx-a' }),
+        expect.objectContaining({ id: 'tx-b' }),
+      ]));
+    });
 
     unmount();
   });

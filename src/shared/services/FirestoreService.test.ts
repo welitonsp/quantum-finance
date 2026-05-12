@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FirestoreService } from './FirestoreService';
 import { toCentavos } from '../types/money';
+import type { Transaction } from '../types/transaction';
 
 const {
   mockAddDoc,
@@ -15,6 +16,13 @@ const {
   mockUpdateDoc,
   mockWriteBatch,
 } = vi.hoisted(() => {
+  const getMockPath = (value: unknown): string => {
+    if (value && typeof value === 'object' && 'path' in value && typeof value.path === 'string') {
+      return value.path;
+    }
+    return 'mock/path';
+  };
+
   const mockAddDoc = vi.fn().mockResolvedValue({ id: 'new-doc-id' });
   const mockBatchCommit = vi.fn().mockResolvedValue(undefined);
   const mockBatchSet = vi.fn();
@@ -24,10 +32,14 @@ const {
     update: mockBatchUpdate,
     commit: mockBatchCommit,
   }));
-  const mockCollection = vi.fn().mockReturnValue({ id: 'mock-col', path: 'mock-col/path' });
-  const mockDoc = vi.fn((_parent?: unknown, explicitId?: string) => {
+  const mockCollection = vi.fn((...args: unknown[]) => ({
+    id: String(args[args.length - 1] ?? 'mock-col'),
+    path: args.map(String).join('/'),
+  }));
+  const mockDoc = vi.fn((parent: unknown, explicitId?: string) => {
     const id = explicitId ?? 'mock-doc-id';
-    return { id, path: `mock/path/${id}` };
+    const parentPath = getMockPath(parent);
+    return { id, path: `${parentPath}/${id}` };
   });
   const mockGetDoc = vi.fn().mockResolvedValue({
     exists: () => true,
@@ -157,10 +169,6 @@ function compatibleManualHistory(txId: string, overrides: Record<string, unknown
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockDoc.mockImplementation((_parent?: unknown, explicitId?: string) => {
-    const id = explicitId ?? 'mock-doc-id';
-    return { id, path: `mock/path/${id}` };
-  });
   mockAddDoc.mockResolvedValue({ id: 'new-doc-id' });
   mockBatchCommit.mockResolvedValue(undefined);
   mockGetDoc.mockResolvedValue(existingSnap(compatibleManualTransaction()));
@@ -565,9 +573,63 @@ describe('FirestoreService.deleteBatchTransactions', () => {
       data: () => ({ type: 'entrada', source: 'csv', value_cents: 500, schemaVersion: 2, description: 'T', category: 'Outros', date: '2026-01-01' }),
     });
 
-    await FirestoreService.deleteBatchTransactions('uid1', ['tx-missing', 'tx-exists']);
+    await expect(FirestoreService.deleteBatchTransactions('uid1', ['tx-missing', 'tx-exists']))
+      .resolves.toBeUndefined();
 
     expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
     expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('FirestoreService.deleteBatchTransactionsWithHistory', () => {
+  it('grava transaction update + history SOFT_DELETE atômico em lote', async () => {
+    const txA = { id: 'tx-a', value_cents: 1000, category: 'Lazer', description: 'Cinema', type: 'saida', date: '2026-05-12' } as Transaction;
+    const txB = { id: 'tx-b', value_cents: 2000, category: 'Saúde', description: 'Médico', type: 'saida', date: '2026-05-12' } as Transaction;
+
+    await FirestoreService.deleteBatchTransactionsWithHistory('uid1', [txA, txB]);
+
+    expect(mockWriteBatch).toHaveBeenCalledTimes(1);
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(2);
+    expect(mockBatchSet).toHaveBeenCalledTimes(2);
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+
+    const [txRefA, txPayloadA] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [histRefA, histPayloadA] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+
+    expect(txRefA['id']).toBe('tx-a');
+    expect(txPayloadA['isDeleted']).toBe(true);
+    expect(txPayloadA['deletedAt']).toEqual({ _serverTimestamp: true });
+
+    expect(String(histRefA['path'])).toContain('tx-a/history');
+    expect(histPayloadA).toEqual(expect.objectContaining({
+      action: 'SOFT_DELETE',
+      txId: 'tx-a',
+      amount_cents: 1000,
+      category: 'Lazer',
+      origin: 'manual',
+    }));
+    const histBefore = histPayloadA['before'] as Record<string, unknown>;
+    expect(histBefore).not.toHaveProperty('id');
+    expect(histBefore['description']).toBe('Cinema');
+  });
+
+  it('respeita o chunk máximo de 240 transações (gera múltiplos commits)', async () => {
+    const manyTxs = Array.from({ length: 241 }, (_, i) => ({
+      id: `tx-${i}`,
+      value_cents: 100,
+      category: 'Teste',
+      description: `Desc ${i}`,
+      type: 'saida',
+      date: '2026-05-12'
+    } as Transaction));
+
+    await FirestoreService.deleteBatchTransactionsWithHistory('uid1', manyTxs);
+
+    // 241 itens:
+    // Batch 1: 240 transações (240 updates + 240 sets = 480 writes)
+    // Batch 2: 1 transação (1 update + 1 set = 2 writes)
+    expect(mockBatchCommit).toHaveBeenCalledTimes(2);
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(241);
+    expect(mockBatchSet).toHaveBeenCalledTimes(241);
   });
 });
