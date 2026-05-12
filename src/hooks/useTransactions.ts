@@ -558,23 +558,12 @@ export function useTransactions(
             pendingIds.current.delete(op.itemId);
             break;
           case 'deleteBatch':
-            await FirestoreService.deleteBatchTransactions(uid, op.ids);
-            op.ids.forEach(id => pendingIds.current.delete(id));
-            // Histórico por transação — fire-and-forget, correlacionado por lote
             if (op.previousBatch.length > 0) {
-              const batchCorrId = Date.now().toString(36);
-              op.previousBatch.forEach(tx => {
-                void AuditService.logTransactionHistory(uid, tx.id, {
-                  action:        'SOFT_DELETE',
-                  txId:          tx.id,
-                  before:        sanitizeForHistory(tx),
-                  origin:        'manual',
-                  correlationId: batchCorrId,
-                  ...(tx.value_cents !== undefined ? { amount_cents: tx.value_cents } : {}),
-                  ...(tx.category    !== undefined ? { category:     tx.category    } : {}),
-                });
-              });
+              await FirestoreService.deleteBatchTransactionsWithHistory(uid, op.previousBatch);
+            } else {
+              await FirestoreService.deleteBatchTransactions(uid, op.ids);
             }
+            op.ids.forEach(id => pendingIds.current.delete(id));
             break;
         }
         queueRef.current.shift();
@@ -905,9 +894,9 @@ export function useTransactions(
     // Marca IDs reais como pendentes
     realIds.forEach(id => pendingIds.current.add(id));
 
-    let previousBatch: Transaction[] = [];
+    const previousBatch = transactionsRef.current.filter(tx => idSet.has(tx.id) && !isTemp(tx.id));
+
     setTransactions(prev => {
-      previousBatch = prev.filter(tx => idSet.has(tx.id) && !isTemp(tx.id));
       return prev.filter(tx => !idSet.has(tx.id));
     });
 

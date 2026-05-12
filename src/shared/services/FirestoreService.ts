@@ -577,6 +577,44 @@ export const FirestoreService = {
     }
   },
 
+  async deleteBatchTransactionsWithHistory(
+    uid: string,
+    transactions: Transaction[],
+  ): Promise<void> {
+    if (!uid || !transactions.length) return;
+
+    // 240 transações * 2 writes (update + history) = 480 writes (limite 500)
+    const BATCH_HISTORY_CHUNK_SIZE = 240;
+
+    for (let i = 0; i < transactions.length; i += BATCH_HISTORY_CHUNK_SIZE) {
+      const chunk = transactions.slice(i, i + BATCH_HISTORY_CHUNK_SIZE);
+      const batch = writeBatch(db);
+      const timestamp = serverTimestamp();
+
+      chunk.forEach(tx => {
+        const txRef = doc(txCol(uid), tx.id);
+        const historyRef = doc(collection(db, 'users', uid, 'transactions', tx.id, 'history'));
+
+        const historyPayload: Record<string, unknown> = {
+          action: 'SOFT_DELETE',
+          txId: tx.id,
+          createdAt: timestamp,
+          schemaVersion: 1,
+          origin: 'manual',
+          before: sanitizeHistorySnapshot(tx as unknown as Record<string, unknown>),
+        };
+
+        if (tx.value_cents !== undefined) historyPayload.amount_cents = tx.value_cents;
+        if (tx.category !== undefined) historyPayload.category = tx.category;
+
+        batch.update(txRef, buildSoftDeletePatch(tx as unknown as Record<string, unknown>));
+        batch.set(historyRef, historyPayload);
+      });
+
+      await batch.commit();
+    }
+  },
+
   async batchUpdateTransactions(
     uidOrNull: string | null | undefined,
     ids: string[],
