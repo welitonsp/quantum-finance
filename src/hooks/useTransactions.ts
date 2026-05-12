@@ -24,6 +24,7 @@ export type BulkUpdate = {
 export type BulkSnapshot = {
   id:          string;
   oldCategory: string;
+  before?: Record<string, unknown>;
   /** Categoria aplicada pelo bulk update — necessária para o log de undo (from → to). */
   newCategory?: string;
 }[];
@@ -924,7 +925,11 @@ export function useTransactions(
     const snap: BulkSnapshot = ids.reduce<BulkSnapshot>((acc, id) => {
       const tx = transactionsRef.current.find(t => t.id === id);
       if (tx) {
-        const item: BulkSnapshot[number] = { id, oldCategory: tx.category ?? 'Outros' };
+        const before = sanitizeForHistory(tx);
+        before['category'] = tx.category ?? 'Outros';
+        if (typeof tx.value_cents !== 'number') delete before['value_cents'];
+
+        const item: BulkSnapshot[number] = { id, oldCategory: tx.category ?? 'Outros', before };
         if (updates.category !== undefined) item.newCategory = updates.category;
         acc.push(item);
       }
@@ -937,10 +942,27 @@ export function useTransactions(
     isBulkUpdatingRef.current = true;
     setIsBulkUpdating(true);
     try {
-      const CHUNK_SIZE = 500;
-      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
-        const chunk = ids.slice(i, i + CHUNK_SIZE);
-        await FirestoreService.batchUpdateTransactions(uid, chunk, updates);
+      const bulkCorrId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+
+      if (snap.length > 0) {
+        // Caminho atômico: transaction update + history BULK_UPDATE no mesmo batch.
+        await FirestoreService.batchUpdateTransactionsWithHistory(uid, snap, updates, bulkCorrId);
+
+        // Se houver IDs sem snapshot (fora da janela carregada), atualizamos via fallback sem history
+        const snapIds = new Set(snap.map(s => s.id));
+        const orphanIds = ids.filter(id => !snapIds.has(id));
+        if (orphanIds.length > 0) {
+          const FALLBACK_CHUNK_SIZE = 500;
+          for (let i = 0; i < orphanIds.length; i += FALLBACK_CHUNK_SIZE) {
+            await FirestoreService.batchUpdateTransactions(uid, orphanIds.slice(i, i + FALLBACK_CHUNK_SIZE), updates);
+          }
+        }
+      } else {
+        // Fallback total: sem snapshot, não há como gravar histórico "before" confiável.
+        const FALLBACK_CHUNK_SIZE = 500;
+        for (let i = 0; i < ids.length; i += FALLBACK_CHUNK_SIZE) {
+          await FirestoreService.batchUpdateTransactions(uid, ids.slice(i, i + FALLBACK_CHUNK_SIZE), updates);
+        }
       }
 
       // Auditoria global — fire-and-forget após todos os commits (nunca bloqueia UI)
@@ -953,20 +975,6 @@ export function useTransactions(
           count:   ids.length,
           changes: snap.map(s => ({ id: s.id, from: s.oldCategory, to: updates.category ?? 'Outros' })),
         },
-      });
-      // Histórico por transação — fire-and-forget, correlacionado por lote
-      const bulkCorrId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-      snap.forEach(({ id, oldCategory }) => {
-        void AuditService.logTransactionHistory(uid, id, {
-          action:        'BULK_UPDATE',
-          txId:          id,
-          before:        { category: oldCategory },
-          after:         { category: updates.category ?? 'Outros' },
-          changedFields: ['category'],
-          origin:        'bulk',
-          correlationId: bulkCorrId,
-          category:      updates.category ?? 'Outros',
-        });
       });
     } catch (err) {
       // Update falhou — snapshot inválido, descarta

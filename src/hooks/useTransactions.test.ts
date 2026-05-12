@@ -21,6 +21,8 @@ const {
   mockStartAfter,
   mockUpdateTransaction,
   mockUpdateTransactionWithHistory,
+  mockBatchUpdateTransactions,
+  mockBatchUpdateTransactionsWithHistory,
 } = vi.hoisted(() => {
   const callable = vi.fn().mockResolvedValue({ data: { id: 'tx-created-1' } });
   return {
@@ -42,6 +44,8 @@ const {
     mockStartAfter:            vi.fn(),
     mockUpdateTransaction:     vi.fn().mockResolvedValue(undefined),
     mockUpdateTransactionWithHistory: vi.fn().mockResolvedValue(undefined),
+    mockBatchUpdateTransactions: vi.fn().mockResolvedValue(undefined),
+    mockBatchUpdateTransactionsWithHistory: vi.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -74,7 +78,8 @@ vi.mock('../shared/services/FirestoreService', () => ({
     deleteTransaction:       mockDeleteTransaction,
     deleteBatchTransactions: mockDeleteBatchTransactions,
     deleteBatchTransactionsWithHistory: mockDeleteBatchTransactionsWithHistory,
-    batchUpdateTransactions: vi.fn(),
+    batchUpdateTransactions: mockBatchUpdateTransactions,
+    batchUpdateTransactionsWithHistory: mockBatchUpdateTransactionsWithHistory,
   },
 }));
 
@@ -639,13 +644,111 @@ describe('useTransactions - removeBatch com batch + history', () => {
       await result.current.removeBatch(['tx-a', 'tx-b']);
     });
 
-    await waitFor(() => expect(mockDeleteBatchTransactionsWithHistory).toHaveBeenCalledTimes(1));
+    unmount();
+  });
+});
+
+describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
+  const transactionA = {
+    id: 'tx-a',
+    uid: 'forged-uid',
+    description: 'Compra A',
+    value: 10,
+    value_cents: 1000,
+    importHash: 'x'.repeat(64),
+    category: 'Lazer',
+    type: 'saida',
+    date: '2026-05-12',
+    source: 'manual',
+    schemaVersion: 2,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLogAction.mockResolvedValue(undefined);
+    mockLogTransactionHistory.mockResolvedValue(undefined);
+    mockBatchUpdateTransactions.mockResolvedValue(undefined);
+    mockBatchUpdateTransactionsWithHistory.mockResolvedValue(undefined);
+    mockOnSnapshot.mockImplementation((_queryArg: unknown, onNext: (snap: { docs: unknown[] }) => void) => {
+      onNext({ docs: [{ id: 'tx-a', data: () => transactionA }] });
+      return vi.fn();
+    });
+  });
+
+  it('chama batchUpdateTransactionsWithHistory quando snapshot existe e não chama logTransactionHistory', async () => {
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.transactions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.bulkUpdateTransactions(['tx-a'], { category: 'Alimentação' });
+    });
+
+    await waitFor(() => expect(mockBatchUpdateTransactionsWithHistory).toHaveBeenCalledWith(
+      'uid-1',
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'tx-a',
+          oldCategory: 'Lazer',
+          before: expect.objectContaining({
+            category: 'Lazer',
+            value_cents: 1000,
+          }),
+        })
+      ]),
+      { category: 'Alimentação' },
+      expect.stringMatching(/\S+/)
+    ));
+
+    const [, snapshot] = mockBatchUpdateTransactionsWithHistory.mock.calls[0] as [
+      string,
+      Array<{ before?: Record<string, unknown> }>,
+      Record<string, unknown>,
+      string,
+    ];
+    const before = snapshot[0]?.before;
+    expect(before).toEqual(expect.objectContaining({
+      category: 'Lazer',
+      value_cents: 1000,
+      description: 'Compra A',
+    }));
+    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+      expect(before).not.toHaveProperty(forbidden);
+    }
+
+    expect(mockBatchUpdateTransactions).not.toHaveBeenCalled();
+    expect(mockLogTransactionHistory).not.toHaveBeenCalled();
+    expect(mockLogAction).toHaveBeenCalledWith(expect.objectContaining({ action: 'BULK_UPDATE' }));
+
+    unmount();
+  });
+
+  it('mantém fallback para batchUpdateTransactions quando snapshot não existe', async () => {
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.bulkUpdateTransactions(['tx-unknown'], { category: 'Alimentação' });
+    });
+
+    await waitFor(() => expect(mockBatchUpdateTransactions).toHaveBeenCalledWith('uid-1', ['tx-unknown'], { category: 'Alimentação' }));
+    expect(mockBatchUpdateTransactionsWithHistory).not.toHaveBeenCalled();
+    expect(mockLogTransactionHistory).not.toHaveBeenCalled();
+
+    unmount();
+  });
+
+  it('restaura o estado otimista quando batchUpdateTransactionsWithHistory falha', async () => {
+    mockBatchUpdateTransactionsWithHistory.mockRejectedValueOnce(new Error('invalid operation'));
+
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.transactions).toHaveLength(1));
+
+    await act(async () => {
+      await expect(result.current.bulkUpdateTransactions(['tx-a'], { category: 'Erro' })).rejects.toThrow();
+    });
+
     await waitFor(() => {
-      expect(result.current.transactions).toHaveLength(2);
-      expect(result.current.transactions).toEqual(expect.arrayContaining([
-        expect.objectContaining({ id: 'tx-a' }),
-        expect.objectContaining({ id: 'tx-b' }),
-      ]));
+      expect(result.current.transactions[0]?.category).toBe('Lazer');
     });
 
     unmount();

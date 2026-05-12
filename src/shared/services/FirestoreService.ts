@@ -615,6 +615,77 @@ export const FirestoreService = {
     }
   },
 
+  async batchUpdateTransactionsWithHistory(
+    uid: string,
+    snapshot: Array<{
+      id: string;
+      oldCategory: string;
+      newCategory?: string;
+      before?: Record<string, unknown>;
+    }>,
+    updates: TransactionUpdateDTO,
+    correlationId: string,
+  ): Promise<void> {
+    if (!uid || !snapshot.length) return;
+    const normalizedUpdates = normalizeUpdatePayload(updates);
+
+    // 240 transações * 2 writes (update + history) = 480 writes (limite 500)
+    const BATCH_HISTORY_CHUNK_SIZE = 240;
+
+    for (let i = 0; i < snapshot.length; i += BATCH_HISTORY_CHUNK_SIZE) {
+      const chunk = snapshot.slice(i, i + BATCH_HISTORY_CHUNK_SIZE);
+      const batch = writeBatch(db);
+      const timestamp = serverTimestamp();
+
+      chunk.forEach(item => {
+        const txRef = doc(txCol(uid), item.id);
+        const historyRef = doc(collection(db, 'users', uid, 'transactions', item.id, 'history'));
+
+        // Update da transação (preserva comportamento de batchUpdateTransactions)
+        batch.update(txRef, {
+          ...normalizedUpdates,
+          uid: deleteField(),
+          id: deleteField(),
+          value: deleteField(),
+          updatedAt: timestamp,
+        });
+
+        // History BULK_UPDATE
+        const before = item.before ?? { category: item.oldCategory };
+        const after = { ...before, ...normalizedUpdates };
+
+        const historyPayload: Record<string, unknown> = {
+          action: 'BULK_UPDATE',
+          origin: 'bulk',
+          txId: item.id,
+          createdAt: timestamp,
+          schemaVersion: 1,
+          before: sanitizeHistorySnapshot(before),
+          after: sanitizeHistorySnapshot(after),
+          changedFields: Object.keys(normalizedUpdates),
+          correlationId,
+        };
+
+        if (normalizedUpdates['category'] !== undefined) {
+          historyPayload['category'] = normalizedUpdates['category'];
+        }
+
+        const valueCents = before['value_cents'];
+        if (
+          typeof valueCents === 'number' &&
+          Number.isSafeInteger(valueCents) &&
+          valueCents >= 0
+        ) {
+          historyPayload['amount_cents'] = valueCents;
+        }
+
+        batch.set(historyRef, historyPayload);
+      });
+
+      await batch.commit();
+    }
+  },
+
   async batchUpdateTransactions(
     uidOrNull: string | null | undefined,
     ids: string[],

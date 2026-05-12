@@ -633,3 +633,112 @@ describe('FirestoreService.deleteBatchTransactionsWithHistory', () => {
     expect(mockBatchSet).toHaveBeenCalledTimes(241);
   });
 });
+
+describe('FirestoreService.batchUpdateTransactionsWithHistory', () => {
+  it('grava transaction update + history BULK_UPDATE atômico em lote', async () => {
+    const snap = [
+      {
+        id: 'tx-1',
+        oldCategory: 'Outros',
+        before: {
+          id: 'client-id',
+          uid: 'u1',
+          value: 10,
+          importHash: 'x'.repeat(64),
+          value_cents: 1000,
+          category: 'Outros',
+          description: 'T1',
+        },
+      },
+      { id: 'tx-2', oldCategory: 'Lazer' }
+    ];
+    const updates = { category: 'Alimentação' };
+    const correlationId = 'corr-123';
+
+    await FirestoreService.batchUpdateTransactionsWithHistory('uid1', snap, updates, correlationId);
+
+    expect(mockWriteBatch).toHaveBeenCalledTimes(1);
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(2);
+    expect(mockBatchSet).toHaveBeenCalledTimes(2);
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+
+    const [txRef1, txPayload1] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [histRef1, histPayload1] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+
+    expect(txRef1['id']).toBe('tx-1');
+    expect(txPayload1['category']).toBe('Alimentação');
+    expect(txPayload1['updatedAt']).toEqual({ _serverTimestamp: true });
+    expect(txPayload1['uid']).toEqual({ _deleteField: true });
+    expect(txPayload1['id']).toEqual({ _deleteField: true });
+    expect(txPayload1['value']).toEqual({ _deleteField: true });
+    expect(txPayload1).not.toHaveProperty('importHash');
+
+    expect(String(histRef1['path'])).toContain('tx-1/history');
+    expect(histPayload1).toEqual(expect.objectContaining({
+      action: 'BULK_UPDATE',
+      origin: 'bulk',
+      txId: 'tx-1',
+      correlationId: 'corr-123',
+      amount_cents: 1000,
+      category: 'Alimentação',
+      schemaVersion: 1,
+      changedFields: ['category'],
+    }));
+
+    const before1 = histPayload1['before'] as Record<string, unknown>;
+    const after1 = histPayload1['after'] as Record<string, unknown>;
+
+    expect(before1['category']).toBe('Outros');
+    expect(after1['category']).toBe('Alimentação');
+    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+      expect(before1).not.toHaveProperty(forbidden);
+      expect(after1).not.toHaveProperty(forbidden);
+    }
+  });
+
+  it('não cria amount_cents a partir de value legado nem de value_cents inválido', async () => {
+    const invalidValues = [100.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1, -1];
+
+    for (const value_cents of invalidValues) {
+      vi.clearAllMocks();
+      mockBatchCommit.mockResolvedValue(undefined);
+
+      await FirestoreService.batchUpdateTransactionsWithHistory('uid1', [
+        {
+          id: `tx-invalid-${String(value_cents)}`,
+          oldCategory: 'Outros',
+          before: {
+            category: 'Outros',
+            value: 9999,
+            value_cents,
+          },
+        },
+      ], { category: 'Alimentação' }, 'corr-invalid');
+
+      const [, histPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+      const before = histPayload['before'] as Record<string, unknown>;
+      const after = histPayload['after'] as Record<string, unknown>;
+
+      expect(histPayload).not.toHaveProperty('amount_cents');
+      expect(before).not.toHaveProperty('value');
+      expect(after).not.toHaveProperty('value');
+    }
+  });
+
+  it('respeita o chunk máximo de 240 transações (gera múltiplos commits)', async () => {
+    const manyItems = Array.from({ length: 241 }, (_, i) => ({
+      id: `tx-${i}`,
+      oldCategory: 'Outros',
+      before: { value_cents: 100, category: 'Outros', description: `D${i}` }
+    }));
+
+    await FirestoreService.batchUpdateTransactionsWithHistory('uid1', manyItems, { category: 'X' }, 'c-1');
+
+    // 241 itens:
+    // Batch 1: 240 transações (240 updates + 240 sets = 480 writes)
+    // Batch 2: 1 transação (1 update + 1 set = 2 writes)
+    expect(mockBatchCommit).toHaveBeenCalledTimes(2);
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(241);
+    expect(mockBatchSet).toHaveBeenCalledTimes(241);
+  });
+});
