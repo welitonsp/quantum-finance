@@ -202,10 +202,11 @@ service cloud.firestore {
     // pela própria regra de create do history via isValidTransactionHistory; aqui checamos apenas
     // action e origin que são específicos do enforcement de UPDATE.
     // Minimizamos as chamadas a getAfter() para evitar o limite de 1000 expressões do emulador.
+    // isStringSized rejeita null, número, objeto, lista, string vazia e string acima de 128 chars.
     function isValidUpdateHistoryPairedInSameBatch(userId, txId) {
       let opId = request.resource.data._lastOpId;
       let historyPath = txHistoryPath(userId, txId, opId);
-      return opId is string && opId.size() > 0
+      return isStringSized(opId, 1, 128)
           && !exists(historyPath)
           && existsAfter(historyPath)
           && getAfter(historyPath).data.txId == txId

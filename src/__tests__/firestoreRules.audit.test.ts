@@ -799,6 +799,147 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
     });
   });
 
+  // ── G. Hardening _lastOpId — FASE 8B-3F-HARDENING ───────────────────────────
+
+  describe('G. Hardening _lastOpId (8B-3F-HARDENING)', () => {
+    const baseUpdatePayload = () => ({
+      description: 'Hardening _lastOpId',
+      value_cents: 10000,
+      schemaVersion: 2,
+      type: 'saida' as const,
+      category: 'Alimentação',
+      date: '2026-01-01',
+      source: 'csv',
+      importHash: IMPORT_HASH_A,
+      createdAt: FIXED_TS,
+      updatedAt: serverTimestamp(),
+    });
+
+    const commitUpdateWithHistoryBatch = async (
+      txId: string,
+      opId: string,
+      historyOverrides: Record<string, unknown> = {},
+    ) => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'users', UID_A, 'transactions', txId), {
+        ...baseUpdatePayload(),
+        _lastOpId: opId,
+      });
+      batch.set(doc(db, 'users', UID_A, 'transactions', txId, 'history', opId), {
+        action: 'UPDATE',
+        txId,
+        createdAt: serverTimestamp(),
+        schemaVersion: 1,
+        origin: 'manual',
+        ...historyOverrides,
+      });
+      return batch.commit();
+    };
+
+    // ── G1-G5: validação de tipo e tamanho de _lastOpId ───────────────────────
+
+    // G1: string vazia — isStringSized(opId, 1, 128) rejeita size < 1
+    it('G1 — UPDATE com _lastOpId vazio deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertFails(setDoc(txDocRef, { ...baseUpdatePayload(), _lastOpId: '' }));
+    });
+
+    // G2: null — isStringSized rejeita tipos não-string
+    it('G2 — UPDATE com _lastOpId null deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertFails(setDoc(txDocRef, { ...baseUpdatePayload(), _lastOpId: null as never }));
+    });
+
+    // G3: número — isStringSized rejeita tipos não-string
+    it('G3 — UPDATE com _lastOpId numérico deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertFails(setDoc(txDocRef, { ...baseUpdatePayload(), _lastOpId: 42 as never }));
+    });
+
+    // G4: mapa (objeto) — isStringSized rejeita tipos não-string
+    it('G4 — UPDATE com _lastOpId objeto deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertFails(setDoc(txDocRef, { ...baseUpdatePayload(), _lastOpId: { id: 'forged' } as never }));
+    });
+
+    // G5: string com 129 chars — isStringSized(opId, 1, 128) rejeita size > 128.
+    // History é criado no mesmo batch com o mesmo opId para isolar a falha ao tamanho do _lastOpId.
+    it('G5 — UPDATE com _lastOpId acima de 128 chars deve falhar', async () => {
+      const longOpId = 'x'.repeat(129);
+      await assertFails(commitUpdateWithHistoryBatch(TX_REAL, longOpId));
+    });
+
+    // ── G6-G8: origins proibidas em history pareado ───────────────────────────
+
+    // G6: origin='reconcile' — permitida no schema de history mas bloqueada no enforcement UPDATE
+    it('G6 — UPDATE com history origin reconcile deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-g6-reconcile', { origin: 'reconcile' }),
+      );
+    });
+
+    // G7: origin='import' — permitida no schema de history mas bloqueada no enforcement UPDATE
+    it('G7 — UPDATE com history origin import deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-g7-import', { origin: 'import' }),
+      );
+    });
+
+    // G8: origin='system' — permitida no schema mas bloqueada no enforcement UPDATE
+    it('G8 — UPDATE com history origin system deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-g8-system', { origin: 'system' }),
+      );
+    });
+
+    // ── G9-G11: actions proibidas em history pareado ──────────────────────────
+
+    // G9: action='BULK_UPDATE' — válida no schema de history mas bloqueada no enforcement UPDATE
+    it('G9 — UPDATE com history action BULK_UPDATE deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-g9-bulk', { action: 'BULK_UPDATE' }),
+      );
+    });
+
+    // G10: action='UNDO_BULK_UPDATE' — válida no schema mas bloqueada no enforcement UPDATE
+    it('G10 — UPDATE com history action UNDO_BULK_UPDATE deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-g10-undo', { action: 'UNDO_BULK_UPDATE' }),
+      );
+    });
+
+    // G11: action='CREATE' — bloqueada tanto pelo enforcement quanto pela regra de create do history
+    it('G11 — UPDATE com history action CREATE deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-g11-create', { action: 'CREATE' }),
+      );
+    });
+
+    // ── G12-G13: schema inválido do history no mesmo batch ────────────────────
+
+    // G12: schemaVersion=0 — isValidTransactionHistory exige schemaVersion == 1
+    it('G12 — UPDATE com history schemaVersion 0 deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-g12-schema', { schemaVersion: 0 as never }),
+      );
+    });
+
+    // G13: changedFields com 'importHash' — isValidHistoryChangedFields usa hasOnly sem importHash
+    it('G13 — UPDATE com history changedFields contendo importHash deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-g13-changedfields', {
+          changedFields: ['importHash'],
+        }),
+      );
+    });
+  });
+
   // ── E. _lastOpId — FASE 8B-3E compatibilidade e ausência de enforcement ──────
 
   describe('E. _lastOpId — compatibilidade de schema (8B-3E)', () => {
