@@ -7,6 +7,7 @@ const {
   mockCollection,
   mockCreateManualTransactionWithHistory,
   mockDoc,
+  mockGetDoc,
   mockHttpsCallable,
   mockLimit,
   mockDeleteTransaction,
@@ -34,6 +35,7 @@ const {
     mockDeleteBatchTransactions: vi.fn().mockResolvedValue(undefined),
     mockDeleteBatchTransactionsWithHistory: vi.fn().mockResolvedValue(undefined),
     mockDoc:                   vi.fn(),
+    mockGetDoc:                vi.fn().mockResolvedValue({ exists: () => false, data: () => undefined }),
     mockHttpsCallable:         vi.fn(() => callable),
     mockLimit:                 vi.fn((count: number) => ({ kind: 'limit', count })),
     mockLogAction:             vi.fn(),
@@ -54,6 +56,7 @@ const {
 vi.mock('firebase/firestore', () => ({
   collection: mockCollection,
   doc:        mockDoc,
+  getDoc:     mockGetDoc,
   getDocs:    vi.fn(),
   limit:      mockLimit,
   onSnapshot: mockOnSnapshot,
@@ -405,7 +408,9 @@ describe('useTransactions - atualização manual com batch + history', () => {
     unmount();
   });
 
-  it('mantém fallback para updateTransaction quando previous não existe', async () => {
+  it('Modelo A: update sem previous faz getDoc e ignora quando doc não existe', async () => {
+    mockGetDoc.mockResolvedValueOnce({ exists: () => false, data: () => undefined });
+
     const { result, unmount } = renderHook(() => useTransactions('uid-1'));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -413,7 +418,7 @@ describe('useTransactions - atualização manual com batch + history', () => {
       await result.current.update('tx-unknown', { description: 'Fallback' });
     });
 
-    expect(mockUpdateTransaction).toHaveBeenCalledWith('uid-1', 'tx-unknown', expect.anything());
+    expect(mockUpdateTransaction).not.toHaveBeenCalled();
     expect(mockUpdateTransactionWithHistory).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 
@@ -519,7 +524,9 @@ describe('useTransactions - delete lógico manual com batch + history', () => {
     unmount();
   });
 
-  it('mantém fallback para deleteTransaction quando previous não existe', async () => {
+  it('Modelo A: delete sem previous faz getDoc e ignora quando doc não existe', async () => {
+    mockGetDoc.mockResolvedValueOnce({ exists: () => false, data: () => undefined });
+
     const { result, unmount } = renderHook(() => useTransactions('uid-1'));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -527,7 +534,7 @@ describe('useTransactions - delete lógico manual com batch + history', () => {
       await result.current.remove('tx-unknown');
     });
 
-    await waitFor(() => expect(mockDeleteTransaction).toHaveBeenCalledWith('uid-1', 'tx-unknown'));
+    expect(mockDeleteTransaction).not.toHaveBeenCalled();
     expect(mockSoftDeleteTransactionWithHistory).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 
@@ -621,7 +628,9 @@ describe('useTransactions - removeBatch com batch + history', () => {
     unmount();
   });
 
-  it('mantém fallback para deleteBatchTransactions quando previousBatch não existe', async () => {
+  it('Modelo A: deleteBatch sem previousBatch faz getDoc e ignora quando docs não existem', async () => {
+    mockGetDoc.mockResolvedValue({ exists: () => false, data: () => undefined });
+
     const { result, unmount } = renderHook(() => useTransactions('uid-1'));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -629,10 +638,7 @@ describe('useTransactions - removeBatch com batch + history', () => {
       await result.current.removeBatch(['tx-unknown-1', 'tx-unknown-2']);
     });
 
-    await waitFor(() => expect(mockDeleteBatchTransactions).toHaveBeenCalledWith(
-      'uid-1',
-      ['tx-unknown-1', 'tx-unknown-2'],
-    ));
+    expect(mockDeleteBatchTransactions).not.toHaveBeenCalled();
     expect(mockDeleteBatchTransactionsWithHistory).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 
@@ -728,7 +734,9 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
     unmount();
   });
 
-  it('mantém fallback para batchUpdateTransactions quando snapshot não existe', async () => {
+  it('Modelo A: bulkUpdate sem snapshot faz getDoc e ignora quando doc não existe', async () => {
+    mockGetDoc.mockResolvedValueOnce({ exists: () => false, data: () => undefined });
+
     const { result, unmount } = renderHook(() => useTransactions('uid-1'));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -736,7 +744,7 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
       await result.current.bulkUpdateTransactions(['tx-unknown'], { category: 'Alimentação' });
     });
 
-    await waitFor(() => expect(mockBatchUpdateTransactions).toHaveBeenCalledWith('uid-1', ['tx-unknown'], { category: 'Alimentação' }));
+    expect(mockBatchUpdateTransactions).not.toHaveBeenCalled();
     expect(mockBatchUpdateTransactionsWithHistory).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 

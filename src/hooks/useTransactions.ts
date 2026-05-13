@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   collection, query, orderBy, onSnapshot, limit,
-  doc, getDocs, startAfter,
+  doc, getDoc, getDocs, startAfter,
   type QueryDocumentSnapshot, type DocumentData, type Timestamp,
 } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
@@ -540,7 +540,21 @@ export function useTransactions(
                 ...(typeof after['category']   === 'string'  ? { category:     after['category']   } : {}),
               });
             } else {
-              await FirestoreService.updateTransaction(uid, op.itemId, op.data);
+              // Modelo A: fetch current state to build history when not in memory
+              const txRef = doc(db, 'users', uid, 'transactions', op.itemId);
+              const snap = await getDoc(txRef);
+              if (snap.exists()) {
+                const fetched = snap.data() as Transaction;
+                const before = sanitizeForHistory(fetched);
+                const after  = sanitizeForHistory({ ...fetched, ...op.data });
+                await FirestoreService.updateTransactionWithHistory(uid, op.itemId, op.data, {
+                  before,
+                  after,
+                  changedFields: computeChangedFields(before, after),
+                  ...(typeof after['value_cents'] === 'number' ? { amount_cents: after['value_cents'] } : {}),
+                  ...(typeof after['category']   === 'string'  ? { category:     after['category']   } : {}),
+                });
+              }
             }
 
             pendingIds.current.delete(op.itemId);
@@ -554,18 +568,42 @@ export function useTransactions(
                 ...(typeof before['category']   === 'string'  ? { category:     before['category']   } : {}),
               });
             } else {
-              await FirestoreService.deleteTransaction(uid, op.itemId);
+              // Modelo A: fetch current state to build history when not in memory
+              const txRef = doc(db, 'users', uid, 'transactions', op.itemId);
+              const snap = await getDoc(txRef);
+              if (snap.exists()) {
+                const fetched = snap.data() as Transaction;
+                const before = sanitizeForHistory(fetched);
+                await FirestoreService.softDeleteTransactionWithHistory(uid, op.itemId, {
+                  before,
+                  ...(typeof before['value_cents'] === 'number' ? { amount_cents: before['value_cents'] } : {}),
+                  ...(typeof before['category']   === 'string'  ? { category:     before['category']   } : {}),
+                });
+              }
             }
             pendingIds.current.delete(op.itemId);
             break;
-          case 'deleteBatch':
-            if (op.previousBatch.length > 0) {
-              await FirestoreService.deleteBatchTransactionsWithHistory(uid, op.previousBatch);
-            } else {
-              await FirestoreService.deleteBatchTransactions(uid, op.ids);
+          case 'deleteBatch': {
+            // Modelo A: always use WithHistory. Fetch orphan docs not in previousBatch.
+            const snapIds = new Set(op.previousBatch.map(tx => tx.id));
+            const orphanIds = op.ids.filter(id => !snapIds.has(id));
+            let allTx: Transaction[] = [...op.previousBatch];
+            if (orphanIds.length > 0) {
+              const fetched = await Promise.all(
+                orphanIds.map(async id => {
+                  const txRef = doc(db, 'users', uid, 'transactions', id);
+                  const s = await getDoc(txRef);
+                  return s.exists() ? (s.data() as Transaction) : null;
+                })
+              );
+              allTx = [...allTx, ...(fetched.filter(Boolean) as Transaction[])];
+            }
+            if (allTx.length > 0) {
+              await FirestoreService.deleteBatchTransactionsWithHistory(uid, allTx);
             }
             op.ids.forEach(id => pendingIds.current.delete(id));
             break;
+          }
         }
         queueRef.current.shift();
 
@@ -940,25 +978,29 @@ export function useTransactions(
     try {
       const bulkCorrId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 
-      if (snap.length > 0) {
-        // Caminho atômico: transaction update + history BULK_UPDATE no mesmo batch.
-        await FirestoreService.batchUpdateTransactionsWithHistory(uid, snap, updates, bulkCorrId);
-
-        // Se houver IDs sem snapshot (fora da janela carregada), atualizamos via fallback sem history
-        const snapIds = new Set(snap.map(s => s.id));
-        const orphanIds = ids.filter(id => !snapIds.has(id));
-        if (orphanIds.length > 0) {
-          const FALLBACK_CHUNK_SIZE = 500;
-          for (let i = 0; i < orphanIds.length; i += FALLBACK_CHUNK_SIZE) {
-            await FirestoreService.batchUpdateTransactions(uid, orphanIds.slice(i, i + FALLBACK_CHUNK_SIZE), updates);
-          }
-        }
-      } else {
-        // Fallback total: sem snapshot, não há como gravar histórico "before" confiável.
-        const FALLBACK_CHUNK_SIZE = 500;
-        for (let i = 0; i < ids.length; i += FALLBACK_CHUNK_SIZE) {
-          await FirestoreService.batchUpdateTransactions(uid, ids.slice(i, i + FALLBACK_CHUNK_SIZE), updates);
-        }
+      // Modelo A: always use WithHistory. Fetch orphan docs not in memory snap.
+      const snapIds = new Set(snap.map(s => s.id));
+      const orphanIds = ids.filter(id => !snapIds.has(id));
+      let fullSnap: BulkSnapshot = [...snap];
+      if (orphanIds.length > 0) {
+        const fetched = await Promise.all(
+          orphanIds.map(async id => {
+            const txRef = doc(db, 'users', uid, 'transactions', id);
+            const s = await getDoc(txRef);
+            if (!s.exists()) return null;
+            const tx = s.data() as Transaction;
+            const before = sanitizeForHistory(tx);
+            before['category'] = tx.category ?? 'Outros';
+            if (typeof tx.value_cents !== 'number') delete before['value_cents'];
+            const item: BulkSnapshot[number] = { id, oldCategory: tx.category ?? 'Outros', before };
+            if (updates.category !== undefined) item.newCategory = updates.category;
+            return item;
+          })
+        );
+        fullSnap = [...fullSnap, ...(fetched.filter(Boolean) as BulkSnapshot)];
+      }
+      if (fullSnap.length > 0) {
+        await FirestoreService.batchUpdateTransactionsWithHistory(uid, fullSnap, updates, bulkCorrId);
       }
 
       // Auditoria global — fire-and-forget após todos os commits (nunca bloqueia UI)
