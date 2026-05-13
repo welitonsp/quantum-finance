@@ -2,6 +2,110 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
+## Estado Consolidado — Modelo A Obrigatório (FASE 8B/8C) — 2026-05-13
+
+### Status Atual
+
+- FASE 8B (enforcement com `existsAfter`/`getAfter`) e FASE 8C (limpeza de helpers legacy) concluídas.
+- **Modelo A obrigatório ativo**: todo UPDATE de transaction exige `_lastOpId` apontando para um `history/{_lastOpId}` criado no mesmo `writeBatch`.
+- Helpers legacy sem `_lastOpId` removidos (`updateTransaction`, `deleteTransaction`, `deleteBatchTransactions`, `batchUpdateTransactions`).
+- Nenhum caller produtivo realiza UPDATE sem history pareado.
+- Topo da main: `dd90dba refactor(audit): remove legacy transaction update helpers (#100)`.
+- Trilha de auditoria de UPDATE encerrada. Pendente: QA funcional manual em navegador (FASE 9A).
+
+### Linha do Tempo — PRs #87–#100
+
+| PR | Descrição |
+|---|---|
+| #87 | UPDATE manual com history atômico |
+| #88 | DELETE manual individual com history atômico |
+| #89 | DELETE batch com history atômico |
+| #90 | BULK UPDATE com history atômico |
+| #91 | UNDO BULK UPDATE com history atômico |
+| #92 | AI category update com history atômico |
+| #93 | `_lastOpId` em UPDATE manual/AI |
+| #94 | `_lastOpId` em delete helpers |
+| #95 | `_lastOpId` em bulk/undo helpers |
+| #96 | Testes de Rules para `_lastOpId` |
+| #97 | Enforcement Modelo B com `getAfter`/`existsAfter` |
+| #98 | Reconciliação migrada para `updateTransactionWithHistory` |
+| #99 | Modelo A obrigatório — UPDATE sem `_lastOpId` falha nas Rules |
+| #100 | Limpeza 8C — remoção de helpers legacy e testes correspondentes |
+
+### Explicação Técnica do Modelo A
+
+- Todo UPDATE de `transactions/{txId}` exige o campo `_lastOpId` no payload.
+- `_lastOpId` deve referenciar um documento `history/{_lastOpId}` que será criado **no mesmo `writeBatch`**.
+- As Firestore Rules validam o pareamento pós-commit com `existsAfter(history/{_lastOpId})` e `getAfter(...)`.
+- History pré-existente não pode ser reutilizado como `_lastOpId`.
+- UPDATE sem `_lastOpId` válido é rejeitado pelas Rules antes de persistir.
+
+### Matriz Permitida action/origin
+
+| action | origin |
+|---|---|
+| `UPDATE` | `manual` |
+| `UPDATE` | `ai` |
+| `UPDATE` | `reconcile` |
+| `SOFT_DELETE` | `manual` |
+| `BULK_UPDATE` | `bulk` |
+| `UNDO_BULK_UPDATE` | `bulk` |
+
+Combinações fora desta matriz são rejeitadas pelas Rules.
+
+### Fluxos Produtivos Cobertos
+
+- Update manual de transação — `updateTransactionWithHistory`
+- AI category update — `updateTransactionWithHistory`
+- Reconciliação na importação — `updateTransactionWithHistory`
+- Soft delete individual — helper `*WithHistory`
+- Delete batch — helper `*WithHistory`
+- Bulk update — `batchUpdateTransactionsWithHistory`
+- Undo bulk update — `undoBulkUpdateWithHistory`
+
+### Proteções Preservadas
+
+- `importHash` imutável; não pode vazar em `before`/`after` do history.
+- `value` legado bloqueado em delta de history.
+- `uid`/`id` bloqueados em delta de history.
+- `createdAt` imutável na transaction.
+- `_lastOpId` sem history pareado no batch é bloqueado pelo enforcement `existsAfter`.
+- Combinações action/origin fora da matriz rejeitadas.
+
+### Limpeza 8C — PR #100
+
+Removidos de `FirestoreService`:
+
+- `updateTransaction` (UPDATE sem `_lastOpId`)
+- `deleteTransaction` (DELETE sem `_lastOpId`)
+- `deleteBatchTransactions` (batch DELETE sem `_lastOpId`)
+- `batchUpdateTransactions` (bulk sem `_lastOpId`)
+
+Testes unitários legacy correspondentes removidos junto.
+Todos os fluxos vivos usam exclusivamente helpers `*WithHistory`.
+
+### Comandos de Validação
+
+```bash
+npm run typecheck
+npm run lint
+npm run test:rules       # 84/84 — emulator obrigatório (Java/JDK)
+npm run test -- --run    # 257 passed após remoção legacy
+npm run build
+```
+
+### Próximas Recomendações
+
+- **FASE 9A — QA funcional manual em navegador**: testar criação, edição, exclusão individual, delete batch, bulk update, undo bulk, importação, reconciliação, AI category e drawer de histórico por transação.
+- Não alterar `firestore.rules` sem ampliar cobertura de emulator (`test:rules`).
+- Não reintroduzir helper de UPDATE sem `_lastOpId`.
+
+### Riscos Residuais
+
+- QA funcional manual em navegador ainda **pendente**.
+- Validações acima refletem CI da consolidação; reexecutar localmente antes de iniciar FASE 9A.
+- Sistema **não** declarado pronto para produção; trilha de auditoria de UPDATE encerrada, demais áreas (App Check, E2E Playwright, Sentry, busca server-side) seguem roadmap próprio.
+
 ## Decisão Operacional — Spark Manual Create — 2026-05-09
 
 - O projeto `quantum-finance-39235` está no plano Firebase Spark/free; deploy de Cloud Functions exige Blaze por depender de `cloudbuild.googleapis.com` e `artifactregistry.googleapis.com`.
