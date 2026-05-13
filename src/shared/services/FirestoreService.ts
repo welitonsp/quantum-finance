@@ -476,6 +476,7 @@ export const FirestoreService = {
       changedFields: string[];
       amount_cents?: number;
       category?: string;
+      origin?: 'manual' | 'ai';
     },
   ): Promise<void> {
     if (!uid || !id) throw new Error('[Firestore][updateTransactionWithHistory] UID ou ID ausente.');
@@ -497,7 +498,7 @@ export const FirestoreService = {
       txId: id,
       createdAt: timestamp,
       schemaVersion: 1,
-      origin: 'manual',
+      origin: historyEvent.origin ?? 'manual',
       before: sanitizeHistorySnapshot(historyEvent.before),
       after: sanitizeHistorySnapshot(historyEvent.after),
       changedFields: historyEvent.changedFields,

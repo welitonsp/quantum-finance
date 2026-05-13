@@ -429,6 +429,36 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
     }
   });
 
+  it('usa origin manual por padrão quando origin não é informada', async () => {
+    await FirestoreService.updateTransactionWithHistory('uid1', 'tx-1', { category: 'Alimentação' }, {
+      before: { category: 'Outros' },
+      after: { category: 'Alimentação' },
+      changedFields: ['category'],
+      amount_cents: 1500,
+      category: 'Alimentação',
+    });
+    const [, historyPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    expect(historyPayload['origin']).toBe('manual');
+  });
+
+  it('usa origin ai quando informada e preserva amount_cents e sanitiza snapshots', async () => {
+    await FirestoreService.updateTransactionWithHistory('uid1', 'tx-1', { category: 'Alimentação' }, {
+      before: { category: 'Outros', id: 'tx-forged', uid: 'uid-x', value: 10, importHash: 'abc' },
+      after: { category: 'Alimentação', id: 'tx-forged', uid: 'uid-x', value: 10, importHash: 'abc' },
+      changedFields: ['category'],
+      origin: 'ai',
+      amount_cents: 1500,
+      category: 'Alimentação',
+    });
+    const [, historyPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    expect(historyPayload['origin']).toBe('ai');
+    expect(historyPayload['amount_cents']).toBe(1500);
+    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+      expect(historyPayload['before']).not.toHaveProperty(forbidden);
+      expect(historyPayload['after']).not.toHaveProperty(forbidden);
+    }
+  });
+
   it('rejeita quando o commit do batch falha', async () => {
     mockBatchCommit.mockRejectedValueOnce(new Error('batch failed'));
 

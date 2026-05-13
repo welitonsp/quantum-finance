@@ -312,11 +312,11 @@ describe('useTransactions - criação manual Spark via batch', () => {
     });
 
     await waitFor(() =>
-      expect(mockLogTransactionHistory).toHaveBeenCalledWith(
+      expect(mockUpdateTransactionWithHistory).toHaveBeenCalledWith(
         'uid-1',
         'tx-reserved-1',
+        expect.objectContaining({ category: 'Transporte' }),
         expect.objectContaining({
-          action:        'UPDATE',
           origin:        'ai',
           before:        { category: 'Outros' },
           after:         { category: 'Transporte' },
@@ -324,6 +324,8 @@ describe('useTransactions - criação manual Spark via batch', () => {
         }),
       ),
     );
+    expect(mockLogTransactionHistory).not.toHaveBeenCalled();
+    expect(mockUpdateTransaction).not.toHaveBeenCalled();
 
     unmount();
   });
@@ -881,6 +883,91 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
 
     expect(mockBatchUndoBulkUpdateTransactionsWithHistory).toHaveBeenCalledTimes(1);
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
+
+    unmount();
+  });
+});
+
+// ── AI categorization atomic update ──────────────────────────────────────────
+import { categorizeWithAI } from '../services/AICategorizationService';
+
+describe('useTransactions - AI categorization usa updateTransactionWithHistory atômico', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockDoc.mockImplementation((_parent: unknown, explicitId?: string) => ({
+      kind: 'doc',
+      id: explicitId ?? 'tx-created-ai',
+    }));
+    mockCreateManualTransactionWithHistory.mockResolvedValue('tx-created-ai');
+    mockLogAction.mockResolvedValue(undefined);
+    mockOnSnapshot.mockImplementation((_queryArg: unknown, onNext: (snap: { docs: never[] }) => void) => {
+      onNext({ docs: [] });
+      return vi.fn();
+    });
+  });
+
+  it('após add sem categoria determinística, AI chama updateTransactionWithHistory com origin ai', async () => {
+    const mockCategorize = vi.mocked(categorizeWithAI);
+    mockCategorize.mockResolvedValueOnce('Alimentação');
+
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+
+    await act(async () => {
+      await result.current.add({ description: 'Padaria Central', value_cents: 1500 as Centavos });
+    });
+
+    await waitFor(() => expect(mockUpdateTransactionWithHistory).toHaveBeenCalledTimes(1));
+
+    expect(mockUpdateTransaction).not.toHaveBeenCalled();
+    expect(mockLogTransactionHistory).not.toHaveBeenCalled();
+
+    const [, , updateData, historyEvent] = mockUpdateTransactionWithHistory.mock.calls[0] as [
+      string, string, Record<string, unknown>, Record<string, unknown>
+    ];
+
+    expect(updateData).toEqual(expect.objectContaining({ category: 'Alimentação' }));
+    expect(historyEvent['origin']).toBe('ai');
+    expect(historyEvent['changedFields']).toEqual(['category']);
+    expect(historyEvent['after']).toEqual(expect.objectContaining({ category: 'Alimentação' }));
+    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+      expect(historyEvent['before']).not.toHaveProperty(forbidden);
+      expect(historyEvent['after']).not.toHaveProperty(forbidden);
+    }
+
+    unmount();
+  });
+
+  it('não chama updateTransactionWithHistory se aiCat === Outros', async () => {
+    const mockCategorize = vi.mocked(categorizeWithAI);
+    mockCategorize.mockResolvedValueOnce('Outros');
+
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+
+    await act(async () => {
+      await result.current.add({ description: 'Compra genérica', value_cents: 500 as Centavos });
+    });
+
+    await new Promise(r => setTimeout(r, 50));
+
+    expect(mockUpdateTransactionWithHistory).not.toHaveBeenCalled();
+    expect(mockUpdateTransaction).not.toHaveBeenCalled();
+
+    unmount();
+  });
+
+  it('não dispara IA se categoria determinística já foi definida', async () => {
+    const mockCategorize = vi.mocked(categorizeWithAI);
+
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+
+    await act(async () => {
+      await result.current.add({ description: 'Mercado', category: 'Alimentação', value_cents: 800 as Centavos });
+    });
+
+    await new Promise(r => setTimeout(r, 50));
+
+    expect(mockCategorize).not.toHaveBeenCalled();
+    expect(mockUpdateTransactionWithHistory).not.toHaveBeenCalled();
 
     unmount();
   });
