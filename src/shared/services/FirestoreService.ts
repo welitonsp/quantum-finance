@@ -476,7 +476,7 @@ export const FirestoreService = {
       changedFields: string[];
       amount_cents?: number;
       category?: string;
-      origin?: 'manual' | 'ai';
+      origin?: 'manual' | 'ai' | 'reconcile';
     },
   ): Promise<void> {
     if (!uid || !id) throw new Error('[Firestore][updateTransactionWithHistory] UID ou ID ausente.');

@@ -2,7 +2,6 @@ import { serverTimestamp } from 'firebase/firestore';
 import { transactionCreateSchema } from '../../../shared/schemas/financialSchemas';
 import { toCentavos, type Centavos } from '../../../shared/types/money';
 import { FirestoreService } from '../../../shared/services/FirestoreService';
-import { AuditService } from '../../../shared/services/AuditService';
 import type { Transaction } from '../../../shared/types/transaction';
 import type { ParsedTransaction, ImportResult } from './importTypes';
 import { buildReconciliationHistoryDelta } from './importHelpers';
@@ -89,13 +88,12 @@ export async function processResolvedImportBatch(
 
   for (const { id, data, before } of toUpdate) {
     if (!uid) continue;
-    await FirestoreService.updateTransaction(uid, id, data);
     const historyDelta = buildReconciliationHistoryDelta(before, data);
-    void AuditService.logTransactionHistory(uid, id, {
-      action:  'UPDATE',
-      txId:    id,
-      ...historyDelta,
-      origin:  'reconcile',
+    await FirestoreService.updateTransactionWithHistory(uid, id, data, {
+      before:       historyDelta.before ?? {},
+      after:        historyDelta.after  ?? {},
+      changedFields: historyDelta.changedFields,
+      origin:       'reconcile',
       ...(data.value_cents !== undefined ? { amount_cents: data.value_cents as number } : {}),
       ...(data.category    !== undefined ? { category:     data.category              } : {}),
     });
