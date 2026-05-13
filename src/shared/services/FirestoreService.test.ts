@@ -943,6 +943,64 @@ describe('FirestoreService.batchUpdateTransactionsWithHistory', () => {
     expect(mockBatchUpdate).toHaveBeenCalledTimes(241);
     expect(mockBatchSet).toHaveBeenCalledTimes(241);
   });
+
+  it('inclui _lastOpId em cada updatePayload do bulk update, pareado com historyRef', async () => {
+    const snap = [
+      { id: 'tx-a', oldCategory: 'Outros', before: { category: 'Outros', value_cents: 500 } },
+      { id: 'tx-b', oldCategory: 'Lazer',  before: { category: 'Lazer',  value_cents: 800 } },
+    ];
+
+    await FirestoreService.batchUpdateTransactionsWithHistory('uid1', snap, { category: 'Alimentação' }, 'corr-xyz');
+
+    const [, payloadA] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [, payloadB] = mockBatchUpdate.mock.calls[1] as [Record<string, unknown>, Record<string, unknown>];
+    const [histRefA] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [histRefB] = mockBatchSet.mock.calls[1] as [Record<string, unknown>, Record<string, unknown>];
+
+    expect(payloadA['_lastOpId']).toBeDefined();
+    expect(payloadA['_lastOpId']).toBe((histRefA as { id: string }).id);
+
+    expect(payloadB['_lastOpId']).toBeDefined();
+    expect(payloadB['_lastOpId']).toBe((histRefB as { id: string }).id);
+  });
+
+  it('bulk update mantém action BULK_UPDATE, origin bulk, correlationId e não vaza importHash', async () => {
+    const snap = [{
+      id: 'tx-1',
+      oldCategory: 'Outros',
+      before: { category: 'Outros', value_cents: 1000, importHash: 'x'.repeat(64) },
+    }];
+
+    await FirestoreService.batchUpdateTransactionsWithHistory('uid1', snap, { category: 'Saúde' }, 'corr-abc');
+
+    const [, txPayload] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [, histPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+
+    expect(txPayload).not.toHaveProperty('importHash');
+    expect(txPayload['_lastOpId']).toBe('mock-doc-id');
+    expect(histPayload['action']).toBe('BULK_UPDATE');
+    expect(histPayload['origin']).toBe('bulk');
+    expect(histPayload['correlationId']).toBe('corr-abc');
+  });
+
+  it('bulk update mantém chunking: 241 itens geram 2 commits e _lastOpId está em todos', async () => {
+    const manyItems = Array.from({ length: 241 }, (_, i) => ({
+      id: `tx-${i}`,
+      oldCategory: 'Outros',
+      before: { value_cents: 100, category: 'Outros' },
+    }));
+
+    await FirestoreService.batchUpdateTransactionsWithHistory('uid1', manyItems, { category: 'X' }, 'c-chunk');
+
+    expect(mockBatchCommit).toHaveBeenCalledTimes(2);
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(241);
+    expect(mockBatchSet).toHaveBeenCalledTimes(241);
+
+    const firstPayload = (mockBatchUpdate.mock.calls[0] as [unknown, Record<string, unknown>])[1];
+    const lastPayload  = (mockBatchUpdate.mock.calls[240] as [unknown, Record<string, unknown>])[1];
+    expect(firstPayload['_lastOpId']).toBeDefined();
+    expect(lastPayload['_lastOpId']).toBeDefined();
+  });
 });
 
 describe('FirestoreService.batchUndoBulkUpdateTransactionsWithHistory', () => {
@@ -1058,5 +1116,65 @@ describe('FirestoreService.batchUndoBulkUpdateTransactionsWithHistory', () => {
     expect(mockBatchCommit).toHaveBeenCalledTimes(2);
     expect(mockBatchUpdate).toHaveBeenCalledTimes(241);
     expect(mockBatchSet).toHaveBeenCalledTimes(241);
+  });
+
+  it('inclui _lastOpId em cada updatePayload do undo bulk, pareado com historyRef', async () => {
+    const snapshot = [
+      { id: 'tx-a', oldCategory: 'Lazer',   newCategory: 'Alimentação', before: { category: 'Lazer',   value_cents: 500 } },
+      { id: 'tx-b', oldCategory: 'Moradia', newCategory: 'Alimentação', before: { category: 'Moradia', value_cents: 800 } },
+    ];
+
+    await FirestoreService.batchUndoBulkUpdateTransactionsWithHistory('uid1', snapshot, 'undo-xyz');
+
+    const [, payloadA] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [, payloadB] = mockBatchUpdate.mock.calls[1] as [Record<string, unknown>, Record<string, unknown>];
+    const [histRefA] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [histRefB] = mockBatchSet.mock.calls[1] as [Record<string, unknown>, Record<string, unknown>];
+
+    expect(payloadA['_lastOpId']).toBeDefined();
+    expect(payloadA['_lastOpId']).toBe((histRefA as { id: string }).id);
+
+    expect(payloadB['_lastOpId']).toBeDefined();
+    expect(payloadB['_lastOpId']).toBe((histRefB as { id: string }).id);
+  });
+
+  it('undo bulk mantém action UNDO_BULK_UPDATE, origin bulk, correlationId e não vaza importHash', async () => {
+    const snapshot = [{
+      id: 'tx-1',
+      oldCategory: 'Lazer',
+      newCategory: 'Alimentação',
+      before: { category: 'Lazer', value_cents: 1000, importHash: 'x'.repeat(64) },
+    }];
+
+    await FirestoreService.batchUndoBulkUpdateTransactionsWithHistory('uid1', snapshot, 'undo-abc');
+
+    const [, txPayload] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [, histPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+
+    expect(txPayload).not.toHaveProperty('importHash');
+    expect(txPayload['_lastOpId']).toBe('mock-doc-id');
+    expect(histPayload['action']).toBe('UNDO_BULK_UPDATE');
+    expect(histPayload['origin']).toBe('bulk');
+    expect(histPayload['correlationId']).toBe('undo-abc');
+  });
+
+  it('undo bulk mantém chunking: 241 itens geram 2 commits e _lastOpId está em todos', async () => {
+    const manyItems = Array.from({ length: 241 }, (_, i) => ({
+      id: `tx-${i}`,
+      oldCategory: 'Outros',
+      newCategory: 'Alimentação',
+      before: { value_cents: 100, category: 'Outros' },
+    }));
+
+    await FirestoreService.batchUndoBulkUpdateTransactionsWithHistory('uid1', manyItems, 'undo-chunk');
+
+    expect(mockBatchCommit).toHaveBeenCalledTimes(2);
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(241);
+    expect(mockBatchSet).toHaveBeenCalledTimes(241);
+
+    const firstPayload = (mockBatchUpdate.mock.calls[0] as [unknown, Record<string, unknown>])[1];
+    const lastPayload  = (mockBatchUpdate.mock.calls[240] as [unknown, Record<string, unknown>])[1];
+    expect(firstPayload['_lastOpId']).toBeDefined();
+    expect(lastPayload['_lastOpId']).toBeDefined();
   });
 });
