@@ -1,7 +1,6 @@
 import {
   collection,
   addDoc,
-  updateDoc,
   deleteDoc,
   doc,
   getDocs,
@@ -33,8 +32,6 @@ import {
   getTransactionCentavos,
 } from '../../utils/transactionUtils';
 import { LedgerService, transactionToLedgerInput } from './LedgerService';
-
-const TX_CHUNK_SIZE = 450;
 
 const txCol = (uid: string): CollectionReference =>
   collection(db, 'users', uid, 'transactions');
@@ -447,25 +444,6 @@ export const FirestoreService = {
     return txRef.id;
   },
 
-  async updateTransaction(uid: string, id: string, data: TransactionUpdateDTO): Promise<void> {
-    if (!uid || !id) throw new Error('[Firestore][updateTransaction] UID ou ID ausente.');
-    const payload = normalizeUpdatePayload(data);
-    const writePayload = {
-      ...payload,
-      uid: deleteField(),
-      id: deleteField(),
-      value: deleteField(),
-      updatedAt: serverTimestamp(),
-    };
-    debugUpdatePayload(id, payload, true);
-    try {
-      await updateDoc(doc(txCol(uid), id), writePayload);
-    } catch (err) {
-      debugRejectedUpdatePayload(id, payload, err);
-      throw err;
-    }
-  },
-
   async updateTransactionWithHistory(
     uid: string,
     id: string,
@@ -554,31 +532,6 @@ export const FirestoreService = {
     await batch.commit();
   },
 
-  async deleteTransaction(uid: string, id: string): Promise<void> {
-    if (!uid || !id) throw new Error('[Firestore][deleteTransaction] UID ou ID ausente.');
-    const docRef = doc(txCol(uid), id);
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) return;
-    await updateDoc(docRef, buildSoftDeletePatch(snap.data() as Record<string, unknown>));
-  },
-
-  async deleteBatchTransactions(uid: string, ids: string[]): Promise<void> {
-    if (!uid || !ids.length) return;
-
-    for (let i = 0; i < ids.length; i += TX_CHUNK_SIZE) {
-      const chunk = ids.slice(i, i + TX_CHUNK_SIZE);
-      const refs = chunk.map(txId => doc(txCol(uid), txId));
-      const snaps = await Promise.all(refs.map(r => getDoc(r)));
-      const batch = writeBatch(db);
-      chunk.forEach((_, idx) => {
-        const snap = snaps[idx];
-        if (!snap?.exists()) return;
-        batch.update(refs[idx]!, buildSoftDeletePatch(snap.data() as Record<string, unknown>));
-      });
-      await batch.commit();
-    }
-  },
-
   async deleteBatchTransactionsWithHistory(
     uid: string,
     transactions: Transaction[],
@@ -643,7 +596,6 @@ export const FirestoreService = {
         const txRef = doc(txCol(uid), item.id);
         const historyRef = doc(collection(db, 'users', uid, 'transactions', item.id, 'history'));
 
-        // Update da transação (preserva comportamento de batchUpdateTransactions)
         batch.update(txRef, {
           ...normalizedUpdates,
           uid: deleteField(),
@@ -756,33 +708,6 @@ export const FirestoreService = {
         batch.set(historyRef, historyPayload);
       });
 
-      await batch.commit();
-    }
-  },
-
-  async batchUpdateTransactions(
-    uidOrNull: string | null | undefined,
-    ids: string[],
-    updateData: TransactionUpdateDTO,
-  ): Promise<void> {
-    if (!ids.length) return;
-    const payload = normalizeUpdatePayload(updateData);
-
-    for (let i = 0; i < ids.length; i += TX_CHUNK_SIZE) {
-      const chunk = ids.slice(i, i + TX_CHUNK_SIZE);
-      const batch = writeBatch(db);
-      chunk.forEach(id => {
-        const ref = uidOrNull
-          ? doc(txCol(uidOrNull), id)
-          : doc(collection(db, 'transactions'), id);
-        batch.update(ref, {
-          ...payload,
-          uid: deleteField(),
-          id: deleteField(),
-          value: deleteField(),
-          updatedAt: serverTimestamp(),
-        });
-      });
       await batch.commit();
     }
   },
