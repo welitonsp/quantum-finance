@@ -639,6 +639,47 @@ describe('FirestoreService.softDeleteTransactionWithHistory', () => {
     expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
     expect(mockBatchSet).toHaveBeenCalledTimes(1);
   });
+
+  it('inclui _lastOpId no updatePayload do soft delete igual ao id do historyRef', async () => {
+    await FirestoreService.softDeleteTransactionWithHistory('uid1', 'tx-delete-1', {
+      before: { description: 'Compra a apagar', value_cents: 1000, category: 'Outros' },
+      amount_cents: 1000,
+      category: 'Outros',
+    });
+
+    const [, txPayload] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [historyRef] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+
+    expect(txPayload['_lastOpId']).toBeDefined();
+    expect(txPayload['_lastOpId']).toBe((historyRef as { id: string }).id);
+    expect(txPayload['_lastOpId']).toBe('mock-doc-id');
+  });
+
+  it('soft delete mantém action SOFT_DELETE, origin manual e não vaza importHash no updatePayload', async () => {
+    mockGetDoc.mockResolvedValueOnce(existingSnap({
+      description: 'Compra',
+      value_cents: 500,
+      schemaVersion: 2,
+      type: 'saida',
+      category: 'Outros',
+      date: '2026-01-01',
+      source: 'manual',
+      importHash: 'x'.repeat(64),
+    }));
+
+    await FirestoreService.softDeleteTransactionWithHistory('uid1', 'tx-delete-1', {
+      before: { description: 'Compra', value_cents: 500, importHash: 'x'.repeat(64) },
+      amount_cents: 500,
+    });
+
+    const [, txPayload] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [, historyPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+
+    expect(txPayload).not.toHaveProperty('importHash');
+    expect(txPayload['_lastOpId']).toBe('mock-doc-id');
+    expect(historyPayload['action']).toBe('SOFT_DELETE');
+    expect(historyPayload['origin']).toBe('manual');
+  });
 });
 
 describe('FirestoreService.deleteBatchTransactions', () => {
@@ -723,6 +764,75 @@ describe('FirestoreService.deleteBatchTransactionsWithHistory', () => {
     expect(mockBatchCommit).toHaveBeenCalledTimes(2);
     expect(mockBatchUpdate).toHaveBeenCalledTimes(241);
     expect(mockBatchSet).toHaveBeenCalledTimes(241);
+  });
+
+  it('inclui _lastOpId em cada updatePayload do delete batch, pareado com historyRef', async () => {
+    const txA = { id: 'tx-a', value_cents: 1000, category: 'Lazer', description: 'Cinema', type: 'saida', date: '2026-05-12' } as Transaction;
+    const txB = { id: 'tx-b', value_cents: 2000, category: 'Saúde', description: 'Médico', type: 'saida', date: '2026-05-12' } as Transaction;
+
+    await FirestoreService.deleteBatchTransactionsWithHistory('uid1', [txA, txB]);
+
+    const [, txPayloadA] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [, txPayloadB] = mockBatchUpdate.mock.calls[1] as [Record<string, unknown>, Record<string, unknown>];
+    const [histRefA] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [histRefB] = mockBatchSet.mock.calls[1] as [Record<string, unknown>, Record<string, unknown>];
+
+    expect(txPayloadA['_lastOpId']).toBeDefined();
+    expect(txPayloadA['_lastOpId']).toBe((histRefA as { id: string }).id);
+
+    expect(txPayloadB['_lastOpId']).toBeDefined();
+    expect(txPayloadB['_lastOpId']).toBe((histRefB as { id: string }).id);
+  });
+
+  it('delete batch não vaza importHash no updatePayload', async () => {
+    const txWithHash = {
+      id: 'tx-hash',
+      value_cents: 1500,
+      category: 'Outros',
+      description: 'Importada',
+      type: 'saida',
+      date: '2026-01-01',
+      importHash: 'x'.repeat(64),
+    } as Transaction;
+
+    await FirestoreService.deleteBatchTransactionsWithHistory('uid1', [txWithHash]);
+
+    const [, txPayload] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    expect(txPayload).not.toHaveProperty('importHash');
+    expect(txPayload['_lastOpId']).toBe('mock-doc-id');
+  });
+
+  it('delete batch mantém action SOFT_DELETE e origin manual', async () => {
+    const tx = { id: 'tx-c', value_cents: 500, category: 'Transporte', description: 'Ônibus', type: 'saida', date: '2026-01-01' } as Transaction;
+
+    await FirestoreService.deleteBatchTransactionsWithHistory('uid1', [tx]);
+
+    const [, historyPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    expect(historyPayload['action']).toBe('SOFT_DELETE');
+    expect(historyPayload['origin']).toBe('manual');
+  });
+
+  it('delete batch mantém chunking: 241 itens geram 2 commits com _lastOpId em todos', async () => {
+    const manyTxs = Array.from({ length: 241 }, (_, i) => ({
+      id: `tx-${i}`,
+      value_cents: 100,
+      category: 'Teste',
+      description: `Desc ${i}`,
+      type: 'saida',
+      date: '2026-05-12',
+    } as Transaction));
+
+    await FirestoreService.deleteBatchTransactionsWithHistory('uid1', manyTxs);
+
+    expect(mockBatchCommit).toHaveBeenCalledTimes(2);
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(241);
+    expect(mockBatchSet).toHaveBeenCalledTimes(241);
+
+    // verifica _lastOpId nos primeiros e no último item
+    const firstPayload = (mockBatchUpdate.mock.calls[0] as [unknown, Record<string, unknown>])[1];
+    const lastPayload = (mockBatchUpdate.mock.calls[240] as [unknown, Record<string, unknown>])[1];
+    expect(firstPayload['_lastOpId']).toBeDefined();
+    expect(lastPayload['_lastOpId']).toBeDefined();
   });
 });
 
