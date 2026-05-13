@@ -38,6 +38,8 @@ export interface Transaction {
   uid?: string;
   createdAt?: Timestamp | number | string | null;
   updatedAt?: Timestamp | number | string | null;
+  /** Reserved audit field: ID of the history document paired with the last update. Used for future Rules enforcement via getAfter(). */
+  _lastOpId?: string;
 }
 
 export interface ParsedTransaction extends Omit<Transaction, 'id' | 'uid' | 'createdAt' | 'updatedAt'> {

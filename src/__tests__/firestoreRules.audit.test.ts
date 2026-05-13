@@ -660,4 +660,61 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       await assertSucceeds(addDoc(ref, baseCreatePayload('pdf')));
     });
   });
+
+  // ── E. _lastOpId — FASE 8B-3B compatibilidade ────────────────────────────────
+
+  describe('E. _lastOpId — compatibilidade de schema (8B-3B)', () => {
+    it('E1 — UPDATE válido com _lastOpId deve ser permitido', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertSucceeds(setDoc(txDocRef, {
+        description: 'Test com _lastOpId',
+        value_cents: 10000,
+        schemaVersion: 2,
+        type: 'saida',
+        category: 'Alimentação',
+        date: '2026-01-01',
+        source: 'csv',
+        importHash: IMPORT_HASH_A,
+        createdAt: FIXED_TS,
+        updatedAt: serverTimestamp(),
+        _lastOpId: 'abc123',
+      }));
+    });
+
+    it('E2 — UPDATE válido sem _lastOpId continua permitido nesta fase', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertSucceeds(setDoc(txDocRef, {
+        description: 'Test sem _lastOpId',
+        value_cents: 10000,
+        schemaVersion: 2,
+        type: 'saida',
+        category: 'Alimentação',
+        date: '2026-01-01',
+        source: 'csv',
+        importHash: IMPORT_HASH_A,
+        createdAt: FIXED_TS,
+        updatedAt: serverTimestamp(),
+      }));
+    });
+
+    it('E3 — UPDATE tentando alterar importHash continua bloqueado mesmo com _lastOpId', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertFails(setDoc(txDocRef, {
+        description: 'Test',
+        value_cents: 10000,
+        schemaVersion: 2,
+        type: 'saida',
+        category: 'Alimentação',
+        date: '2026-01-01',
+        source: 'csv',
+        importHash: IMPORT_HASH_B,
+        createdAt: FIXED_TS,
+        updatedAt: serverTimestamp(),
+        _lastOpId: 'abc123',
+      }));
+    });
+  });
 });
