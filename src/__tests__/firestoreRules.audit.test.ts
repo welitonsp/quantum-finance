@@ -677,6 +677,269 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
     });
   });
 
+  // ── F. _lastOpId UPDATE enforcement — Modelo B (8B-3F) ──────────────────────
+
+  describe('F. _lastOpId UPDATE enforcement — Modelo B (8B-3F)', () => {
+    const baseUpdatePayload = () => ({
+      description: 'Test com _lastOpId enforcement',
+      value_cents: 10000,
+      schemaVersion: 2,
+      type: 'saida' as const,
+      category: 'Alimentação',
+      date: '2026-01-01',
+      source: 'csv',
+      importHash: IMPORT_HASH_A,
+      createdAt: FIXED_TS,
+      updatedAt: serverTimestamp(),
+    });
+
+    const commitUpdateWithHistoryBatch = async (
+      txId: string,
+      opId: string,
+      txOverrides: Record<string, unknown> = {},
+      historyOverrides: Record<string, unknown> = {},
+    ) => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'users', UID_A, 'transactions', txId), {
+        ...baseUpdatePayload(),
+        _lastOpId: opId,
+        ...txOverrides,
+      });
+      batch.set(doc(db, 'users', UID_A, 'transactions', txId, 'history', opId), {
+        action: 'UPDATE',
+        txId,
+        createdAt: serverTimestamp(),
+        schemaVersion: 1,
+        origin: 'manual',
+        ...historyOverrides,
+      });
+      return batch.commit();
+    };
+
+    // F1: positivo — UPDATE manual com _lastOpId e history pareado no mesmo writeBatch
+    it('F1 — UPDATE manual com _lastOpId e history pareado deve passar', async () => {
+      await assertSucceeds(commitUpdateWithHistoryBatch(TX_REAL, 'op-f1-manual'));
+    });
+
+    // F2: positivo — UPDATE ai com _lastOpId e history pareado no mesmo writeBatch
+    it('F2 — UPDATE ai com _lastOpId e history pareado deve passar', async () => {
+      await assertSucceeds(commitUpdateWithHistoryBatch(TX_REAL, 'op-f2-ai', {}, { origin: 'ai' }));
+    });
+
+    // F3: positivo — UPDATE sem _lastOpId continua passando (Modelo B backward-compatible)
+    it('F3 — UPDATE sem _lastOpId continua passando no Modelo B', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertSucceeds(setDoc(txDocRef, baseUpdatePayload()));
+    });
+
+    // F4: negativo — UPDATE com _lastOpId sem history pareado deve falhar
+    it('F4 — UPDATE com _lastOpId sem history pareado deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertFails(setDoc(txDocRef, { ...baseUpdatePayload(), _lastOpId: 'op-f4-no-history' }));
+    });
+
+    // F5: negativo — UPDATE com _lastOpId apontando para history pré-existente deve falhar
+    // (existsAfter retorna true, mas exists também retorna true → !exists falha)
+    it('F5 — UPDATE com _lastOpId apontando para history pré-existente deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertFails(setDoc(txDocRef, {
+        ...baseUpdatePayload(),
+        _lastOpId: EXISTING_HISTORY_ID,
+      }));
+    });
+
+    // F6: negativo — UPDATE com history txId divergente deve falhar
+    it('F6 — UPDATE com history txId divergente deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-f6-txid', {}, { txId: 'tx-outro' }),
+      );
+    });
+
+    // F7: negativo — UPDATE com history action diferente de UPDATE deve falhar
+    it('F7 — UPDATE com history action diferente de UPDATE deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-f7-action', {}, { action: 'SOFT_DELETE' }),
+      );
+    });
+
+    // F8: negativo — UPDATE com history origin fora de manual/ai deve falhar
+    it('F8 — UPDATE com history origin fora de manual/ai deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-f8-origin', {}, { origin: 'bulk' }),
+      );
+    });
+
+    // F9: negativo — UPDATE com history before contendo importHash deve falhar
+    // (isValidHistorySnapshot rejeita importHash em before/after)
+    it('F9 — UPDATE com history before contendo importHash deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-f9-before', {}, {
+          before: { importHash: IMPORT_HASH_A },
+        }),
+      );
+    });
+
+    // F10: negativo — UPDATE alterando importHash da transaction continua falhando
+    it('F10 — UPDATE alterando importHash da transaction continua falhando', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertFails(setDoc(txDocRef, { ...baseUpdatePayload(), importHash: IMPORT_HASH_B }));
+    });
+
+    // F11: negativo — UPDATE com value legado continua falhando mesmo com Modelo B
+    it('F11 — UPDATE com value legado continua falhando', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertFails(setDoc(txDocRef, { ...baseUpdatePayload(), value: 100 }));
+    });
+  });
+
+  // ── G. Hardening _lastOpId — FASE 8B-3F-HARDENING ───────────────────────────
+
+  describe('G. Hardening _lastOpId (8B-3F-HARDENING)', () => {
+    const baseUpdatePayload = () => ({
+      description: 'Hardening _lastOpId',
+      value_cents: 10000,
+      schemaVersion: 2,
+      type: 'saida' as const,
+      category: 'Alimentação',
+      date: '2026-01-01',
+      source: 'csv',
+      importHash: IMPORT_HASH_A,
+      createdAt: FIXED_TS,
+      updatedAt: serverTimestamp(),
+    });
+
+    const commitUpdateWithHistoryBatch = async (
+      txId: string,
+      opId: string,
+      historyOverrides: Record<string, unknown> = {},
+    ) => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'users', UID_A, 'transactions', txId), {
+        ...baseUpdatePayload(),
+        _lastOpId: opId,
+      });
+      batch.set(doc(db, 'users', UID_A, 'transactions', txId, 'history', opId), {
+        action: 'UPDATE',
+        txId,
+        createdAt: serverTimestamp(),
+        schemaVersion: 1,
+        origin: 'manual',
+        ...historyOverrides,
+      });
+      return batch.commit();
+    };
+
+    // ── G1-G5: validação de tipo e tamanho de _lastOpId ───────────────────────
+
+    // G1: string vazia — isStringSized(opId, 1, 128) rejeita size < 1
+    it('G1 — UPDATE com _lastOpId vazio deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertFails(setDoc(txDocRef, { ...baseUpdatePayload(), _lastOpId: '' }));
+    });
+
+    // G2: null — isStringSized rejeita tipos não-string
+    it('G2 — UPDATE com _lastOpId null deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertFails(setDoc(txDocRef, { ...baseUpdatePayload(), _lastOpId: null as never }));
+    });
+
+    // G3: número — isStringSized rejeita tipos não-string
+    it('G3 — UPDATE com _lastOpId numérico deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertFails(setDoc(txDocRef, { ...baseUpdatePayload(), _lastOpId: 42 as never }));
+    });
+
+    // G4: mapa (objeto) — isStringSized rejeita tipos não-string
+    it('G4 — UPDATE com _lastOpId objeto deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertFails(setDoc(txDocRef, { ...baseUpdatePayload(), _lastOpId: { id: 'forged' } as never }));
+    });
+
+    // G5: string com 129 chars — isStringSized(opId, 1, 128) rejeita size > 128.
+    // History é criado no mesmo batch com o mesmo opId para isolar a falha ao tamanho do _lastOpId.
+    it('G5 — UPDATE com _lastOpId acima de 128 chars deve falhar', async () => {
+      const longOpId = 'x'.repeat(129);
+      await assertFails(commitUpdateWithHistoryBatch(TX_REAL, longOpId));
+    });
+
+    // ── G6-G8: origins proibidas em history pareado ───────────────────────────
+
+    // G6: origin='reconcile' — permitida no schema de history mas bloqueada no enforcement UPDATE
+    it('G6 — UPDATE com history origin reconcile deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-g6-reconcile', { origin: 'reconcile' }),
+      );
+    });
+
+    // G7: origin='import' — permitida no schema de history mas bloqueada no enforcement UPDATE
+    it('G7 — UPDATE com history origin import deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-g7-import', { origin: 'import' }),
+      );
+    });
+
+    // G8: origin='system' — permitida no schema mas bloqueada no enforcement UPDATE
+    it('G8 — UPDATE com history origin system deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-g8-system', { origin: 'system' }),
+      );
+    });
+
+    // ── G9-G11: actions proibidas em history pareado ──────────────────────────
+
+    // G9: action='BULK_UPDATE' — válida no schema de history mas bloqueada no enforcement UPDATE
+    it('G9 — UPDATE com history action BULK_UPDATE deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-g9-bulk', { action: 'BULK_UPDATE' }),
+      );
+    });
+
+    // G10: action='UNDO_BULK_UPDATE' — válida no schema mas bloqueada no enforcement UPDATE
+    it('G10 — UPDATE com history action UNDO_BULK_UPDATE deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-g10-undo', { action: 'UNDO_BULK_UPDATE' }),
+      );
+    });
+
+    // G11: action='CREATE' — bloqueada tanto pelo enforcement quanto pela regra de create do history
+    it('G11 — UPDATE com history action CREATE deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-g11-create', { action: 'CREATE' }),
+      );
+    });
+
+    // ── G12-G13: schema inválido do history no mesmo batch ────────────────────
+
+    // G12: schemaVersion=0 — isValidTransactionHistory exige schemaVersion == 1
+    it('G12 — UPDATE com history schemaVersion 0 deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-g12-schema', { schemaVersion: 0 as never }),
+      );
+    });
+
+    // G13: changedFields com 'importHash' — isValidHistoryChangedFields usa hasOnly sem importHash
+    it('G13 — UPDATE com history changedFields contendo importHash deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-g13-changedfields', {
+          changedFields: ['importHash'],
+        }),
+      );
+    });
+  });
+
   // ── E. _lastOpId — FASE 8B-3E compatibilidade e ausência de enforcement ──────
 
   describe('E. _lastOpId — compatibilidade de schema (8B-3E)', () => {
@@ -695,10 +958,10 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
 
     // ── Tarefa 1: positivos de compatibilidade ──────────────────────────────
 
-    it('E1 — UPDATE válido com _lastOpId deve ser permitido', async () => {
+    it('E1 — UPDATE com _lastOpId sem history pareado deve falhar (Modelo B enforcement)', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
-      await assertSucceeds(setDoc(txDocRef, { ...baseUpdatePayload(), _lastOpId: 'abc123' }));
+      await assertFails(setDoc(txDocRef, { ...baseUpdatePayload(), _lastOpId: 'abc123' }));
     });
 
     it('E2 — UPDATE válido sem _lastOpId continua permitido nesta fase', async () => {
@@ -707,20 +970,20 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       await assertSucceeds(setDoc(txDocRef, baseUpdatePayload()));
     });
 
-    it('E4 — UPDATE de category com _lastOpId deve ser permitido', async () => {
+    it('E4 — UPDATE de category com _lastOpId sem history deve falhar (Modelo B enforcement)', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
-      await assertSucceeds(setDoc(txDocRef, {
+      await assertFails(setDoc(txDocRef, {
         ...baseUpdatePayload(),
         category: 'Transporte',
         _lastOpId: 'op-cat-update',
       }));
     });
 
-    it('E5 — UPDATE marcando isDeleted com _lastOpId deve ser permitido', async () => {
+    it('E5 — UPDATE marcando isDeleted com _lastOpId sem history deve falhar (Modelo B enforcement)', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
-      await assertSucceeds(setDoc(txDocRef, {
+      await assertFails(setDoc(txDocRef, {
         ...baseUpdatePayload(),
         isDeleted: true,
         deletedAt: serverTimestamp(),
@@ -728,16 +991,17 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       }));
     });
 
-    it('E6 — UPDATE com _lastOpId preserva createdAt e importHash sem value legado', async () => {
+    it('E6 — UPDATE com _lastOpId sem history deve falhar; campos proibidos ausentes são verificados', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
       const payload = { ...baseUpdatePayload(), _lastOpId: 'op-safe' };
-      // garante ausência de campos proibidos no payload
+      // garante ausência de campos proibidos no payload (verificação estática)
       const hasValue = 'value' in payload;
       const hasUid = 'uid' in payload;
       const hasId = 'id' in payload;
       if (hasValue || hasUid || hasId) throw new Error('payload contém campo proibido');
-      await assertSucceeds(setDoc(txDocRef, payload));
+      // _lastOpId sem history pareado deve ser rejeitado pelo Modelo B
+      await assertFails(setDoc(txDocRef, payload));
     });
 
     // ── Tarefa 2: negativos — proteções existentes permanecem com _lastOpId ──
@@ -793,36 +1057,35 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       }));
     });
 
-    // ── Tarefa 3: documentação técnica — ausência de enforcement (fase futura) ─
-    // Documentação técnica: nesta fase NÃO há getAfter() exigindo history pareado.
-    // Os assertSucceeds abaixo (E11–E13) quebrarão de propósito quando enforcement
-    // for ativado em fase futura. O prefixo "sem enforcement ainda" facilita o grep.
+    // ── Tarefa 3: enforcement ativo (8B-3F) — E11/E12 agora devem falhar ─────────
+    // Modelo B: _lastOpId sem history pareado no mesmo commit é bloqueado.
+    // E13 continua passando: UPDATE sem _lastOpId é compatível com Modelo B.
 
-    it('E11 — sem enforcement ainda — UPDATE com _lastOpId apontando para history inexistente é permitido', async () => {
+    it('E11 — UPDATE com _lastOpId apontando para history inexistente deve falhar', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
-      await assertSucceeds(setDoc(txDocRef, {
+      await assertFails(setDoc(txDocRef, {
         ...baseUpdatePayload(),
         _lastOpId: 'op-history-inexistente',
       }));
     });
 
-    it('E12 — sem enforcement ainda — UPDATE com _lastOpId arbitrário é permitido (compatibilidade temporária)', async () => {
+    it('E12 — UPDATE com _lastOpId arbitrário sem history deve falhar', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
-      await assertSucceeds(setDoc(txDocRef, {
+      await assertFails(setDoc(txDocRef, {
         ...baseUpdatePayload(),
         _lastOpId: '00000000-0000-0000-0000-000000000000',
       }));
     });
 
-    it('E13 — sem enforcement ainda — UPDATE sem history pareado é permitido (preparação para fase futura)', async () => {
+    it('E13 — UPDATE sem _lastOpId continua passando no Modelo B', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
-      // Sem _lastOpId e sem history escrito — deve continuar passando até enforcement entrar.
+      // Modelo B: sem _lastOpId, nenhum enforcement de history é aplicado.
       await assertSucceeds(setDoc(txDocRef, {
         ...baseUpdatePayload(),
-        description: 'Atualização sem history pareado — sem enforcement ainda',
+        description: 'Atualização sem history pareado — Modelo B compatível',
       }));
     });
   });

@@ -112,6 +112,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(userId)/transactions/$(txId)/history/create;
     }
 
+    function txHistoryPath(userId, txId, historyId) {
+      return /databases/$(database)/documents/users/$(userId)/transactions/$(txId)/history/$(historyId);
+    }
+
     function isValidTransactionBase(data) {
       return data.keys().hasAll([
             'description', 'value_cents', 'schemaVersion', 'type',
@@ -190,6 +194,34 @@ service cloud.firestore {
           && (!changed.hasAny(['deletedAt']) || data.deletedAt == request.time)
           && (!changed.hasAny(['reconciledAt']) || data.reconciledAt == request.time)
           && (!changed.hasAny(['reconciledBy']) || data.reconciledBy == userId);
+    }
+
+    // Modelo B: valida history pareado no mesmo commit quando _lastOpId está presente.
+    // existsAfter() é verificado antes de chamar getAfter() para evitar erro em path inexistente.
+    // Os demais campos do history (txId, createdAt, schemaVersion, before/after) são validados
+    // pela própria regra de create do history via isValidTransactionHistory; aqui checamos apenas
+    // action e origin que são específicos do enforcement de UPDATE.
+    // Minimizamos as chamadas a getAfter() para evitar o limite de 1000 expressões do emulador.
+    // isStringSized rejeita null, número, objeto, lista, string vazia e string acima de 128 chars.
+    function isValidUpdateHistoryPairedInSameBatch(userId, txId) {
+      let opId = request.resource.data._lastOpId;
+      let historyPath = txHistoryPath(userId, txId, opId);
+      return isStringSized(opId, 1, 128)
+          && !exists(historyPath)
+          && existsAfter(historyPath)
+          && getAfter(historyPath).data.txId == txId
+          && getAfter(historyPath).data.action == 'UPDATE'
+          && getAfter(historyPath).data.origin in ['manual', 'ai'];
+    }
+
+    // Wrapper Modelo B: UPDATE sem _lastOpId continua compatível; com _lastOpId exige history pareado.
+    function isValidTransactionUpdateWithHistory(userId, txId) {
+      let data = request.resource.data;
+      return isValidTransactionUpdate(userId)
+          && (
+            !('_lastOpId' in data)
+            || isValidUpdateHistoryPairedInSameBatch(userId, txId)
+          );
     }
 
     function isValidAccount(data) {
@@ -510,7 +542,7 @@ service cloud.firestore {
       match /transactions/{txId} {
         allow read: if isOwner(userId);
         allow create: if isOwner(userId) && isValidTransactionCreate(userId, txId);
-        allow update: if isOwner(userId) && isValidTransactionUpdate(userId);
+        allow update: if isOwner(userId) && isValidTransactionUpdateWithHistory(userId, txId);
         allow delete: if false;
 
         match /history/{historyId} {
