@@ -677,9 +677,9 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
     });
   });
 
-  // ── F. _lastOpId UPDATE enforcement — Modelo B (8B-3F) ──────────────────────
+  // ── F. _lastOpId UPDATE enforcement — Modelo A (8B-5) ───────────────────────
 
-  describe('F. _lastOpId UPDATE enforcement — Modelo B (8B-3F)', () => {
+  describe('F. _lastOpId UPDATE enforcement — Modelo A (8B-5)', () => {
     const baseUpdatePayload = () => ({
       description: 'Test com _lastOpId enforcement',
       value_cents: 10000,
@@ -728,11 +728,11 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       await assertSucceeds(commitUpdateWithHistoryBatch(TX_REAL, 'op-f2-ai', {}, { origin: 'ai' }));
     });
 
-    // F3: positivo — UPDATE sem _lastOpId continua passando (Modelo B backward-compatible)
-    it('F3 — UPDATE sem _lastOpId continua passando no Modelo B', async () => {
+    // F3: negativo — Modelo A: UPDATE sem _lastOpId deve falhar (porta de compat Modelo B removida)
+    it('F3 — Modelo A: UPDATE sem _lastOpId é rejeitado', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
-      await assertSucceeds(setDoc(txDocRef, baseUpdatePayload()));
+      await assertFails(setDoc(txDocRef, baseUpdatePayload()));
     });
 
     // F4: negativo — UPDATE com _lastOpId sem history pareado deve falhar
@@ -760,15 +760,15 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       );
     });
 
-    // F7: negativo — UPDATE com history action diferente de UPDATE deve falhar
-    it('F7 — UPDATE com history action diferente de UPDATE deve falhar', async () => {
-      await assertFails(
-        commitUpdateWithHistoryBatch(TX_REAL, 'op-f7-action', {}, { action: 'SOFT_DELETE' }),
+    // F7: positivo — SOFT_DELETE + origin manual é permitido pelo Modelo A
+    it('F7 — SOFT_DELETE com origin manual e _lastOpId pareado deve passar', async () => {
+      await assertSucceeds(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-f7-soft-delete', {}, { action: 'SOFT_DELETE' }),
       );
     });
 
-    // F8: negativo — UPDATE com history origin fora de manual/ai deve falhar
-    it('F8 — UPDATE com history origin fora de manual/ai deve falhar', async () => {
+    // F8: negativo — UPDATE action com origin bulk deve falhar (UPDATE só aceita manual/ai/reconcile)
+    it('F8 — UPDATE action com origin bulk deve falhar', async () => {
       await assertFails(
         commitUpdateWithHistoryBatch(TX_REAL, 'op-f8-origin', {}, { origin: 'bulk' }),
       );
@@ -791,11 +791,46 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       await assertFails(setDoc(txDocRef, { ...baseUpdatePayload(), importHash: IMPORT_HASH_B }));
     });
 
-    // F11: negativo — UPDATE com value legado continua falhando mesmo com Modelo B
+    // F11: negativo — UPDATE com value legado continua falhando
     it('F11 — UPDATE com value legado continua falhando', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
       await assertFails(setDoc(txDocRef, { ...baseUpdatePayload(), value: 100 }));
+    });
+
+    // F12: positivo — BULK_UPDATE + origin bulk com _lastOpId e history pareado deve passar
+    it('F12 — BULK_UPDATE com origin bulk e _lastOpId pareado deve passar', async () => {
+      await assertSucceeds(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-f12-bulk', {}, { action: 'BULK_UPDATE', origin: 'bulk' }),
+      );
+    });
+
+    // F13: positivo — UNDO_BULK_UPDATE + origin bulk com _lastOpId e history pareado deve passar
+    it('F13 — UNDO_BULK_UPDATE com origin bulk e _lastOpId pareado deve passar', async () => {
+      await assertSucceeds(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-f13-undo', {}, { action: 'UNDO_BULK_UPDATE', origin: 'bulk' }),
+      );
+    });
+
+    // F14: positivo — UPDATE + origin reconcile com _lastOpId e history pareado deve passar
+    it('F14 — UPDATE com origin reconcile e _lastOpId pareado deve passar', async () => {
+      await assertSucceeds(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-f14-reconcile', {}, { origin: 'reconcile' }),
+      );
+    });
+
+    // F15: negativo — SOFT_DELETE com origin bulk (cruzado errado) deve falhar
+    it('F15 — SOFT_DELETE com origin bulk deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-f15-cross', {}, { action: 'SOFT_DELETE', origin: 'bulk' }),
+      );
+    });
+
+    // F16: negativo — BULK_UPDATE com origin manual (cruzado errado) deve falhar
+    it('F16 — BULK_UPDATE com origin manual deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op-f16-cross', {}, { action: 'BULK_UPDATE', origin: 'manual' }),
+      );
     });
   });
 
@@ -942,9 +977,9 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
     });
   });
 
-  // ── E. _lastOpId — FASE 8B-3E compatibilidade e ausência de enforcement ──────
+  // ── E. _lastOpId — FASE 8B-5 Modelo A obrigatório ──────────────────────────
 
-  describe('E. _lastOpId — compatibilidade de schema (8B-3E)', () => {
+  describe('E. _lastOpId — Modelo A obrigatório (8B-5)', () => {
     const baseUpdatePayload = () => ({
       description: 'Test com _lastOpId',
       value_cents: 10000,
@@ -966,10 +1001,10 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       await assertFails(setDoc(txDocRef, { ...baseUpdatePayload(), _lastOpId: 'abc123' }));
     });
 
-    it('E2 — UPDATE válido sem _lastOpId continua permitido nesta fase', async () => {
+    it('E2 — Modelo A: UPDATE sem _lastOpId é rejeitado', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
-      await assertSucceeds(setDoc(txDocRef, baseUpdatePayload()));
+      await assertFails(setDoc(txDocRef, baseUpdatePayload()));
     });
 
     it('E4 — UPDATE de category com _lastOpId sem history deve falhar (Modelo B enforcement)', async () => {
@@ -1059,9 +1094,7 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       }));
     });
 
-    // ── Tarefa 3: enforcement ativo (8B-3F) — E11/E12 agora devem falhar ─────────
-    // Modelo B: _lastOpId sem history pareado no mesmo commit é bloqueado.
-    // E13 continua passando: UPDATE sem _lastOpId é compatível com Modelo B.
+    // ── Tarefa 3: enforcement Modelo A — _lastOpId obrigatório ─────────────────
 
     it('E11 — UPDATE com _lastOpId apontando para history inexistente deve falhar', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
@@ -1081,13 +1114,12 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       }));
     });
 
-    it('E13 — UPDATE sem _lastOpId continua passando no Modelo B', async () => {
+    it('E13 — Modelo A: UPDATE sem _lastOpId é rejeitado', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
-      // Modelo B: sem _lastOpId, nenhum enforcement de history é aplicado.
-      await assertSucceeds(setDoc(txDocRef, {
+      await assertFails(setDoc(txDocRef, {
         ...baseUpdatePayload(),
-        description: 'Atualização sem history pareado — Modelo B compatível',
+        description: 'Atualização sem history pareado — deve falhar no Modelo A',
       }));
     });
   });
