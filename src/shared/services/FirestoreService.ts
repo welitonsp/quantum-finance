@@ -549,7 +549,7 @@ export const FirestoreService = {
     if (historyEvent.category !== undefined) historyPayload.category = historyEvent.category;
 
     const batch = writeBatch(db);
-    batch.update(txRef, buildSoftDeletePatch(snap.data() as Record<string, unknown>));
+    batch.update(txRef, { ...buildSoftDeletePatch(snap.data() as Record<string, unknown>), _lastOpId: historyRef.id });
     batch.set(historyRef, historyPayload);
     await batch.commit();
   },
@@ -609,7 +609,7 @@ export const FirestoreService = {
         if (tx.value_cents !== undefined) historyPayload.amount_cents = tx.value_cents;
         if (tx.category !== undefined) historyPayload.category = tx.category;
 
-        batch.update(txRef, buildSoftDeletePatch(tx as unknown as Record<string, unknown>));
+        batch.update(txRef, { ...buildSoftDeletePatch(tx as unknown as Record<string, unknown>), _lastOpId: historyRef.id });
         batch.set(historyRef, historyPayload);
       });
 
