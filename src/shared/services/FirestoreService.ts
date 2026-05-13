@@ -491,6 +491,7 @@ export const FirestoreService = {
       id: deleteField(),
       value: deleteField(),
       updatedAt: timestamp,
+      _lastOpId: historyRef.id,
     };
 
     const historyPayload: Record<string, unknown> = {

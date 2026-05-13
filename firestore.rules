@@ -100,7 +100,7 @@ service cloud.firestore {
         'date', 'source', 'account', 'accountId', 'cardId', 'fitId', 'tags',
         'isRecurring', 'importHash', 'createdAt', 'updatedAt', 'isDeleted',
         'deletedAt', 'reconciliationStatus', 'reconciliationSource',
-        'reconciledAt', 'reconciledBy'
+        'reconciledAt', 'reconciledBy', '_lastOpId'
       ];
     }
 

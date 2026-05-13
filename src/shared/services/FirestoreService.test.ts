@@ -478,6 +478,68 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
     expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
     expect(mockBatchSet).toHaveBeenCalledTimes(1);
   });
+
+  it('inclui _lastOpId no payload da transaction igual ao id do historyRef', async () => {
+    await FirestoreService.updateTransactionWithHistory('uid1', 'tx-1', {
+      category: 'Alimentação',
+    }, {
+      before: { category: 'Outros' },
+      after: { category: 'Alimentação' },
+      changedFields: ['category'],
+    });
+
+    const [, txPayload] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [historyRef] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+
+    expect(txPayload['_lastOpId']).toBeDefined();
+    expect(txPayload['_lastOpId']).toBe((historyRef as { id: string }).id);
+    expect(txPayload['_lastOpId']).toBe('mock-doc-id');
+  });
+
+  it('_lastOpId não interfere com importHash: importHash não aparece no updatePayload', async () => {
+    await FirestoreService.updateTransactionWithHistory('uid1', 'tx-1', {
+      category: 'Alimentação',
+    }, {
+      before: { category: 'Outros', importHash: 'x'.repeat(64) },
+      after: { category: 'Alimentação' },
+      changedFields: ['category'],
+    });
+
+    const [, txPayload] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    expect(txPayload).not.toHaveProperty('importHash');
+    expect(txPayload['_lastOpId']).toBe('mock-doc-id');
+  });
+
+  it('_lastOpId está presente com origin manual padrão', async () => {
+    await FirestoreService.updateTransactionWithHistory('uid1', 'tx-1', {
+      description: 'Teste',
+    }, {
+      before: { description: 'Antigo' },
+      after: { description: 'Teste' },
+      changedFields: ['description'],
+    });
+
+    const [, txPayload] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [, historyPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    expect(txPayload['_lastOpId']).toBe('mock-doc-id');
+    expect(historyPayload['origin']).toBe('manual');
+  });
+
+  it('_lastOpId está presente com origin ai', async () => {
+    await FirestoreService.updateTransactionWithHistory('uid1', 'tx-1', {
+      category: 'Saúde',
+    }, {
+      before: { category: 'Outros' },
+      after: { category: 'Saúde' },
+      changedFields: ['category'],
+      origin: 'ai',
+    });
+
+    const [, txPayload] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [, historyPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    expect(txPayload['_lastOpId']).toBe('mock-doc-id');
+    expect(historyPayload['origin']).toBe('ai');
+  });
 });
 
 describe('FirestoreService.deleteTransaction', () => {
