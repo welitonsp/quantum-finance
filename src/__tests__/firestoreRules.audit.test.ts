@@ -659,61 +659,170 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       await assertSucceeds(addDoc(ref, baseCreatePayload('ofx')));
       await assertSucceeds(addDoc(ref, baseCreatePayload('pdf')));
     });
+
+    it('D9 — CREATE manual em batch com historyId diferente de "create" deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const txId = 'tx-manual-wrong-history-id';
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'users', UID_A, 'transactions', txId), {
+        ...baseCreatePayload('manual'),
+        isRecurring: false,
+      });
+      batch.set(
+        doc(db, 'users', UID_A, 'transactions', txId, 'history', 'outro-id'),
+        manualHistoryPayload(txId),
+      );
+      await assertFails(batch.commit());
+    });
   });
 
-  // ── E. _lastOpId — FASE 8B-3B compatibilidade ────────────────────────────────
+  // ── E. _lastOpId — FASE 8B-3E compatibilidade e ausência de enforcement ──────
 
-  describe('E. _lastOpId — compatibilidade de schema (8B-3B)', () => {
+  describe('E. _lastOpId — compatibilidade de schema (8B-3E)', () => {
+    const baseUpdatePayload = () => ({
+      description: 'Test com _lastOpId',
+      value_cents: 10000,
+      schemaVersion: 2,
+      type: 'saida' as const,
+      category: 'Alimentação',
+      date: '2026-01-01',
+      source: 'csv',
+      importHash: IMPORT_HASH_A,
+      createdAt: FIXED_TS,
+      updatedAt: serverTimestamp(),
+    });
+
+    // ── Tarefa 1: positivos de compatibilidade ──────────────────────────────
+
     it('E1 — UPDATE válido com _lastOpId deve ser permitido', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
-      await assertSucceeds(setDoc(txDocRef, {
-        description: 'Test com _lastOpId',
-        value_cents: 10000,
-        schemaVersion: 2,
-        type: 'saida',
-        category: 'Alimentação',
-        date: '2026-01-01',
-        source: 'csv',
-        importHash: IMPORT_HASH_A,
-        createdAt: FIXED_TS,
-        updatedAt: serverTimestamp(),
-        _lastOpId: 'abc123',
-      }));
+      await assertSucceeds(setDoc(txDocRef, { ...baseUpdatePayload(), _lastOpId: 'abc123' }));
     });
 
     it('E2 — UPDATE válido sem _lastOpId continua permitido nesta fase', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertSucceeds(setDoc(txDocRef, baseUpdatePayload()));
+    });
+
+    it('E4 — UPDATE de category com _lastOpId deve ser permitido', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
       await assertSucceeds(setDoc(txDocRef, {
-        description: 'Test sem _lastOpId',
-        value_cents: 10000,
-        schemaVersion: 2,
-        type: 'saida',
-        category: 'Alimentação',
-        date: '2026-01-01',
-        source: 'csv',
-        importHash: IMPORT_HASH_A,
-        createdAt: FIXED_TS,
-        updatedAt: serverTimestamp(),
+        ...baseUpdatePayload(),
+        category: 'Transporte',
+        _lastOpId: 'op-cat-update',
       }));
     });
+
+    it('E5 — UPDATE marcando isDeleted com _lastOpId deve ser permitido', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertSucceeds(setDoc(txDocRef, {
+        ...baseUpdatePayload(),
+        isDeleted: true,
+        deletedAt: serverTimestamp(),
+        _lastOpId: 'op-delete',
+      }));
+    });
+
+    it('E6 — UPDATE com _lastOpId preserva createdAt e importHash sem value legado', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      const payload = { ...baseUpdatePayload(), _lastOpId: 'op-safe' };
+      // garante ausência de campos proibidos no payload
+      const hasValue = 'value' in payload;
+      const hasUid = 'uid' in payload;
+      const hasId = 'id' in payload;
+      if (hasValue || hasUid || hasId) throw new Error('payload contém campo proibido');
+      await assertSucceeds(setDoc(txDocRef, payload));
+    });
+
+    // ── Tarefa 2: negativos — proteções existentes permanecem com _lastOpId ──
 
     it('E3 — UPDATE tentando alterar importHash continua bloqueado mesmo com _lastOpId', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
       await assertFails(setDoc(txDocRef, {
-        description: 'Test',
-        value_cents: 10000,
-        schemaVersion: 2,
-        type: 'saida',
-        category: 'Alimentação',
-        date: '2026-01-01',
-        source: 'csv',
+        ...baseUpdatePayload(),
         importHash: IMPORT_HASH_B,
-        createdAt: FIXED_TS,
-        updatedAt: serverTimestamp(),
         _lastOpId: 'abc123',
+      }));
+    });
+
+    it('E7 — UPDATE com _lastOpId tentando incluir value legado continua bloqueado', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertFails(setDoc(txDocRef, {
+        ...baseUpdatePayload(),
+        value: 100,
+        _lastOpId: 'op-value-legado',
+      }));
+    });
+
+    it('E8 — UPDATE com _lastOpId tentando incluir uid continua bloqueado', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertFails(setDoc(txDocRef, {
+        ...baseUpdatePayload(),
+        uid: UID_A,
+        _lastOpId: 'op-uid-forge',
+      }));
+    });
+
+    it('E9 — UPDATE com _lastOpId tentando incluir id continua bloqueado', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertFails(setDoc(txDocRef, {
+        ...baseUpdatePayload(),
+        id: TX_REAL,
+        _lastOpId: 'op-id-forge',
+      }));
+    });
+
+    it('E10 — UPDATE com _lastOpId alterando createdAt continua bloqueado', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      const otherTs = Timestamp.fromDate(new Date('2025-01-01T00:00:00Z'));
+      await assertFails(setDoc(txDocRef, {
+        ...baseUpdatePayload(),
+        createdAt: otherTs,
+        _lastOpId: 'op-creat-tamper',
+      }));
+    });
+
+    // ── Tarefa 3: documentação técnica — ausência de enforcement (fase futura) ─
+    // Documentação técnica: nesta fase NÃO há getAfter() exigindo history pareado.
+    // Os assertSucceeds abaixo (E11–E13) quebrarão de propósito quando enforcement
+    // for ativado em fase futura. O prefixo "sem enforcement ainda" facilita o grep.
+
+    it('E11 — sem enforcement ainda — UPDATE com _lastOpId apontando para history inexistente é permitido', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertSucceeds(setDoc(txDocRef, {
+        ...baseUpdatePayload(),
+        _lastOpId: 'op-history-inexistente',
+      }));
+    });
+
+    it('E12 — sem enforcement ainda — UPDATE com _lastOpId arbitrário é permitido (compatibilidade temporária)', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      await assertSucceeds(setDoc(txDocRef, {
+        ...baseUpdatePayload(),
+        _lastOpId: '00000000-0000-0000-0000-000000000000',
+      }));
+    });
+
+    it('E13 — sem enforcement ainda — UPDATE sem history pareado é permitido (preparação para fase futura)', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL);
+      // Sem _lastOpId e sem history escrito — deve continuar passando até enforcement entrar.
+      await assertSucceeds(setDoc(txDocRef, {
+        ...baseUpdatePayload(),
+        description: 'Atualização sem history pareado — sem enforcement ainda',
       }));
     });
   });
