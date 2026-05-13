@@ -876,10 +876,12 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
     });
 
     // ── G6-G8: origins proibidas em history pareado ───────────────────────────
+    // G6 foi atualizado na FASE 8B-4: 'reconcile' passou a ser permitida no enforcement UPDATE
+    // (migração do fluxo de reconciliação para updateTransactionWithHistory).
 
-    // G6: origin='reconcile' — permitida no schema de history mas bloqueada no enforcement UPDATE
-    it('G6 — UPDATE com history origin reconcile deve falhar', async () => {
-      await assertFails(
+    // G6: origin='reconcile' — agora permitida no enforcement UPDATE (FASE 8B-4)
+    it('G6 — UPDATE com history origin reconcile deve passar (FASE 8B-4)', async () => {
+      await assertSucceeds(
         commitUpdateWithHistoryBatch(TX_REAL, 'op-g6-reconcile', { origin: 'reconcile' }),
       );
     });

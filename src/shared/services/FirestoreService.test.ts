@@ -459,6 +459,28 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
     }
   });
 
+  it('usa origin reconcile quando informada (fluxo de reconciliação de importação)', async () => {
+    await FirestoreService.updateTransactionWithHistory('uid1', 'tx-1', {
+      category: 'Alimentação',
+      reconciliationStatus: 'reconciled',
+      reconciliationSource: 'import',
+    }, {
+      before: { category: 'Outros' },
+      after: { category: 'Alimentação', reconciliationStatus: 'reconciled', reconciliationSource: 'import' },
+      changedFields: ['category', 'reconciliationStatus', 'reconciliationSource'],
+      origin: 'reconcile',
+      amount_cents: 2000,
+      category: 'Alimentação',
+    });
+    const [, historyPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    expect(historyPayload['origin']).toBe('reconcile');
+    expect(historyPayload['amount_cents']).toBe(2000);
+    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+      expect(historyPayload['before']).not.toHaveProperty(forbidden);
+      expect(historyPayload['after']).not.toHaveProperty(forbidden);
+    }
+  });
+
   it('rejeita quando o commit do batch falha', async () => {
     mockBatchCommit.mockRejectedValueOnce(new Error('batch failed'));
 

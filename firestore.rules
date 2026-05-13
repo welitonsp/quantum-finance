@@ -211,7 +211,7 @@ service cloud.firestore {
           && existsAfter(historyPath)
           && getAfter(historyPath).data.txId == txId
           && getAfter(historyPath).data.action == 'UPDATE'
-          && getAfter(historyPath).data.origin in ['manual', 'ai'];
+          && getAfter(historyPath).data.origin in ['manual', 'ai', 'reconcile'];
     }
 
     // Wrapper Modelo B: UPDATE sem _lastOpId continua compatível; com _lastOpId exige history pareado.
