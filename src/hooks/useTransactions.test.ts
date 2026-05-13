@@ -10,8 +10,6 @@ const {
   mockGetDoc,
   mockHttpsCallable,
   mockLimit,
-  mockDeleteTransaction,
-  mockDeleteBatchTransactions,
   mockDeleteBatchTransactionsWithHistory,
   mockLogAction,
   mockLogTransactionHistory,
@@ -20,9 +18,7 @@ const {
   mockQuery,
   mockSoftDeleteTransactionWithHistory,
   mockStartAfter,
-  mockUpdateTransaction,
   mockUpdateTransactionWithHistory,
-  mockBatchUpdateTransactions,
   mockBatchUpdateTransactionsWithHistory,
   mockBatchUndoBulkUpdateTransactionsWithHistory,
 } = vi.hoisted(() => {
@@ -31,8 +27,6 @@ const {
     mockCallable:              callable,
     mockCollection:            vi.fn(() => ({ kind: 'collection' })),
     mockCreateManualTransactionWithHistory: vi.fn().mockResolvedValue('tx-created-1'),
-    mockDeleteTransaction:       vi.fn().mockResolvedValue(undefined),
-    mockDeleteBatchTransactions: vi.fn().mockResolvedValue(undefined),
     mockDeleteBatchTransactionsWithHistory: vi.fn().mockResolvedValue(undefined),
     mockDoc:                   vi.fn(),
     mockGetDoc:                vi.fn().mockResolvedValue({ exists: () => false, data: () => undefined }),
@@ -45,9 +39,7 @@ const {
     mockQuery:                 vi.fn(() => ({ kind: 'query' })),
     mockSoftDeleteTransactionWithHistory: vi.fn().mockResolvedValue(undefined),
     mockStartAfter:            vi.fn(),
-    mockUpdateTransaction:     vi.fn().mockResolvedValue(undefined),
     mockUpdateTransactionWithHistory: vi.fn().mockResolvedValue(undefined),
-    mockBatchUpdateTransactions: vi.fn().mockResolvedValue(undefined),
     mockBatchUpdateTransactionsWithHistory: vi.fn().mockResolvedValue(undefined),
     mockBatchUndoBulkUpdateTransactionsWithHistory: vi.fn().mockResolvedValue(undefined),
   };
@@ -77,13 +69,9 @@ vi.mock('../shared/api/firebase/index', () => ({
 vi.mock('../shared/services/FirestoreService', () => ({
   FirestoreService: {
     createManualTransactionWithHistory: mockCreateManualTransactionWithHistory,
-    updateTransaction:       mockUpdateTransaction,
     updateTransactionWithHistory: mockUpdateTransactionWithHistory,
     softDeleteTransactionWithHistory: mockSoftDeleteTransactionWithHistory,
-    deleteTransaction:       mockDeleteTransaction,
-    deleteBatchTransactions: mockDeleteBatchTransactions,
     deleteBatchTransactionsWithHistory: mockDeleteBatchTransactionsWithHistory,
-    batchUpdateTransactions: mockBatchUpdateTransactions,
     batchUpdateTransactionsWithHistory: mockBatchUpdateTransactionsWithHistory,
     batchUndoBulkUpdateTransactionsWithHistory: mockBatchUndoBulkUpdateTransactionsWithHistory,
   },
@@ -328,7 +316,6 @@ describe('useTransactions - criação manual Spark via batch', () => {
       ),
     );
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
-    expect(mockUpdateTransaction).not.toHaveBeenCalled();
 
     unmount();
   });
@@ -357,7 +344,6 @@ describe('useTransactions - atualização manual com batch + history', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLogTransactionHistory.mockResolvedValue(undefined);
-    mockUpdateTransaction.mockResolvedValue(undefined);
     mockUpdateTransactionWithHistory.mockResolvedValue(undefined);
     mockOnSnapshot.mockImplementation((_queryArg: unknown, onNext: (snap: { docs: unknown[] }) => void) => {
       onNext({ docs: [transactionDoc] });
@@ -403,7 +389,6 @@ describe('useTransactions - atualização manual com batch + history', () => {
       expect(historyEvent.after).not.toHaveProperty(forbidden);
     }
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
-    expect(mockUpdateTransaction).not.toHaveBeenCalled();
 
     unmount();
   });
@@ -418,7 +403,6 @@ describe('useTransactions - atualização manual com batch + history', () => {
       await result.current.update('tx-unknown', { description: 'Fallback' });
     });
 
-    expect(mockUpdateTransaction).not.toHaveBeenCalled();
     expect(mockUpdateTransactionWithHistory).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 
@@ -450,7 +434,6 @@ describe('useTransactions - atualização manual com batch + history', () => {
       }));
     });
 
-    expect(mockUpdateTransaction).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 
     unmount();
@@ -479,7 +462,6 @@ describe('useTransactions - delete lógico manual com batch + history', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockDeleteTransaction.mockResolvedValue(undefined);
     mockLogTransactionHistory.mockResolvedValue(undefined);
     mockSoftDeleteTransactionWithHistory.mockResolvedValue(undefined);
     mockOnSnapshot.mockImplementation((_queryArg: unknown, onNext: (snap: { docs: unknown[] }) => void) => {
@@ -518,7 +500,6 @@ describe('useTransactions - delete lógico manual com batch + history', () => {
     for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
       expect(historyEvent.before).not.toHaveProperty(forbidden);
     }
-    expect(mockDeleteTransaction).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 
     unmount();
@@ -534,7 +515,6 @@ describe('useTransactions - delete lógico manual com batch + history', () => {
       await result.current.remove('tx-unknown');
     });
 
-    expect(mockDeleteTransaction).not.toHaveBeenCalled();
     expect(mockSoftDeleteTransactionWithHistory).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 
@@ -563,7 +543,6 @@ describe('useTransactions - delete lógico manual com batch + history', () => {
       }));
     });
 
-    expect(mockDeleteTransaction).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 
     unmount();
@@ -594,7 +573,6 @@ describe('useTransactions - removeBatch com batch + history', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockDeleteBatchTransactions.mockResolvedValue(undefined);
     mockDeleteBatchTransactionsWithHistory.mockResolvedValue(undefined);
     mockLogTransactionHistory.mockResolvedValue(undefined);
     mockOnSnapshot.mockImplementation((_queryArg: unknown, onNext: (snap: { docs: unknown[] }) => void) => {
@@ -622,7 +600,6 @@ describe('useTransactions - removeBatch com batch + history', () => {
       ]),
     ));
 
-    expect(mockDeleteBatchTransactions).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 
     unmount();
@@ -638,7 +615,6 @@ describe('useTransactions - removeBatch com batch + history', () => {
       await result.current.removeBatch(['tx-unknown-1', 'tx-unknown-2']);
     });
 
-    expect(mockDeleteBatchTransactions).not.toHaveBeenCalled();
     expect(mockDeleteBatchTransactionsWithHistory).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 
@@ -678,7 +654,6 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
     vi.clearAllMocks();
     mockLogAction.mockResolvedValue(undefined);
     mockLogTransactionHistory.mockResolvedValue(undefined);
-    mockBatchUpdateTransactions.mockResolvedValue(undefined);
     mockBatchUpdateTransactionsWithHistory.mockResolvedValue(undefined);
     mockBatchUndoBulkUpdateTransactionsWithHistory.mockResolvedValue(undefined);
     mockOnSnapshot.mockImplementation((_queryArg: unknown, onNext: (snap: { docs: unknown[] }) => void) => {
@@ -727,7 +702,6 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
       expect(before).not.toHaveProperty(forbidden);
     }
 
-    expect(mockBatchUpdateTransactions).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
     expect(mockLogAction).toHaveBeenCalledWith(expect.objectContaining({ action: 'BULK_UPDATE' }));
 
@@ -744,7 +718,6 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
       await result.current.bulkUpdateTransactions(['tx-unknown'], { category: 'Alimentação' });
     });
 
-    expect(mockBatchUpdateTransactions).not.toHaveBeenCalled();
     expect(mockBatchUpdateTransactionsWithHistory).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 
@@ -829,7 +802,6 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
     });
 
     expect(mockBatchUndoBulkUpdateTransactionsWithHistory).not.toHaveBeenCalled();
-    expect(mockBatchUpdateTransactions).not.toHaveBeenCalled();
     expect(mockLogAction).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 
@@ -926,7 +898,6 @@ describe('useTransactions - AI categorization usa updateTransactionWithHistory a
 
     await waitFor(() => expect(mockUpdateTransactionWithHistory).toHaveBeenCalledTimes(1));
 
-    expect(mockUpdateTransaction).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 
     const [, , updateData, historyEvent] = mockUpdateTransactionWithHistory.mock.calls[0] as [
@@ -958,7 +929,6 @@ describe('useTransactions - AI categorization usa updateTransactionWithHistory a
     await new Promise(r => setTimeout(r, 50));
 
     expect(mockUpdateTransactionWithHistory).not.toHaveBeenCalled();
-    expect(mockUpdateTransaction).not.toHaveBeenCalled();
 
     unmount();
   });
