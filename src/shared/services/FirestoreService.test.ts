@@ -13,7 +13,6 @@ const {
   mockGetDoc,
   mockLedgerImport,
   mockServerTimestamp,
-  mockUpdateDoc,
   mockWriteBatch,
 } = vi.hoisted(() => {
   const getMockPath = (value: unknown): string => {
@@ -55,7 +54,6 @@ const {
   });
   const mockLedgerImport = vi.fn().mockResolvedValue({ added: 1, duplicates: 0, invalid: 0 });
   const mockServerTimestamp = vi.fn().mockReturnValue({ _serverTimestamp: true });
-  const mockUpdateDoc = vi.fn().mockResolvedValue(undefined);
 
   return {
     mockAddDoc,
@@ -67,7 +65,6 @@ const {
     mockGetDoc,
     mockLedgerImport,
     mockServerTimestamp,
-    mockUpdateDoc,
     mockWriteBatch,
   };
 });
@@ -82,7 +79,6 @@ vi.mock('firebase/firestore', () => ({
   orderBy: vi.fn(),
   query: vi.fn((collectionRef: unknown) => collectionRef),
   serverTimestamp: mockServerTimestamp,
-  updateDoc: mockUpdateDoc,
   writeBatch: mockWriteBatch,
   deleteField: vi.fn().mockReturnValue({ _deleteField: true }),
 }));
@@ -330,35 +326,6 @@ describe('FirestoreService.createManualTransactionWithHistory', () => {
   });
 });
 
-describe('FirestoreService.updateTransaction', () => {
-  it('continua disponível para fluxos não migrados', () => {
-    expect(typeof FirestoreService.updateTransaction).toBe('function');
-  });
-
-  it('aceita contrato persistente opcional de conciliação', async () => {
-    const reconciledAt = { _serverTimestamp: true };
-
-    await FirestoreService.updateTransaction('uid1', 'tx-reconciled', {
-      reconciliationStatus: 'reconciled',
-      reconciliationSource: 'import',
-      reconciledAt,
-      reconciledBy: 'uid1',
-    });
-
-    const [, data] = mockUpdateDoc.mock.calls[0] as [unknown, Record<string, unknown>];
-    expect(data).toEqual(expect.objectContaining({
-      reconciliationStatus: 'reconciled',
-      reconciliationSource: 'import',
-      reconciledAt,
-      reconciledBy: 'uid1',
-      updatedAt: { _serverTimestamp: true },
-    }));
-    expect(data['value']).toEqual({ _deleteField: true });
-    expect(data['id']).toEqual({ _deleteField: true });
-    expect(data['uid']).toEqual({ _deleteField: true });
-  });
-});
-
 describe('FirestoreService.updateTransactionWithHistory', () => {
   it('monta batch com transaction update + history UPDATE sem campos proibidos', async () => {
     const historyEvent = {
@@ -564,16 +531,6 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
   });
 });
 
-describe('FirestoreService.deleteTransaction', () => {
-  it('continua disponível e usa updateDoc para o fluxo legado', async () => {
-    await FirestoreService.deleteTransaction('uid1', 'tx-legacy-delete');
-
-    expect(typeof FirestoreService.deleteTransaction).toBe('function');
-    expect(mockUpdateDoc).toHaveBeenCalledTimes(1);
-    expect(mockWriteBatch).not.toHaveBeenCalled();
-  });
-});
-
 describe('FirestoreService.softDeleteTransactionWithHistory', () => {
   it('monta batch com soft delete + history SOFT_DELETE sem campos proibidos', async () => {
     mockGetDoc.mockResolvedValueOnce(existingSnap({
@@ -701,38 +658,6 @@ describe('FirestoreService.softDeleteTransactionWithHistory', () => {
     expect(txPayload['_lastOpId']).toBe('mock-doc-id');
     expect(historyPayload['action']).toBe('SOFT_DELETE');
     expect(historyPayload['origin']).toBe('manual');
-  });
-});
-
-describe('FirestoreService.deleteBatchTransactions', () => {
-  it('usa soft delete em lote para transações financeiras', async () => {
-    await FirestoreService.deleteBatchTransactions('uid1', ['tx-a', 'tx-b']);
-
-    expect(mockGetDoc).toHaveBeenCalledTimes(2);
-    expect(mockBatchUpdate).toHaveBeenCalledTimes(2);
-    expect(mockBatchUpdate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-      isDeleted: true,
-      deletedAt: { _serverTimestamp: true },
-      updatedAt: { _serverTimestamp: true },
-      schemaVersion: 2,
-      type: 'saida',
-      source: 'manual',
-    }));
-    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
-  });
-
-  it('ignora documentos que não existem no lote', async () => {
-    mockGetDoc.mockResolvedValueOnce({ exists: () => false, data: () => ({}) });
-    mockGetDoc.mockResolvedValueOnce({
-      exists: () => true,
-      data: () => ({ type: 'entrada', source: 'csv', value_cents: 500, schemaVersion: 2, description: 'T', category: 'Outros', date: '2026-01-01' }),
-    });
-
-    await expect(FirestoreService.deleteBatchTransactions('uid1', ['tx-missing', 'tx-exists']))
-      .resolves.toBeUndefined();
-
-    expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
-    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
   });
 });
 
