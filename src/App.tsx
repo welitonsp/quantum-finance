@@ -15,6 +15,7 @@ import { useRecurring } from './hooks/useRecurring';
 import { useCategoryRules } from './hooks/useCategoryRules';
 import { useCategories } from './hooks/useCategories';
 import { useAppLogic } from './hooks/useAppLogic';
+import { logSanitizedFirebaseError } from './shared/lib/firebaseErrorHandling';
 
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -98,7 +99,7 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren, ErrorBounda
     this.state = { hasError: false };
   }
   static getDerivedStateFromError(): ErrorBoundaryState { return { hasError: true }; }
-  componentDidCatch(error: Error, info: React.ErrorInfo) { console.error('Falha Crítica:', error, info); }
+  componentDidCatch(error: Error) { logSanitizedFirebaseError('app_error_boundary', error); }
   render() {
     if (this.state.hasError) {
       return (
@@ -399,7 +400,7 @@ export default function App() {
       await signInWithPopup(auth, new GoogleAuthProvider());
       toast.success('Acesso Autorizado, Comandante!');
     } catch (error) {
-      console.error('Falha na Autenticação:', error);
+      logSanitizedFirebaseError('auth_login', error);
       const err = error as { code?: string };
       const msg = err.code === 'auth/popup-closed-by-user' ? 'Login cancelado.' : 'Falha ao autenticar.';
       toast.error(msg);

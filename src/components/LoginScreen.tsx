@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Wallet } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
+import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 
 interface Props {
   onLogin: () => Promise<void>;
@@ -16,7 +17,7 @@ export default function LoginScreen({ onLogin }: Props) {
     try {
       await onLogin();
     } catch (error) {
-      console.error('Erro na autenticação:', error);
+      logSanitizedFirebaseError('auth_login_screen', error);
       toast.error('Falha ao iniciar sessão. Verifique se tem os pop-ups bloqueados.');
     } finally {
       setIsLoading(false);
