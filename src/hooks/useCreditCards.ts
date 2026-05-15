@@ -3,6 +3,7 @@ import {
   collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
+import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import { toCentavos, fromCentavos } from '../shared/schemas/financialSchemas';
 import type { CreditCard, CreditCardWithMetrics, CardMetrics, Transaction } from '../shared/types/transaction';
 import type { MoneyInput } from '../shared/types/money';
@@ -89,7 +90,7 @@ export function useCreditCards(uid: string, transactions: Transaction[] = []): U
         setCards(data);
         setLoading(false);
       },
-      (err) => { console.error('❌ Erro ao ler cartões:', err); setLoading(false); }
+      (err) => { logSanitizedFirebaseError('credit_cards_load', err); setLoading(false); }
     );
 
     return () => unsub();

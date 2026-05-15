@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
+import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import { toCentavos, fromCentavos } from '../shared/schemas/financialSchemas';
 import { FirestoreService } from '../shared/services/FirestoreService';
 import { AuditService, type AuditChange } from '../shared/services/AuditService';
@@ -40,7 +41,7 @@ export function useRecurring(uid: string): UseRecurringReturn {
         setError(null);
       },
       (err) => {
-        console.error('❌ Erro no Radar de Recorrentes:', err);
+        logSanitizedFirebaseError('recurring_load', err);
         setError(err.message);
         setLoading(false);
       }

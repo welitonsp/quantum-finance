@@ -7,6 +7,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
+import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import { toCentavos } from '../shared/schemas/financialSchemas';
 import type { Account } from '../shared/types/transaction';
 import type { Centavos } from '../shared/types/money';
@@ -70,7 +71,7 @@ export function useAccounts(uid: string): UseAccountsReturn {
         setLoadingAccounts(false);
       },
       (err) => {
-        console.error('❌ Erro ao ler contas:', err);
+        logSanitizedFirebaseError('accounts_load', err);
         setLoadingAccounts(false);
       }
     );
