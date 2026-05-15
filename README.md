@@ -93,6 +93,10 @@ Toda persistência financeira passa por `LedgerService` ou `FirestoreService`.
 Auditoria é registrada em `users/{uid}/transactions/{txId}/history` e `users/{uid}/audit_logs`.
 Firestore Rules implementam validação de schema na camada de segurança (schema version 2).
 
+### Política de `importHash`
+
+`importHash` é uma chave técnica de deduplicação e evidência das movimentações importadas. Ele permanece apenas na transaction importada e no id determinístico dessa transaction; não deve ser exibido na UI, logado em console, copiado para `history` nem duplicado em `audit_logs`. Logs de importação usam `txId` para rastreabilidade.
+
 ## Firebase App Check
 
 Quantum Finance usa Firebase App Check com reCAPTCHA v3 para proteger os endpoints do Firebase contra abusos.

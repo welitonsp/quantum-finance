@@ -133,11 +133,24 @@ describe('LedgerService.importTransactions', () => {
     ]);
 
     expect(result).toEqual({ added: 1, duplicates: 0, invalid: 0 });
-    expect(mockTransactionSet.mock.calls[0]?.[1]).toEqual(expect.objectContaining({
+    const transactionPayload = mockTransactionSet.mock.calls[0]?.[1] as Record<string, unknown>;
+    const auditPayload = mockTransactionSet.mock.calls[1]?.[1] as Record<string, unknown>;
+
+    expect(transactionPayload).toEqual(expect.objectContaining({
       category: 'Academia',
       value_cents: 123456,
       importHash: expect.any(String),
     }));
+    expect(auditPayload).toEqual(expect.objectContaining({
+      action: 'IMPORT_TRANSACTION',
+      entity: 'TRANSACTION',
+      txId: transactionPayload.importHash,
+      source: 'csv',
+      amount_cents: 123456,
+      amount_display: 1234.56,
+      schemaVersion: 2,
+    }));
+    expect(auditPayload).not.toHaveProperty('importHash');
   });
 
   it('importação duplicada no mesmo lote não cria duplicidade', async () => {
