@@ -213,7 +213,6 @@ export const LedgerService = {
             action: 'IMPORT_TRANSACTION',
             entity: 'TRANSACTION',
             txId: item.hash,
-            importHash: item.hash,
             source: item.payload.source,
             amount_cents: item.payload.value_cents,
             amount_display: fromCentavos(item.payload.value_cents),
