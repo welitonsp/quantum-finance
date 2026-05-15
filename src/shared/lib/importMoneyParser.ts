@@ -107,8 +107,6 @@ function normalizeDecimalString(s: string, original: string): string {
   return s;
 }
 
-function devLog(raw: string, normalized: string, centavos: number): void {
-  if (typeof import.meta !== 'undefined' && (import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
-    console.debug(`[importMoneyParser] raw="${raw}" -> normalized="${normalized}" -> ${centavos} centavos`);
-  }
+function devLog(_raw: string, _normalized: string, _centavos: number): void {
+  // Runtime dev logs removed for security (Phase 9F-4B)
 }

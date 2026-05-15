@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import ParserWorker from './workers/parserWorker?worker';
 import type { ParsedTransaction } from '../types/transaction';
 import type { ColumnMapping } from './csvParser';
+import { logSanitizedFirebaseError } from './firebaseErrorHandling';
 
 interface WorkerError extends Error {
   code?: string;
@@ -55,7 +56,7 @@ export function useParserWorker() {
     };
 
     worker.onerror = (event: ErrorEvent) => {
-      console.error('[parserWorker] Erro interno no worker:', event.message);
+      logSanitizedFirebaseError('import_parse_worker', event.message);
       pendingRef.current.forEach(({ reject }) => {
         reject(new Error(`Worker crash: ${event.message}`));
       });

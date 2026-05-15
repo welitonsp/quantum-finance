@@ -5,6 +5,7 @@
 // - comprometimento = custoFixoMensal / receita
 // - reservaMeses = ativos / custoFixoMensal (em meses de sobrevivência)
 import { useMemo } from 'react';
+import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import Decimal from 'decimal.js';
 import type { Transaction, Account } from '../shared/types/transaction';
 import { fromCentavos, type Centavos } from '../shared/types/money';
@@ -203,7 +204,7 @@ export function useFinancialMetrics(
     try {
       return computeFinancialMetrics(transactions ?? [], accounts, currentMonth, currentYear);
     } catch (err) {
-      console.error('[useFinancialMetrics]', err);
+      logSanitizedFirebaseError('financial_metrics_compute', err);
       return null;
     }
   }, [uid, transactions, accounts, currentMonth, currentYear]);
