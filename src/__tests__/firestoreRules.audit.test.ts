@@ -324,6 +324,16 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       await assertSucceeds(addDoc(ref, validAuditPayload()));
     });
 
+    // B9b: negativo — payload com importHash (FASE 9E-2 Hardening) deve falhar
+    it('B9b — payload com importHash deve falhar (9E-2)', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'audit_logs');
+      await assertFails(addDoc(ref, {
+        ...validAuditPayload(),
+        importHash: IMPORT_HASH_A,
+      } as never));
+    });
+
     // B10: payload BULK_UPDATE com details e metadata válidos
     it('B10 — BULK_UPDATE válido deve passar', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
