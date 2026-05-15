@@ -24,6 +24,10 @@ import TransactionHistoryDrawer from '../../components/TransactionHistoryDrawer'
 import type { UserCategory } from '../../shared/schemas/categorySchemas';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getCategoryStyle as catStyle } from '../../shared/lib/categoryStyles';
+import {
+  getUserFriendlyErrorMessage,
+  logSanitizedFirebaseError,
+} from '../../shared/lib/firebaseErrorHandling';
 
 const VIRTUAL_THRESHOLD = 100;
 
@@ -554,8 +558,9 @@ export default function TransactionsManager({
       await onBatchDelete(ids);
       clearSelected();
       setConfirmDelete(false);
-    } catch {
-      toast.error('Falha ao apagar em lote.');
+    } catch (error) {
+      logSanitizedFirebaseError('transaction_delete_batch', error);
+      toast.error(getUserFriendlyErrorMessage(error, 'transaction_delete_batch'));
     }
   }, [selected, onBatchDelete, clearSelected]);
 
@@ -594,7 +599,10 @@ export default function TransactionsManager({
                   const undoId = toast.loading('A desfazer alterações...');
                   undoLastBulkUpdate()
                     .then(() => toast.success('Alterações desfeitas.', { id: undoId }))
-                    .catch(() => toast.error('Falha ao desfazer. Verifique manualmente.', { id: undoId }));
+                    .catch((error: unknown) => {
+                      logSanitizedFirebaseError('transaction_bulk_undo', error);
+                      toast.error(getUserFriendlyErrorMessage(error, 'transaction_bulk_undo'), { id: undoId });
+                    });
                 }}
                 className="shrink-0 px-2.5 py-1 bg-quantum-accent/15 border border-quantum-accent/30 text-quantum-accent rounded-lg text-xs font-black hover:bg-quantum-accent/25 transition-colors"
               >
@@ -614,8 +622,9 @@ export default function TransactionsManager({
 
       clearSelected();
       setBatchAction(null);
-    } catch {
-      toast.error('Falha ao re-categorizar. Tente novamente.', { id: loadingId });
+    } catch (error) {
+      logSanitizedFirebaseError('transaction_bulk_update', error);
+      toast.error(getUserFriendlyErrorMessage(error, 'transaction_bulk_update'), { id: loadingId });
     }
   }, [selected, newCat, onBulkUpdate, undoLastBulkUpdate, clearBulkSnapshot, clearSelected]);
 

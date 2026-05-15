@@ -13,6 +13,12 @@ import { getTransactionCentavos } from '../utils/transactionUtils';
 import { categorizeTransaction } from '../utils/aiCategorize';
 import { categorizeWithAI } from '../services/AICategorizationService';
 import { PAGE_SIZE, mergeTransactionPages, hasMorePages } from '../utils/transactionPagination';
+import {
+  getFirebaseErrorCode,
+  getUserFriendlyErrorMessage,
+  logSanitizedFirebaseError,
+  type FirebaseErrorOperation,
+} from '../shared/lib/firebaseErrorHandling';
 import toast from 'react-hot-toast';
 
 // ─── Bulk Update — tipo restrito (não expõe Partial<Transaction> livre) ────────
@@ -189,61 +195,40 @@ function getErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function getErrorCode(err: unknown): string | undefined {
-  return typeof err === 'object' && err !== null && 'code' in err
-    ? String((err as { code?: unknown }).code ?? '')
-    : undefined;
-}
-
-function isAppCheckFailure(code: string | undefined, message: string): boolean {
-  return Boolean(
-    code?.includes('failed-precondition')
-    || message.includes('app check')
-    || message.includes('appcheck')
-    || message.includes('app-check')
-  );
-}
-
 function shouldRetrySyncError(err: unknown): boolean {
-  const code = getErrorCode(err);
+  const code = getFirebaseErrorCode(err);
   const message = getErrorMessage(err).toLowerCase();
-  if (isAppCheckFailure(code, message)) return false;
-  if (code?.includes('permission-denied') || message.includes('permission')) return false;
-  if (code?.includes('invalid-argument') || code?.includes('unauthenticated')) return false;
+  if (code === 'failed-precondition') return false;
+  if (code === 'permission-denied' || message.includes('permission')) return false;
+  if (code === 'invalid-argument' || code === 'unauthenticated') return false;
   if (message.includes('transação inválida') || message.includes('atualização inválida')) return false;
   if (message.includes('invalid') || message.includes('inválid')) return false;
   return true;
 }
 
-function userFacingSyncError(err: unknown): Error {
-  const code = getErrorCode(err);
-  const message = getErrorMessage(err);
-  const lower = message.toLowerCase();
-
-  if (isAppCheckFailure(code, lower)) {
-    return new Error('Falha na verificação de segurança do App Check. Atualize a página e tente novamente.');
-  }
-  if (code?.includes('permission-denied') || lower.includes('permission')) {
-    return new Error('A movimentação foi recusada pelas regras do Firebase. Verifique campos proibidos no payload.');
-  }
-  if (code?.includes('invalid-argument')) {
-    return new Error(message || 'Dados inválidos para criação da movimentação.');
-  }
-  if (code?.includes('unauthenticated')) {
-    return new Error('Sessão expirada. Faça login novamente.');
-  }
-  if (code?.includes('unavailable') || lower.includes('network') || lower.includes('offline')) {
-    return new Error('Falha de conexão. A movimentação não foi confirmada.');
-  }
-  if (lower.includes('transação inválida') || lower.includes('inválid')) {
-    return new Error(message);
-  }
-  return new Error(message || 'Falha ao confirmar a movimentação no Firestore.');
+function userFacingSyncError(
+  err: unknown,
+  operation: FirebaseErrorOperation = 'transaction_sync',
+): Error {
+  return new Error(getUserFriendlyErrorMessage(err, operation));
 }
 
-function debugSync(message: string, details?: Record<string, unknown>): void {
+function debugSync(message: string, operation: FirebaseErrorOperation): void {
   if (!import.meta.env.DEV) return;
-  console.warn(`[useTransactions] ${message}`, details ?? {});
+  console.warn('[useTransactions]', { operation, message });
+}
+
+function operationFromQueueOp(type: Op['type']): FirebaseErrorOperation {
+  switch (type) {
+    case 'add':
+      return 'transaction_add';
+    case 'update':
+      return 'transaction_update';
+    case 'delete':
+      return 'transaction_delete';
+    case 'deleteBatch':
+      return 'transaction_delete_batch';
+  }
 }
 
 /**
@@ -449,8 +434,8 @@ export function useTransactions(
         setLoading(false);
       },
       err => {
-        console.error('[Firestore][onSnapshot] error:', err.message);
-        setError(err);
+        logSanitizedFirebaseError('transaction_snapshot', err);
+        setError(new Error(getUserFriendlyErrorMessage(err, 'transaction_snapshot')));
         setLoading(false);
       }
     );
@@ -481,21 +466,9 @@ export function useTransactions(
         switch (op.type) {
           case 'add': {
             // Modo Spark: transação + history gravados atomicamente por writeBatch validado em Rules.
-            debugSync('iniciando criação manual via batch Firestore', {
-              uid,
-              tempId: op.tempId,
-              txId: op.txId,
-              payload: {
-                type:           op.data.type,
-                category:       op.data.category,
-                date:           op.data.date,
-                source:         op.data.source ?? 'manual',
-                value_cents:    op.data.value_cents,
-                hasDescription: Boolean(op.data.description),
-              },
-            });
+            debugSync('iniciando criação manual via batch Firestore', 'transaction_add');
             const realId = await FirestoreService.createManualTransactionWithHistory(uid, op.data, op.txId);
-            debugSync('batch Firestore confirmado', { uid, tempId: op.tempId, realId });
+            debugSync('batch Firestore confirmado', 'transaction_add');
             // O batch já escreveu transação + history de forma atômica — sem log CREATE separado
             const aiCb = postAddCallbacks.current.get(op.tempId);
             if (aiCb) {
@@ -511,23 +484,7 @@ export function useTransactions(
           }
           case 'update':
             // updatedAt: serverTimestamp() sempre enviado pelo FirestoreService
-            debugSync('iniciando atualização de movimentação', {
-              uid,
-              id: op.itemId,
-              operation: 'update',
-              removesLegacyFields: true,
-              path: `users/${uid}/transactions/${op.itemId}`,
-              payload: {
-                keys: Object.keys(op.data).sort(),
-                type: op.data.type,
-                category: op.data.category,
-                date: op.data.date,
-                source: op.data.source,
-                value_cents: op.data.value_cents,
-                schemaVersion: op.data.schemaVersion,
-                hasDescription: Boolean(op.data.description),
-              },
-            });
+            debugSync('iniciando atualização de movimentação', 'transaction_update');
 
             if (op.previous) {
               const before = sanitizeForHistory(op.previous);
@@ -609,21 +566,12 @@ export function useTransactions(
 
       } catch (err) {
         op.retries++;
-        const msg = getErrorMessage(err);
-        debugSync('erro na gravação/sync', {
-          uid,
-          opType: op.type,
-          attempt: op.retries,
-          code: getErrorCode(err),
-          message: msg,
-        });
-        console.error(
-          `[SyncQueue][${op.type}] erro (tentativa ${op.retries}/${MAX_RETRIES}): ${msg}`
-        );
+        const operation = operationFromQueueOp(op.type);
+        logSanitizedFirebaseError(operation, err);
 
         if (op.retries >= MAX_RETRIES || !shouldRetrySyncError(err)) {
-          console.error(`[SyncQueue][${op.type}] descartado após ${MAX_RETRIES} tentativas.`);
-          const finalError = userFacingSyncError(err);
+          console.warn('[SyncQueue] operação descartada após tentativas', { operation });
+          const finalError = userFacingSyncError(err, operation);
           const hasAwaiter = op.type === 'add' && pendingAddResolvers.current.has(op.tempId);
           if (!hasAwaiter) toast.error(finalError.message);
 
@@ -731,8 +679,8 @@ export function useTransactions(
         });
       }
     } catch (err) {
-      console.error('[loadMoreTransactions] erro:', err);
-      toast.error('Falha ao carregar mais movimentações.');
+      logSanitizedFirebaseError('transaction_load_more', err);
+      toast.error(getUserFriendlyErrorMessage(err, 'transaction_load_more'));
     } finally {
       isLoadingMoreRef.current = false;
       setIsLoadingMore(false);
@@ -786,6 +734,8 @@ export function useTransactions(
               origin:        'ai',
               category:      aiCat,
               amount_cents:  optimisticCentavos,
+            }).catch(error => {
+              logSanitizedFirebaseError('ai_category', error);
             });
           }
         });
@@ -896,6 +846,8 @@ export function useTransactions(
                 origin:        'ai',
                 category:      aiCat,
                 amount_cents:  optimisticCentavos,
+              }).catch(error => {
+                logSanitizedFirebaseError('ai_category', error);
               });
             }
           });

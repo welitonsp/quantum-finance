@@ -241,7 +241,7 @@ describe('useTransactions - criação manual Spark via batch', () => {
         category:    'Alimentação',
         date:        '2026-05-05',
         source:      'manual',
-      })).rejects.toThrow('A movimentação foi recusada pelas regras do Firebase');
+      })).rejects.toThrow('Não foi possível concluir a operação porque as regras de segurança bloquearam a alteração');
     });
 
     await waitFor(() => expect(result.current.transactions).toHaveLength(0));

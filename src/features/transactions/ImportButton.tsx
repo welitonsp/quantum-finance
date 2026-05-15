@@ -32,6 +32,10 @@ import { PreviewPanel } from './import/PreviewPanel';
 import { SuccessPanel } from './import/SuccessPanel';
 import { ErrorPanel }   from './import/ErrorPanel';
 import { PasswordPanel } from './import/PasswordPanel';
+import {
+  getUserFriendlyErrorMessage,
+  logSanitizedFirebaseError,
+} from '../../shared/lib/firebaseErrorHandling';
 
 // Re-export so existing test imports remain valid
 export { processResolvedImportBatch, calculatePreviewTotals };
@@ -265,9 +269,8 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
       setStatus('reconciliation');
 
     } catch (rawErr) {
-      const err = rawErr as Error;
-      console.error('Importação falhou:', err);
-      setErrorMessage(err.message || 'Falha desconhecida ao processar o ficheiro.');
+      logSanitizedFirebaseError('import_parse', rawErr);
+      setErrorMessage(getUserFriendlyErrorMessage(rawErr, 'import_parse'));
       setStatus('error');
     }
   }, [deduplicate, parseFile, parseFileWithMapping, uid]);
@@ -293,9 +296,8 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
       setStatus('success');
       setTimeout(() => closeModal(), 3000);
     } catch (rawErr) {
-      const err = rawErr as Error;
-      console.error('Erro ao gravar no Firestore:', err);
-      setErrorMessage(err.message || 'Falha ao guardar as transações. Tente novamente.');
+      logSanitizedFirebaseError('import_reconcile', rawErr);
+      setErrorMessage(getUserFriendlyErrorMessage(rawErr, 'import_reconcile'));
       setStatus('error');
     }
   }, [uid, onImportTransactions, existingTransactions]);

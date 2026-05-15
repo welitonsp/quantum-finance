@@ -3,6 +3,7 @@ import { GeminiService } from '../features/ai-chat/GeminiService';
 import type { Transaction } from '../shared/types/transaction';
 import { CATEGORY_KEYWORDS } from '../shared/data/categoryKeywords';
 import type { UserCategoryRule } from '../hooks/useCategoryRules';
+import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 
 // ─── Deterministic categorization (no external AI) ───────────────────────────
 
@@ -103,7 +104,7 @@ export async function batchCategorizeDescriptions(
     });
     return map;
   } catch (err) {
-    console.error('[aiCategorize] Batch categorization failed:', err);
+    logSanitizedFirebaseError('ai_category', err);
     return {};
   }
 }

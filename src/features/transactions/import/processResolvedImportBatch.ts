@@ -5,6 +5,7 @@ import { FirestoreService } from '../../../shared/services/FirestoreService';
 import type { Transaction } from '../../../shared/types/transaction';
 import type { ParsedTransaction, ImportResult } from './importTypes';
 import { buildReconciliationHistoryDelta } from './importHelpers';
+import { logSanitizedFirebaseError } from '../../../shared/lib/firebaseErrorHandling';
 
 export async function processResolvedImportBatch(
   uid: string | undefined,
@@ -47,7 +48,7 @@ export async function processResolvedImportBatch(
     const zodResult = transactionCreateSchema.safeParse(cleanTx);
     if (!zodResult.success) {
       invalidCount++;
-      console.warn('[Import] Transação rejeitada:', cleanTx, zodResult.error.issues);
+      logSanitizedFirebaseError('transaction_import', new Error('schema_validation_failed'));
       continue;
     }
 

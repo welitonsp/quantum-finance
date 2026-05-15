@@ -5,6 +5,10 @@ import { toCentavos } from '../shared/types/money';
 import type { Transaction, ImportResult } from '../shared/types/transaction';
 import { FirestoreService } from '../shared/services/FirestoreService';
 import type { User } from 'firebase/auth';
+import {
+  getUserFriendlyErrorMessage,
+  logSanitizedFirebaseError,
+} from '../shared/lib/firebaseErrorHandling';
 
 interface UseImportActionsReturn {
   handleImport: (parsedData: Partial<Transaction>[]) => Promise<ImportResult | undefined>;
@@ -44,8 +48,8 @@ export function useImportActions(
 
       return result;
     } catch (error) {
-      console.error('[useImportActions] Falha na importação:', error);
-      toast.error('Falha crítica ao importar o ficheiro.', { id: toastId });
+      logSanitizedFirebaseError('transaction_import', error);
+      toast.error(getUserFriendlyErrorMessage(error, 'transaction_import'), { id: toastId });
     }
   }, [uid]);
 
