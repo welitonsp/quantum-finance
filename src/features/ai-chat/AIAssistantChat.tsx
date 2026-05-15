@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Send, BrainCircuit, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GeminiService } from './GeminiService';
+import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 import type { Transaction, ModuleBalances } from '../../shared/types/transaction';
 
 interface Message {
@@ -47,7 +48,7 @@ export const AIAssistantChat = ({ transactions, balances, isOpen, onClose }: Pro
       });
       setMessages(prev => [...prev, { role: 'ai', text: aiResponse }]);
     } catch (error) {
-      console.error('Erro no link de comunicação Quântico:', error);
+      logSanitizedFirebaseError('ai_chat_advice', error);
       setMessages(prev => [...prev, { role: 'ai', text: '🚨 Interferência quântica detectada. Verifique a chave da API no ficheiro .env.' }]);
     } finally {
       setIsLoading(false);

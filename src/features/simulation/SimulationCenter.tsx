@@ -20,6 +20,7 @@ import type { Transaction } from '../../shared/types/transaction';
 import type { ModuleBalances } from '../../shared/types/transaction';
 import { getTransactionAbsCentavos, isIncome } from '../../utils/transactionUtils';
 import { toCentavos } from '../../shared/types/money';
+import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 interface RechartsTooltipPayloadEntry {
   dataKey?: string | number | ((obj: unknown) => unknown);
   name?: string | number;
@@ -216,11 +217,11 @@ export default function SimulationCenter({ transactions, balances }: Props) {
     worker.onmessage = (e: MessageEvent<MonteCarloResult>) => {
       setIsCalculating(false);
       if (e.data.success) setResult(e.data);
-      else console.error('[MonteCarloWorker]', e.data.error);
+      else logSanitizedFirebaseError('simulation_run', e.data.error);
     };
     worker.onerror = (e: ErrorEvent) => {
       setIsCalculating(false);
-      console.error('[MonteCarloWorker] crash:', e.message);
+      logSanitizedFirebaseError('simulation_crash', e.message);
     };
     workerRef.current = worker;
     return () => { worker.terminate(); workerRef.current = null; };
