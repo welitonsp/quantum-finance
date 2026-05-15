@@ -329,7 +329,7 @@ service cloud.firestore {
     function isValidAuditLog(data) {
       return data.keys().hasAll(['action', 'entity', 'createdAt', 'schemaVersion'])
           && data.keys().hasOnly([
-            'action', 'entity', 'txId', 'importHash', 'source',
+            'action', 'entity', 'txId', 'source',
             'amount_cents', 'amount_display', 'details', 'metadata',
             'createdAt', 'schemaVersion'
           ])
@@ -338,7 +338,6 @@ service cloud.firestore {
           && data.createdAt == request.time
           && data.schemaVersion == 2
           && (!('txId' in data) || isStringSized(data.txId, 1, 128))
-          && (!('importHash' in data) || isStringSized(data.importHash, 64, 64))
           && (!('source' in data) || isValidAuditSource(data.source))
           && (!('amount_cents' in data) || isSafeInt(data.amount_cents))
           && (!('amount_display' in data) || data.amount_display is number)
