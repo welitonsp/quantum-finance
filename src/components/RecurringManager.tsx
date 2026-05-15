@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Plus, Trash2, Repeat, AlertTriangle, Wallet, Calendar, X, CheckCircle2 } from 'lucide-react';
 import Decimal from 'decimal.js';
 import { useRecurring } from '../hooks/useRecurring';
+import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import { formatCurrency } from '../utils/formatters';
 import toast from 'react-hot-toast';
 import type { RecurringTask } from '../shared/types/transaction';
@@ -71,7 +72,7 @@ export default function RecurringManager({ uid }: Props) {
       setIsAddModalOpen(false);
       setNewDescription(''); setNewValue(''); setNewCategory('Moradia'); setNewFrequency('mensal');
     } catch (err) {
-      console.error('Erro ao adicionar contrato:', err);
+      logSanitizedFirebaseError('recurring_create', err);
       toast.error('Erro na encriptação da despesa.');
     } finally {
       setIsProcessing(false);

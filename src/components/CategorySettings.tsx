@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Settings, Tag, Search, Loader2, ArrowRight } from 'lucide-react';
 import { collection, query, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../shared/api/firebase';
+import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import toast from 'react-hot-toast';
 
 interface CategoryRule {
@@ -60,7 +61,7 @@ export default function CategorySettings({ uid, onClose }: Props) {
       toast.success('Regra Quântica ativada!');
       setKeyword(''); setCategory('');
     } catch (error) {
-      console.error('Erro ao salvar regra:', error);
+      logSanitizedFirebaseError('category_settings_save', error);
       toast.error('Interferência ao salvar regra.');
     } finally {
       setIsSaving(false);
@@ -72,7 +73,7 @@ export default function CategorySettings({ uid, onClose }: Props) {
       await deleteDoc(doc(db, 'users', uid, 'categoryRules', ruleId));
       toast.success('Regra desativada.');
     } catch (error) {
-      console.error('Erro ao apagar regra:', error);
+      logSanitizedFirebaseError('category_settings_delete', error);
       toast.error('Falha ao apagar.');
     }
   };

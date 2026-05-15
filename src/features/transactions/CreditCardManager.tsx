@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCreditCards } from '../../hooks/useCreditCards';
+import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 import { fromCentavos } from '../../shared/schemas/financialSchemas';
 import type { CreditCard as CreditCardType, CreditCardWithMetrics, Transaction } from '../../shared/types/transaction';
 import type { MoneyInput } from '../../shared/types/money';
@@ -242,7 +243,7 @@ export default function CreditCardManager({ uid, transactions = [] }: Props) {
       setShowForm(false);
       setEditingCard(null);
     } catch (err) {
-      console.error(err);
+      logSanitizedFirebaseError(editingCard ? 'credit_card_update' : 'credit_card_create', err);
       toast.error('Erro ao guardar cartão.');
     }
   };

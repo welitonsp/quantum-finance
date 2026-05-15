@@ -2,6 +2,7 @@
 import { useState, useMemo } from 'react';
 import { Plus, Building2, PiggyBank, TrendingUp, CreditCard, Landmark, Trash2, Wallet } from 'lucide-react';
 import { useAccounts } from '../../hooks/useAccounts';
+import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 import Decimal from 'decimal.js';
 import { formatCurrency } from '../../utils/formatters';
 import { fromCentavos } from '../../shared/schemas/financialSchemas';
@@ -58,7 +59,7 @@ export default function AccountsManager({ uid }: Props) {
       setBalance('');
       setType('corrente');
     } catch (error) {
-      console.error(error);
+      logSanitizedFirebaseError('account_create', error);
     }
   };
 
