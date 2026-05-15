@@ -4,6 +4,7 @@ import {
   type DocumentData, type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
+import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import type { AuditLog } from '../shared/services/AuditService';
 import { fromCentavos } from '../shared/types/money';
 
@@ -204,7 +205,7 @@ export function useAuditLogs(uid: string): UseAuditLogsReturn {
         setLoading(false);
       },
       (err) => {
-        console.error('[useAuditLogs]', err);
+        logSanitizedFirebaseError('audit_logs_load', err);
         setError('Não foi possível carregar o histórico.');
         setLoading(false);
       }
@@ -241,7 +242,7 @@ export function useAuditLogs(uid: string): UseAuditLogsReturn {
       });
       setHasMoreLogs(snap.docs.length >= AUDIT_LOG_PAGE_SIZE);
     } catch (err) {
-      console.error('[useAuditLogs][loadMore]', err);
+      logSanitizedFirebaseError('audit_logs_load_more', err);
       setError('Não foi possível carregar mais histórico.');
     } finally {
       isLoadingMoreRef.current = false;
