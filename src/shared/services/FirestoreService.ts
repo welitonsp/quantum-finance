@@ -32,6 +32,7 @@ import {
   getTransactionCentavos,
 } from '../../utils/transactionUtils';
 import { LedgerService, transactionToLedgerInput } from './LedgerService';
+import { getFirebaseErrorCode, logSanitizedFirebaseError } from '../lib/firebaseErrorHandling';
 
 const txCol = (uid: string): CollectionReference =>
   collection(db, 'users', uid, 'transactions');
@@ -241,50 +242,21 @@ async function manualCreateAlreadyCommitted(
   }
 }
 
-function getFirebaseErrorCode(err: unknown): string | undefined {
-  return typeof err === 'object' && err !== null && 'code' in err
-    ? String((err as { code?: unknown }).code ?? '')
-    : undefined;
-}
-
 function debugUpdatePayload(
-  id: string,
-  payload: Record<string, unknown>,
   removesLegacyFields: boolean,
 ): void {
   if (!import.meta.env.DEV) return;
-  console.warn('[Firestore][updateTransaction][payload]', {
-    id,
-    keys: Object.keys(payload).sort(),
-    operation: 'update',
+  console.warn('[Firestore][transaction_update]', {
+    operation: 'transaction_update',
     removesLegacyFields,
-    type: payload['type'],
-    category: payload['category'],
-    date: payload['date'],
-    source: payload['source'],
-    value_cents: payload['value_cents'],
-    schemaVersion: payload['schemaVersion'],
-    hasDescription: typeof payload['description'] === 'string' && payload['description'].length > 0,
-    forbiddenFieldsPresentAfterWrite: false,
   });
 }
 
-function debugRejectedUpdatePayload(id: string, payload: Record<string, unknown>, err: unknown): void {
+function debugRejectedUpdatePayload(err: unknown): void {
   if (!import.meta.env.DEV) return;
-  if (getFirebaseErrorCode(err) !== 'permission-denied') return;
-  console.warn('[Firestore][updateTransaction][permission-denied]', {
-    id,
-    keys: Object.keys(payload).sort(),
-    operation: 'update',
-    removesLegacyFields: true,
-    type: payload['type'],
-    category: payload['category'],
-    date: payload['date'],
-    source: payload['source'],
-    value_cents: payload['value_cents'],
-    schemaVersion: payload['schemaVersion'],
-    legacyFieldsRequestedForDeletion: ['uid', 'id', 'value'],
-  });
+  const code = getFirebaseErrorCode(err);
+  if (code !== 'permission-denied' && code !== 'failed-precondition') return;
+  logSanitizedFirebaseError('transaction_update', err);
 }
 
 function normalizeUpdatePayload(data: TransactionUpdateDTO): Record<string, unknown> {
@@ -388,7 +360,7 @@ export const FirestoreService = {
         }))
         .filter(isActiveTransaction);
     } catch (err) {
-      console.warn('[Firestore][getTransactions] fallback sem orderBy:', (err as Error).message);
+      logSanitizedFirebaseError('firestore_query', err);
       const snap = await getDocs(txCol(uid));
       return snap.docs
         .map(d => normalizeReadTransaction({
@@ -490,11 +462,11 @@ export const FirestoreService = {
     batch.update(txRef, writePayload);
     batch.set(historyRef, historyPayload);
 
-    debugUpdatePayload(id, payload, true);
+    debugUpdatePayload(true);
     try {
       await batch.commit();
     } catch (err) {
-      debugRejectedUpdatePayload(id, payload, err);
+      debugRejectedUpdatePayload(err);
       throw err;
     }
   },

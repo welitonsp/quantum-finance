@@ -164,7 +164,7 @@ export async function categorizeWithAI(
     if (!allowed) {
       inFlight.delete(key);
       externalResolve('Outros');
-      void writeSystemLog(uid, 'ERROR', `daily AI limit reached (${DAILY_AI_LIMIT}/day)`);
+      void writeSystemLog(uid, 'ERROR', 'ai_daily_limit_reached');
       return promise;
     }
 
@@ -174,7 +174,7 @@ export async function categorizeWithAI(
       key,
       resolve: (cat: string) => {
         inFlight.delete(key);
-        void writeSystemLog(uid, 'AI_CALL', `${key} → ${cat}`);
+        void writeSystemLog(uid, 'AI_CALL', 'ai_category_completed');
         externalResolve(cat);
       },
     });

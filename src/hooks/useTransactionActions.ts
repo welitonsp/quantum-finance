@@ -3,6 +3,10 @@ import toast from 'react-hot-toast';
 import { toCentavos } from '../shared/types/money';
 import type { Transaction } from '../shared/types/transaction';
 import type { User } from 'firebase/auth';
+import {
+  getUserFriendlyErrorMessage,
+  logSanitizedFirebaseError,
+} from '../shared/lib/firebaseErrorHandling';
 
 interface UseTransactionActionsParams {
   user: User | null;
@@ -14,22 +18,6 @@ interface UseTransactionActionsParams {
   setTransactionToEdit: (tx: Transaction | null) => void;
   setIsFormOpen: (v: boolean) => void;
   setTransactionToDelete: (tx: Transaction | null) => void;
-}
-
-function transactionErrorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  const lower = message.toLowerCase();
-
-  if (lower.includes('permiss') || lower.includes('permission-denied')) {
-    return 'A movimentação foi recusada pelas regras do Firebase. Verifique campos proibidos no payload.';
-  }
-  if (lower.includes('network') || lower.includes('offline') || lower.includes('unavailable')) {
-    return 'Falha de conexão. A movimentação não foi confirmada.';
-  }
-  if (lower.includes('inválid') || lower.includes('invalid')) {
-    return message;
-  }
-  return message || 'Ocorreu um erro ao gravar. Tente novamente.';
 }
 
 export function useTransactionActions({
@@ -63,8 +51,9 @@ export function useTransactionActions({
       setIsFormOpen(false);
       setTransactionToEdit(null);
     } catch (error) {
-      console.error('Falha ao gravar no Cofre:', error);
-      toast.error(transactionErrorMessage(error));
+      const operation = transactionToEdit ? 'transaction_update' : 'transaction_add';
+      logSanitizedFirebaseError(operation, error);
+      toast.error(getUserFriendlyErrorMessage(error, operation));
     }
   }, [transactionToEdit, update, add, setIsFormOpen, setTransactionToEdit]);
 
@@ -76,8 +65,8 @@ export function useTransactionActions({
       await remove(idToDelete);
       toast.success('Registo eliminado permanentemente.');
     } catch (error) {
-      console.error('Falha ao eliminar registo:', error);
-      toast.error('Aviso: Falha ao eliminar a movimentação.');
+      logSanitizedFirebaseError('transaction_delete', error);
+      toast.error(getUserFriendlyErrorMessage(error, 'transaction_delete'));
     }
   }, [remove, setTransactionToDelete]);
 
@@ -87,8 +76,8 @@ export function useTransactionActions({
       await removeBatch(ids);
       toast.success(`${ids.length} movimentações eliminadas.`);
     } catch (error) {
-      console.error('Falha na eliminação em massa:', error);
-      toast.error('Aviso: Falha ao executar eliminação em lote.');
+      logSanitizedFirebaseError('transaction_delete_batch', error);
+      toast.error(getUserFriendlyErrorMessage(error, 'transaction_delete_batch'));
     }
   }, [removeBatch]);
 

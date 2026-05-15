@@ -9,6 +9,7 @@ import {
 
 import { db } from '../../shared/api/firebase/index';
 import type { Transaction } from '../../shared/types/transaction';
+import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 
 const DEFAULT_MAX_CANDIDATES = 300;
 const MAX_CANDIDATES_CEILING = 500;
@@ -62,7 +63,7 @@ export async function findImportCandidateTransactions({
       }))
       .filter(tx => tx.isDeleted !== true && !tx.deletedAt);
   } catch (error) {
-    console.warn('[importCandidateSearch] Falha ao buscar candidatos de importacao:', error);
+    logSanitizedFirebaseError('import_candidate_search', error);
     return [];
   }
 }

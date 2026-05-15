@@ -1,5 +1,6 @@
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../api/firebase/index';
+import { logSanitizedFirebaseError } from '../lib/firebaseErrorHandling';
 
 // ─── Audit Model (replayable) ─────────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ export const AuditService = {
   async logAction(log: AuditLogInput): Promise<void> {
     if (!log.userId) {
       if (import.meta.env.DEV) {
-        console.warn('[AuditService] logAction ignorado: userId ausente.');
+        console.warn('[AuditService] logAction ignorado: identificador ausente.');
       }
       return;
     }
@@ -95,7 +96,7 @@ export const AuditService = {
       await addDoc(ref, payload);
     } catch (error) {
       // FAIL SILENT — UI nunca quebra por falha de auditoria
-      console.error('[AuditService] logAction failed:', error);
+      logSanitizedFirebaseError('audit_log_action', error);
     }
   },
 
@@ -114,7 +115,7 @@ export const AuditService = {
   ): Promise<void> {
     if (!uid || !txId) {
       if (import.meta.env.DEV) {
-        console.warn('[AuditService] logTransactionHistory ignorado: uid ou txId ausente.');
+        console.warn('[AuditService] logTransactionHistory ignorado: identificador ausente.');
       }
       return;
     }
@@ -138,7 +139,7 @@ export const AuditService = {
       await addDoc(histRef, payload);
     } catch (error) {
       // FAIL SILENT — UI nunca quebra por falha de auditoria
-      console.error('[AuditService] logTransactionHistory failed:', error);
+      logSanitizedFirebaseError('audit_transaction_history', error);
     }
   },
 };

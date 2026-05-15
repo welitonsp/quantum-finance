@@ -3,6 +3,10 @@
 import { httpsCallable } from 'firebase/functions';
 import { functions }     from '../../shared/api/firebase/index';
 import { maskPII, buildSafePromptRows } from '../../shared/lib/piiMasker';
+import {
+  getUserFriendlyErrorMessage,
+  logSanitizedFirebaseError,
+} from '../../shared/lib/firebaseErrorHandling';
 import type { Transaction } from '../../shared/types/transaction';
 import type { RecurringTask } from '../../shared/types/transaction';
 import { getTransactionAbsCentavos } from '../../utils/transactionUtils';
@@ -50,14 +54,7 @@ export class GeminiService {
       const result = await fn({ transactions: safeRows });
       return Array.isArray(result.data) ? (result.data as CategorizeResult[]) : [];
     } catch (error) {
-      const err = error as { code?: string; message?: string };
-      if (err.code === 'functions/unauthenticated') {
-        console.error('[GeminiService] Utilizador não autenticado.');
-      } else if (err.code === 'functions/not-found') {
-        console.warn('[GeminiService] Cloud Function não encontrada. Deploy pendente?');
-      } else {
-        console.error('[GeminiService] Erro na categorização:', err.message);
-      }
+      logSanitizedFirebaseError('callable_ai_category', error);
       return [];
     }
   }
@@ -98,12 +95,8 @@ export class GeminiService {
       const data   = result.data as { reply?: string } | null;
       return data?.reply ?? '⚠️ Resposta vazia do servidor.';
     } catch (error) {
-      const err = error as { code?: string; message?: string };
-      console.error('[GeminiService] Erro no motor auditor:', err.message);
-      if (err.code === 'functions/not-found') {
-        return '⚠️ Cloud Function não está deployada ainda. Execute `firebase deploy --only functions`.';
-      }
-      return `🚨 Interferência quântica: ${err.message ?? 'Erro desconhecido'}`;
+      logSanitizedFirebaseError('callable_ai_chat', error);
+      return getUserFriendlyErrorMessage(error, 'callable_ai_chat');
     }
   }
 
@@ -138,12 +131,8 @@ export class GeminiService {
       const data   = result.data as { reply?: string } | null;
       return data?.reply ?? '⚠️ Relatório vazio.';
     } catch (error) {
-      const err = error as { code?: string; message?: string };
-      console.error('[GeminiService] Erro no audit report:', err.message);
-      if (err.code === 'functions/not-found') {
-        return '⚠️ Cloud Function não deployada. Execute `firebase deploy --only functions`.';
-      }
-      return `🚨 Interferência quântica: ${err.message ?? 'Erro desconhecido'}`;
+      logSanitizedFirebaseError('callable_ai_report', error);
+      return getUserFriendlyErrorMessage(error, 'callable_ai_report');
     }
   }
 
@@ -225,9 +214,8 @@ export class GeminiService {
       if (!text) throw new Error('Resposta vazia');
       return text;
     } catch (error) {
-      const err = error as { code?: string; message?: string };
-      console.error('[GeminiService][proactiveBriefing]', err.message);
-      throw error;
+      logSanitizedFirebaseError('callable_ai_briefing', error);
+      throw new Error(getUserFriendlyErrorMessage(error, 'callable_ai_briefing'));
     }
   }
 
@@ -280,8 +268,8 @@ export class GeminiService {
         })
         .filter((x): x is AnomalyResult => x !== null)
         .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-    } catch (e) {
-      console.error('[GeminiService] Erro na detecção de anomalias:', e);
+    } catch (error) {
+      logSanitizedFirebaseError('unknown_operation', error);
       return [];
     }
   }
