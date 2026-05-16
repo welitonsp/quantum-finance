@@ -190,6 +190,47 @@ function toSafeCategorizationPromptId(id, index) {
   return OPAQUE_CATEGORIZATION_ID_RE.test(rawId) ? rawId : `tx_${index}`;
 }
 
+// ─── Sanitized Function Error Logging ────────────────────────────────────────
+
+const SAFE_FUNCTION_ERROR_MESSAGES = Object.freeze({
+  rate_limit_check: 'Rate limit check failed',
+  structured_log_write: 'Structured log write failed',
+  ai_batch_categorization: 'AI categorization failed',
+  ai_chat: 'AI chat failed',
+  ai_audit_report: 'AI audit report failed',
+});
+
+const SAFE_ERROR_CODE_RE = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
+
+function safeErrorCode(error) {
+  if (!error || typeof error !== 'object' || typeof error.code !== 'string') {
+    return 'internal_error';
+  }
+  const code = error.code.trim();
+  return SAFE_ERROR_CODE_RE.test(code) ? code.toLowerCase() : 'internal_error';
+}
+
+function safeErrorContext(context) {
+  return Object.prototype.hasOwnProperty.call(SAFE_FUNCTION_ERROR_MESSAGES, context)
+    ? context
+    : 'unknown_error';
+}
+
+function sanitizeFunctionError(context, error) {
+  const safeContext = safeErrorContext(context);
+  return {
+    status: 'error',
+    context: safeContext,
+    code: safeErrorCode(error),
+    message: SAFE_FUNCTION_ERROR_MESSAGES[safeContext] ?? 'Operation failed',
+  };
+}
+
+function safeSystemLogDetail(context) {
+  const safeContext = safeErrorContext(context);
+  return SAFE_FUNCTION_ERROR_MESSAGES[safeContext] ?? 'Operation failed';
+}
+
 // ─── Persistent rate limiting (Firestore transaction — survives cold starts) ──
 
 async function checkAndIncrementRateLimit(uid) {
@@ -226,7 +267,7 @@ async function checkAndIncrementRateLimit(uid) {
       return true;
     });
   } catch (e) {
-    console.error('[RateLimit] Firestore transaction failed:', e.message);
+    console.error('[FunctionError]', sanitizeFunctionError('rate_limit_check', e));
     return true; // fail open — never block on rate-limit infrastructure errors
   }
 }
@@ -241,7 +282,7 @@ async function writeStructuredLog(uid, type, detail) {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   } catch (e) {
-    console.warn('[StructuredLog] Write failed (non-critical):', e.message);
+    console.warn('[FunctionWarning]', sanitizeFunctionError('structured_log_write', e));
   }
 }
 
@@ -403,8 +444,8 @@ Transações:\n${safeRows.map(t => `ID: ${t.promptId} | "${t.description}" | R$ 
       void writeStructuredLog(uid, 'BATCH', `categorized ${safeRows.length} transactions`);
       return safeRows.map(t => ({ id: t.id, category: byId.get(t.promptId) || 'Outros' }));
     } catch (e) {
-      console.error('[categorizeTransactionsBatch] Gemini call failed:', e.message);
-      void writeStructuredLog(uid, 'ERROR', `batch categorization failed: ${e.message}`);
+      console.error('[FunctionError]', sanitizeFunctionError('ai_batch_categorization', e));
+      void writeStructuredLog(uid, 'ERROR', safeSystemLogDetail('ai_batch_categorization'));
       // Return safe defaults instead of throwing — UI must never crash on AI failure
       return safeRows.map(t => ({ id: t.id, category: 'Outros' }));
     }
@@ -444,8 +485,8 @@ exports.chatWithQuantumAI = onCall(
       void writeStructuredLog(uid, 'AI_CALL', 'chat request completed');
       return { reply };
     } catch (e) {
-      console.error('[chatWithQuantumAI] Gemini call failed:', e.message);
-      void writeStructuredLog(uid, 'ERROR', `chat failed: ${e.message}`);
+      console.error('[FunctionError]', sanitizeFunctionError('ai_chat', e));
+      void writeStructuredLog(uid, 'ERROR', safeSystemLogDetail('ai_chat'));
       throw new HttpsError('internal', 'Falha no núcleo de IA.');
     }
   }
@@ -477,8 +518,8 @@ exports.generateAuditReport = onCall(
       void writeStructuredLog(uid, 'AI_CALL', 'audit report generated');
       return { reply };
     } catch (e) {
-      console.error('[generateAuditReport] Gemini call failed:', e.message);
-      void writeStructuredLog(uid, 'ERROR', `audit report failed: ${e.message}`);
+      console.error('[FunctionError]', sanitizeFunctionError('ai_audit_report', e));
+      void writeStructuredLog(uid, 'ERROR', safeSystemLogDetail('ai_audit_report'));
       throw new HttpsError('internal', 'Falha no motor de auditoria.');
     }
   }
