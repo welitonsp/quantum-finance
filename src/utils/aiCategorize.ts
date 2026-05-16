@@ -93,14 +93,19 @@ export async function batchCategorizeDescriptions(
   const unique = [...new Set(descriptions.filter(d => d?.trim()))];
   if (!unique.length) return {};
 
-  // Use the description itself as the pseudo-ID so we can reverse-map after
-  const pseudoTxs = unique.map(desc => ({ id: desc, description: desc }));
+  const descriptionByOpaqueId = new Map<string, string>();
+  const pseudoTxs = unique.map((desc, index) => {
+    const id = `tx_${index}`;
+    descriptionByOpaqueId.set(id, desc);
+    return { id, description: desc };
+  });
 
   try {
     const results = await GeminiService.categorizeTransactionsBatch(pseudoTxs);
     const map: Record<string, string> = {};
     results.forEach(r => {
-      if (r.category) map[r.id] = r.category;
+      const description = descriptionByOpaqueId.get(r.id);
+      if (description && r.category) map[description] = r.category;
     });
     return map;
   } catch (err) {

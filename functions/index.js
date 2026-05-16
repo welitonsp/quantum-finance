@@ -183,6 +183,13 @@ function safeCategory(category) {
   return ALLOWED_CATEGORIES.has(category) ? category : 'Outros';
 }
 
+const OPAQUE_CATEGORIZATION_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+function toSafeCategorizationPromptId(id, index) {
+  const rawId = typeof id === 'string' ? id : '';
+  return OPAQUE_CATEGORIZATION_ID_RE.test(rawId) ? rawId : `tx_${index}`;
+}
+
 // ─── Persistent rate limiting (Firestore transaction — survives cold starts) ──
 
 async function checkAndIncrementRateLimit(uid) {
@@ -360,8 +367,9 @@ exports.categorizeTransactionsBatch = onCall(
 
     const safeRows = transactions
       .filter(t => t && typeof t.id === 'string' && typeof t.description === 'string')
-      .map(t => ({
+      .map((t, index) => ({
         id:          String(t.id).slice(0, 128),
+        promptId:    toSafeCategorizationPromptId(t.id, index),
         description: maskPII(String(t.description || '').slice(0, 256)),
         value_cents: txCents(t),
       }));
@@ -370,7 +378,7 @@ exports.categorizeTransactionsBatch = onCall(
 
     const prompt = `Classifique cada transação em UMA das categorias: Alimentação, Transporte, Assinaturas, Educação, Saúde, Moradia, Impostos/Taxas, Lazer, Vestuário, Salário, Freelance, Investimento, Diversos, Outros.
 Responda APENAS um array JSON: [{"id":"id","category":"Categoria"}].
-Transações:\n${safeRows.map(t => `ID: ${t.id} | "${t.description}" | R$ ${centsToReais(t.value_cents).toFixed(2)}`).join('\n')}`;
+Transações:\n${safeRows.map(t => `ID: ${t.promptId} | "${t.description}" | R$ ${centsToReais(t.value_cents).toFixed(2)}`).join('\n')}`;
 
     try {
       let text = await callGemini(GEMINI_API_KEY.value(), prompt, { jsonMode: true });
@@ -393,7 +401,7 @@ Transações:\n${safeRows.map(t => `ID: ${t.id} | "${t.description}" | R$ ${cent
         : []);
 
       void writeStructuredLog(uid, 'BATCH', `categorized ${safeRows.length} transactions`);
-      return safeRows.map(t => ({ id: t.id, category: byId.get(t.id) || 'Outros' }));
+      return safeRows.map(t => ({ id: t.id, category: byId.get(t.promptId) || 'Outros' }));
     } catch (e) {
       console.error('[categorizeTransactionsBatch] Gemini call failed:', e.message);
       void writeStructuredLog(uid, 'ERROR', `batch categorization failed: ${e.message}`);
