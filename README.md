@@ -97,6 +97,18 @@ Firestore Rules implementam validação de schema na camada de segurança (schem
 
 `importHash` é uma chave técnica de deduplicação e evidência das movimentações importadas. Ele permanece apenas na transaction importada e no id determinístico dessa transaction; não deve ser exibido na UI, logado em console, copiado para `history` nem duplicado em `audit_logs`. Logs de importação usam `txId` para rastreabilidade.
 
+## Observabilidade, privacidade e política de logs
+
+Quantum Finance adota política restritiva de logging para reduzir risco de vazamento de dados financeiros, identificadores, metadados de auditoria e segredos.
+
+- Console cru é proibido em produção para `console.error`, `console.log`, `console.debug` e `console.trace`.
+- `console.warn` e `console.info` só são permitidos quando protegidos por `import.meta.env.DEV` ou como exceções arquiteturais explícitas e documentadas.
+- Erros técnicos de Firebase/Firestore e fluxos sensíveis devem usar `logSanitizedFirebaseError`; o objeto bruto do erro não deve ser logado.
+- Nunca logar: `uid`, paths `users/{uid}`, `importHash`, payload financeiro, snapshots `before`/`after`, prompts ou respostas de IA, tokens ou secrets.
+- A política preventiva é protegida por `src/__tests__/consoleLoggingPolicy.test.ts`; novas exceções exigem justificativa explícita.
+- `useTransactions.ts` mantém exceção granular apenas para o log técnico conhecido: `[SyncQueue] operação descartada após tentativas`.
+- Mudanças em auditoria, Firestore Rules ou transações devem preservar o Modelo A: todo UPDATE de transaction exige `_lastOpId`, `history` deve ser pareado no mesmo batch e nenhuma política de logs pode enfraquecer a integridade financeira ou a trilha de auditoria.
+
 ## Firebase App Check
 
 Quantum Finance usa Firebase App Check com reCAPTCHA v3 para proteger os endpoints do Firebase contra abusos.
