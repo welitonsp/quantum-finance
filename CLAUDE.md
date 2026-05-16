@@ -2,6 +2,57 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
+## Estado Consolidado — Política de Observabilidade e Logging (FASE 9F/9G) — 2026-05-15
+
+### Status Atual
+
+- **Fase 9F e 9G concluídas**: Auditoria completa e sanitização de logs em todo o sistema.
+- **Política Preventiva Ativa**: Teste automatizado de análise estática bloqueia regressões de logs crus.
+- **Topo da main**: `ea45fe1 test(observability): prevent raw console logging regressions (#110)`.
+
+### Linha do Tempo — Fase 9B a 9G
+
+| PR | Descrição |
+|---|---|
+| #103 | Normalização central de erros Firebase e log sanitizado (Fase 9B) |
+| #104 | Remoção de duplicação de `importHash` em `audit_logs` (Fase 9E-1) |
+| #105 | Hardening de Firestore Rules bloqueando `importHash` em `audit_logs` (Fase 9E-2) |
+| #106 | Sanitização de logs em hooks Firestore de leitura (Fase 9F-1) |
+| #107 | Sanitização de logs de Auth e Error Boundary (Fase 9F-2) |
+| #108 | Sanitização de componentes financeiros periféricos (Fase 9F-3) |
+| #109 | Sanitização de parsers, workers, simulação, métricas e IA (Fase 9F-4) |
+| #110 | Teste preventivo contra regressão de `console.*` cru (Fase 9F-5) |
+
+### Política de Observabilidade, Privacidade e Logging
+
+1.  **Console cru é PROIBIDO em produção**:
+    - `console.error`, `console.log`, `console.debug` e `console.trace` não devem ser usados no código do diretório `src`.
+    - `console.warn` e `console.info` são permitidos apenas quando protegidos por `import.meta.env.DEV` ou como exceções arquiteturais documentadas.
+
+2.  **Erros Firebase e Fluxos Sensíveis**:
+    - Devem usar obrigatoriamente `logSanitizedFirebaseError` (ou `sanitizeErrorForLog`).
+    - **NUNCA** logar: objeto bruto do erro, stack trace, `uid`, paths `users/{uid}`, payload financeiro (valores/descrições), deltas `before`/`after`, `importHash`, prompts/respostas de IA, tokens ou segredos.
+
+3.  **Guarda Automática (Vitest)**:
+    - O teste `src/__tests__/consoleLoggingPolicy.test.ts` varre o código fonte e falha o CI se encontrar violações.
+    - Novas exceções ao teste exigem justificativa técnica explícita no código do teste.
+    - Exceção granular permitida em `useTransactions.ts` apenas para: `[SyncQueue] operação descartada após tentativas`.
+
+4.  **Privacidade do importHash**:
+    - O `importHash` permanece na transação real para deduplicação.
+    - **Proibido** em `audit_logs` (bloqueado por Rules).
+    - **Proibido** em deltas de histórico (`before`/`after`).
+
+5.  **Manutenção do Modelo A**:
+    - A política de logging não relaxa o Modelo A. Todo UPDATE exige `_lastOpId` e `history` pareado no batch.
+
+### Checklist para Novas Implementações
+
+- Antes de criar um `console.*`, prefira o helper sanitizado central.
+- Se for log estritamente para depuração local, envolva em `if (import.meta.env.DEV)`.
+- Rodar `npm run test -- --run` para garantir que a política de logging não foi violada.
+- Rodar `npm run test:rules` se houver alteração em Auditoria ou Firestore Rules.
+
 ## Estado Consolidado — Modelo A Obrigatório (FASE 8B/8C) — 2026-05-13
 
 ### Status Atual
