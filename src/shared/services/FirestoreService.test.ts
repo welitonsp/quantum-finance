@@ -163,6 +163,27 @@ function compatibleManualHistory(txId: string, overrides: Record<string, unknown
   };
 }
 
+function lastTransactionUpdatePayload(index = 0): Record<string, unknown> {
+  return (mockBatchUpdate.mock.calls[index] as [unknown, Record<string, unknown>])[1];
+}
+
+function lastHistoryPayload(index = 0): Record<string, unknown> {
+  return (mockBatchSet.mock.calls[index] as [unknown, Record<string, unknown>])[1];
+}
+
+async function updateWithLegacyBefore(
+  before: Record<string, unknown>,
+  afterOverrides: Record<string, unknown> = { category: 'Alimentação' },
+) {
+  await FirestoreService.updateTransactionWithHistory('uid1', 'tx-legacy', {
+    category: 'Alimentação',
+  }, {
+    before,
+    after: { ...before, ...afterOverrides },
+    changedFields: ['category'],
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockAddDoc.mockResolvedValue({ id: 'new-doc-id' });
@@ -514,6 +535,160 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
     }));
     expect(txPayload['value']).toEqual({ _deleteField: true });
     expect(txPayload).not.toHaveProperty('importHash');
+  });
+
+  it('remove campos desconhecidos do documento legado com deleteField e não grava extras no history', async () => {
+    await updateWithLegacyBefore({
+      category: 'Outros',
+      source: 'manual',
+      user_id: 'legacy-user',
+      creation_date: '2026-01-01',
+      metadata: 'trash',
+      notes: 'legacy notes',
+    });
+
+    const txPayload = lastTransactionUpdatePayload();
+    const historyPayload = lastHistoryPayload();
+
+    for (const field of ['user_id', 'creation_date', 'metadata', 'notes']) {
+      expect(txPayload[field]).toEqual({ _deleteField: true });
+      expect(historyPayload['before']).not.toHaveProperty(field);
+      expect(historyPayload['after']).not.toHaveProperty(field);
+    }
+  });
+
+  it('normaliza source legado case-sensitive de CSV para csv', async () => {
+    await updateWithLegacyBefore({ category: 'Outros', source: 'CSV' });
+
+    const txPayload = lastTransactionUpdatePayload();
+    expect(txPayload['source']).toBe('csv');
+  });
+
+  it('mantém source válido e aplica fallback manual para source inválido ou ausente', async () => {
+    await updateWithLegacyBefore({ category: 'Outros', source: 'ofx' });
+    expect(lastTransactionUpdatePayload()['source']).toBe('ofx');
+
+    vi.clearAllMocks();
+    mockBatchCommit.mockResolvedValue(undefined);
+    await updateWithLegacyBefore({ category: 'Outros', source: 'bank-feed' });
+    expect(lastTransactionUpdatePayload()['source']).toBe('manual');
+
+    vi.clearAllMocks();
+    mockBatchCommit.mockResolvedValue(undefined);
+    await updateWithLegacyBefore({ category: 'Outros' });
+    expect(lastTransactionUpdatePayload()['source']).toBe('manual');
+  });
+
+  it('normaliza type legado receita/despesa e injeta schemaVersion 2', async () => {
+    await updateWithLegacyBefore({ category: 'Outros', type: 'receita', source: 'manual' });
+    expect(lastTransactionUpdatePayload()).toEqual(expect.objectContaining({
+      type: 'entrada',
+      schemaVersion: 2,
+    }));
+
+    vi.clearAllMocks();
+    mockBatchCommit.mockResolvedValue(undefined);
+    await updateWithLegacyBefore({ category: 'Outros', type: 'despesa', source: 'manual' });
+    expect(lastTransactionUpdatePayload()).toEqual(expect.objectContaining({
+      type: 'saida',
+      schemaVersion: 2,
+    }));
+  });
+
+  it('remove value legado sem derivar value_cents e preserva importHash fora do payload', async () => {
+    await updateWithLegacyBefore({
+      category: 'Outros',
+      source: 'manual',
+      value: 99.99,
+      importHash: 'x'.repeat(64),
+    });
+
+    const txPayload = lastTransactionUpdatePayload();
+    expect(txPayload['value']).toEqual({ _deleteField: true });
+    expect(txPayload).not.toHaveProperty('value_cents');
+    expect(txPayload).not.toHaveProperty('importHash');
+  });
+
+  it('remove campos opcionais inválidos que violariam isValidTransactionBase', async () => {
+    await updateWithLegacyBefore({
+      category: 'Outros',
+      source: 'manual',
+      tags: 'not-a-list',
+      isRecurring: 'no',
+      isDeleted: 'false',
+      account: '',
+      accountId: 123,
+      cardId: null,
+      fitId: 42,
+    });
+
+    const txPayload = lastTransactionUpdatePayload();
+    for (const field of ['tags', 'isRecurring', 'isDeleted', 'account', 'accountId', 'cardId', 'fitId']) {
+      expect(txPayload[field]).toEqual({ _deleteField: true });
+    }
+  });
+
+  it('remove reconciliationStatus/reconciliationSource/reconciledBy inválidos', async () => {
+    await updateWithLegacyBefore({
+      category: 'Outros',
+      source: 'manual',
+      reconciliationStatus: 'pending',
+      reconciliationSource: 'manual',
+      reconciledBy: 123,
+    });
+
+    const txPayload = lastTransactionUpdatePayload();
+    expect(txPayload['reconciliationStatus']).toEqual({ _deleteField: true });
+    expect(txPayload['reconciliationSource']).toEqual({ _deleteField: true });
+    expect(txPayload['reconciledBy']).toEqual({ _deleteField: true });
+  });
+
+  it('remove reconciledAt string, number, null ou inválido para não converter timestamp histórico no client', async () => {
+    for (const reconciledAt of ['2026-01-01T00:00:00.000Z', 1767225600000, null, { seconds: 1 }]) {
+      vi.clearAllMocks();
+      mockBatchCommit.mockResolvedValue(undefined);
+
+      await updateWithLegacyBefore({
+        category: 'Outros',
+        source: 'manual',
+        reconciledAt,
+      });
+
+      expect(lastTransactionUpdatePayload()['reconciledAt']).toEqual({ _deleteField: true });
+    }
+  });
+
+  it('preserva campos de conciliação válidos por ausência de patch', async () => {
+    const reconciledAt = { toMillis: vi.fn(() => 1767225600000) };
+
+    await updateWithLegacyBefore({
+      category: 'Outros',
+      source: 'manual',
+      reconciliationStatus: 'reconciled',
+      reconciliationSource: 'import',
+      reconciledAt,
+      reconciledBy: 'uid1',
+    });
+
+    const txPayload = lastTransactionUpdatePayload();
+    expect(txPayload).not.toHaveProperty('reconciliationStatus');
+    expect(txPayload).not.toHaveProperty('reconciliationSource');
+    expect(txPayload).not.toHaveProperty('reconciledAt');
+    expect(txPayload).not.toHaveProperty('reconciledBy');
+  });
+
+  it('não altera createdAt existente nem tenta reparar createdAt ausente', async () => {
+    await updateWithLegacyBefore({
+      category: 'Outros',
+      source: 'manual',
+      createdAt: { seconds: 1 },
+    });
+    expect(lastTransactionUpdatePayload()).not.toHaveProperty('createdAt');
+
+    vi.clearAllMocks();
+    mockBatchCommit.mockResolvedValue(undefined);
+    await updateWithLegacyBefore({ category: 'Outros', source: 'manual' });
+    expect(lastTransactionUpdatePayload()).not.toHaveProperty('createdAt');
   });
 
   it('_lastOpId não interfere com importHash: importHash não aparece no updatePayload', async () => {
@@ -917,6 +1092,53 @@ describe('FirestoreService.batchUpdateTransactionsWithHistory', () => {
     }));
     expect(after).not.toHaveProperty('importHash');
     expect(after).not.toHaveProperty('value');
+  });
+
+  it('aplica sanitização profunda no bulk update e remove deletes do history.after', async () => {
+    const snap = [{
+      id: 'tx-deep-legacy',
+      oldCategory: 'Outros',
+      before: {
+        category: 'Outros',
+        source: 'CSV',
+        value_cents: 1234,
+        value: 12.34,
+        metadata: 'trash',
+        reconciliationStatus: 'pending',
+        reconciliationSource: 'manual',
+        reconciledAt: '2026-01-01T00:00:00.000Z',
+        importHash: 'x'.repeat(64),
+      },
+    }];
+
+    await FirestoreService.batchUpdateTransactionsWithHistory('uid1', snap, { category: 'Alimentação' }, 'corr-deep');
+
+    const txPayload = lastTransactionUpdatePayload();
+    const histPayload = lastHistoryPayload();
+    const before = histPayload['before'] as Record<string, unknown>;
+    const after = histPayload['after'] as Record<string, unknown>;
+
+    expect(txPayload).toEqual(expect.objectContaining({
+      category: 'Alimentação',
+      source: 'csv',
+      schemaVersion: 2,
+      value_cents: 1234,
+      metadata: { _deleteField: true },
+      reconciliationStatus: { _deleteField: true },
+      reconciliationSource: { _deleteField: true },
+      reconciledAt: { _deleteField: true },
+    }));
+    expect(txPayload['value']).toEqual({ _deleteField: true });
+    expect(txPayload).not.toHaveProperty('importHash');
+
+    for (const field of ['metadata', 'value', 'importHash']) {
+      expect(before).not.toHaveProperty(field);
+      expect(after).not.toHaveProperty(field);
+    }
+    for (const field of ['reconciliationStatus', 'reconciliationSource', 'reconciledAt']) {
+      expect(after).not.toHaveProperty(field);
+    }
+    expect(after['source']).toBe('csv');
   });
 
   it('não cria amount_cents a partir de value legado nem de value_cents inválido', async () => {

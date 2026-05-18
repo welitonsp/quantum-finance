@@ -28,6 +28,7 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   serverTimestamp,
   setDoc,
@@ -741,6 +742,31 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       });
     };
 
+    const commitPatchUpdateWithHistoryBatch = async (
+      txId: string,
+      opId: string,
+      txPatch: Record<string, unknown> = {},
+      historyOverrides: Record<string, unknown> = {},
+    ) => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'users', UID_A, 'transactions', txId), {
+        ...txPatch,
+        updatedAt: serverTimestamp(),
+        _lastOpId: opId,
+      });
+      batch.set(doc(db, 'users', UID_A, 'transactions', txId, 'history', opId), {
+        action: 'UPDATE',
+        txId,
+        createdAt: serverTimestamp(),
+        schemaVersion: 1,
+        origin: 'manual',
+        ...historyOverrides,
+      });
+      return batch.commit();
+    };
+
     // F1: positivo — UPDATE manual com _lastOpId e history pareado no mesmo writeBatch
     it('F1 — UPDATE manual com _lastOpId e history pareado deve passar', async () => {
       await assertSucceeds(commitUpdateWithHistoryBatch(TX_REAL, 'op-f1-manual'));
@@ -884,6 +910,238 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
           before: { category: 'Alimentação', type: 'despesa' },
           after: { category: 'Transporte', type: 'saida' },
           changedFields: ['category', 'type'],
+        }),
+      );
+    });
+
+    it('F19 — UPDATE com campo extra legado fora da whitelist falha mesmo com Modelo A correto', async () => {
+      const txId = 'tx-f19-extra-field-raw';
+      await seedLegacyTransaction(txId, { metadata: 'trash' });
+
+      await assertFails(
+        commitUpdateWithHistoryBatch(txId, 'op-f19-extra-field-raw', {
+          metadata: 'trash',
+          category: 'Transporte',
+        }, {
+          before: { category: 'Alimentação' },
+          after: { category: 'Transporte' },
+          changedFields: ['category'],
+        }),
+      );
+    });
+
+    it('F20 — UPDATE removendo campo extra legado via deleteField passa com Modelo A correto', async () => {
+      const txId = 'tx-f20-extra-field-repaired';
+      await seedLegacyTransaction(txId, { metadata: 'trash' });
+
+      await assertSucceeds(
+        commitPatchUpdateWithHistoryBatch(txId, 'op-f20-extra-field-repaired', {
+          metadata: deleteField(),
+          category: 'Transporte',
+        }, {
+          before: { category: 'Alimentação' },
+          after: { category: 'Transporte' },
+          changedFields: ['category'],
+        }),
+      );
+    });
+
+    it('F21 — UPDATE preservando source CSV em maiúsculas falha', async () => {
+      const txId = 'tx-f21-source-uppercase-raw';
+      await seedLegacyTransaction(txId, { source: 'CSV' });
+
+      await assertFails(
+        commitUpdateWithHistoryBatch(txId, 'op-f21-source-uppercase-raw', {
+          source: 'CSV',
+          category: 'Transporte',
+        }, {
+          before: { category: 'Alimentação', source: 'CSV' },
+          after: { category: 'Transporte', source: 'CSV' },
+          changedFields: ['category'],
+        }),
+      );
+    });
+
+    it('F22 — UPDATE normalizando source CSV para csv passa', async () => {
+      const txId = 'tx-f22-source-uppercase-repaired';
+      await seedLegacyTransaction(txId, { source: 'CSV' });
+
+      await assertSucceeds(
+        commitPatchUpdateWithHistoryBatch(txId, 'op-f22-source-uppercase-repaired', {
+          source: 'csv',
+          category: 'Transporte',
+        }, {
+          before: { category: 'Alimentação', source: 'CSV' },
+          after: { category: 'Transporte', source: 'csv' },
+          changedFields: ['category', 'source'],
+        }),
+      );
+    });
+
+    it('F23 — UPDATE com reconciledAt string ou number falha sem repair e passa removendo o campo', async () => {
+      const cases: Array<[string, string | number]> = [
+        ['tx-f23-reconciled-at-string', '2026-01-01T00:00:00.000Z'],
+        ['tx-f23-reconciled-at-number', 1767225600000],
+      ];
+
+      for (const [txId, reconciledAt] of cases) {
+        await seedLegacyTransaction(txId, { reconciledAt });
+
+        await assertFails(
+          commitUpdateWithHistoryBatch(txId, `${txId}-raw`, {
+            reconciledAt,
+            category: 'Transporte',
+          }, {
+            before: { category: 'Alimentação' },
+            after: { category: 'Transporte' },
+            changedFields: ['category'],
+          }),
+        );
+
+        await assertSucceeds(
+          commitPatchUpdateWithHistoryBatch(txId, `${txId}-repaired`, {
+            reconciledAt: deleteField(),
+            category: 'Transporte',
+          }, {
+            before: { category: 'Alimentação' },
+            after: { category: 'Transporte' },
+            changedFields: ['category'],
+          }),
+        );
+      }
+    });
+
+    it('F24 — UPDATE com reconciliationStatus/reconciliationSource inválidos passa após remoção', async () => {
+      const txId = 'tx-f24-reconciliation-fields';
+      await seedLegacyTransaction(txId, {
+        reconciliationStatus: 'pending',
+        reconciliationSource: 'manual',
+      });
+
+      await assertFails(
+        commitUpdateWithHistoryBatch(txId, 'op-f24-reconciliation-fields-raw', {
+          reconciliationStatus: 'pending',
+          reconciliationSource: 'manual',
+          category: 'Transporte',
+        }, {
+          before: { category: 'Alimentação' },
+          after: { category: 'Transporte' },
+          changedFields: ['category'],
+        }),
+      );
+
+      await assertSucceeds(
+        commitPatchUpdateWithHistoryBatch(txId, 'op-f24-reconciliation-fields-repaired', {
+          reconciliationStatus: deleteField(),
+          reconciliationSource: deleteField(),
+          category: 'Transporte',
+        }, {
+          before: { category: 'Alimentação' },
+          after: { category: 'Transporte' },
+          changedFields: ['category'],
+        }),
+      );
+    });
+
+    it('F25 — UPDATE sem _lastOpId continua falhando', async () => {
+      const txId = 'tx-f25-no-last-op-id';
+      await seedLegacyTransaction(txId, {});
+
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', txId);
+      await assertFails(updateDoc(txDocRef, {
+        category: 'Transporte',
+        updatedAt: serverTimestamp(),
+      }));
+    });
+
+    it('F26 — UPDATE com _lastOpId sem history pareado continua falhando', async () => {
+      const txId = 'tx-f26-no-paired-history';
+      await seedLegacyTransaction(txId, {});
+
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txDocRef = doc(alice.firestore(), 'users', UID_A, 'transactions', txId);
+      await assertFails(updateDoc(txDocRef, {
+        category: 'Transporte',
+        updatedAt: serverTimestamp(),
+        _lastOpId: 'op-f26-no-paired-history',
+      }));
+    });
+
+    it('F27 — UPDATE tentando alterar importHash continua falhando em batch pareado', async () => {
+      const txId = 'tx-f27-importhash-change';
+      await seedLegacyTransaction(txId, {});
+
+      await assertFails(
+        commitPatchUpdateWithHistoryBatch(txId, 'op-f27-importhash-change', {
+          importHash: IMPORT_HASH_B,
+          category: 'Transporte',
+        }, {
+          before: { category: 'Alimentação' },
+          after: { category: 'Transporte' },
+          changedFields: ['category'],
+        }),
+      );
+    });
+
+    it('F28 — UPDATE removendo value legado passa e value não permanece no documento final', async () => {
+      const txId = 'tx-f28-value-legacy-repaired';
+      await seedLegacyTransaction(txId, { value: 100 });
+
+      await assertSucceeds(
+        commitPatchUpdateWithHistoryBatch(txId, 'op-f28-value-legacy-repaired', {
+          value: deleteField(),
+          category: 'Transporte',
+        }, {
+          before: { category: 'Alimentação' },
+          after: { category: 'Transporte' },
+          changedFields: ['category'],
+        }),
+      );
+    });
+
+    it('F29 — UPDATE mantendo importHash sem alteração passa com history pareado', async () => {
+      const txId = 'tx-f29-importhash-preserved';
+      await seedLegacyTransaction(txId, {});
+
+      await assertSucceeds(
+        commitPatchUpdateWithHistoryBatch(txId, 'op-f29-importhash-preserved', {
+          category: 'Transporte',
+        }, {
+          before: { category: 'Alimentação' },
+          after: { category: 'Transporte' },
+          changedFields: ['category'],
+        }),
+      );
+    });
+
+    it('F30 — documento sem createdAt não é corrigível pelo client sem relaxar a rule', async () => {
+      const txId = 'tx-f30-missing-created-at';
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const data = baseUpdatePayload() as Record<string, unknown>;
+        delete data['createdAt'];
+        data['updatedAt'] = FIXED_TS;
+        await setDoc(doc(ctx.firestore(), 'users', UID_A, 'transactions', txId), data);
+      });
+
+      await assertFails(
+        commitPatchUpdateWithHistoryBatch(txId, 'op-f30-missing-created-at-no-repair', {
+          category: 'Transporte',
+        }, {
+          before: { category: 'Alimentação' },
+          after: { category: 'Transporte' },
+          changedFields: ['category'],
+        }),
+      );
+
+      await assertFails(
+        commitPatchUpdateWithHistoryBatch(txId, 'op-f30-missing-created-at-attempted-repair', {
+          createdAt: serverTimestamp(),
+          category: 'Transporte',
+        }, {
+          before: { category: 'Alimentação' },
+          after: { category: 'Transporte' },
+          changedFields: ['category'],
         }),
       );
     });
