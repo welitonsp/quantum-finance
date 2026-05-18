@@ -5,8 +5,12 @@ const { describe, it } = require('node:test');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
 
-const AI_CALLABLES_PLANNED_FOR_GRADUAL_ENFORCEMENT = [
+const CALLABLES_WITH_APP_CHECK_ENFORCEMENT = [
+  'createTransaction',
   'categorizeTransactionsBatch',
+];
+
+const AI_CALLABLES_STILL_PENDING_GRADUAL_ENFORCEMENT = [
   'chatWithQuantumAI',
   'generateAuditReport',
 ];
@@ -18,17 +22,23 @@ function callableOptions(exportName) {
   return match[1];
 }
 
-describe('App Check guardrails before AI enforcement rollout', () => {
-  it('keeps createTransaction enforced', () => {
-    assert.match(callableOptions('createTransaction'), /\benforceAppCheck\s*:\s*true\b/);
+describe('App Check guardrails during gradual AI enforcement rollout', () => {
+  it('enforces App Check on createTransaction and AI batch categorization only', () => {
+    for (const callableName of CALLABLES_WITH_APP_CHECK_ENFORCEMENT) {
+      assert.match(
+        callableOptions(callableName),
+        /\benforceAppCheck\s*:\s*true\b/,
+        `${callableName} must enforce App Check in the current rollout state`,
+      );
+    }
   });
 
-  it('keeps AI callables temporarily without enforcement until the explicit rollout phase', () => {
-    for (const callableName of AI_CALLABLES_PLANNED_FOR_GRADUAL_ENFORCEMENT) {
+  it('keeps chat and audit AI callables temporarily without enforcement', () => {
+    for (const callableName of AI_CALLABLES_STILL_PENDING_GRADUAL_ENFORCEMENT) {
       assert.doesNotMatch(
         callableOptions(callableName),
         /\benforceAppCheck\b/,
-        `${callableName} must remain unenforced in 10C-2A; change this only in the planned rollout phase`,
+        `${callableName} must remain unenforced until its explicit rollout phase`,
       );
     }
   });

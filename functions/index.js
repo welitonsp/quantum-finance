@@ -383,7 +383,7 @@ REGRAS: Seja direto e objetivo. Foque em anomalias. Use alertas ("🔴 Alerta", 
 // FUNÇÃO 1 — Categorização em Batch
 // ═══════════════════════════════════════════════════════════════════════════════
 exports.categorizeTransactionsBatch = onCall(
-  { secrets: [GEMINI_API_KEY], region: 'southamerica-east1', timeoutSeconds: 30 },
+  { secrets: [GEMINI_API_KEY], region: 'southamerica-east1', timeoutSeconds: 30, enforceAppCheck: true },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
 
