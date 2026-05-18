@@ -115,8 +115,9 @@ Quantum Finance usa Firebase App Check com reCAPTCHA v3 para proteger os endpoin
 
 Estado atual:
 - `createTransaction` já usa `enforceAppCheck: true`.
-- Callables de IA (`categorizeTransactionsBatch`, `chatWithQuantumAI`, `generateAuditReport`) ainda exigem autenticação, mas não têm enforcement de App Check.
-- A próxima etapa planejada é ativar enforcement gradual nas callables de IA, começando pela categorização em lote.
+- `categorizeTransactionsBatch` já usa `enforceAppCheck: true` como primeiro passo do rollout gradual em IA.
+- `chatWithQuantumAI` e `generateAuditReport` ainda exigem autenticação, mas não têm enforcement de App Check.
+- A próxima etapa planejada é continuar o enforcement gradual nas callables de IA pendentes.
 - `consumeAppCheckToken` não está habilitado nas callables.
 
 | Variável | Visibilidade | Uso |
@@ -127,7 +128,7 @@ Estado atual:
 
 App Check é ignorado quando `VITE_USE_EMULATOR=true`, em testes, ou quando `VITE_RECAPTCHA_SITE_KEY` não está definido. O bundle só emite tokens quando a site key está configurada.
 
-Antes de ativar enforcement em IA, Vercel Preview e Firebase Hosting Preview precisam de estratégia operacional explícita:
+Antes de ampliar enforcement nas callables de IA pendentes, Vercel Preview e Firebase Hosting Preview precisam de estratégia operacional explícita:
 - configurar `VITE_RECAPTCHA_SITE_KEY` no ambiente que deve emitir token;
 - registrar domínios autorizados de forma controlada no Firebase/App Check;
 - usar `VITE_FIREBASE_APPCHECK_DEBUG_TOKEN` apenas em DEV ou preview controlado, sem commitar valor real;
