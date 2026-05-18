@@ -66,7 +66,37 @@ const transactionWriteUpdateSchema = transactionWriteCreateSchema.partial()
   })
   .refine(value => Object.keys(value).length > 0, 'Atualização vazia.');
 
+const TRANSACTION_ALLOWED_KEYS = new Set([
+  'description',
+  'value_cents',
+  'schemaVersion',
+  'type',
+  'category',
+  'date',
+  'source',
+  'account',
+  'accountId',
+  'cardId',
+  'fitId',
+  'tags',
+  'isRecurring',
+  'importHash',
+  'createdAt',
+  'updatedAt',
+  'isDeleted',
+  'deletedAt',
+  'reconciliationStatus',
+  'reconciliationSource',
+  'reconciledAt',
+  'reconciledBy',
+  '_lastOpId',
+]);
+
 const HISTORY_SNAPSHOT_FORBIDDEN_FIELDS = new Set(['id', 'uid', 'value', 'importHash']);
+const HISTORY_SNAPSHOT_ALLOWED_KEYS = new Set(
+  [...TRANSACTION_ALLOWED_KEYS].filter(key => !HISTORY_SNAPSHOT_FORBIDDEN_FIELDS.has(key)),
+);
+const LEGACY_REPAIR_DELETE_SENTINELS = new WeakSet<object>();
 
 export interface TransactionUpdateDTO {
   description?: string;
@@ -196,6 +226,30 @@ function canonicalEquals(left: unknown, right: unknown): boolean {
   return false;
 }
 
+function markLegacyRepairDeleteField(): unknown {
+  const sentinel = deleteField();
+  if (sentinel !== null && typeof sentinel === 'object') {
+    LEGACY_REPAIR_DELETE_SENTINELS.add(sentinel);
+  }
+  return sentinel;
+}
+
+function isLegacyRepairDeleteField(value: unknown): boolean {
+  return value !== null
+    && typeof value === 'object'
+    && LEGACY_REPAIR_DELETE_SENTINELS.has(value);
+}
+
+function isStringSizedValue(value: unknown, min: number, max: number): boolean {
+  return typeof value === 'string' && value.length >= min && value.length <= max;
+}
+
+function isFirestoreTimestampLike(value: unknown): boolean {
+  return value !== null
+    && typeof value === 'object'
+    && typeof (value as { toMillis?: unknown }).toMillis === 'function';
+}
+
 function hasAnyKey(data: Record<string, unknown>, keys: readonly string[]): boolean {
   return keys.some(key => key in data);
 }
@@ -294,7 +348,12 @@ function normalizeUpdatePayload(data: TransactionUpdateDTO): Record<string, unkn
 function sanitizeHistorySnapshot(snapshot: Record<string, unknown>): Record<string, unknown> {
   const sanitized: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(snapshot)) {
-    if (!HISTORY_SNAPSHOT_FORBIDDEN_FIELDS.has(key) && value !== undefined) {
+    if (
+      HISTORY_SNAPSHOT_ALLOWED_KEYS.has(key)
+      && !HISTORY_SNAPSHOT_FORBIDDEN_FIELDS.has(key)
+      && value !== undefined
+      && !isLegacyRepairDeleteField(value)
+    ) {
       sanitized[key] = value;
     }
   }
@@ -308,23 +367,79 @@ function buildLegacyTransactionRepairPayload(snapshot?: Record<string, unknown>)
 
   if (!snapshot) return patch;
 
+  for (const key of Object.keys(snapshot)) {
+    if (!TRANSACTION_ALLOWED_KEYS.has(key)) {
+      patch[key] = markLegacyRepairDeleteField();
+    }
+  }
+
   const type = snapshot['type'];
-  if (type === 'entrada' || type === 'receita') {
+  const normalizedType = typeof type === 'string' ? type.toLowerCase() : undefined;
+  if (normalizedType === 'entrada' || normalizedType === 'receita') {
     patch['type'] = 'entrada';
-  } else if (type === 'saida' || type === 'despesa') {
+  } else if (normalizedType === 'saida' || normalizedType === 'despesa') {
     patch['type'] = 'saida';
   }
 
   const source = snapshot['source'];
-  if (SOURCE_VALUES.includes(source as FinancialSource)) {
-    patch['source'] = source;
-  } else if (source === undefined) {
+  const normalizedSource = typeof source === 'string' ? source.toLowerCase() : undefined;
+  if (SOURCE_VALUES.includes(normalizedSource as FinancialSource)) {
+    patch['source'] = normalizedSource;
+  } else {
     patch['source'] = 'manual';
   }
 
   const rawCents = snapshot['value_cents'];
   if (typeof rawCents === 'number' && Number.isSafeInteger(rawCents) && rawCents > 0) {
     patch['value_cents'] = rawCents;
+  }
+
+  if ('tags' in snapshot && !Array.isArray(snapshot['tags'])) {
+    patch['tags'] = markLegacyRepairDeleteField();
+  }
+
+  if ('isRecurring' in snapshot && typeof snapshot['isRecurring'] !== 'boolean') {
+    patch['isRecurring'] = markLegacyRepairDeleteField();
+  }
+
+  if ('isDeleted' in snapshot && typeof snapshot['isDeleted'] !== 'boolean') {
+    patch['isDeleted'] = markLegacyRepairDeleteField();
+  }
+
+  if ('account' in snapshot && !isStringSizedValue(snapshot['account'], 1, 120)) {
+    patch['account'] = markLegacyRepairDeleteField();
+  }
+
+  if ('accountId' in snapshot && !isStringSizedValue(snapshot['accountId'], 1, 120)) {
+    patch['accountId'] = markLegacyRepairDeleteField();
+  }
+
+  if ('cardId' in snapshot && !isStringSizedValue(snapshot['cardId'], 1, 120)) {
+    patch['cardId'] = markLegacyRepairDeleteField();
+  }
+
+  if (
+    'fitId' in snapshot
+    && snapshot['fitId'] !== null
+    && !isStringSizedValue(snapshot['fitId'], 1, 160)
+  ) {
+    patch['fitId'] = markLegacyRepairDeleteField();
+  }
+
+  if ('reconciliationStatus' in snapshot && snapshot['reconciliationStatus'] !== 'reconciled') {
+    patch['reconciliationStatus'] = markLegacyRepairDeleteField();
+  }
+
+  if ('reconciliationSource' in snapshot && snapshot['reconciliationSource'] !== 'import') {
+    patch['reconciliationSource'] = markLegacyRepairDeleteField();
+  }
+
+  if ('reconciledAt' in snapshot && !isFirestoreTimestampLike(snapshot['reconciledAt'])) {
+    patch['reconciledAt'] = markLegacyRepairDeleteField();
+  }
+
+  if ('reconciledBy' in snapshot && !isStringSizedValue(snapshot['reconciledBy'], 1, 128)) {
+    patch['reconciledBy'] = markLegacyRepairDeleteField();
   }
 
   return patch;
