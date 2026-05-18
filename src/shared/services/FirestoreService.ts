@@ -301,6 +301,35 @@ function sanitizeHistorySnapshot(snapshot: Record<string, unknown>): Record<stri
   return sanitized;
 }
 
+function buildLegacyTransactionRepairPayload(snapshot?: Record<string, unknown>): Record<string, unknown> {
+  const patch: Record<string, unknown> = {
+    schemaVersion: 2,
+  };
+
+  if (!snapshot) return patch;
+
+  const type = snapshot['type'];
+  if (type === 'entrada' || type === 'receita') {
+    patch['type'] = 'entrada';
+  } else if (type === 'saida' || type === 'despesa') {
+    patch['type'] = 'saida';
+  }
+
+  const source = snapshot['source'];
+  if (SOURCE_VALUES.includes(source as FinancialSource)) {
+    patch['source'] = source;
+  } else if (source === undefined) {
+    patch['source'] = 'manual';
+  }
+
+  const rawCents = snapshot['value_cents'];
+  if (typeof rawCents === 'number' && Number.isSafeInteger(rawCents) && rawCents > 0) {
+    patch['value_cents'] = rawCents;
+  }
+
+  return patch;
+}
+
 function buildSoftDeletePatch(existing: Record<string, unknown>): Record<string, unknown> {
   const type = canonicalizeTransactionType(existing['type'] as string | undefined);
   const srcRaw = existing['source'] as string | undefined;
@@ -430,7 +459,10 @@ export const FirestoreService = {
     },
   ): Promise<void> {
     if (!uid || !id) throw new Error('[Firestore][updateTransactionWithHistory] UID ou ID ausente.');
-    const payload = normalizeUpdatePayload(data);
+    const payload = {
+      ...buildLegacyTransactionRepairPayload(historyEvent.before),
+      ...normalizeUpdatePayload(data),
+    };
     const txRef = doc(txCol(uid), id);
     const historyRef = doc(collection(db, 'users', uid, 'transactions', id, 'history'));
     const timestamp = serverTimestamp();
@@ -567,9 +599,14 @@ export const FirestoreService = {
       chunk.forEach(item => {
         const txRef = doc(txCol(uid), item.id);
         const historyRef = doc(collection(db, 'users', uid, 'transactions', item.id, 'history'));
+        const repairPayload = buildLegacyTransactionRepairPayload(item.before);
+        const updatePayload = {
+          ...repairPayload,
+          ...normalizedUpdates,
+        };
 
         batch.update(txRef, {
-          ...normalizedUpdates,
+          ...updatePayload,
           uid: deleteField(),
           id: deleteField(),
           value: deleteField(),
@@ -579,7 +616,7 @@ export const FirestoreService = {
 
         // History BULK_UPDATE
         const before = item.before ?? { category: item.oldCategory };
-        const after = { ...before, ...normalizedUpdates };
+        const after = { ...before, ...updatePayload };
 
         const historyPayload: Record<string, unknown> = {
           action: 'BULK_UPDATE',

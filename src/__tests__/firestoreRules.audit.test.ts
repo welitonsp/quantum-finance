@@ -728,6 +728,19 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       return batch.commit();
     };
 
+    const seedLegacyTransaction = async (
+      txId: string,
+      overrides: Record<string, unknown>,
+    ) => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID_A, 'transactions', txId), {
+          ...baseUpdatePayload(),
+          updatedAt: FIXED_TS,
+          ...overrides,
+        });
+      });
+    };
+
     // F1: positivo — UPDATE manual com _lastOpId e history pareado no mesmo writeBatch
     it('F1 — UPDATE manual com _lastOpId e history pareado deve passar', async () => {
       await assertSucceeds(commitUpdateWithHistoryBatch(TX_REAL, 'op-f1-manual'));
@@ -840,6 +853,38 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
     it('F16 — BULK_UPDATE com origin manual deve falhar', async () => {
       await assertFails(
         commitUpdateWithHistoryBatch(TX_REAL, 'op-f16-cross', {}, { action: 'BULK_UPDATE', origin: 'manual' }),
+      );
+    });
+
+    it('F17 — UPDATE de category preservando type legado deve falhar mesmo com Modelo A correto', async () => {
+      const txId = 'tx-f17-legacy-type-raw';
+      await seedLegacyTransaction(txId, { type: 'despesa' });
+
+      await assertFails(
+        commitUpdateWithHistoryBatch(txId, 'op-f17-legacy-type-raw', {
+          type: 'despesa',
+          category: 'Transporte',
+        }, {
+          before: { category: 'Alimentação', type: 'despesa' },
+          after: { category: 'Transporte', type: 'despesa' },
+          changedFields: ['category'],
+        }),
+      );
+    });
+
+    it('F18 — UPDATE de category reparando type legado para canonical passa com Modelo A correto', async () => {
+      const txId = 'tx-f18-legacy-type-repaired';
+      await seedLegacyTransaction(txId, { type: 'despesa' });
+
+      await assertSucceeds(
+        commitUpdateWithHistoryBatch(txId, 'op-f18-legacy-type-repaired', {
+          type: 'saida',
+          category: 'Transporte',
+        }, {
+          before: { category: 'Alimentação', type: 'despesa' },
+          after: { category: 'Transporte', type: 'saida' },
+          changedFields: ['category', 'type'],
+        }),
       );
     });
   });
