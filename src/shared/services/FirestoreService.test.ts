@@ -485,6 +485,37 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
     expect(txPayload['_lastOpId']).toBe('mock-doc-id');
   });
 
+  it('repara shape legado seguro no update individual sem alterar importHash nem reintroduzir value', async () => {
+    await FirestoreService.updateTransactionWithHistory('uid1', 'tx-legacy', {
+      category: 'Alimentação',
+    }, {
+      before: {
+        category: 'Outros',
+        type: 'despesa',
+        source: 'csv',
+        schemaVersion: 1,
+        value_cents: 1234,
+        importHash: 'x'.repeat(64),
+        value: 12.34,
+      },
+      after: { category: 'Alimentação', type: 'saida', source: 'csv', schemaVersion: 2, value_cents: 1234 },
+      changedFields: ['category', 'type', 'schemaVersion'],
+    });
+
+    const [, txPayload] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+
+    expect(txPayload).toEqual(expect.objectContaining({
+      category: 'Alimentação',
+      type: 'saida',
+      source: 'csv',
+      schemaVersion: 2,
+      value_cents: 1234,
+      _lastOpId: 'mock-doc-id',
+    }));
+    expect(txPayload['value']).toEqual({ _deleteField: true });
+    expect(txPayload).not.toHaveProperty('importHash');
+  });
+
   it('_lastOpId não interfere com importHash: importHash não aparece no updatePayload', async () => {
     await FirestoreService.updateTransactionWithHistory('uid1', 'tx-1', {
       category: 'Alimentação',
@@ -843,6 +874,49 @@ describe('FirestoreService.batchUpdateTransactionsWithHistory', () => {
       expect(before1).not.toHaveProperty(forbidden);
       expect(after1).not.toHaveProperty(forbidden);
     }
+  });
+
+  it('repara shape legado seguro no bulk update antes de enviar category', async () => {
+    const snap = [{
+      id: 'tx-legacy',
+      oldCategory: 'Outros',
+      before: {
+        category: 'Outros',
+        type: 'despesa',
+        source: 'csv',
+        schemaVersion: 1,
+        value_cents: 1234,
+        importHash: 'x'.repeat(64),
+        value: 12.34,
+      },
+    }];
+
+    await FirestoreService.batchUpdateTransactionsWithHistory('uid1', snap, { category: 'Alimentação' }, 'corr-legacy');
+
+    const [, txPayload] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [, histPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const after = histPayload['after'] as Record<string, unknown>;
+
+    expect(txPayload).toEqual(expect.objectContaining({
+      category: 'Alimentação',
+      type: 'saida',
+      source: 'csv',
+      schemaVersion: 2,
+      value_cents: 1234,
+      _lastOpId: 'mock-doc-id',
+    }));
+    expect(txPayload['value']).toEqual({ _deleteField: true });
+    expect(txPayload).not.toHaveProperty('importHash');
+    expect(histPayload['changedFields']).toEqual(['category']);
+    expect(after).toEqual(expect.objectContaining({
+      category: 'Alimentação',
+      type: 'saida',
+      source: 'csv',
+      schemaVersion: 2,
+      value_cents: 1234,
+    }));
+    expect(after).not.toHaveProperty('importHash');
+    expect(after).not.toHaveProperty('value');
   });
 
   it('não cria amount_cents a partir de value legado nem de value_cents inválido', async () => {
