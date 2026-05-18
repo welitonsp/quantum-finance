@@ -113,15 +113,25 @@ Quantum Finance adota política restritiva de logging para reduzir risco de vaza
 
 Quantum Finance usa Firebase App Check com reCAPTCHA v3 para proteger os endpoints do Firebase contra abusos.
 
-**Fase atual: monitor-only** — tokens são enviados mas nenhuma requisição é bloqueada.
-Observe as métricas no painel App Check por ≥ 7 dias antes de ativar enforcement.
+Estado atual:
+- `createTransaction` já usa `enforceAppCheck: true`.
+- Callables de IA (`categorizeTransactionsBatch`, `chatWithQuantumAI`, `generateAuditReport`) ainda exigem autenticação, mas não têm enforcement de App Check.
+- A próxima etapa planejada é ativar enforcement gradual nas callables de IA, começando pela categorização em lote.
+- `consumeAppCheckToken` não está habilitado nas callables.
 
 | Variável | Visibilidade | Uso |
 |---|---|---|
-| `VITE_RECAPTCHA_SITE_KEY` | Pública | Identificador da Web App no reCAPTCHA; seguro no `.env.local` |
-| `VITE_FIREBASE_APPCHECK_DEBUG_TOKEN` | **Sensível** | Apenas local/CI; nunca commitar valor real |
+| `VITE_RECAPTCHA_SITE_KEY` | Pública | Necessária para o bundle emitir tokens App Check |
+| `VITE_FIREBASE_APPCHECK_DEBUG_TOKEN` | **Sensível** | Apenas DEV/preview controlado; nunca commitar valor real |
+| `VITE_USE_EMULATOR` | Pública | Quando `true`, pula App Check e conecta Functions Emulator |
 
-App Check é ignorado quando `VITE_USE_EMULATOR=true` ou quando `VITE_RECAPTCHA_SITE_KEY` não está definido.
+App Check é ignorado quando `VITE_USE_EMULATOR=true`, em testes, ou quando `VITE_RECAPTCHA_SITE_KEY` não está definido. O bundle só emite tokens quando a site key está configurada.
+
+Antes de ativar enforcement em IA, Vercel Preview e Firebase Hosting Preview precisam de estratégia operacional explícita:
+- configurar `VITE_RECAPTCHA_SITE_KEY` no ambiente que deve emitir token;
+- registrar domínios autorizados de forma controlada no Firebase/App Check;
+- usar `VITE_FIREBASE_APPCHECK_DEBUG_TOKEN` apenas em DEV ou preview controlado, sem commitar valor real;
+- evitar wildcard amplo ou domínio genérico inseguro para previews efêmeros.
 
 ## Licença
 
