@@ -25,7 +25,7 @@ import {
   SOURCE_VALUES,
   type FinancialSource,
 } from '../schemas/financialSchemas';
-import { fromCentavos, toCentavos, type Centavos, type MoneyInput } from '../types/money';
+import { fromCentavos, type Centavos, type MoneyInput } from '../types/money';
 import type { ImportResult, ReconciliationSource, ReconciliationStatus, Transaction } from '../types/transaction';
 import {
   canonicalizeTransactionType,
@@ -123,8 +123,11 @@ export interface TransactionUpdateDTO {
 export type ManualTransactionCreateDTO = Partial<Transaction>;
 
 function resolveCentavos(data: Pick<TransactionUpdateDTO, 'value' | 'value_cents'>): Centavos {
-  if (data.value_cents !== undefined) return Math.abs(Math.round(data.value_cents)) as Centavos;
-  if (data.value !== undefined) return Math.abs(toCentavos(data.value)) as Centavos;
+  if (data.value_cents !== undefined && Number.isSafeInteger(data.value_cents)) {
+    return Math.abs(Math.round(data.value_cents)) as Centavos;
+  }
+  // FIX: Não usar data.value para gerar value_cents no cliente.
+  // O formulário deve enviar value_cents explicitamente.
   return 0 as Centavos;
 }
 
@@ -367,32 +370,37 @@ function buildLegacyTransactionRepairPayload(snapshot?: Record<string, unknown>)
 
   if (!snapshot) return patch;
 
+  // 1. Limpeza de campos não autorizados (ex: uid, id, value legados no root)
   for (const key of Object.keys(snapshot)) {
     if (!TRANSACTION_ALLOWED_KEYS.has(key)) {
       patch[key] = markLegacyRepairDeleteField();
     }
   }
 
-  const type = snapshot['type'];
-  const normalizedType = typeof type === 'string' ? type.toLowerCase() : undefined;
-  if (normalizedType === 'entrada' || normalizedType === 'receita') {
+  // 2. Normalização de campos essenciais (Enum-like)
+  const type = (snapshot['type'] as string | undefined)?.toLowerCase();
+  if (type === 'entrada' || type === 'receita') {
     patch['type'] = 'entrada';
-  } else if (normalizedType === 'saida' || normalizedType === 'despesa') {
+  } else if (type === 'saida' || type === 'despesa') {
+    patch['type'] = 'saida';
+  } else if (type) {
     patch['type'] = 'saida';
   }
 
-  const source = snapshot['source'];
-  const normalizedSource = typeof source === 'string' ? source.toLowerCase() : undefined;
-  if (SOURCE_VALUES.includes(normalizedSource as FinancialSource)) {
-    patch['source'] = normalizedSource;
+  const source = (snapshot['source'] as string | undefined)?.toLowerCase();
+  if (SOURCE_VALUES.includes(source as FinancialSource)) {
+    patch['source'] = source;
   } else {
     patch['source'] = 'manual';
   }
 
+  // 3. Validação de tipos e deleção de inválidos
   const rawCents = snapshot['value_cents'];
-  if (typeof rawCents === 'number' && Number.isSafeInteger(rawCents) && rawCents > 0) {
+  if (typeof rawCents === 'number' && Number.isSafeInteger(rawCents) && rawCents >= 0) {
     patch['value_cents'] = rawCents;
   }
+  // FIX: Não reconstruir value_cents a partir de snapshot['value'] no cliente.
+  // Documentos sem value_cents válido permanecem caso de Admin Repair.
 
   if ('tags' in snapshot && !Array.isArray(snapshot['tags'])) {
     patch['tags'] = markLegacyRepairDeleteField();
@@ -426,11 +434,11 @@ function buildLegacyTransactionRepairPayload(snapshot?: Record<string, unknown>)
     patch['fitId'] = markLegacyRepairDeleteField();
   }
 
-  if ('reconciliationStatus' in snapshot && snapshot['reconciliationStatus'] !== 'reconciled') {
+  if ('reconciliationStatus' in snapshot && !reconciliationStatusSchema.safeParse(snapshot['reconciliationStatus']).success) {
     patch['reconciliationStatus'] = markLegacyRepairDeleteField();
   }
 
-  if ('reconciliationSource' in snapshot && snapshot['reconciliationSource'] !== 'import') {
+  if ('reconciliationSource' in snapshot && !reconciliationSourceSchema.safeParse(snapshot['reconciliationSource']).success) {
     patch['reconciliationSource'] = markLegacyRepairDeleteField();
   }
 
@@ -464,13 +472,10 @@ function buildSoftDeletePatch(existing: Record<string, unknown>): Record<string,
     value: deleteField(),
   };
 
-  // Fix legacy documents where value_cents is absent or zero but a float 'value' exists
+  // Preserve value_cents if it is a valid safe integer. Do NOT derive from legacy float 'value'.
   const rawCents = existing['value_cents'];
-  const legacyValue = existing['value'];
-  if (typeof rawCents === 'number' && rawCents > 0) {
-    patch['value_cents'] = Math.round(rawCents);
-  } else if (typeof legacyValue === 'number' && legacyValue !== 0) {
-    patch['value_cents'] = Math.abs(Math.round(legacyValue * 100));
+  if (typeof rawCents === 'number' && Number.isSafeInteger(rawCents) && rawCents >= 0) {
+    patch['value_cents'] = rawCents;
   }
 
   return patch;

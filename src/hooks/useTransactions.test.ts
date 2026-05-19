@@ -438,6 +438,149 @@ describe('useTransactions - atualização manual com batch + history', () => {
 
     unmount();
   });
+
+  it('normaliza type e source de transações legadas durante o update', async () => {
+    const legacyTxDoc = {
+      id: 'tx-legacy',
+      data: () => ({
+        id:          'tx-legacy',
+        uid:         'uid-1',
+        description: 'Legacy item',
+        value_cents: 5000,
+        type:        'DESPESA', // legada (caixa alta)
+        source:      'INVALID_SRC', // inválida
+        schemaVersion: 1,
+        createdAt:   1000,
+        updatedAt:   1000,
+      }),
+    };
+
+    mockOnSnapshot.mockImplementationOnce((_queryArg: unknown, onNext: (snap: { docs: unknown[] }) => void) => {
+      onNext({ docs: [legacyTxDoc] });
+      return vi.fn();
+    });
+
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.transactions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.update('tx-legacy', { category: 'Lazer' });
+    });
+
+    await waitFor(() => expect(mockUpdateTransactionWithHistory).toHaveBeenCalledWith(
+      'uid-1',
+      'tx-legacy',
+      expect.objectContaining({ category: 'Lazer' }),
+      expect.objectContaining({
+        // O hook deve enviar os campos normalizados baseados no snapshot legado
+        before: expect.objectContaining({
+          type: 'DESPESA',
+          source: 'INVALID_SRC',
+        }),
+      })
+    ));
+
+    const [,, writeData] = mockUpdateTransactionWithHistory.mock.calls[0] as [
+      string,
+      string,
+      Record<string, unknown>,
+      Record<string, unknown>
+    ];
+    // O writeData deve conter type normalizado para 'saida' e source para 'manual' (reparo de inválido presente)
+    expect(writeData.type).toBe('saida');
+    expect(writeData.source).toBe('manual');
+    expect(writeData.schemaVersion).toBe(2);
+
+    unmount();
+  });
+
+  it('não deriva value_cents de value legado durante o update', async () => {
+    const incompleteTxDoc = {
+      id: 'tx-incomplete',
+      data: () => ({
+        id:          'tx-incomplete',
+        uid:         'uid-1',
+        description: 'Incomplete item',
+        value:       99.99, // Legado
+        // value_cents ausente ou inválido
+        type:        'saida',
+        category:    'Outros',
+        date:        '2026-05-01',
+        source:      'manual',
+        schemaVersion: 1,
+      }),
+    };
+
+    mockOnSnapshot.mockImplementationOnce((_queryArg: unknown, onNext: (snap: { docs: unknown[] }) => void) => {
+      onNext({ docs: [incompleteTxDoc] });
+      return vi.fn();
+    });
+
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.transactions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.update('tx-incomplete', { category: 'Lazer' });
+    });
+
+    await waitFor(() => expect(mockUpdateTransactionWithHistory).toHaveBeenCalled());
+
+    const [,, writeData] = mockUpdateTransactionWithHistory.mock.calls[0] as [
+      string,
+      string,
+      Record<string, unknown>,
+      Record<string, unknown>
+    ];
+
+    // O writeData NÃO deve conter value_cents derivado de value
+    expect(writeData).not.toHaveProperty('value_cents');
+    expect(writeData.category).toBe('Lazer');
+    expect(writeData.schemaVersion).toBe(2);
+
+    unmount();
+  });
+
+  it('não inventa type, date ou description se estiverem ausentes no snapshot', async () => {
+    const brokenTxDoc = {
+      id: 'tx-broken',
+      data: () => ({
+        id:          'tx-broken',
+        uid:         'uid-1',
+        // type, date, description ausentes
+        category:    'Outros',
+        schemaVersion: 1,
+      }),
+    };
+
+    mockOnSnapshot.mockImplementationOnce((_queryArg: unknown, onNext: (snap: { docs: unknown[] }) => void) => {
+      onNext({ docs: [brokenTxDoc] });
+      return vi.fn();
+    });
+
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.transactions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.update('tx-broken', { category: 'Saúde' });
+    });
+
+    await waitFor(() => expect(mockUpdateTransactionWithHistory).toHaveBeenCalled());
+
+    const [,, writeData] = mockUpdateTransactionWithHistory.mock.calls[0] as [
+      string,
+      string,
+      Record<string, unknown>,
+      Record<string, unknown>
+    ];
+
+    expect(writeData).not.toHaveProperty('type');
+    expect(writeData).not.toHaveProperty('date');
+    expect(writeData).not.toHaveProperty('description');
+    expect(writeData.category).toBe('Saúde');
+    expect(writeData.schemaVersion).toBe(2);
+
+    unmount();
+  });
 });
 
 describe('useTransactions - delete lógico manual com batch + history', () => {

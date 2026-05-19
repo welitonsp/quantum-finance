@@ -8,8 +8,7 @@ import { db } from '../shared/api/firebase/index';
 import { FirestoreService } from '../shared/services/FirestoreService';
 import { AuditService } from '../shared/services/AuditService';
 import type { Transaction } from '../shared/types/transaction';
-import { fromCentavos, toCentavos, type Centavos } from '../shared/types/money';
-import { getTransactionCentavos } from '../utils/transactionUtils';
+import { fromCentavos, type Centavos } from '../shared/types/money';
 import { categorizeTransaction } from '../utils/aiCategorize';
 import { categorizeWithAI } from '../services/AICategorizationService';
 import { PAGE_SIZE, mergeTransactionPages, hasMorePages } from '../utils/transactionPagination';
@@ -114,22 +113,29 @@ function isTemp(id: string): boolean {
   return id.startsWith('__temp_');
 }
 
-function getTxCentavos(tx: Partial<Transaction>): Centavos {
-  return getTransactionCentavos(tx) ?? toCentavos(0);
+function getTxCentavos(tx: Partial<Transaction>): Centavos | undefined {
+  const c = tx.value_cents;
+  if (typeof c === 'number' && Number.isSafeInteger(c) && c >= 0) return c as Centavos;
+  return undefined;
 }
 
 function normalizeTransaction(tx: Transaction): Transaction {
-  const value_cents = getTxCentavos(tx);
+  // FIX: O cliente não deve reconstruir value_cents a partir de value legado nem na leitura.
+  // Se estiver ausente, a transação é considerada incompleta (Admin Repair).
+  const rawCents = tx.value_cents;
+  const value_cents = (typeof rawCents === 'number' && Number.isSafeInteger(rawCents) && rawCents >= 0)
+    ? (rawCents as Centavos)
+    : (0 as Centavos); // Fallback apenas para exibição UI, mas schemaVersion continua original
+
   return {
     ...tx,
     value_cents,
     value: fromCentavos(value_cents),
-    schemaVersion: tx.schemaVersion ?? 2,
+    schemaVersion: tx.schemaVersion ?? 1, // Preserva versão original se não for 2
   };
 }
 
 function normalizeWriteData(data: Partial<Transaction>): Partial<Transaction> {
-  const value_cents = getTxCentavos(data);
   const {
     id: _id,
     uid: _uid,
@@ -139,6 +145,7 @@ function normalizeWriteData(data: Partial<Transaction>): Partial<Transaction> {
     deletedAt: _deletedAt,
     importHash: _importHash,
     isDeleted: _isDeleted,
+    value_cents: rawCents,
     ...rest
   } = data;
   void _id;
@@ -149,7 +156,21 @@ function normalizeWriteData(data: Partial<Transaction>): Partial<Transaction> {
   void _deletedAt;
   void _importHash;
   void _isDeleted;
-  return { ...rest, value_cents, schemaVersion: 2 };
+
+  const result: Partial<Transaction> = { schemaVersion: 2 };
+
+  // Filtra undefined para garantir que propriedades ausentes não existam no payload
+  Object.entries(rest).forEach(([key, val]) => {
+    if (val !== undefined) {
+      (result as Record<string, unknown>)[key] = val;
+    }
+  });
+
+  if (typeof rawCents === 'number' && Number.isSafeInteger(rawCents) && rawCents >= 0) {
+    result.value_cents = rawCents as Centavos;
+  }
+
+  return result;
 }
 
 function setIfDefined<K extends keyof Transaction>(
@@ -165,13 +186,37 @@ function setIfDefined<K extends keyof Transaction>(
 function buildUpdateWriteData(current: Transaction | undefined, data: Partial<Transaction>): Partial<Transaction> {
   const base: Partial<Transaction> = {};
   if (current) {
-    base.description = current.description;
-    base.value_cents = getTxCentavos(current);
+    if (current.description !== undefined) base.description = current.description;
+
+    // FIX: Somente preservar value_cents se for um inteiro seguro vindo do SNAPSHOT real (schemaVersion 2).
+    const currentCents = current.value_cents;
+    if (current.schemaVersion === 2 && typeof currentCents === 'number' && Number.isSafeInteger(currentCents) && currentCents >= 0) {
+      base.value_cents = currentCents as Centavos;
+    }
+
     base.schemaVersion = 2;
-    base.type = current.type;
-    base.category = current.category;
-    base.date = current.date;
-    base.source = current.source ?? 'manual';
+
+    // Normalização defensiva do snapshot — não "inventar" type se estiver ausente
+    if (current.type) {
+      const rawType = String(current.type).toLowerCase();
+      if (rawType === 'entrada' || rawType === 'receita') {
+        base.type = 'entrada';
+      } else if (rawType === 'saida' || rawType === 'despesa') {
+        base.type = 'saida';
+      }
+    }
+
+    if (current.source) {
+      const rawSource = String(current.source).toLowerCase();
+      if (rawSource === 'csv') base.source = 'csv';
+      else if (rawSource === 'ofx') base.source = 'ofx';
+      else if (rawSource === 'pdf') base.source = 'pdf';
+      else if (rawSource === 'manual') base.source = 'manual';
+      else base.source = 'manual'; // REPARO de valor inválido presente
+    }
+
+    if (current.category !== undefined) base.category = current.category;
+    if (current.date !== undefined) base.date = current.date;
     setIfDefined(base, 'account', current.account);
     setIfDefined(base, 'accountId', current.accountId);
     setIfDefined(base, 'cardId', current.cardId);
@@ -180,15 +225,36 @@ function buildUpdateWriteData(current: Transaction | undefined, data: Partial<Tr
     setIfDefined(base, 'isRecurring', current.isRecurring);
   }
 
-  const incomingCentavos = data.value !== undefined || data.value_cents !== undefined
-    ? getTxCentavos(data)
-    : getTxCentavos(base);
-  return normalizeWriteData({
+  // FIX: Priorizar value_cents vindo de data. Ignorar data.value para integridade financeira.
+  const incomingCents = data.value_cents;
+  let finalCents: Centavos | undefined = base.value_cents;
+
+  if (typeof incomingCents === 'number' && Number.isSafeInteger(incomingCents) && incomingCents >= 0) {
+    finalCents = incomingCents as Centavos;
+  }
+
+  const merged: Partial<Transaction> = {
     ...base,
     ...data,
-    value_cents: incomingCentavos,
-    source: data.source ?? base.source ?? 'manual',
-  });
+  };
+
+  if (finalCents !== undefined) {
+    merged.value_cents = finalCents;
+  } else {
+    delete merged.value_cents;
+  }
+
+  // Normalização final do campo source no payload de escrita
+  if (merged.source) {
+    const s = String(merged.source).toLowerCase();
+    if (s === 'csv') merged.source = 'csv';
+    else if (s === 'ofx') merged.source = 'ofx';
+    else if (s === 'pdf') merged.source = 'pdf';
+    else if (s === 'manual') merged.source = 'manual';
+    else merged.source = 'manual';
+  }
+
+  return normalizeWriteData(merged);
 }
 
 function getErrorMessage(err: unknown): string {
@@ -702,7 +768,7 @@ export function useTransactions(
     const now    = Date.now();
     const tempId = makeTempId();
     const txId   = makeManualTransactionId(uid);
-    const optimisticCentavos = getTxCentavos(enriched);
+    const optimisticCentavos = getTxCentavos(enriched) ?? (0 as Centavos);
     const optimistic: Transaction = {
       description: '',
       value:       fromCentavos(optimisticCentavos),
@@ -716,7 +782,7 @@ export function useTransactions(
       // Timestamps locais para LWW até serverTimestamp() chegar via snapshot
       createdAt: now,
       updatedAt: now,
-    };
+    } as Transaction;
 
     // 2. AI fallback — only when deterministic returned nothing; fire-and-forget after Firestore write
     if (!enriched.category && enriched.description) {
@@ -733,7 +799,7 @@ export function useTransactions(
               changedFields: ['category'],
               origin:        'ai',
               category:      aiCat,
-              amount_cents:  optimisticCentavos,
+              amount_cents:  Number(optimisticCentavos),
             }).catch(error => {
               logSanitizedFirebaseError('ai_category', error);
             });
@@ -767,7 +833,7 @@ export function useTransactions(
       return prev.map(tx =>
         tx.id === id
           // updatedAt local em ms; será substituído por serverTimestamp() no snapshot
-          ? { ...tx, ...normalizedData, updatedAt: Date.now() }
+          ? { ...tx, ...normalizedData, updatedAt: Date.now() } as Transaction
           : tx
       );
     });
@@ -816,7 +882,7 @@ export function useTransactions(
 
       const tempId: string = makeTempId();
       const txId:   string = makeManualTransactionId(uid);
-      const optimisticCentavos = getTxCentavos(enriched);
+      const optimisticCentavos = getTxCentavos(enriched) ?? (0 as Centavos);
       const optimistic: Transaction = {
         description: '',
         value:       fromCentavos(optimisticCentavos),
@@ -829,7 +895,7 @@ export function useTransactions(
         uid,
         createdAt: now,
         updatedAt: now,
-      };
+      } as Transaction;
 
       // 2. AI fallback per item — concurrency controlled by AICategorizationService
       if (!enriched.category && enriched.description) {
@@ -845,7 +911,7 @@ export function useTransactions(
                 changedFields: ['category'],
                 origin:        'ai',
                 category:      aiCat,
-                amount_cents:  optimisticCentavos,
+                amount_cents:  Number(optimisticCentavos),
               }).catch(error => {
                 logSanitizedFirebaseError('ai_category', error);
               });
