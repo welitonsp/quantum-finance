@@ -92,7 +92,7 @@ const TRANSACTION_ALLOWED_KEYS = new Set([
   '_lastOpId',
 ]);
 
-const HISTORY_SNAPSHOT_FORBIDDEN_FIELDS = new Set(['id', 'uid', 'value', 'importHash']);
+const HISTORY_SNAPSHOT_FORBIDDEN_FIELDS = new Set(['id', 'uid', 'value', 'importHash', '_lastOpId']);
 const HISTORY_SNAPSHOT_ALLOWED_KEYS = new Set(
   [...TRANSACTION_ALLOWED_KEYS].filter(key => !HISTORY_SNAPSHOT_FORBIDDEN_FIELDS.has(key)),
 );
@@ -596,6 +596,10 @@ export const FirestoreService = {
       _lastOpId: historyRef.id,
     };
 
+    if (import.meta.env.DEV) {
+      console.warn('[Firestore][Audit] Update keys:', Object.keys(writePayload));
+    }
+
     const historyPayload: Record<string, unknown> = {
       action: 'UPDATE',
       txId: id,
@@ -604,8 +608,14 @@ export const FirestoreService = {
       origin: historyEvent.origin ?? 'manual',
       before: sanitizeHistorySnapshot(historyEvent.before),
       after: sanitizeHistorySnapshot(historyEvent.after),
-      changedFields: historyEvent.changedFields,
+      changedFields: historyEvent.changedFields.filter(f => f !== '_lastOpId'),
     };
+
+    if (import.meta.env.DEV) {
+      console.warn('[Firestore][Audit] History changedFields:', historyPayload.changedFields);
+      console.warn('[Firestore][Audit] History before keys:', Object.keys(historyPayload.before as object));
+      console.warn('[Firestore][Audit] History after keys:', Object.keys(historyPayload.after as object));
+    }
 
     if (historyEvent.amount_cents !== undefined) historyPayload.amount_cents = historyEvent.amount_cents;
     if (historyEvent.category !== undefined) historyPayload.category = historyEvent.category;
@@ -638,20 +648,31 @@ export const FirestoreService = {
     if (!snap.exists()) return;
 
     const historyRef = doc(collection(db, 'users', uid, 'transactions', id, 'history'));
+    const existing = snap.data() as Record<string, unknown>;
+    const softDeletePatch = buildSoftDeletePatch(existing);
+    const before = sanitizeHistorySnapshot(existing);
+    const after = sanitizeHistorySnapshot({ ...existing, ...softDeletePatch });
     const historyPayload: Record<string, unknown> = {
       action: 'SOFT_DELETE',
       txId: id,
       createdAt: serverTimestamp(),
       schemaVersion: 1,
       origin: 'manual',
-      before: sanitizeHistorySnapshot(historyEvent.before),
+      before,
+      after,
+      changedFields: ['isDeleted', 'deletedAt', 'updatedAt'],
     };
 
-    if (historyEvent.amount_cents !== undefined) historyPayload.amount_cents = historyEvent.amount_cents;
-    if (historyEvent.category !== undefined) historyPayload.category = historyEvent.category;
+    const amountCents = existing['value_cents'] ?? historyEvent.amount_cents;
+    const category = existing['category'] ?? historyEvent.category;
+
+    if (typeof amountCents === 'number' && Number.isSafeInteger(amountCents)) {
+      historyPayload.amount_cents = amountCents;
+    }
+    if (typeof category === 'string') historyPayload.category = category;
 
     const batch = writeBatch(db);
-    batch.update(txRef, { ...buildSoftDeletePatch(snap.data() as Record<string, unknown>), _lastOpId: historyRef.id });
+    batch.update(txRef, { ...softDeletePatch, _lastOpId: historyRef.id });
     batch.set(historyRef, historyPayload);
     await batch.commit();
   },

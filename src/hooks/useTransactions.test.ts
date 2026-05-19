@@ -384,10 +384,75 @@ describe('useTransactions - atualização manual com batch + history', () => {
       Record<string, unknown>,
       { before: Record<string, unknown>; after: Record<string, unknown> },
     ];
-    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
       expect(historyEvent.before).not.toHaveProperty(forbidden);
       expect(historyEvent.after).not.toHaveProperty(forbidden);
     }
+    expect(mockLogTransactionHistory).not.toHaveBeenCalled();
+
+    unmount();
+  });
+
+  it('editar categoria no fluxo real usa history pareado, payload mínimo e snapshots sanitizados', async () => {
+    mockGetDoc.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({
+        id:          'tx-1',
+        uid:         'uid-1',
+        value:       10,
+        importHash:  'x'.repeat(64),
+        _lastOpId:   'op-anterior',
+        description: 'Compra original',
+        value_cents: 1000,
+        type:        'saida',
+        category:    'Outros',
+        date:        '2026-05-01',
+        source:      'manual',
+        schemaVersion: 2,
+        createdAt:   1000,
+        updatedAt:   1000,
+      }),
+    });
+
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.transactions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.update('tx-1', { category: 'Lazer' });
+    });
+
+    await waitFor(() => expect(mockUpdateTransactionWithHistory).toHaveBeenCalledTimes(1));
+
+    const [, , writeData, historyEvent] = mockUpdateTransactionWithHistory.mock.calls[0] as [
+      string,
+      string,
+      Record<string, unknown>,
+      {
+        before: Record<string, unknown>;
+        after: Record<string, unknown>;
+        changedFields: string[];
+        amount_cents?: number;
+        category?: string;
+      },
+    ];
+
+    expect(writeData).toEqual(expect.objectContaining({
+      category: 'Lazer',
+      schemaVersion: 2,
+      type: 'saida',
+      source: 'manual',
+      value_cents: 1000,
+    }));
+    expect(writeData).not.toHaveProperty('description');
+    expect(writeData).not.toHaveProperty('date');
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
+      expect(writeData).not.toHaveProperty(forbidden);
+      expect(historyEvent.before).not.toHaveProperty(forbidden);
+      expect(historyEvent.after).not.toHaveProperty(forbidden);
+    }
+    expect(historyEvent.changedFields).toEqual(['category']);
+    expect(historyEvent.amount_cents).toBe(1000);
+    expect(historyEvent.category).toBe('Lazer');
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 
     unmount();
@@ -640,7 +705,7 @@ describe('useTransactions - delete lógico manual com batch + history', () => {
       string,
       { before: Record<string, unknown> },
     ];
-    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
       expect(historyEvent.before).not.toHaveProperty(forbidden);
     }
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
@@ -841,7 +906,7 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
       value_cents: 1000,
       description: 'Compra A',
     }));
-    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
       expect(before).not.toHaveProperty(forbidden);
     }
 
@@ -925,7 +990,7 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
       value_cents: 1000,
       description: 'Compra A',
     }));
-    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
       expect(before).not.toHaveProperty(forbidden);
     }
 
@@ -1051,7 +1116,7 @@ describe('useTransactions - AI categorization usa updateTransactionWithHistory a
     expect(historyEvent['origin']).toBe('ai');
     expect(historyEvent['changedFields']).toEqual(['category']);
     expect(historyEvent['after']).toEqual(expect.objectContaining({ category: 'Alimentação' }));
-    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
       expect(historyEvent['before']).not.toHaveProperty(forbidden);
       expect(historyEvent['after']).not.toHaveProperty(forbidden);
     }

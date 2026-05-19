@@ -52,6 +52,7 @@ interface UpdateOp {
   type:     'update';
   itemId:   string;
   data:     Partial<Transaction>;
+  requestedData: Partial<Transaction>;
   previous: Transaction | undefined;
   retries:  number;
 }
@@ -173,21 +174,9 @@ function normalizeWriteData(data: Partial<Transaction>): Partial<Transaction> {
   return result;
 }
 
-function setIfDefined<K extends keyof Transaction>(
-  target: Partial<Transaction>,
-  key: K,
-  value: Transaction[K] | undefined,
-): void {
-  if (value !== undefined) {
-    target[key] = value;
-  }
-}
-
 function buildUpdateWriteData(current: Transaction | undefined, data: Partial<Transaction>): Partial<Transaction> {
   const base: Partial<Transaction> = {};
   if (current) {
-    if (current.description !== undefined) base.description = current.description;
-
     // FIX: Somente preservar value_cents se for um inteiro seguro vindo do SNAPSHOT real (schemaVersion 2).
     const currentCents = current.value_cents;
     if (current.schemaVersion === 2 && typeof currentCents === 'number' && Number.isSafeInteger(currentCents) && currentCents >= 0) {
@@ -214,15 +203,6 @@ function buildUpdateWriteData(current: Transaction | undefined, data: Partial<Tr
       else if (rawSource === 'manual') base.source = 'manual';
       else base.source = 'manual'; // REPARO de valor inválido presente
     }
-
-    if (current.category !== undefined) base.category = current.category;
-    if (current.date !== undefined) base.date = current.date;
-    setIfDefined(base, 'account', current.account);
-    setIfDefined(base, 'accountId', current.accountId);
-    setIfDefined(base, 'cardId', current.cardId);
-    setIfDefined(base, 'fitId', current.fitId);
-    setIfDefined(base, 'tags', current.tags);
-    setIfDefined(base, 'isRecurring', current.isRecurring);
   }
 
   // FIX: Priorizar value_cents vindo de data. Ignorar data.value para integridade financeira.
@@ -255,6 +235,17 @@ function buildUpdateWriteData(current: Transaction | undefined, data: Partial<Tr
   }
 
   return normalizeWriteData(merged);
+}
+
+async function fetchTransactionForHistory(uid: string, id: string): Promise<Transaction | undefined> {
+  const txRef = doc(db, 'users', uid, 'transactions', id);
+  const snap = await getDoc(txRef);
+  if (!snap.exists()) return undefined;
+
+  return normalizeTransaction({
+    id,
+    ...(snap.data() as Omit<Transaction, 'id'>),
+  } as Transaction);
 }
 
 function getErrorMessage(err: unknown): string {
@@ -323,7 +314,7 @@ function toMillis(ts: Transaction['updatedAt'] | Transaction['createdAt']): numb
  * Filtra undefined para garantir escrita válida no Firestore.
  */
 export function sanitizeForHistory(tx: Partial<Transaction>): Record<string, unknown> {
-  const excluded = new Set<string>(['id', 'uid', 'value', 'importHash']);
+  const excluded = new Set<string>(['id', 'uid', 'value', 'importHash', '_lastOpId']);
   const result: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(tx)) {
     if (!excluded.has(k) && v !== undefined) {
@@ -552,32 +543,25 @@ export function useTransactions(
             // updatedAt: serverTimestamp() sempre enviado pelo FirestoreService
             debugSync('iniciando atualização de movimentação', 'transaction_update');
 
-            if (op.previous) {
-              const before = sanitizeForHistory(op.previous);
-              const after  = sanitizeForHistory({ ...op.previous, ...op.data });
-              await FirestoreService.updateTransactionWithHistory(uid, op.itemId, op.data, {
+            {
+              const canonicalPrevious = await fetchTransactionForHistory(uid, op.itemId);
+              const historySource = canonicalPrevious ?? op.previous;
+
+              if (!historySource) {
+                pendingIds.current.delete(op.itemId);
+                break;
+              }
+
+              const writeData = buildUpdateWriteData(historySource, op.requestedData);
+              const before = sanitizeForHistory(historySource);
+              const after  = sanitizeForHistory({ ...historySource, ...writeData });
+              await FirestoreService.updateTransactionWithHistory(uid, op.itemId, writeData, {
                 before,
                 after,
                 changedFields: computeChangedFields(before, after),
                 ...(typeof after['value_cents'] === 'number' ? { amount_cents: after['value_cents'] } : {}),
                 ...(typeof after['category']   === 'string'  ? { category:     after['category']   } : {}),
               });
-            } else {
-              // Modelo A: fetch current state to build history when not in memory
-              const txRef = doc(db, 'users', uid, 'transactions', op.itemId);
-              const snap = await getDoc(txRef);
-              if (snap.exists()) {
-                const fetched = snap.data() as Transaction;
-                const before = sanitizeForHistory(fetched);
-                const after  = sanitizeForHistory({ ...fetched, ...op.data });
-                await FirestoreService.updateTransactionWithHistory(uid, op.itemId, op.data, {
-                  before,
-                  after,
-                  changedFields: computeChangedFields(before, after),
-                  ...(typeof after['value_cents'] === 'number' ? { amount_cents: after['value_cents'] } : {}),
-                  ...(typeof after['category']   === 'string'  ? { category:     after['category']   } : {}),
-                });
-              }
             }
 
             pendingIds.current.delete(op.itemId);
@@ -824,6 +808,7 @@ export function useTransactions(
 
     const current = transactionsRef.current.find(tx => tx.id === id);
     const previous = current;
+    const requestedData = normalizeWriteData(data);
     const normalizedData = buildUpdateWriteData(current, data);
 
     // Regista como pendente antes do optimistic update
@@ -838,7 +823,7 @@ export function useTransactions(
       );
     });
 
-    enqueue({ type: 'update', itemId: id, data: normalizedData, previous, retries: 0 });
+    enqueue({ type: 'update', itemId: id, data: normalizedData, requestedData, previous, retries: 0 });
   }, [uid, enqueue]);
 
   // ── REMOVE — Optimistic + enqueue ─────────────────────────────────────────
