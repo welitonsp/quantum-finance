@@ -20,6 +20,50 @@ interface UseTransactionActionsParams {
   setTransactionToDelete: (tx: Transaction | null) => void;
 }
 
+function valuesEqual(left: unknown, right: unknown): boolean {
+  try {
+    return JSON.stringify(left) === JSON.stringify(right);
+  } catch {
+    return Object.is(left, right);
+  }
+}
+
+function setChangedField<K extends keyof Transaction>(
+  target: Partial<Transaction>,
+  previous: Transaction,
+  key: K,
+  value: Transaction[K] | undefined,
+): void {
+  if (value !== undefined && !valuesEqual(previous[key], value)) {
+    target[key] = value;
+  }
+}
+
+function buildEditPayload(previous: Transaction, data: Partial<Transaction>): Partial<Transaction> {
+  const payload: Partial<Transaction> = {};
+
+  setChangedField(payload, previous, 'description', data.description);
+  setChangedField(payload, previous, 'type', data.type);
+  setChangedField(payload, previous, 'category', data.category);
+  setChangedField(payload, previous, 'date', data.date);
+  setChangedField(payload, previous, 'account', data.account);
+  setChangedField(payload, previous, 'accountId', data.accountId);
+  setChangedField(payload, previous, 'cardId', data.cardId);
+  setChangedField(payload, previous, 'fitId', data.fitId);
+  setChangedField(payload, previous, 'tags', data.tags);
+  setChangedField(payload, previous, 'isRecurring', data.isRecurring);
+
+  if (data.value_cents !== undefined && data.value_cents !== previous.value_cents) {
+    payload.value_cents = data.value_cents;
+  }
+
+  if (previous.schemaVersion !== 2) {
+    payload.schemaVersion = 2;
+  }
+
+  return payload;
+}
+
 export function useTransactionActions({
   user,
   update,
@@ -42,7 +86,10 @@ export function useTransactionActions({
         payload.value_cents = toCentavos(data.value);
       }
       if (transactionToEdit) {
-        await update(transactionToEdit.id, payload);
+        const editPayload = buildEditPayload(transactionToEdit, payload);
+        if (Object.keys(editPayload).length > 0) {
+          await update(transactionToEdit.id, editPayload);
+        }
         toast.success('Movimentação atualizada com sucesso!');
       } else {
         await add(payload);

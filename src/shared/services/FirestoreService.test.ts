@@ -367,7 +367,7 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
         category: 'Alimentação',
         value_cents: 2000,
       },
-      changedFields: ['description', 'category', 'value_cents'],
+      changedFields: ['description', 'category', 'value_cents', '_lastOpId'],
       amount_cents: 2000,
       category: 'Alimentação',
     };
@@ -411,7 +411,7 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
       after: { description: 'Novo', category: 'Alimentação', value_cents: 2000 },
       changedFields: ['description', 'category', 'value_cents'],
     }));
-    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
       expect(historyPayload['before']).not.toHaveProperty(forbidden);
       expect(historyPayload['after']).not.toHaveProperty(forbidden);
     }
@@ -441,7 +441,7 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
     const [, historyPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
     expect(historyPayload['origin']).toBe('ai');
     expect(historyPayload['amount_cents']).toBe(1500);
-    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
       expect(historyPayload['before']).not.toHaveProperty(forbidden);
       expect(historyPayload['after']).not.toHaveProperty(forbidden);
     }
@@ -463,7 +463,7 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
     const [, historyPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
     expect(historyPayload['origin']).toBe('reconcile');
     expect(historyPayload['amount_cents']).toBe(2000);
-    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
       expect(historyPayload['before']).not.toHaveProperty(forbidden);
       expect(historyPayload['after']).not.toHaveProperty(forbidden);
     }
@@ -817,14 +817,24 @@ describe('FirestoreService.softDeleteTransactionWithHistory', () => {
       category:     'Outros',
       schemaVersion: 1,
       createdAt:    { _serverTimestamp: true },
-      before: {
+      before: expect.objectContaining({
         description: 'Compra a apagar',
         value_cents: 2034,
         category:    'Outros',
-      },
+      }),
+      after: expect.objectContaining({
+        description: 'Compra a apagar',
+        value_cents: 2034,
+        category:    'Outros',
+        isDeleted:   true,
+        deletedAt:   { _serverTimestamp: true },
+        updatedAt:   { _serverTimestamp: true },
+      }),
+      changedFields: ['isDeleted', 'deletedAt', 'updatedAt'],
     }));
-    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
       expect(historyPayload['before']).not.toHaveProperty(forbidden);
+      expect(historyPayload['after']).not.toHaveProperty(forbidden);
     }
   });
 
@@ -881,6 +891,11 @@ describe('FirestoreService.softDeleteTransactionWithHistory', () => {
     expect(txPayload['_lastOpId']).toBe('mock-doc-id');
     expect(historyPayload['action']).toBe('SOFT_DELETE');
     expect(historyPayload['origin']).toBe('manual');
+    expect(historyPayload['after']).toEqual(expect.objectContaining({
+      isDeleted: true,
+      deletedAt: { _serverTimestamp: true },
+      updatedAt: { _serverTimestamp: true },
+    }));
   });
 });
 
@@ -1062,7 +1077,7 @@ describe('FirestoreService.batchUpdateTransactionsWithHistory', () => {
 
     expect(before1['category']).toBe('Outros');
     expect(after1['category']).toBe('Alimentação');
-    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
       expect(before1).not.toHaveProperty(forbidden);
       expect(after1).not.toHaveProperty(forbidden);
     }
@@ -1324,7 +1339,7 @@ describe('FirestoreService.batchUndoBulkUpdateTransactionsWithHistory', () => {
     expect(after1['category']).toBe('Lazer');
     expect(before1['value_cents']).toBe(1000);
     expect(after1['value_cents']).toBe(1000);
-    for (const forbidden of ['id', 'uid', 'value', 'importHash']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
       expect(before1).not.toHaveProperty(forbidden);
       expect(after1).not.toHaveProperty(forbidden);
     }
