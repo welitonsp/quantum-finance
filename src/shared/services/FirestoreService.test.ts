@@ -705,6 +705,25 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
     expect(txPayload['_lastOpId']).toBe('mock-doc-id');
   });
 
+  it('normaliza type e source de transações legadas agressivamente no update individual', async () => {
+    await updateWithLegacyBefore({
+      category: 'Outros',
+      type: 'RECEITA', // legada e case-insensitive
+      source: 'UNKNOWN_API', // inválida
+      schemaVersion: 1,
+    });
+
+    const txPayload = lastTransactionUpdatePayload();
+    expect(txPayload['type']).toBe('entrada');
+    expect(txPayload['source']).toBe('manual');
+    expect(txPayload['schemaVersion']).toBe(2);
+  });
+
+  it('não altera source válido mas normaliza case no update individual', async () => {
+    await updateWithLegacyBefore({ category: 'Outros', source: 'OFX' });
+    expect(lastTransactionUpdatePayload()['source']).toBe('ofx');
+  });
+
   it('_lastOpId está presente com origin manual padrão', async () => {
     await FirestoreService.updateTransactionWithHistory('uid1', 'tx-1', {
       description: 'Teste',
@@ -741,8 +760,7 @@ describe('FirestoreService.softDeleteTransactionWithHistory', () => {
   it('monta batch com soft delete + history SOFT_DELETE sem campos proibidos', async () => {
     mockGetDoc.mockResolvedValueOnce(existingSnap({
       description:   'Compra a apagar',
-      value:         20.34,
-      value_cents:   0,
+      value_cents:   2034,
       schemaVersion: 2,
       type:          'saida',
       category:      'Outros',
@@ -757,7 +775,6 @@ describe('FirestoreService.softDeleteTransactionWithHistory', () => {
       before: {
         id:          'tx-delete-1',
         uid:         'uid1',
-        value:       20.34,
         importHash:  'x'.repeat(64),
         description: 'Compra a apagar',
         value_cents: 2034,
