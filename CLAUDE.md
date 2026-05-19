@@ -2,6 +2,70 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
+## Estado Consolidado — Retomada Pós-PR #122 e FASE 10D — 2026-05-19
+
+### 1. Status atual
+- Projeto retomado após perda de histórico de chats.
+- `CLAUDE.md` recuperado como base de conhecimento primária.
+- Relatórios Gemini/Codex passam a ser fonte operacional auxiliar.
+- Estado atual confirmado: `main` limpa, PR #122 consolidado, sem PRs abertos.
+- Stash legado preservado e intocado (`stash@{0}: WIP on main: f84e641 descrição clara`).
+
+### 2. Topo atual da main
+- `9d2e726 fix(transactions): repair manual update and soft delete audit flow (#122)`
+- `30f2d38 test(functions): diagnose legacy transaction migration candidates (#121)`
+- `10bd686 fix(transactions): prevent legacy update payload regressions (#120)`
+
+### 3. Contratos críticos vivos
+- `value_cents` é a fonte canônica.
+- `value` legado não deve ser usado para reconstrução financeira automática.
+- É **proibido** usar `Math.round(value * 100)`, `parseFloat`, `Number(value)` ou heurística float para migração financeira.
+- **Modelo A obrigatório:** Todo UPDATE exige `_lastOpId` + `history` pareado.
+- `importHash` permanece preservado na transação real e é **proibido** em `audit_logs` e `snapshots`.
+- Logs devem ser rigorosamente sanitizados.
+- Firestore Rules devem permanecer alinhadas com o código e deploy real.
+- Stash legado não deve ser tocado sem ordem explícita.
+
+### 4. Estado pós-incidente 10C-2J / PR #122
+- O incidente anterior envolveu desalinhamento entre Firestore Rules locais/testadas e as Rules publicadas.
+- Criação manual, edição de categoria e soft-delete voltaram a funcionar após o hotfix e publicação manual das rules.
+- Próximas fases que alterem contrato de rules devem prever validação estrita de alinhamento local/emulador/deploy.
+
+### 5. FASE 10D — Migração legada
+- FASE 10D-0 (read-only) concluiu que não existe script de migração de escrita automático.
+- Existe diagnóstico read-only `diagnoseLegacyTransactions`.
+- Transações legadas sem `value_cents` devem ser tratadas como `Admin Repair` ou `migrationBlocked`.
+- Migração automática de float legado para `value_cents` está bloqueada por segurança.
+- Qualquer migração futura deve ser classificatória, *dry-run* por padrão, auditável, idempotente e bloqueante por padrão.
+- **Não aprovar escrita real antes de:**
+  a) contraparecer técnico 10D-1A;
+  b) testes de guardrail;
+  c) plano de backup/export;
+  d) confirmação explícita do usuário.
+
+### 6. Próxima etapa recomendada
+**FASE 10D-1A** — Contraparecer técnico da migração legada, read-only, sem alteração de arquivos, para remover a recomendação insegura de `Math.round(value * 100)` e desenhar política segura de migração.
+
+### 7. Comandos de validação padrão
+```bash
+npm run typecheck
+npm run lint
+npm run test -- --run
+npm run test:rules
+npm run build
+npm --prefix functions test
+npm --prefix functions run build
+```
+
+### 8. Processo operacional permanente
+- Read-only antes de implementação.
+- PR pequeno.
+- Auditoria independente antes de merge.
+- Merge squash.
+- Atualizar main local.
+- Confirmar git status limpo.
+- Atualizar `CLAUDE.md` após marco relevante.
+
 ## Estado Consolidado — Política de Observabilidade e Logging (FASE 9F/9G) — 2026-05-15
 
 ### Status Atual
