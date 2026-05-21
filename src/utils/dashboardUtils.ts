@@ -12,6 +12,24 @@ export interface StatusResult {
   patrimonyRisk: number;
 }
 
+export const DEFAULT_SAVINGS_GOAL_PERCENT = 20;
+
+export type SavingsGoalInput = { percent?: number } | number | null | undefined;
+
+export function resolveSavingsGoalPercent(goal: SavingsGoalInput): number {
+  const rawPercent = typeof goal === 'object' && goal !== null ? goal.percent : goal;
+
+  if (typeof rawPercent !== 'number' || !Number.isFinite(rawPercent)) {
+    return DEFAULT_SAVINGS_GOAL_PERCENT;
+  }
+
+  if (rawPercent <= 0 || rawPercent > 100) {
+    return DEFAULT_SAVINGS_GOAL_PERCENT;
+  }
+
+  return rawPercent;
+}
+
 export const calcStatus = (
   saldo: number,
   receitas: number,

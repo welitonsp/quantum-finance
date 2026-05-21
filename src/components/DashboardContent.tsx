@@ -14,7 +14,7 @@ import ProactiveBriefing from './ProactiveBriefing';
 import SurvivalHeatmap from './SurvivalHeatmap';
 import WealthKPIs from './WealthKPIs';
 import DashboardCharts from './DashboardCharts';
-import { calcStatus } from '../utils/dashboardUtils';
+import { calcStatus, resolveSavingsGoalPercent } from '../utils/dashboardUtils';
 import { useForecast } from '../hooks/useForecast';
 import { useBudgets } from '../hooks/useBudgets';
 import BudgetWidget from './BudgetWidget';
@@ -105,7 +105,7 @@ export default function DashboardContent({
 
   const patrimonio = moduleBalances?.geral?.patrimonio ?? saldo;
   const dividas    = moduleBalances?.geral?.dividas    ?? 0;
-  const metaEcon   = typeof monthlyGoal === 'object' && monthlyGoal !== null ? (monthlyGoal.percent ?? 20) : 20;
+  const metaEcon   = resolveSavingsGoalPercent(monthlyGoal);
 
   const st = useMemo(
     () => calcStatus(saldo, receitas, despesas, patrimonio, dividas, metaEcon),
@@ -233,7 +233,12 @@ export default function DashboardContent({
 
       {/* ── INTEL STRIP ───────────────────────────────────────── */}
       <motion.div variants={itemVariants}>
-        <IntelStrip savingsRate={savingsRate} debtRatio={debtRatio} goalProgress={goalProgress} />
+        <IntelStrip
+          savingsRate={savingsRate}
+          debtRatio={debtRatio}
+          goalProgress={goalProgress}
+          savingsGoalPercent={metaEcon}
+        />
       </motion.div>
 
       {/* ── KPI CARDS — receita, despesa, saldo, projeção ─────── */}
