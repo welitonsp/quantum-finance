@@ -18,6 +18,7 @@ describe('resolveSavingsGoalPercent', () => {
     expect(resolveSavingsGoalPercent(null)).toBe(DEFAULT_SAVINGS_GOAL_PERCENT);
     expect(resolveSavingsGoalPercent(0)).toBe(DEFAULT_SAVINGS_GOAL_PERCENT);
     expect(resolveSavingsGoalPercent(3500)).toBe(DEFAULT_SAVINGS_GOAL_PERCENT);
+    expect(resolveSavingsGoalPercent({ percent: NaN })).toBe(DEFAULT_SAVINGS_GOAL_PERCENT);
   });
 });
 

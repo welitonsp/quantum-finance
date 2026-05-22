@@ -18,10 +18,10 @@ interface IntelItem {
 
 export const IntelStrip = memo(({ savingsRate, debtRatio, goalProgress, savingsGoalPercent }: Props) => {
   const items = useMemo((): IntelItem[] => [
-    savingsRate >= savingsGoalPercent
-      ? { c: 'emerald', Icon: TrendingUp,   title: 'Poupança Sólida',      body: `${savingsRate.toFixed(1)}% da renda preservada mensalmente` }
-      : savingsRate < 10
-        ? { c: 'red',     Icon: TrendingDown, title: 'Poupança Crítica',     body: `Apenas ${savingsRate.toFixed(1)}% retidos — meta mínima: ${savingsGoalPercent.toFixed(0)}%` }
+    savingsRate < 10
+      ? { c: 'red',     Icon: TrendingDown, title: 'Poupança Crítica',     body: `Apenas ${savingsRate.toFixed(1)}% retidos — meta mínima: ${savingsGoalPercent.toFixed(0)}%` }
+      : savingsRate >= savingsGoalPercent
+        ? { c: 'emerald', Icon: TrendingUp,   title: 'Poupança Sólida',      body: `${savingsRate.toFixed(1)}% da renda preservada mensalmente` }
         : { c: 'amber',   Icon: Minus,        title: 'Poupança Moderada',    body: `${savingsRate.toFixed(1)}% retidos — amplie para ${savingsGoalPercent.toFixed(0)}%` },
     debtRatio > 70
       ? { c: 'red',     Icon: AlertTriangle, title: 'Renda Comprometida',   body: `${debtRatio.toFixed(0)}% em despesas — reduza fixos` }
