@@ -6,6 +6,7 @@ interface Props {
   savingsRate: number;
   debtRatio: number;
   goalProgress: number;
+  savingsGoalPercent: number;
 }
 
 interface IntelItem {
@@ -15,13 +16,13 @@ interface IntelItem {
   body: string;
 }
 
-export const IntelStrip = memo(({ savingsRate, debtRatio, goalProgress }: Props) => {
+export const IntelStrip = memo(({ savingsRate, debtRatio, goalProgress, savingsGoalPercent }: Props) => {
   const items = useMemo((): IntelItem[] => [
     savingsRate < 10
-      ? { c: 'red',     Icon: TrendingDown, title: 'Poupança Crítica',     body: `Apenas ${savingsRate.toFixed(1)}% retidos — meta mínima: 20%` }
-      : savingsRate >= 20
+      ? { c: 'red',     Icon: TrendingDown, title: 'Poupança Crítica',     body: `Apenas ${savingsRate.toFixed(1)}% retidos — meta mínima: ${savingsGoalPercent.toFixed(0)}%` }
+      : savingsRate >= savingsGoalPercent
         ? { c: 'emerald', Icon: TrendingUp,   title: 'Poupança Sólida',      body: `${savingsRate.toFixed(1)}% da renda preservada mensalmente` }
-        : { c: 'amber',   Icon: Minus,        title: 'Poupança Moderada',    body: `${savingsRate.toFixed(1)}% retidos — amplie para 20%` },
+        : { c: 'amber',   Icon: Minus,        title: 'Poupança Moderada',    body: `${savingsRate.toFixed(1)}% retidos — amplie para ${savingsGoalPercent.toFixed(0)}%` },
     debtRatio > 70
       ? { c: 'red',     Icon: AlertTriangle, title: 'Renda Comprometida',   body: `${debtRatio.toFixed(0)}% em despesas — reduza fixos` }
       : { c: 'emerald', Icon: ShieldCheck,   title: 'Despesas Controladas', body: `${debtRatio.toFixed(0)}% de comprometimento de renda` },
@@ -30,7 +31,7 @@ export const IntelStrip = memo(({ savingsRate, debtRatio, goalProgress }: Props)
       : goalProgress >= 90
         ? { c: 'emerald', Icon: ChevronsUp,  title: 'Meta Quase Batida',    body: `${goalProgress.toFixed(0)}% — no trilho certo` }
         : { c: 'amber',   Icon: Target,      title: 'Progresso Parcial',    body: `${goalProgress.toFixed(0)}% da meta atingido este mês` },
-  ], [savingsRate, debtRatio, goalProgress]);
+  ], [savingsRate, debtRatio, goalProgress, savingsGoalPercent]);
 
   const colorClasses: Record<string, string> = {
     red:     'border-l-red-500 bg-red-500/5 border-red-500/20 text-red-400',
