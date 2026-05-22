@@ -39,13 +39,10 @@ vi.mock('../hooks/useFinancialMetrics', () => ({
   useFinancialMetrics: () => ({ metrics: null, loadingMetrics: false }),
 }));
 
-vi.mock('../hooks/useBudgets', async importOriginal => {
-  const actual = await importOriginal<typeof import('../hooks/useBudgets')>();
-  return {
-    ...actual,
-    useBudgets: (...args: unknown[]) => mockUseBudgets(...args),
-  };
-});
+vi.mock('../hooks/useBudgets', () => ({
+  useBudgets: (...args: unknown[]) => mockUseBudgets(...args),
+  currentMonthStr: vi.fn(() => '2026-05'),
+}));
 
 vi.mock('./ForecastWidget', () => ({ default: () => <div data-testid="forecast-widget" /> }));
 vi.mock('./ProactiveBriefing', () => ({ default: () => <div data-testid="proactive-briefing" /> }));
