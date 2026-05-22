@@ -53,15 +53,34 @@ function formatDate(timestamp: number): string {
 }
 
 const FIELD_LABELS: Record<string, string> = {
-  amount_cents: 'Valor',
-  category:     'Categoria',
-  date:         'Data',
-  description:  'Descrição',
-  source:       'Origem',
-  type:         'Tipo',
-  value:        'Valor',
-  value_cents:  'Valor',
+  amount_cents:          'Valor',
+  category:              'Categoria',
+  date:                  'Data',
+  description:           'Descrição',
+  reconciliationSource:  'Origem da conciliação',
+  reconciliationStatus:  'Status de conciliação',
+  source:                'Origem',
+  type:                  'Tipo',
+  value:                 'Valor',
+  value_cents:           'Valor',
 };
+
+const HISTORY_FIELDS_HIDDEN_FROM_UI = new Set([
+  'importHash',
+  'fitId',
+  'uid',
+  'reconciledBy',
+  '_lastOpId',
+  'value',
+]);
+
+export function isRenderableHistoryField(field: string): boolean {
+  return !HISTORY_FIELDS_HIDDEN_FROM_UI.has(field);
+}
+
+function renderableChangedFields(event: TransactionHistoryView): string[] {
+  return event.changedFields?.filter(isRenderableHistoryField) ?? [];
+}
 
 function fieldLabel(field: string): string {
   return FIELD_LABELS[field] ?? field;
@@ -84,14 +103,18 @@ function formatFieldValue(field: string, value: unknown): string {
 }
 
 function formatChangedFields(event: TransactionHistoryView): string | null {
-  if (!event.changedFields?.length) return null;
-  return `Campos alterados: ${event.changedFields.join(', ')}`;
+  const fields = renderableChangedFields(event);
+  if (!fields.length) return null;
+  return `Campos alterados: ${fields.join(', ')}`;
 }
 
 function formatChangedFieldDeltas(event: TransactionHistoryView): string[] | null {
   if (!event.changedFields?.length || !event.before || !event.after) return null;
 
-  return event.changedFields.map(field => {
+  const fields = renderableChangedFields(event);
+  if (!fields.length) return null;
+
+  return fields.map(field => {
     const before = formatFieldValue(field, event.before?.[field]);
     const after = formatFieldValue(field, event.after?.[field]);
     return `${fieldLabel(field)}: ${before} → ${after}`;

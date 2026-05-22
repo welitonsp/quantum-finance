@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Transaction } from '../../../shared/types/transaction';
 import type { Centavos } from '../../../shared/types/money';
@@ -72,6 +72,43 @@ describe('TransactionsManager running balance UI', () => {
 
   it('mantem base vazia sem NaN ou Infinity', () => {
     const { container } = renderManager([]);
+
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/NaN|Infinity/);
+  });
+
+  it('filtro Importadas nao conciliadas exclui manuais e conciliadas', () => {
+    renderManager([
+      tx({
+        id: 'manual-pending',
+        description: 'Manual pendente',
+        source: 'manual',
+      }),
+      tx({
+        id: 'csv-pending',
+        description: 'CSV pendente',
+        source: 'csv',
+      }),
+      tx({
+        id: 'csv-reconciled',
+        description: 'CSV conciliada',
+        source: 'csv',
+        reconciliationStatus: 'reconciled',
+      }),
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Importadas não conciliadas' }));
+
+    expect(screen.getByText('CSV pendente')).toBeInTheDocument();
+    expect(screen.queryByText('Manual pendente')).not.toBeInTheDocument();
+    expect(screen.queryByText('CSV conciliada')).not.toBeInTheDocument();
+    expect(screen.getByText('Conciliação: Importadas não conciliadas')).toBeInTheDocument();
+  });
+
+  it('filtro Importadas nao conciliadas mantem base vazia estavel', () => {
+    const { container } = renderManager([]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Importadas não conciliadas' }));
 
     expect(screen.getByRole('status')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/NaN|Infinity/);

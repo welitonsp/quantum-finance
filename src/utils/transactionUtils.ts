@@ -50,7 +50,7 @@ export function getTransactionOriginLabel(tx: Pick<Transaction, 'source'>): stri
  * Retorna true se a transação foi importada (não manual).
  */
 export function isImportedTransaction(tx: Pick<Transaction, 'source'>): boolean {
-  return !!tx.source && tx.source !== 'manual';
+  return tx.source === 'csv' || tx.source === 'ofx' || tx.source === 'pdf';
 }
 
 /**

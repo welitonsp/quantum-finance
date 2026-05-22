@@ -40,6 +40,8 @@ describe('transaction status helpers', () => {
     expect(isImportedTransaction({})).toBe(false);
     expect(isImportedTransaction({ source: 'csv' })).toBe(true);
     expect(isImportedTransaction({ source: 'ofx' })).toBe(true);
+    expect(isImportedTransaction({ source: 'pdf' })).toBe(true);
+    expect(isImportedTransaction({ source: 'unknown' as any })).toBe(false);
   });
 
   it('isReconciledTransaction identifica transacoes conciliadas', () => {
@@ -49,9 +51,14 @@ describe('transaction status helpers', () => {
   });
 
   it('isImportedUnreconciledTransaction identifica importadas pendentes de conciliacao', () => {
+    expect(isImportedUnreconciledTransaction({})).toBe(false);
     expect(isImportedUnreconciledTransaction({ source: 'csv' })).toBe(true);
+    expect(isImportedUnreconciledTransaction({ source: 'ofx' })).toBe(true);
+    expect(isImportedUnreconciledTransaction({ source: 'pdf' })).toBe(true);
     expect(isImportedUnreconciledTransaction({ source: 'manual' })).toBe(false);
     expect(isImportedUnreconciledTransaction({ source: 'csv', reconciliationStatus: 'reconciled' })).toBe(false);
+    expect(isImportedUnreconciledTransaction({ source: 'ofx', reconciliationStatus: 'reconciled' })).toBe(false);
+    expect(isImportedUnreconciledTransaction({ source: 'pdf', reconciliationStatus: 'reconciled' })).toBe(false);
   });
 });
 
