@@ -17,8 +17,13 @@ import type { Transaction } from '../../shared/types/transaction';
 import type { BulkUpdate } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { auth } from '../../shared/api/firebase/auth';
-import { getTransactionAbsCentavos, isIncome as checkIncome, isExpense as checkExpense } from '../../utils/transactionUtils';
-import { fromCentavos } from '../../shared/types/money';
+import {
+  calculateRunningBalances,
+  getTransactionAbsCentavos,
+  isIncome as checkIncome,
+  isExpense as checkExpense,
+} from '../../utils/transactionUtils';
+import { fromCentavos, type Centavos } from '../../shared/types/money';
 import AuditTimeline from '../../components/AuditTimeline';
 import TransactionHistoryDrawer from '../../components/TransactionHistoryDrawer';
 import type { UserCategory } from '../../shared/schemas/categorySchemas';
@@ -205,15 +210,17 @@ function GroupHeader({ label, count, totalInCents, totalOutCents, netCents }: Gr
 // ─── Linha de Transação ───────────────────────────────────────────────────────
 interface TransactionRowProps {
   tx: Transaction;
+  runningBalanceCents?: Centavos | undefined;
   isSelected: boolean;
   onToggle: (id: string) => void;
   onEdit: (tx: Transaction) => void;
   onDelete: (tx: Transaction) => void;
   onHistory: (tx: Transaction) => void;
 }
-const TransactionRow = React.memo(({ tx, isSelected, onToggle, onEdit, onDelete, onHistory }: TransactionRowProps) => {
+const TransactionRow = React.memo(({ tx, runningBalanceCents, isSelected, onToggle, onEdit, onDelete, onHistory }: TransactionRowProps) => {
   const isIncome = checkIncome(tx.type);
   const cs = catStyle(tx.category ?? 'Diversos');
+  const runningIsPositive = (runningBalanceCents ?? 0) >= 0;
 
   return (
     <motion.div
@@ -256,11 +263,21 @@ const TransactionRow = React.memo(({ tx, isSelected, onToggle, onEdit, onDelete,
         </div>
       </div>
 
-      <p className={`font-mono font-black text-sm shrink-0 ${
-        isIncome ? 'text-quantum-accent' : 'text-quantum-fg'
-      }`}>
-        {isIncome ? '+' : '-'}{formatCurrency(fromCentavos(getTransactionAbsCentavos(tx)))}
-      </p>
+      <div className="flex flex-col items-end gap-0.5 shrink-0 min-w-[118px]">
+        <p className={`font-mono font-black text-sm leading-tight ${
+          isIncome ? 'text-quantum-accent' : 'text-quantum-fg'
+        }`}>
+          {isIncome ? '+' : '-'}{formatCurrency(fromCentavos(getTransactionAbsCentavos(tx)))}
+        </p>
+        {runningBalanceCents !== undefined && (
+          <div className="text-right leading-none">
+            <p className="text-[9px] text-quantum-fgMuted uppercase tracking-wide">Fluxo acumulado</p>
+            <p className={`text-[10px] font-mono font-bold ${runningIsPositive ? 'text-quantum-accent' : 'text-quantum-red'}`}>
+              {runningIsPositive ? '+' : ''}{formatCurrency(runningBalanceCents, { cents: true })}
+            </p>
+          </div>
+        )}
+      </div>
 
       <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity shrink-0">
         <button
@@ -466,6 +483,11 @@ export default function TransactionsManager({
     const totals = calculateTransactionTotalsCents(filtered);
     return { count: filtered.length, ...totals };
   }, [filtered]);
+
+  const runningBalances = useMemo(
+    () => calculateRunningBalances(filtered),
+    [filtered],
+  );
 
   const virtualRowEntries = useMemo<VirtualRowEntry[]>(() => {
     const rows: VirtualRowEntry[] = [];
@@ -1269,6 +1291,7 @@ export default function TransactionsManager({
                     ) : entry?.kind === 'row' ? (
                       <TransactionRow
                         tx={entry.tx}
+                        runningBalanceCents={runningBalances[entry.tx.id]}
                         isSelected={selected.has(entry.tx.id)}
                         onToggle={toggleOne}
                         onEdit={onEdit}
@@ -1328,6 +1351,7 @@ export default function TransactionsManager({
                       <TransactionRow
                         key={tx.id}
                         tx={tx}
+                        runningBalanceCents={runningBalances[tx.id]}
                         isSelected={selected.has(tx.id)}
                         onToggle={toggleOne}
                         onEdit={onEdit}

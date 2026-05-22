@@ -1,5 +1,5 @@
 import type { Transaction } from '../shared/types/transaction';
-import { absCentavos, toCentavos, type Centavos } from '../shared/types/money';
+import { absCentavos, addCentavos, subtractCentavos, toCentavos, type Centavos } from '../shared/types/money';
 
 export const isIncome = (t: string): boolean =>
   t === 'entrada' || t === 'receita';
@@ -31,4 +31,72 @@ export function getTransactionAbsCentavos(tx: Pick<Transaction, 'value_cents' | 
 
 export function canonicalizeTransactionType(type: string | undefined): 'entrada' | 'saida' {
   return isIncome(type ?? '') ? 'entrada' : 'saida';
+}
+
+function createdAtToMillis(createdAt: Transaction['createdAt']): number | null {
+  if (typeof createdAt === 'number' && Number.isFinite(createdAt)) {
+    return createdAt;
+  }
+
+  if (typeof createdAt === 'string') {
+    const millis = Date.parse(createdAt);
+    return Number.isFinite(millis) ? millis : null;
+  }
+
+  if (createdAt && typeof createdAt === 'object') {
+    if ('toMillis' in createdAt && typeof createdAt.toMillis === 'function') {
+      const millis = createdAt.toMillis();
+      return Number.isFinite(millis) ? millis : null;
+    }
+
+    const seconds = (createdAt as { seconds?: unknown }).seconds;
+    const nanoseconds = (createdAt as { nanoseconds?: unknown }).nanoseconds;
+    if (typeof seconds === 'number' && Number.isFinite(seconds)) {
+      const nanos = typeof nanoseconds === 'number' && Number.isFinite(nanoseconds) ? nanoseconds : 0;
+      return seconds * 1000 + Math.trunc(nanos / 1_000_000);
+    }
+  }
+
+  return null;
+}
+
+function compareTransactionsChronologically(a: Transaction, b: Transaction): number {
+  const byDate = (a.date ?? '').localeCompare(b.date ?? '');
+  if (byDate !== 0) return byDate;
+
+  const aCreatedAt = createdAtToMillis(a.createdAt);
+  const bCreatedAt = createdAtToMillis(b.createdAt);
+
+  if (aCreatedAt !== null && bCreatedAt !== null && aCreatedAt !== bCreatedAt) {
+    return aCreatedAt - bCreatedAt;
+  }
+
+  if (aCreatedAt !== null && bCreatedAt === null) return -1;
+  if (aCreatedAt === null && bCreatedAt !== null) return 1;
+
+  return a.id.localeCompare(b.id);
+}
+
+export function calculateRunningBalances(transactions: Transaction[]): Record<string, Centavos> {
+  const runningBalances: Record<string, Centavos> = {};
+  let running = 0 as Centavos;
+
+  const chronological = transactions
+    .filter(tx => tx.isDeleted !== true)
+    .slice()
+    .sort(compareTransactionsChronologically);
+
+  for (const tx of chronological) {
+    const amount = tx.value_cents === undefined ? (0 as Centavos) : absCentavos(tx.value_cents);
+
+    if (isIncome(tx.type)) {
+      running = addCentavos(running, amount);
+    } else if (isExpense(tx.type)) {
+      running = subtractCentavos(running, amount);
+    }
+
+    runningBalances[tx.id] = running;
+  }
+
+  return runningBalances;
 }
