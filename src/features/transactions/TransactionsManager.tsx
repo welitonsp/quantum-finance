@@ -63,7 +63,7 @@ type ReconciliationStatusFilter = 'all' | 'reconciled' | 'unreconciled';
 const RECONCILIATION_FILTER_LABELS: Record<ReconciliationStatusFilter, string> = {
   all:          'Todas',
   reconciled:   'Conciliadas',
-  unreconciled: 'Não conciliadas',
+  unreconciled: 'Importadas não conciliadas',
 };
 
 interface Group {
@@ -489,7 +489,7 @@ export default function TransactionsManager({
       list = list.filter(tx => tx.reconciliationStatus === 'reconciled');
     }
     if (filterReconciliationStatus === 'unreconciled') {
-      list = list.filter(tx => tx.reconciliationStatus !== 'reconciled');
+      list = list.filter(isImportedUnreconciledTransaction);
     }
 
     return [...list].sort((a, b) => {
@@ -574,7 +574,7 @@ export default function TransactionsManager({
     if (maxCents !== null) list = list.filter(tx => getTransactionAbsCentavos(tx) <= maxCents);
     if (filterOrigin)      list = list.filter(tx => (tx.source ?? 'manual') === filterOrigin);
     if (filterReconciliationStatus === 'reconciled')   list = list.filter(tx => tx.reconciliationStatus === 'reconciled');
-    if (filterReconciliationStatus === 'unreconciled') list = list.filter(tx => tx.reconciliationStatus !== 'reconciled');
+    if (filterReconciliationStatus === 'unreconciled') list = list.filter(isImportedUnreconciledTransaction);
     return list;
   }, [transactions, search, filterType, dateFrom, dateTo, minCents, maxCents, filterOrigin, filterReconciliationStatus]);
 
@@ -917,7 +917,7 @@ export default function TransactionsManager({
                     >
                       <option value="all">Todas</option>
                       <option value="reconciled">Conciliadas</option>
-                      <option value="unreconciled">Não conciliadas</option>
+                      <option value="unreconciled">Importadas não conciliadas</option>
                     </select>
                   </div>
 
