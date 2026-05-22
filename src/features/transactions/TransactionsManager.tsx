@@ -35,6 +35,8 @@ import {
 } from '../../shared/lib/firebaseErrorHandling';
 
 const VIRTUAL_THRESHOLD = 100;
+const RUNNING_BALANCE_HELP =
+  'Considera apenas os lançamentos visíveis/carregados após filtros. Não representa o saldo da conta.';
 
 type VirtualRowEntry =
   | { kind: 'header'; group: Group }
@@ -270,8 +272,13 @@ const TransactionRow = React.memo(({ tx, runningBalanceCents, isSelected, onTogg
           {isIncome ? '+' : '-'}{formatCurrency(fromCentavos(getTransactionAbsCentavos(tx)))}
         </p>
         {runningBalanceCents !== undefined && (
-          <div className="text-right leading-none">
-            <p className="text-[9px] text-quantum-fgMuted uppercase tracking-wide">Fluxo acumulado</p>
+          <div
+            className="text-right leading-none"
+            title={RUNNING_BALANCE_HELP}
+            aria-label={`Acumulado visível. ${RUNNING_BALANCE_HELP}`}
+          >
+            <p className="text-[9px] text-quantum-fgMuted uppercase tracking-wide">Acumulado visível</p>
+            <span className="sr-only">{RUNNING_BALANCE_HELP}</span>
             <p className={`text-[10px] font-mono font-bold ${runningIsPositive ? 'text-quantum-accent' : 'text-quantum-red'}`}>
               {runningIsPositive ? '+' : ''}{formatCurrency(runningBalanceCents, { cents: true })}
             </p>

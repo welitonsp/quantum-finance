@@ -51,12 +51,23 @@ function renderManager(transactions: Transaction[]) {
 }
 
 describe('TransactionsManager running balance UI', () => {
-  it('renderiza o rotulo Fluxo acumulado por linha', () => {
+  it('renderiza o rotulo Acumulado visivel por linha', () => {
     renderManager([
       tx({ id: 'income', description: 'Salario', type: 'entrada', value_cents: cents(100000), date: '2026-05-01' }),
     ]);
 
-    expect(screen.getByText('Fluxo acumulado')).toBeInTheDocument();
+    expect(screen.getByText('Acumulado visível')).toBeInTheDocument();
+    expect(screen.queryByText('Fluxo acumulado')).not.toBeInTheDocument();
+  });
+
+  it('explica que o acumulado considera somente lancamentos visiveis e carregados', () => {
+    renderManager([
+      tx({ id: 'income', description: 'Salario', type: 'entrada', value_cents: cents(100000), date: '2026-05-01' }),
+    ]);
+
+    expect(screen.getByTitle(
+      'Considera apenas os lançamentos visíveis/carregados após filtros. Não representa o saldo da conta.',
+    )).toBeInTheDocument();
   });
 
   it('mantem base vazia sem NaN ou Infinity', () => {
