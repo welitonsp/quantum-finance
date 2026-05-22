@@ -33,6 +33,40 @@ export function canonicalizeTransactionType(type: string | undefined): 'entrada'
   return isIncome(type ?? '') ? 'entrada' : 'saida';
 }
 
+/**
+ * Identifica a etiqueta de exibição para a origem da transação.
+ */
+export function getTransactionOriginLabel(tx: Pick<Transaction, 'source'>): string {
+  if (!tx.source || tx.source === 'manual') return 'Manual';
+  const labels: Record<string, string> = {
+    csv: 'CSV',
+    ofx: 'OFX',
+    pdf: 'PDF',
+  };
+  return labels[tx.source] ?? tx.source.toUpperCase();
+}
+
+/**
+ * Retorna true se a transação foi importada (não manual).
+ */
+export function isImportedTransaction(tx: Pick<Transaction, 'source'>): boolean {
+  return !!tx.source && tx.source !== 'manual';
+}
+
+/**
+ * Retorna true se a transação está explicitamente conciliada.
+ */
+export function isReconciledTransaction(tx: Pick<Transaction, 'reconciliationStatus'>): boolean {
+  return tx.reconciliationStatus === 'reconciled';
+}
+
+/**
+ * Retorna true se a transação foi importada mas ainda não foi conciliada.
+ */
+export function isImportedUnreconciledTransaction(tx: Pick<Transaction, 'source' | 'reconciliationStatus'>): boolean {
+  return isImportedTransaction(tx) && !isReconciledTransaction(tx);
+}
+
 function createdAtToMillis(createdAt: Transaction['createdAt']): number | null {
   if (typeof createdAt === 'number' && Number.isFinite(createdAt)) {
     return createdAt;

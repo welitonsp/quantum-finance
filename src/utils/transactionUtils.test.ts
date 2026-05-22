@@ -1,7 +1,14 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from 'vitest';
 import type { Transaction } from '../shared/types/transaction';
 import type { Centavos } from '../shared/types/money';
-import { calculateRunningBalances } from './transactionUtils';
+import {
+  calculateRunningBalances,
+  getTransactionOriginLabel,
+  isImportedTransaction,
+  isReconciledTransaction,
+  isImportedUnreconciledTransaction,
+} from './transactionUtils';
 
 const cents = (value: number): Centavos => value as Centavos;
 
@@ -17,6 +24,36 @@ function tx(overrides: Partial<Transaction>): Transaction {
     ...overrides,
   } as Transaction;
 }
+
+describe('transaction status helpers', () => {
+  it('getTransactionOriginLabel identifica origens corretamente', () => {
+    expect(getTransactionOriginLabel({ source: 'manual' })).toBe('Manual');
+    expect(getTransactionOriginLabel({})).toBe('Manual');
+    expect(getTransactionOriginLabel({ source: 'csv' })).toBe('CSV');
+    expect(getTransactionOriginLabel({ source: 'ofx' })).toBe('OFX');
+    expect(getTransactionOriginLabel({ source: 'pdf' })).toBe('PDF');
+    expect(getTransactionOriginLabel({ source: 'unknown' as any })).toBe('UNKNOWN');
+  });
+
+  it('isImportedTransaction identifica transacoes nao manuais', () => {
+    expect(isImportedTransaction({ source: 'manual' })).toBe(false);
+    expect(isImportedTransaction({})).toBe(false);
+    expect(isImportedTransaction({ source: 'csv' })).toBe(true);
+    expect(isImportedTransaction({ source: 'ofx' })).toBe(true);
+  });
+
+  it('isReconciledTransaction identifica transacoes conciliadas', () => {
+    expect(isReconciledTransaction({ reconciliationStatus: 'reconciled' })).toBe(true);
+    expect(isReconciledTransaction({})).toBe(false);
+    expect(isReconciledTransaction({ reconciliationStatus: 'pending' as any })).toBe(false);
+  });
+
+  it('isImportedUnreconciledTransaction identifica importadas pendentes de conciliacao', () => {
+    expect(isImportedUnreconciledTransaction({ source: 'csv' })).toBe(true);
+    expect(isImportedUnreconciledTransaction({ source: 'manual' })).toBe(false);
+    expect(isImportedUnreconciledTransaction({ source: 'csv', reconciliationStatus: 'reconciled' })).toBe(false);
+  });
+});
 
 describe('calculateRunningBalances', () => {
   it('retorna estrutura vazia para lista vazia', () => {

@@ -20,8 +20,12 @@ import { auth } from '../../shared/api/firebase/auth';
 import {
   calculateRunningBalances,
   getTransactionAbsCentavos,
+  getTransactionOriginLabel,
   isIncome as checkIncome,
   isExpense as checkExpense,
+  isImportedTransaction,
+  isReconciledTransaction,
+  isImportedUnreconciledTransaction,
 } from '../../utils/transactionUtils';
 import { fromCentavos, type Centavos } from '../../shared/types/money';
 import AuditTimeline from '../../components/AuditTimeline';
@@ -257,11 +261,46 @@ const TransactionRow = React.memo(({ tx, runningBalanceCents, isSelected, onTogg
 
       <div className="flex-1 min-w-0">
         <p className="text-sm font-bold text-quantum-fg truncate leading-tight">{tx.description}</p>
-        <div className="flex items-center gap-2 mt-0.5">
+        <div className="flex flex-wrap items-center gap-2 mt-1">
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${cs.bg} ${cs.text} ${cs.border}`}>
             {tx.category ?? 'Diversos'}
           </span>
-          <span className="text-[10px] text-quantum-fgMuted font-mono">{formatDateShort(tx.date)}</span>
+
+          <div className="flex items-center gap-1.5 border-l border-quantum-border pl-2">
+            {isReconciledTransaction(tx) && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[9px] font-black uppercase tracking-wider"
+                title="Transação conciliada com extrato"
+              >
+                <Check className="w-2.5 h-2.5" />
+                Conciliada
+              </span>
+            )}
+
+            {isImportedUnreconciledTransaction(tx) && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-400 text-[9px] font-black uppercase tracking-wider"
+                title="Importada do extrato bancário (não conciliada)"
+              >
+                <AlertTriangle className="w-2.5 h-2.5" />
+                Importada
+              </span>
+            )}
+
+            <span
+              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[9px] font-bold uppercase tracking-wider ${
+                isImportedTransaction(tx)
+                  ? 'bg-quantum-accent/10 border-quantum-accent/25 text-quantum-accent'
+                  : 'bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted'
+              }`}
+              title={`Origem: ${getTransactionOriginLabel(tx)}`}
+            >
+              {isImportedTransaction(tx) ? <ShieldAlert className="w-2.5 h-2.5" /> : <History className="w-2.5 h-2.5" />}
+              {getTransactionOriginLabel(tx)}
+            </span>
+          </div>
+
+          <span className="text-[10px] text-quantum-fgMuted font-mono border-l border-quantum-border pl-2">{formatDateShort(tx.date)}</span>
         </div>
       </div>
 
@@ -711,13 +750,19 @@ export default function TransactionsManager({
     { v: 'saida',   label: 'Saídas',   icon: TrendingDown },
   ];
 
+  const QUICK_RECON_FILTERS = [
+    { v: 'all',          label: 'Todas', icon: Minus },
+    { v: 'reconciled',   label: 'Conciliadas', icon: Check },
+    { v: 'unreconciled', label: 'Importadas não conciliadas', icon: AlertTriangle },
+  ] as const;
+
   return (
     <div className="flex flex-col h-full">
 
       {/* ═══ BARRA DE FILTROS ═══════════════════════════════════════════════ */}
       <div className="p-4 md:p-5 border-b border-quantum-border bg-quantum-bg/40 space-y-4 select-none">
-        <div className="flex gap-2 items-center">
-          <div className="relative flex-1">
+        <div className="flex flex-wrap gap-2 items-center">
+          <div className="relative flex-1 min-w-[240px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-quantum-fgMuted" />
             <input
               ref={searchRef}
@@ -756,43 +801,67 @@ export default function TransactionsManager({
             ))}
           </div>
 
-          <button
-            onClick={() => setFiltersOpen(o => !o)}
-            aria-label="Filtros avançados"
-            aria-expanded={filtersOpen}
-            className={`p-2.5 rounded-xl border transition-all shrink-0 ${
-              filtersOpen || filterCat || dateFrom || dateTo || valueMin || valueMax || filterOrigin || filterReconciliationStatus !== 'all'
-                ? 'bg-quantum-accentDim border-quantum-accent/30 text-quantum-accent'
-                : 'bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted hover:text-quantum-fg'
-            }`}
-            title="Filtros avançados"
-          >
-            <SlidersHorizontal className="w-4 h-4" />
-          </button>
+          <div className="flex bg-quantum-bgSecondary border border-quantum-border rounded-xl p-1 gap-1 shrink-0">
+            {QUICK_RECON_FILTERS.map(({ v, label, icon: Icon }) => (
+              <button
+                key={v}
+                onClick={() => setFilterReconciliationStatus(v)}
+                aria-pressed={filterReconciliationStatus === v}
+                aria-label={label}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  filterReconciliationStatus === v
+                    ? v === 'reconciled'   ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    : v === 'unreconciled' ? 'bg-amber-500/10   text-amber-400   border border-amber-500/20'
+                    :                        'bg-quantum-cardHover text-quantum-fg       border border-quantum-border'
+                    : 'text-quantum-fgMuted hover:text-quantum-fg'
+                }`}
+                title={label}
+              >
+                <Icon className="w-3 h-3" aria-hidden="true" />
+                <span className="hidden xl:inline">{label}</span>
+              </button>
+            ))}
+          </div>
 
-          <button
-            onClick={() => setAuditOpen(true)}
-            aria-label="Histórico de ações"
-            className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-quantum-border bg-quantum-bgSecondary text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/20 transition-all shrink-0 text-xs font-bold"
-            title="Histórico de ações"
-          >
-            <History className="w-4 h-4" />
-            <span className="hidden sm:inline">Histórico</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setFiltersOpen(o => !o)}
+              aria-label="Filtros avançados"
+              aria-expanded={filtersOpen}
+              className={`p-2.5 rounded-xl border transition-all ${
+                filtersOpen || filterCat || dateFrom || dateTo || valueMin || valueMax || filterOrigin || filterReconciliationStatus !== 'all'
+                  ? 'bg-quantum-accentDim border-quantum-accent/30 text-quantum-accent'
+                  : 'bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted hover:text-quantum-fg'
+              }`}
+              title="Filtros avançados"
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+            </button>
 
-          <button
-            onClick={() => {
-              const csv = transactionsToCSV(filtered);
-              const date = new Date().toISOString().slice(0, 10);
-              downloadCSV(`quantum-finance-transacoes-${date}.csv`, csv);
-            }}
-            aria-label="Exportar CSV"
-            className="flex items-center gap-2 px-3 py-2 bg-quantum-card border border-quantum-border rounded-xl text-xs font-bold text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/40 transition-all"
-            title="Exportar transações filtradas como CSV"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Exportar CSV</span>
-          </button>
+            <button
+              onClick={() => setAuditOpen(true)}
+              aria-label="Histórico de ações"
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-quantum-border bg-quantum-bgSecondary text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/20 transition-all text-xs font-bold"
+              title="Histórico de ações"
+            >
+              <History className="w-4 h-4" />
+              <span className="hidden sm:inline">Histórico</span>
+            </button>
+
+            <button
+              onClick={() => {
+                const csv = transactionsToCSV(filtered);
+                const date = new Date().toISOString().slice(0, 10);
+                downloadCSV(`quantum-finance-transacoes-${date}.csv`, csv);
+              }}
+              aria-label="Exportar CSV"
+              className="flex items-center gap-2 px-3 py-2 bg-quantum-card border border-quantum-border rounded-xl text-xs font-bold text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/40 transition-all"
+              title="Exportar transações filtradas como CSV"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Exportar CSV</span>
+            </button>
+          </div>
         </div>
 
         <AnimatePresence>
