@@ -31,6 +31,7 @@ Este documento estabelece um registro de riscos arquiteturais focado em maturida
 | **AR-05** | Ausência de Double-Entry Ledger | **P2** | Ledger simples | Dificuldade em garantir consistência entre contas (transferências) e auditoria contábil. | Integridade em centavos e idempotência. | Desenhar modelo de Journal Entries. | Futuro |
 | **AR-06** | Multi-moeda Ausente | **P3** | Apenas BRL | Impossibilidade de gerir ativos globais sem refactor amplo. | N/A | Adicionar campo `currency` ao schema. | Futuro |
 | **AR-07** | Dependência de Legado no Cliente | **P3** | Normalização em runtime | Complexidade extra no hook para tratar dados sem `value_cents`. | Conversão em memória no `useAccounts`. | Script de migração de dados (Backfill). | 10F-2 |
+| **AR-08** | Conciliação ainda client-orchestrated | **P1** | Matching e merge ainda dependem de decisão/orquestração no cliente | Risco de corrida, divergência semântica ou resolução inconsistente em múltiplas sessões/dispositivos | Modelo A, history pareado e explicabilidade visual | Inventariar fluxo e migrar reconcile para callable server-trusted com idempotência | 10F-3 |
 
 ## 4. Classificação de Prioridade (Realista)
 
@@ -60,14 +61,22 @@ Este documento estabelece um registro de riscos arquiteturais focado em maturida
 - **NÃO** reescrever o sistema do zero.
 - **NÃO** implementar Double-Entry Ledger imediatamente (exige mudança profunda no UX e persistência).
 - **NÃO** implementar AML (Anti-Money Laundering) ou PCI/PAN enquanto o sistema for PFM.
+- **NÃO** implementar Open Finance enquanto não houver requisito real de produto/regulatório.
+- **NÃO** criar novas Cloud Functions amplas sem inventário prévio de write paths.
+- **NÃO** substituir o modelo de dados atual por ledger contábil sem ADR específica.
 - **NÃO** relaxar as Firestore Security Rules para facilitar o desenvolvimento.
 - **NÃO** quebrar a compatibilidade com documentos legados sem um plano de backfill.
 
 ## 7. Critérios de Entrada para Fases Futuras
 
-- **Fase 10F-4 (Snapshots):** Gatilho se a carga inicial do Dashboard exceder 2 segundos em conexões médias ou se o volume médio de transações por usuário passar de 2.000 registros.
+- **Fase 10F-1 (CorrelationId):** Gatilho se houver aumento de erros reportados por usuários, dificuldade de depuração entre UI/Firestore/Functions ou início de observabilidade operacional.
+- **Fase 10F-2 (Write Paths):** Gatilho imediato antes de qualquer nova migração server-trusted ou nova Cloud Function financeira.
 - **Fase 10F-3 (Server-trusted):** Gatilho ao iniciar qualquer integração de escrita externa ou automação financeira que não passe pela UI.
+- **Fase 10F-4 (Snapshots):** Gatilho se a carga inicial do Dashboard exceder 2 segundos em conexões médias ou se o volume médio de transações por usuário passar de 2.000 registros.
+- **Fase 10F-5 (Functions TypeScript):** Gatilho ao tocar em qualquer callable crítica existente ou ao criar nova lógica financeira no backend.
 - **Double-Entry:** Gatilho se houver necessidade de emitir balancetes contábeis reais ou se a complexidade de transferências entre múltiplas contas/moedas se tornar incontrolável no modelo simples.
+- **Multi-moeda:** Gatilho somente se houver requisito real de ativos globais, câmbio, cripto ou investimentos internacionais.
+- **Open Finance/PCI/AML:** Gatilho somente com integração regulada, dados bancários reais, cartão real, parceiro externo ou obrigação regulatória.
 
 ## 8. Veredito Arquitetural
 
