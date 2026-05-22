@@ -11,7 +11,7 @@ import { useBudgets, currentMonthStr } from '../hooks/useBudgets';
 import { ALLOWED_CATEGORIES } from '../shared/schemas/financialSchemas';
 import { formatCurrency } from '../utils/formatters';
 import type { Transaction } from '../shared/types/transaction';
-import type { BudgetInsight } from '../hooks/useBudgets';
+import type { BudgetInsight, BudgetWriteData } from '../hooks/useBudgets';
 import { fromCentavos, toCentavos } from '../shared/types/money';
 
 // ─── Status config ────────────────────────────────────────────────────────────
@@ -158,7 +158,7 @@ const BUDGET_CATEGORIES = ALLOWED_CATEGORIES.filter(
 );
 
 interface AddFormProps {
-  onAdd:    (data: Omit<BudgetInsight, 'id' | 'createdAt' | 'spent' | 'remaining' | 'progress' | 'projectedSpend' | 'status'>) => Promise<void>;
+  onAdd:    (data: BudgetWriteData) => Promise<void>;
   onClose:  () => void;
 }
 
