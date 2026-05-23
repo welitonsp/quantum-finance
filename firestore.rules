@@ -23,6 +23,11 @@ service cloud.firestore {
       return value is string && value.size() >= min && value.size() <= max;
     }
 
+    function isSafeCorrelationId(value) {
+      return isStringSized(value, 16, 80)
+          && value.matches('^[A-Za-z0-9_-]+$');
+    }
+
     function isValidHistoryAction(value) {
       return value in [
         'CREATE',
@@ -61,7 +66,9 @@ service cloud.firestore {
 
     function isValidHistorySnapshot(value) {
       return value is map
-          && !value.keys().hasAny(['id', 'uid', 'value', 'importHash']);
+          && !value.keys().hasAny([
+            'id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId'
+          ]);
     }
 
     function isValidAuditAction(value) {
@@ -213,6 +220,11 @@ service cloud.firestore {
             (h.action == 'SOFT_DELETE'      && h.origin == 'manual')                      ||
             (h.action == 'BULK_UPDATE'      && h.origin == 'bulk')                        ||
             (h.action == 'UNDO_BULK_UPDATE' && h.origin == 'bulk')
+          )
+          && (
+            !('correlationId' in h)
+            || h.action in ['BULK_UPDATE', 'UNDO_BULK_UPDATE']
+            || h.correlationId == opId
           );
     }
 
@@ -260,7 +272,7 @@ service cloud.firestore {
           && (!('changedFields' in data) || isValidHistoryChangedFields(data.changedFields))
           && (!('origin' in data) || isValidHistoryOrigin(data.origin))
           && (!('reason' in data) || isStringSized(data.reason, 1, 240))
-          && (!('correlationId' in data) || isStringSized(data.correlationId, 1, 128))
+          && (!('correlationId' in data) || isSafeCorrelationId(data.correlationId))
           && (!('importHash' in data) || isStringSized(data.importHash, 64, 64))
           && (!('amount_cents' in data) || isSafeInt(data.amount_cents))
           && (!('category' in data) || isStringSized(data.category, 1, 80));

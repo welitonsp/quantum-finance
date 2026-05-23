@@ -1,6 +1,7 @@
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../api/firebase/index';
 import { logSanitizedFirebaseError } from '../lib/firebaseErrorHandling';
+import { isSafeOperationId } from '../lib/operationTrace';
 
 // ─── Audit Model (replayable) ─────────────────────────────────────────────────
 
@@ -132,7 +133,7 @@ export const AuditService = {
       if (event.changedFields?.length)              payload['changedFields'] = event.changedFields;
       if (event.origin)                             payload['origin']        = event.origin;
       if (event.reason)                             payload['reason']        = event.reason;
-      if (event.correlationId)                      payload['correlationId'] = event.correlationId;
+      if (isSafeOperationId(event.correlationId))    payload['correlationId'] = event.correlationId;
       if (event.importHash)                         payload['importHash']    = event.importHash;
       if (event.amount_cents !== undefined)         payload['amount_cents']  = event.amount_cents;
       if (event.category)                           payload['category']      = event.category;

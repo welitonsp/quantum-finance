@@ -150,16 +150,26 @@ describe('AuditService.logTransactionHistory', () => {
   });
 
   it('correlationId e category incluídos quando presentes', async () => {
+    const correlationId = 'batch_456_safe_trace';
     await AuditService.logTransactionHistory('u1', 'tx-3', mkHistoryEvent({
       action:        'BULK_UPDATE',
-      correlationId: 'batch-456',
+      correlationId,
       category:      'Saúde',
       amount_cents:  5000,
     }));
     const [, data] = mockAddDoc.mock.calls[0] as [unknown, Record<string, unknown>];
-    expect(data['correlationId']).toBe('batch-456');
+    expect(data['correlationId']).toBe(correlationId);
     expect(data['category']).toBe('Saúde');
     expect(data['amount_cents']).toBe(5000);
+  });
+
+  it('omite correlationId inseguro em history', async () => {
+    await AuditService.logTransactionHistory('u1', 'tx-3', mkHistoryEvent({
+      action: 'UPDATE',
+      correlationId: 'uid/user-abc/importHash',
+    }));
+    const [, data] = mockAddDoc.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(data).not.toHaveProperty('correlationId');
   });
 
   it('omite campos opcionais ausentes (before, after, changedFields, etc.)', async () => {

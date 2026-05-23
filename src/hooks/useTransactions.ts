@@ -18,6 +18,7 @@ import {
   logSanitizedFirebaseError,
   type FirebaseErrorOperation,
 } from '../shared/lib/firebaseErrorHandling';
+import { generateSafeOperationId } from '../shared/lib/operationTrace';
 import toast from 'react-hot-toast';
 
 // ─── Bulk Update — tipo restrito (não expõe Partial<Transaction> livre) ────────
@@ -314,7 +315,7 @@ function toMillis(ts: Transaction['updatedAt'] | Transaction['createdAt']): numb
  * Filtra undefined para garantir escrita válida no Firestore.
  */
 export function sanitizeForHistory(tx: Partial<Transaction>): Record<string, unknown> {
-  const excluded = new Set<string>(['id', 'uid', 'value', 'importHash', '_lastOpId']);
+  const excluded = new Set<string>(['id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId']);
   const result: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(tx)) {
     if (!excluded.has(k) && v !== undefined) {
@@ -979,7 +980,7 @@ export function useTransactions(
     isBulkUpdatingRef.current = true;
     setIsBulkUpdating(true);
     try {
-      const bulkCorrId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+      const bulkCorrId = generateSafeOperationId('bulk');
 
       // Modelo A: always use WithHistory. Fetch orphan docs not in memory snap.
       const snapIds = new Set(snap.map(s => s.id));
@@ -1040,7 +1041,7 @@ export function useTransactions(
     setIsUndoing(true);
 
     try {
-      const undoCorrId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+      const undoCorrId = generateSafeOperationId('undo');
       await FirestoreService.batchUndoBulkUpdateTransactionsWithHistory(uid, snap, undoCorrId);
 
       // Auditoria global — fire-and-forget após todos os commits (nunca bloqueia UI)

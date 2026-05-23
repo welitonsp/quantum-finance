@@ -92,7 +92,7 @@ const TRANSACTION_ALLOWED_KEYS = new Set([
   '_lastOpId',
 ]);
 
-const HISTORY_SNAPSHOT_FORBIDDEN_FIELDS = new Set(['id', 'uid', 'value', 'importHash', '_lastOpId']);
+const HISTORY_SNAPSHOT_FORBIDDEN_FIELDS = new Set(['id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId']);
 const HISTORY_SNAPSHOT_ALLOWED_KEYS = new Set(
   [...TRANSACTION_ALLOWED_KEYS].filter(key => !HISTORY_SNAPSHOT_FORBIDDEN_FIELDS.has(key)),
 );
@@ -606,9 +606,10 @@ export const FirestoreService = {
       createdAt: timestamp,
       schemaVersion: 1,
       origin: historyEvent.origin ?? 'manual',
+      correlationId: historyRef.id,
       before: sanitizeHistorySnapshot(historyEvent.before),
       after: sanitizeHistorySnapshot(historyEvent.after),
-      changedFields: historyEvent.changedFields.filter(f => f !== '_lastOpId'),
+      changedFields: historyEvent.changedFields.filter(f => f !== '_lastOpId' && f !== 'correlationId'),
     };
 
     if (import.meta.env.DEV) {
@@ -658,6 +659,7 @@ export const FirestoreService = {
       createdAt: serverTimestamp(),
       schemaVersion: 1,
       origin: 'manual',
+      correlationId: historyRef.id,
       before,
       after,
       changedFields: ['isDeleted', 'deletedAt', 'updatedAt'],
@@ -701,6 +703,7 @@ export const FirestoreService = {
           createdAt: timestamp,
           schemaVersion: 1,
           origin: 'manual',
+          correlationId: historyRef.id,
           before: sanitizeHistorySnapshot(tx as unknown as Record<string, unknown>),
         };
 
