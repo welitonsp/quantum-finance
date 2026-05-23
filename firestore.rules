@@ -123,6 +123,22 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(userId)/transactions/$(txId)/history/$(historyId);
     }
 
+    function accountPath(userId, accountId) {
+      return /databases/$(database)/documents/users/$(userId)/accounts/$(accountId);
+    }
+
+    function accountHistoryCreatePath(userId, accountId) {
+      return /databases/$(database)/documents/users/$(userId)/accounts/$(accountId)/history/create;
+    }
+
+    function accountHistoryDeletePath(userId, accountId) {
+      return /databases/$(database)/documents/users/$(userId)/accounts/$(accountId)/history/delete;
+    }
+
+    function accountHistoryPath(userId, accountId, historyId) {
+      return /databases/$(database)/documents/users/$(userId)/accounts/$(accountId)/history/$(historyId);
+    }
+
     function isValidTransactionBase(data) {
       return data.keys().hasAll([
             'description', 'value_cents', 'schemaVersion', 'type',
@@ -244,25 +260,155 @@ service cloud.firestore {
           && isValidUpdateHistoryPairedInSameBatch(userId, txId);
     }
 
+    function accountAllowedKeys() {
+      return [
+        'name', 'type', 'balance', 'schemaVersion', 'createdAt', 'updatedAt',
+        '_lastOpId'
+      ];
+    }
+
+    function accountSnapshotKeys() {
+      return [
+        'name', 'type', 'balance', 'schemaVersion', 'createdAt', 'updatedAt'
+      ];
+    }
+
+    function accountChangedFieldKeys() {
+      return ['name', 'type', 'balance', 'schemaVersion'];
+    }
+
     function isValidAccount(data) {
       return data.keys().hasAll(['name', 'type', 'balance', 'schemaVersion', 'createdAt', 'updatedAt'])
-          && data.keys().hasOnly(['name', 'type', 'balance', 'schemaVersion', 'createdAt', 'updatedAt'])
+          && data.keys().hasOnly(accountAllowedKeys())
           && isStringSized(data.name, 2, 100)
           && data.type in ['corrente', 'poupanca', 'investimento', 'cartao', 'divida']
           && isSafeInt(data.balance)
-          && data.schemaVersion == 2;
+          && data.schemaVersion == 2
+          && (!('_lastOpId' in data) || isSafeCorrelationId(data._lastOpId));
     }
 
-    function isValidAccountCreate() {
+    function isValidAccountCreate(userId, accountId) {
+      let historyPath = accountHistoryCreatePath(userId, accountId);
       return isValidAccount(request.resource.data)
+          && !('_lastOpId' in request.resource.data)
           && request.resource.data.createdAt == request.time
-          && request.resource.data.updatedAt == request.time;
+          && request.resource.data.updatedAt == request.time
+          && !exists(historyPath)
+          && existsAfter(historyPath);
     }
 
-    function isValidAccountUpdate() {
+    function isValidAccountUpdate(userId, accountId) {
+      let opId = request.resource.data._lastOpId;
+      let historyPath = accountHistoryPath(userId, accountId, opId);
+      let h = getAfter(historyPath).data;
       return isValidAccount(request.resource.data)
           && request.resource.data.createdAt == resource.data.createdAt
-          && request.resource.data.updatedAt == request.time;
+          && request.resource.data.updatedAt == request.time
+          && isSafeCorrelationId(opId)
+          && !exists(historyPath)
+          && existsAfter(historyPath)
+          && h.action == 'UPDATE'
+          && h.origin == 'manual'
+          && h.accountId == accountId
+          && h.correlationId == opId;
+    }
+
+    function isValidAccountDelete(userId, accountId) {
+      let historyPath = accountHistoryDeletePath(userId, accountId);
+      let h = getAfter(historyPath).data;
+      return !exists(historyPath)
+          && existsAfter(historyPath)
+          && h.action == 'DELETE'
+          && h.origin == 'manual'
+          && h.accountId == accountId
+          && isSafeCorrelationId(h.correlationId);
+    }
+
+    function isValidAccountHistoryAction(value) {
+      return value in ['CREATE', 'UPDATE', 'DELETE'];
+    }
+
+    function isValidAccountHistoryChangedFields(value) {
+      return value is list
+          && value.size() <= 4
+          && value.hasOnly(accountChangedFieldKeys());
+    }
+
+    function isValidAccountHistorySnapshot(value) {
+      return value is map
+          && value.keys().hasOnly(accountSnapshotKeys())
+          && (!('name' in value) || isStringSized(value.name, 2, 100))
+          && (!('type' in value) || value.type in ['corrente', 'poupanca', 'investimento', 'cartao', 'divida'])
+          && (!('balance' in value) || isSafeInt(value.balance))
+          && (!('schemaVersion' in value) || value.schemaVersion == 2);
+    }
+
+    function isValidAccountHistory(data, accountId) {
+      return data.keys().hasAll(['action', 'accountId', 'createdAt', 'schemaVersion', 'origin', 'correlationId'])
+          && data.keys().hasOnly([
+            'action', 'accountId', 'before', 'after', 'changedFields',
+            'origin', 'correlationId', 'createdAt', 'schemaVersion'
+          ])
+          && isValidAccountHistoryAction(data.action)
+          && isStringSized(data.accountId, 1, 128)
+          && data.accountId == accountId
+          && data.createdAt == request.time
+          && data.schemaVersion == 1
+          && data.origin == 'manual'
+          && isSafeCorrelationId(data.correlationId)
+          && (!('before' in data) || isValidAccountHistorySnapshot(data.before))
+          && (!('after' in data) || isValidAccountHistorySnapshot(data.after))
+          && (!('changedFields' in data) || isValidAccountHistoryChangedFields(data.changedFields));
+    }
+
+    function accountSnapshotMatches(account, snapshot) {
+      return optionalHistoryFieldMatches(account, snapshot, 'name')
+          && optionalHistoryFieldMatches(account, snapshot, 'type')
+          && optionalHistoryFieldMatches(account, snapshot, 'balance')
+          && optionalHistoryFieldMatches(account, snapshot, 'schemaVersion')
+          && optionalHistoryFieldMatches(account, snapshot, 'createdAt')
+          && optionalHistoryFieldMatches(account, snapshot, 'updatedAt');
+    }
+
+    function isValidAccountCreateHistoryInSameBatch(data, userId, accountId, historyId) {
+      let accountRef = accountPath(userId, accountId);
+      let account = getAfter(accountRef).data;
+      return historyId == 'create'
+          && data.action == 'CREATE'
+          && !exists(accountRef)
+          && existsAfter(accountRef)
+          && !('before' in data)
+          && ('after' in data)
+          && data.after.keys().hasAll(accountSnapshotKeys())
+          && !('_lastOpId' in account)
+          && accountSnapshotMatches(account, data.after);
+    }
+
+    function isValidAccountUpdateHistoryInSameBatch(data, userId, accountId, historyId) {
+      let accountRef = accountPath(userId, accountId);
+      let before = get(accountRef).data;
+      let after = getAfter(accountRef).data;
+      return historyId == data.correlationId
+          && data.action == 'UPDATE'
+          && exists(accountRef)
+          && existsAfter(accountRef)
+          && after._lastOpId == data.correlationId
+          && ('before' in data)
+          && ('after' in data)
+          && accountSnapshotMatches(before, data.before)
+          && accountSnapshotMatches(after, data.after);
+    }
+
+    function isValidAccountDeleteHistoryInSameBatch(data, userId, accountId, historyId) {
+      let accountRef = accountPath(userId, accountId);
+      let before = get(accountRef).data;
+      return historyId == 'delete'
+          && data.action == 'DELETE'
+          && exists(accountRef)
+          && !existsAfter(accountRef)
+          && ('before' in data)
+          && !('after' in data)
+          && accountSnapshotMatches(before, data.before);
     }
 
     function isValidTransactionHistory(data, txId) {
@@ -640,9 +786,21 @@ service cloud.firestore {
 
       match /accounts/{accountId} {
         allow read: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidAccountCreate();
-        allow update: if isOwner(userId) && isValidAccountUpdate();
-        allow delete: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidAccountCreate(userId, accountId);
+        allow update: if isOwner(userId) && isValidAccountUpdate(userId, accountId);
+        allow delete: if isOwner(userId) && isValidAccountDelete(userId, accountId);
+
+        match /history/{historyId} {
+          allow read: if isOwner(userId);
+          allow create: if isOwner(userId)
+            && isValidAccountHistory(request.resource.data, accountId)
+            && (
+              isValidAccountCreateHistoryInSameBatch(request.resource.data, userId, accountId, historyId)
+              || isValidAccountUpdateHistoryInSameBatch(request.resource.data, userId, accountId, historyId)
+              || isValidAccountDeleteHistoryInSameBatch(request.resource.data, userId, accountId, historyId)
+            );
+          allow update, delete: if false;
+        }
       }
 
       match /audit_logs/{logId} {
