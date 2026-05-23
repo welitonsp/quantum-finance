@@ -27,11 +27,17 @@ Este documento estabelece um registro de riscos arquiteturais focado em maturida
 | **AR-01** | Mutações parciais no Client-side | **P1** | Reconciliação e Updates via SDK | Risco de desvio de regra de negócio se o cliente falhar ou for manipulado. | Firestore Rules validam `_lastOpId` e `history`. | Migrar `update/delete` para Callables server-trusted. | 10F-3 |
 | **AR-02** | Agregações Client-side (Gargalo) | **P1** | O(N) no carregamento | Lentidão UI com crescimento do volume de transações (> 5000 itens). | Paginação no `useTransactions`. | Implementar Materialized Summaries (Snapshots). | 10F-4 |
 | **AR-03** | JavaScript Legado em Functions | **P2** | `functions/index.js` em CJS | Dificuldade de manutenção e ausência de tipagem em lógica crítica. | Algumas novas funções em TS. | Migrar fatias do index.js para TS. | 10F-5 |
-| **AR-04** | Ausência de Tracing Ponta-a-Ponta | **P2** | Logs isolados | Dificuldade em correlacionar erro no Dashboard com falha no Firestore. | Sanitized logging. | Implementar `correlationId` / `traceId` leve. | 10F-1 |
+| **AR-04** | Ausência de Tracing Ponta-a-Ponta | **P2** | Parcialmente mitigado em `history` | Dificuldade em correlacionar erro no Dashboard com falha no Firestore. | Sanitized logging; `correlationId` mínimo em transaction history. | Expandir tracing somente com nova fase/ADR. | 10F-1+ |
 | **AR-05** | Ausência de Double-Entry Ledger | **P2** | Ledger simples | Dificuldade em garantir consistência entre contas (transferências) e auditoria contábil. | Integridade em centavos e idempotência. | Desenhar modelo de Journal Entries. | Futuro |
 | **AR-06** | Multi-moeda Ausente | **P3** | Apenas BRL | Impossibilidade de gerir ativos globais sem refactor amplo. | N/A | Adicionar campo `currency` ao schema. | Futuro |
 | **AR-07** | Dependência de Legado no Cliente | **P3** | Normalização em runtime | Complexidade extra no hook para tratar dados sem `value_cents`. | Conversão em memória no `useAccounts`. | Script de migração de dados (Backfill). | 10F-2 |
 | **AR-08** | Conciliação ainda client-orchestrated | **P1** | Matching e merge ainda dependem de decisão/orquestração no cliente | Risco de corrida, divergência semântica ou resolução inconsistente em múltiplas sessões/dispositivos | Modelo A, history pareado e explicabilidade visual | Inventariar fluxo e migrar reconcile para callable server-trusted com idempotência | 10F-3 |
+
+### Nota AR-04 — CorrelationId / Operation Trace
+
+- **10F-1B:** implementou `correlationId` mínimo e seguro em transaction history.
+- O escopo atual é **history-only**: o identificador persiste apenas no root de `users/{uid}/transactions/{txId}/history/{historyId}`.
+- Expansões para importação, IA/categorização, Functions, callables, logs globais, relatórios ou observabilidade externa permanecem futuras e exigem nova fase/ADR.
 
 ## 4. Classificação de Prioridade (Realista)
 
@@ -43,7 +49,7 @@ Este documento estabelece um registro de riscos arquiteturais focado em maturida
 ## 5. Roadmap Sugerido (Evolução Incremental)
 
 ### Curto Prazo (Operacional)
-- **10F-1:** Implementação de `correlationId` em operações críticas para auditoria cruzada.
+- **10F-1:** `correlationId` mínimo em transaction history concluído; expansões para importação, IA, Functions e logs globais exigem nova fase.
 - **10F-2:** Inventário completo de caminhos de escrita (Write Paths) financeiros para preparar migração.
 
 ### Médio Prazo (Segurança e Performance)
@@ -69,7 +75,7 @@ Este documento estabelece um registro de riscos arquiteturais focado em maturida
 
 ## 7. Critérios de Entrada para Fases Futuras
 
-- **Fase 10F-1 (CorrelationId):** Gatilho se houver aumento de erros reportados por usuários, dificuldade de depuração entre UI/Firestore/Functions ou início de observabilidade operacional.
+- **Fase 10F-1 (CorrelationId — expansões):** Após o escopo history-only concluído em 10F-1B, novas expansões devem ser acionadas por aumento de erros reportados por usuários, dificuldade de depuração entre UI/Firestore/Functions ou início de observabilidade operacional.
 - **Fase 10F-2 (Write Paths):** Gatilho imediato antes de qualquer nova migração server-trusted ou nova Cloud Function financeira.
 - **Fase 10F-3 (Server-trusted):** Gatilho ao iniciar qualquer integração de escrita externa ou automação financeira que não passe pela UI.
 - **Fase 10F-4 (Snapshots):** Gatilho se a carga inicial do Dashboard exceder 2 segundos em conexões médias ou se o volume médio de transações por usuário passar de 2.000 registros.
