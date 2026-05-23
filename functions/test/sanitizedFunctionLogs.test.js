@@ -1,31 +1,16 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
 const { describe, it } = require('node:test');
+const { safeSystemLogDetail, sanitizeFunctionError } = require('../lib/lib/logger');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
-const helperStart = source.indexOf('// ─── Sanitized Function Error Logging');
-const helperEnd = source.indexOf('// ─── Persistent rate limiting');
-
-assert.notEqual(helperStart, -1, 'sanitized function error helper block not found');
-assert.notEqual(helperEnd, -1, 'persistent rate limiting block not found');
-
-const helperSource = source.slice(helperStart, helperEnd);
 
 function evaluateSanitizer(context, error) {
-  const sandbox = {
-    error,
-    result: null,
-    detail: null,
+  return {
+    result: sanitizeFunctionError(context, error),
+    detail: safeSystemLogDetail(context),
   };
-  vm.createContext(sandbox);
-  vm.runInContext(`
-${helperSource}
-result = sanitizeFunctionError(${JSON.stringify(context)}, error);
-detail = safeSystemLogDetail(${JSON.stringify(context)});
-`, sandbox);
-  return { result: sandbox.result, detail: sandbox.detail };
 }
 
 describe('sanitized function logging guardrails', () => {

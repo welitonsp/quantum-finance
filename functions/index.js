@@ -19,6 +19,17 @@ const {
   CreateTransactionValidationError,
   validateCreateTransactionPayload,
 } = require('./createTransactionValidation');
+const { maskPII } = require('./lib/lib/piiMasker');
+const {
+  centsToReais,
+  safeCategory,
+  toSafeCategorizationPromptId,
+  txCents,
+} = require('./lib/lib/financialUtils');
+const {
+  safeSystemLogDetail,
+  sanitizeFunctionError,
+} = require('./lib/lib/logger');
 
 admin.initializeApp();
 const adminDb = admin.firestore();
@@ -134,103 +145,6 @@ const GEMINI_API_KEY  = defineSecret('GEMINI_API_KEY');
 const DAILY_AI_LIMIT  = 50;
 const MAX_BATCH_SIZE  = 100;
 const MAX_PROMPT_LEN  = 4_000;
-const ALLOWED_CATEGORIES = new Set([
-  'Alimentação', 'Transporte', 'Assinaturas', 'Educação', 'Saúde',
-  'Moradia', 'Impostos/Taxas', 'Lazer', 'Vestuário', 'Salário',
-  'Freelance', 'Investimento', 'Diversos', 'Outros', 'Importado',
-]);
-
-// ─── PII Masker (server-side second layer of defense) ────────────────────────
-
-const CPF_RE      = /\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g;
-const CNPJ_RE     = /\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/g;
-const EMAIL_RE    = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
-const UUID_RE     = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
-const PHONE_RE    = /(?:\+?55[\s-]?)?(?:\(?\d{2}\)?[\s-]?)?\b9\d{4}[\s-]?\d{4}\b/g;
-const PIX_PARA_RE = /\bpix\s+(?:para|envio|pgto|pag\.?|transf\.?)\s+[A-Za-zÀ-ÿ][\w\sÀ-ÿ'.]{2,39}/gi;
-const PIX_DE_RE   = /\bpix\s+(?:de|rec(?:ebido)?\.?)\s+[A-Za-zÀ-ÿ][\w\sÀ-ÿ'.]{2,39}/gi;
-const TRANSF_RE   = /\b(?:ted|doc)\s+(?:para|de)\s+[A-Za-zÀ-ÿ][\w\sÀ-ÿ'.]{2,39}/gi;
-
-function maskPII(text) {
-  if (!text || typeof text !== 'string') return text ?? '';
-  return text
-    .replace(CPF_RE,      '[CPF]')
-    .replace(CNPJ_RE,     '[CNPJ]')
-    .replace(EMAIL_RE,    '[EMAIL]')
-    .replace(UUID_RE,     '[CHAVE-PIX]')
-    .replace(PHONE_RE,    '[FONE]')
-    .replace(PIX_PARA_RE, 'PIX ENVIADO')
-    .replace(PIX_DE_RE,   'PIX RECEBIDO')
-    .replace(TRANSF_RE,   'TRANSFERENCIA BANCARIA');
-}
-
-function toSafeCents(value) {
-  if (Number.isSafeInteger(value)) return Math.abs(value);
-  if (typeof value === 'number' && Number.isFinite(value)) return Math.abs(Math.round(value * 100));
-  return 0;
-}
-
-function txCents(tx = {}) {
-  if (Number.isSafeInteger(tx.value_cents)) return Math.abs(tx.value_cents);
-  return toSafeCents(tx.value);
-}
-
-function centsToReais(cents) {
-  return (Number.isSafeInteger(cents) ? cents : 0) / 100;
-}
-
-function safeCategory(category) {
-  return ALLOWED_CATEGORIES.has(category) ? category : 'Outros';
-}
-
-const OPAQUE_CATEGORIZATION_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
-
-function toSafeCategorizationPromptId(id, index) {
-  const rawId = typeof id === 'string' ? id : '';
-  return OPAQUE_CATEGORIZATION_ID_RE.test(rawId) ? rawId : `tx_${index}`;
-}
-
-// ─── Sanitized Function Error Logging ────────────────────────────────────────
-
-const SAFE_FUNCTION_ERROR_MESSAGES = Object.freeze({
-  rate_limit_check: 'Rate limit check failed',
-  structured_log_write: 'Structured log write failed',
-  ai_batch_categorization: 'AI categorization failed',
-  ai_chat: 'AI chat failed',
-  ai_audit_report: 'AI audit report failed',
-});
-
-const SAFE_ERROR_CODE_RE = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
-
-function safeErrorCode(error) {
-  if (!error || typeof error !== 'object' || typeof error.code !== 'string') {
-    return 'internal_error';
-  }
-  const code = error.code.trim();
-  return SAFE_ERROR_CODE_RE.test(code) ? code.toLowerCase() : 'internal_error';
-}
-
-function safeErrorContext(context) {
-  return Object.prototype.hasOwnProperty.call(SAFE_FUNCTION_ERROR_MESSAGES, context)
-    ? context
-    : 'unknown_error';
-}
-
-function sanitizeFunctionError(context, error) {
-  const safeContext = safeErrorContext(context);
-  return {
-    status: 'error',
-    context: safeContext,
-    code: safeErrorCode(error),
-    message: SAFE_FUNCTION_ERROR_MESSAGES[safeContext] ?? 'Operation failed',
-  };
-}
-
-function safeSystemLogDetail(context) {
-  const safeContext = safeErrorContext(context);
-  return SAFE_FUNCTION_ERROR_MESSAGES[safeContext] ?? 'Operation failed';
-}
-
 // ─── Persistent rate limiting (Firestore transaction — survives cold starts) ──
 
 async function checkAndIncrementRateLimit(uid) {
