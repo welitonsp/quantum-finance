@@ -55,6 +55,8 @@ const SAFE_CORRELATION_ID = 'op_safe_trace_0001';
 const SAFE_BULK_CORRELATION_ID = 'bulk_safe_trace_0001';
 const ACCOUNT_REAL = 'account-real-001';
 const LEGACY_ACCOUNT = 'account-legacy-001';
+const RECURRING_REAL = 'recurring-real-001';
+const LEGACY_RECURRING = 'recurring-legacy-001';
 
 const validHistoryPayload = () => ({
   action: 'UPDATE' as const,
@@ -119,6 +121,61 @@ const validAccountHistoryPayload = (
   before:        accountHistorySnapshot(),
   after:         accountHistorySnapshot({ name: 'Conta Atualizada', updatedAt: serverTimestamp() }),
   changedFields: ['name'],
+  ...overrides,
+});
+
+const validRecurringPayload = (overrides: Record<string, unknown> = {}) => ({
+  description:   'Aluguel',
+  value:         120050,
+  category:      'Moradia',
+  dueDay:        1,
+  active:        true,
+  frequency:     'mensal' as const,
+  schemaVersion: 2,
+  createdAt:     serverTimestamp(),
+  updatedAt:     serverTimestamp(),
+  ...overrides,
+});
+
+const fixedRecurringPayload = (overrides: Record<string, unknown> = {}) => ({
+  description:   'Aluguel',
+  value:         120050,
+  category:      'Moradia',
+  dueDay:        1,
+  active:        true,
+  frequency:     'mensal' as const,
+  schemaVersion: 2,
+  createdAt:     FIXED_TS,
+  updatedAt:     FIXED_TS,
+  ...overrides,
+});
+
+const recurringHistorySnapshot = (overrides: Record<string, unknown> = {}) => ({
+  description:   'Aluguel',
+  value_cents:   120050,
+  category:      'Moradia',
+  dueDay:        1,
+  active:        true,
+  frequency:     'mensal' as const,
+  schemaVersion: 2,
+  createdAt:     FIXED_TS,
+  updatedAt:     FIXED_TS,
+  ...overrides,
+});
+
+const validRecurringHistoryPayload = (
+  recurringTaskId: string,
+  overrides: Record<string, unknown> = {},
+) => ({
+  action:          'UPDATE' as const,
+  recurringTaskId,
+  createdAt:       serverTimestamp(),
+  schemaVersion:   1,
+  origin:          'manual' as const,
+  correlationId:   SAFE_CORRELATION_ID,
+  before:          recurringHistorySnapshot(),
+  after:           recurringHistorySnapshot({ category: 'Assinaturas', updatedAt: serverTimestamp() }),
+  changedFields:   ['category'],
   ...overrides,
 });
 
@@ -187,6 +244,25 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
           balance:   1500.50,
           createdAt: FIXED_TS,
           updatedAt: FIXED_TS,
+        },
+      );
+
+      await setDoc(
+        doc(db, 'users', UID_A, 'recurringTasks', RECURRING_REAL),
+        fixedRecurringPayload(),
+      );
+
+      await setDoc(
+        doc(db, 'users', UID_A, 'recurringTasks', LEGACY_RECURRING),
+        {
+          description: 'Recorrente legado',
+          value:       25000,
+          category:    'Assinaturas',
+          dueDay:      10,
+          active:      true,
+          frequency:   'mensal',
+          createdAt:   FIXED_TS,
+          updatedAt:   FIXED_TS,
         },
       );
     });
@@ -1848,6 +1924,196 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
     it('H10 — contas legadas continuam legíveis', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       await assertSucceeds(getDoc(doc(alice.firestore(), 'users', UID_A, 'accounts', LEGACY_ACCOUNT)));
+    });
+  });
+
+  // ── I. recurringTasks/{taskId}/history — FASE 10F-3C ───────────────────────
+
+  describe('I. recurringTasks/{taskId}/history — Modelo A leve', () => {
+    const seedRecurring = async (taskId: string, overrides: Record<string, unknown> = {}) => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(
+          doc(ctx.firestore(), 'users', UID_A, 'recurringTasks', taskId),
+          fixedRecurringPayload(overrides),
+        );
+      });
+    };
+
+    const commitCreateRecurringWithHistory = async (
+      taskId: string,
+      taskOverrides: Record<string, unknown> = {},
+      historyOverrides: Record<string, unknown> = {},
+    ) => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      const taskRef = doc(db, 'users', UID_A, 'recurringTasks', taskId);
+      const taskPayload = validRecurringPayload(taskOverrides);
+
+      batch.set(taskRef, taskPayload);
+      batch.set(doc(db, 'users', UID_A, 'recurringTasks', taskId, 'history', 'create'), {
+        action:          'CREATE',
+        recurringTaskId: taskId,
+        createdAt:       serverTimestamp(),
+        schemaVersion:   1,
+        origin:          'manual',
+        correlationId:   SAFE_CORRELATION_ID,
+        after: {
+          description:   taskPayload.description,
+          value_cents:   taskPayload.value,
+          category:      taskPayload.category,
+          dueDay:        taskPayload.dueDay,
+          active:        taskPayload.active,
+          frequency:     taskPayload.frequency,
+          schemaVersion: taskPayload.schemaVersion,
+          createdAt:     taskPayload.createdAt,
+          updatedAt:     taskPayload.updatedAt,
+        },
+        changedFields: [
+          'description', 'value_cents', 'category', 'dueDay',
+          'active', 'frequency', 'schemaVersion',
+        ],
+        ...historyOverrides,
+      });
+
+      return batch.commit();
+    };
+
+    const commitUpdateRecurringWithHistory = async (
+      taskId: string,
+      opId: string,
+      updateOverrides: Record<string, unknown> = {},
+      historyOverrides: Record<string, unknown> = {},
+    ) => {
+      await seedRecurring(taskId);
+
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      const updatePayload = {
+        category:  'Assinaturas',
+        updatedAt: serverTimestamp(),
+        _lastOpId: opId,
+        ...updateOverrides,
+      };
+
+      batch.update(doc(db, 'users', UID_A, 'recurringTasks', taskId), updatePayload);
+      batch.set(doc(db, 'users', UID_A, 'recurringTasks', taskId, 'history', opId), {
+        ...validRecurringHistoryPayload(taskId, {
+          correlationId: opId,
+          after: recurringHistorySnapshot({
+            category:  updatePayload.category,
+            updatedAt: updatePayload.updatedAt,
+          }),
+        }),
+        ...historyOverrides,
+      });
+
+      return batch.commit();
+    };
+
+    it('I1 — CREATE de recurringTask com history pareado deve passar', async () => {
+      await assertSucceeds(commitCreateRecurringWithHistory('recurring-i1-create'));
+    });
+
+    it('I2 — CREATE de recurringTask sem history pareado deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertFails(setDoc(
+        doc(alice.firestore(), 'users', UID_A, 'recurringTasks', 'recurring-i2-no-history'),
+        validRecurringPayload(),
+      ));
+    });
+
+    it('I3 — UPDATE de recurringTask com history pareado deve passar', async () => {
+      await assertSucceeds(commitUpdateRecurringWithHistory(
+        'recurring-i3-update',
+        'op_recurring_update_0001',
+      ));
+    });
+
+    it('I4 — UPDATE de recurringTask sem history pareado deve falhar', async () => {
+      const taskId = 'recurring-i4-no-history';
+      await seedRecurring(taskId);
+
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertFails(updateDoc(doc(alice.firestore(), 'users', UID_A, 'recurringTasks', taskId), {
+        category:  'Assinaturas',
+        updatedAt: serverTimestamp(),
+        _lastOpId: 'op_recurring_no_history',
+      }));
+    });
+
+    it('I5 — DELETE de recurringTask com history pareado deve passar', async () => {
+      const taskId = 'recurring-i5-delete';
+      await seedRecurring(taskId);
+
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'users', UID_A, 'recurringTasks', taskId, 'history', 'delete'), {
+        action:          'DELETE',
+        recurringTaskId: taskId,
+        createdAt:       serverTimestamp(),
+        schemaVersion:   1,
+        origin:          'manual',
+        correlationId:   'op_recurring_delete_0001',
+        before:          recurringHistorySnapshot(),
+        changedFields: [
+          'description', 'value_cents', 'category', 'dueDay',
+          'active', 'frequency', 'schemaVersion',
+        ],
+      });
+      batch.delete(doc(db, 'users', UID_A, 'recurringTasks', taskId));
+
+      await assertSucceeds(batch.commit());
+    });
+
+    it('I6 — DELETE de recurringTask sem history pareado deve falhar', async () => {
+      const taskId = 'recurring-i6-delete-no-history';
+      await seedRecurring(taskId);
+
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertFails(deleteDoc(doc(alice.firestore(), 'users', UID_A, 'recurringTasks', taskId)));
+    });
+
+    it('I7 — history de recurringTask com correlationId inválido deve falhar', async () => {
+      await assertFails(commitUpdateRecurringWithHistory(
+        'recurring-i7-bad-correlation',
+        'op_recurring_update_0002',
+        {},
+        { correlationId: 'unsafe correlation id!' },
+      ));
+    });
+
+    it.each(['uid', 'id', 'path', 'correlationId', '_lastOpId', 'value'])(
+      'I8 — before/after com campo proibido %s deve falhar',
+      async (field) => {
+        await assertFails(commitUpdateRecurringWithHistory(
+          `recurring-i8-${field.replace('_', '')}`,
+          `op_recurring_${field.replace('_', '')}_0003`,
+          {},
+          {
+            after: recurringHistorySnapshot({
+              category:  'Assinaturas',
+              updatedAt: serverTimestamp(),
+              [field]:   `forbidden-${field}`,
+            }),
+          },
+        ));
+      },
+    );
+
+    it('I9 — campos monetários inválidos em recurringTask são rejeitados', async () => {
+      await assertFails(commitCreateRecurringWithHistory(
+        'recurring-i9-invalid-money',
+        { value: 12.5 },
+        { after: { ...recurringHistorySnapshot(), value_cents: 12.5 } },
+      ));
+    });
+
+    it('I10 — recorrentes legadas continuam legíveis', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertSucceeds(getDoc(doc(alice.firestore(), 'users', UID_A, 'recurringTasks', LEGACY_RECURRING)));
     });
   });
 

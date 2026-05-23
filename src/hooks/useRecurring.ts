@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
+import { generateSafeOperationId } from '../shared/lib/operationTrace';
 import { toCentavos, fromCentavos } from '../shared/schemas/financialSchemas';
 import { FirestoreService } from '../shared/services/FirestoreService';
 import { AuditService, type AuditChange } from '../shared/services/AuditService';
@@ -15,6 +16,34 @@ interface UseRecurringReturn {
   updateRecurring: (id: string, data: Partial<RecurringTask>) => Promise<void>;
   removeRecurring: (id: string) => Promise<void>;
 }
+
+type RecurringHistoryAction = 'CREATE' | 'UPDATE' | 'DELETE';
+
+const RECURRING_HISTORY_FIELDS = [
+  'description',
+  'value_cents',
+  'type',
+  'category',
+  'dueDay',
+  'active',
+  'frequency',
+  'schemaVersion',
+  'createdAt',
+  'updatedAt',
+] as const;
+
+type RecurringHistoryField = typeof RECURRING_HISTORY_FIELDS[number];
+
+const RECURRING_HISTORY_CHANGED_FIELDS: RecurringHistoryField[] = [
+  'description',
+  'value_cents',
+  'type',
+  'category',
+  'dueDay',
+  'active',
+  'frequency',
+  'schemaVersion',
+];
 
 export function useRecurring(uid: string): UseRecurringReturn {
   const [recurringTasks, setRecurringTasks] = useState<RecurringTask[]>([]);
@@ -52,23 +81,62 @@ export function useRecurring(uid: string): UseRecurringReturn {
 
   const addRecurring = useCallback(async (data: Omit<RecurringTask, 'id'>) => {
     if (!uid) return;
-    const finalData = { ...data, value: toCentavos(data.value) };
-    const result = await FirestoreService.addRecurringTask(uid, finalData as Record<string, unknown>);
+    const colRef = FirestoreService.getRecurringCollection(uid);
+    const taskRef = doc(colRef);
+    const timestamp = serverTimestamp();
+    const correlationId = generateSafeOperationId('op');
+    const finalData = {
+      ...data,
+      value:         toCentavos(data.value),
+      schemaVersion: 2,
+      createdAt:     timestamp,
+      updatedAt:     timestamp,
+    };
+    const after = sanitizeRecurringForHistory(finalData);
+    const batch = writeBatch(db);
+
+    batch.set(taskRef, finalData);
+    batch.set(doc(db, 'users', uid, 'recurringTasks', taskRef.id, 'history', 'create'), {
+      ...buildRecurringHistory('CREATE', taskRef.id, correlationId),
+      after,
+      changedFields: computeRecurringChangedFields({}, after),
+    });
+    await batch.commit();
+
     void AuditService.logAction({
       userId: uid,
       action: 'ADD_RECURRING',
       entity: 'RECURRING_TASK',
       details: typeof data.description === 'string' ? String(data.description).slice(0, 160) : 'Nova tarefa recorrente',
     });
-    return result;
+    return taskRef.id;
   }, [uid]);
 
   const updateRecurring = useCallback(async (id: string, data: Partial<RecurringTask>): Promise<void> => {
     if (!uid || !id) return;
     const finalData: Record<string, unknown> = { ...data };
     if (data.value !== undefined) finalData['value'] = toCentavos(data.value);
-    const docRef = doc(db, 'users', uid, 'recurringTasks', id);
-    await updateDoc(docRef, finalData);
+    finalData['updatedAt'] = serverTimestamp();
+    const correlationId = generateSafeOperationId('op');
+    finalData['_lastOpId'] = correlationId;
+    delete finalData['id'];
+    delete finalData['uid'];
+    const taskRef = doc(db, 'users', uid, 'recurringTasks', id);
+    const snap = await getDoc(taskRef);
+    if (!snap.exists()) return;
+    const before = sanitizeRecurringForHistory(snap.data());
+    const after = sanitizeRecurringForHistory({ ...snap.data(), ...finalData });
+    const batch = writeBatch(db);
+
+    batch.update(taskRef, finalData);
+    batch.set(doc(db, 'users', uid, 'recurringTasks', id, 'history', correlationId), {
+      ...buildRecurringHistory('UPDATE', id, correlationId),
+      before,
+      after,
+      changedFields: computeRecurringChangedFields(before, after),
+    });
+    await batch.commit();
+
     const current  = recurringTasksRef.current.find(t => t.id === id);
     const changes: AuditChange[] = Object.keys(data)
       .filter(k => k !== 'id')
@@ -89,15 +157,66 @@ export function useRecurring(uid: string): UseRecurringReturn {
 
   const removeRecurring = useCallback(async (id: string) => {
     if (!uid || !id) return;
-    const result = await FirestoreService.deleteRecurringTask(uid, id);
+    const taskRef = doc(db, 'users', uid, 'recurringTasks', id);
+    const snap = await getDoc(taskRef);
+    if (!snap.exists()) return;
+    const correlationId = generateSafeOperationId('op');
+    const before = sanitizeRecurringForHistory(snap.data());
+    const batch = writeBatch(db);
+
+    batch.set(doc(db, 'users', uid, 'recurringTasks', id, 'history', 'delete'), {
+      ...buildRecurringHistory('DELETE', id, correlationId),
+      before,
+      changedFields: RECURRING_HISTORY_CHANGED_FIELDS.filter(field => field in before),
+    });
+    batch.delete(taskRef);
+    await batch.commit();
+
     void AuditService.logAction({
       userId: uid,
       action: 'DELETE_RECURRING',
       entity: 'RECURRING_TASK',
       details: id.slice(0, 160),
     });
-    return result;
   }, [uid]);
 
   return { recurringTasks, loading, error, addRecurring, updateRecurring, removeRecurring };
+}
+
+function buildRecurringHistory(
+  action: RecurringHistoryAction,
+  recurringTaskId: string,
+  correlationId: string,
+): Record<string, unknown> {
+  return {
+    action,
+    recurringTaskId,
+    origin:        'manual',
+    correlationId,
+    createdAt:     serverTimestamp(),
+    schemaVersion: 1,
+  };
+}
+
+export function sanitizeRecurringForHistory(task: Record<string, unknown>): Record<string, unknown> {
+  const source = { ...task };
+  if (source['value_cents'] === undefined && typeof source['value'] === 'number') {
+    source['value_cents'] = source['value'];
+  }
+
+  return RECURRING_HISTORY_FIELDS.reduce<Record<string, unknown>>((snapshot, field) => {
+    if (source[field] !== undefined) snapshot[field] = source[field];
+    return snapshot;
+  }, {});
+}
+
+export function computeRecurringChangedFields(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+): RecurringHistoryField[] {
+  return RECURRING_HISTORY_CHANGED_FIELDS.filter(field => {
+    const beforeValue = before[field];
+    const afterValue = after[field];
+    return JSON.stringify(beforeValue) !== JSON.stringify(afterValue);
+  });
 }
