@@ -139,6 +139,22 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(userId)/accounts/$(accountId)/history/$(historyId);
     }
 
+    function recurringTaskPath(userId, taskId) {
+      return /databases/$(database)/documents/users/$(userId)/recurringTasks/$(taskId);
+    }
+
+    function recurringTaskHistoryCreatePath(userId, taskId) {
+      return /databases/$(database)/documents/users/$(userId)/recurringTasks/$(taskId)/history/create;
+    }
+
+    function recurringTaskHistoryDeletePath(userId, taskId) {
+      return /databases/$(database)/documents/users/$(userId)/recurringTasks/$(taskId)/history/delete;
+    }
+
+    function recurringTaskHistoryPath(userId, taskId, historyId) {
+      return /databases/$(database)/documents/users/$(userId)/recurringTasks/$(taskId)/history/$(historyId);
+    }
+
     function isValidTransactionBase(data) {
       return data.keys().hasAll([
             'description', 'value_cents', 'schemaVersion', 'type',
@@ -677,7 +693,7 @@ service cloud.firestore {
           && data.keys().hasOnly([
             'description', 'value', 'value_cents', 'type', 'category',
             'dueDay', 'active', 'frequency', 'schemaVersion',
-            'createdAt', 'updatedAt', 'uid'
+            'createdAt', 'updatedAt', 'uid', '_lastOpId'
           ])
           && (('value' in data) || ('value_cents' in data))
           && isStringSized(data.description, 2, 160)
@@ -689,20 +705,133 @@ service cloud.firestore {
           && data.active is bool
           && data.frequency in ['mensal', 'anual']
           && data.schemaVersion == 2
-          && (!('uid' in data) || data.uid == userId);
+          && (!('uid' in data) || data.uid == userId)
+          && (!('_lastOpId' in data) || isSafeCorrelationId(data._lastOpId));
     }
 
-    function isValidRecurringTaskCreate(userId) {
+    function isValidRecurringTaskCreate(userId, taskId) {
+      let historyPath = recurringTaskHistoryCreatePath(userId, taskId);
       return isValidRecurringTask(request.resource.data, userId)
+          && !('_lastOpId' in request.resource.data)
           && request.resource.data.createdAt == request.time
-          && request.resource.data.updatedAt == request.time;
+          && request.resource.data.updatedAt == request.time
+          && !exists(historyPath)
+          && existsAfter(historyPath);
     }
 
-    function isValidRecurringTaskUpdate(userId) {
+    function isValidRecurringTaskUpdate(userId, taskId) {
+      let opId = request.resource.data._lastOpId;
+      let historyPath = recurringTaskHistoryPath(userId, taskId, opId);
+      let h = getAfter(historyPath).data;
       return isValidRecurringTask(request.resource.data, userId)
           && request.resource.data.createdAt == resource.data.createdAt
           && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['updatedAt'])
-              || request.resource.data.updatedAt == request.time);
+              || request.resource.data.updatedAt == request.time)
+          && isSafeCorrelationId(opId)
+          && !exists(historyPath)
+          && existsAfter(historyPath)
+          && h.action == 'UPDATE'
+          && h.origin == 'manual'
+          && h.recurringTaskId == taskId
+          && h.correlationId == opId;
+    }
+
+    function isValidRecurringTaskDelete(userId, taskId) {
+      let historyPath = recurringTaskHistoryDeletePath(userId, taskId);
+      let h = getAfter(historyPath).data;
+      return !exists(historyPath)
+          && existsAfter(historyPath)
+          && h.action == 'DELETE'
+          && h.origin == 'manual'
+          && h.recurringTaskId == taskId
+          && isSafeCorrelationId(h.correlationId);
+    }
+
+    function recurringTaskSnapshotKeys() {
+      return [
+        'description', 'value_cents', 'type', 'category', 'dueDay', 'active',
+        'frequency', 'schemaVersion', 'createdAt', 'updatedAt'
+      ];
+    }
+
+    function recurringTaskChangedFieldKeys() {
+      return [
+        'description', 'value_cents', 'type', 'category', 'dueDay', 'active',
+        'frequency', 'schemaVersion'
+      ];
+    }
+
+    function isValidRecurringTaskHistoryAction(value) {
+      return value in ['CREATE', 'UPDATE', 'DELETE'];
+    }
+
+    function isValidRecurringTaskHistoryChangedFields(value) {
+      return value is list
+          && value.size() <= 8
+          && value.hasOnly(recurringTaskChangedFieldKeys());
+    }
+
+    function isValidRecurringTaskHistorySnapshot(value) {
+      return value is map
+          && value.keys().hasOnly(recurringTaskSnapshotKeys())
+          && (!('description' in value) || isStringSized(value.description, 2, 160))
+          && (!('value_cents' in value) || isPositiveSafeInt(value.value_cents))
+          && (!('type' in value) || value.type in ['entrada', 'saida', 'receita', 'despesa'])
+          && (!('category' in value) || isStringSized(value.category, 1, 80))
+          && (!('dueDay' in value) || (value.dueDay is int && value.dueDay >= 1 && value.dueDay <= 31))
+          && (!('active' in value) || value.active is bool)
+          && (!('frequency' in value) || value.frequency in ['mensal', 'anual'])
+          && (!('schemaVersion' in value) || value.schemaVersion == 2);
+    }
+
+    function isValidRecurringTaskHistory(data, taskId) {
+      return data.keys().hasAll(['action', 'recurringTaskId', 'createdAt', 'schemaVersion', 'origin', 'correlationId'])
+          && data.keys().hasOnly([
+            'action', 'recurringTaskId', 'before', 'after', 'changedFields',
+            'origin', 'correlationId', 'createdAt', 'schemaVersion'
+          ])
+          && isValidRecurringTaskHistoryAction(data.action)
+          && isStringSized(data.recurringTaskId, 1, 128)
+          && data.recurringTaskId == taskId
+          && data.createdAt == request.time
+          && data.schemaVersion == 1
+          && data.origin == 'manual'
+          && isSafeCorrelationId(data.correlationId)
+          && (!('before' in data) || isValidRecurringTaskHistorySnapshot(data.before))
+          && (!('after' in data) || isValidRecurringTaskHistorySnapshot(data.after))
+          && (!('changedFields' in data) || isValidRecurringTaskHistoryChangedFields(data.changedFields));
+    }
+
+    function isValidRecurringTaskCreateHistoryInSameBatch(data, userId, taskId, historyId) {
+      return historyId == 'create'
+          && data.action == 'CREATE'
+          && !exists(recurringTaskPath(userId, taskId))
+          && existsAfter(recurringTaskPath(userId, taskId))
+          && !('before' in data)
+          && ('after' in data)
+          && data.after.keys().hasAll([
+            'description', 'value_cents', 'category', 'dueDay', 'active',
+            'frequency', 'schemaVersion', 'createdAt', 'updatedAt'
+          ]);
+    }
+
+    function isValidRecurringTaskUpdateHistoryInSameBatch(data, userId, taskId, historyId) {
+      return historyId == data.correlationId
+          && data.action == 'UPDATE'
+          && exists(recurringTaskPath(userId, taskId))
+          && existsAfter(recurringTaskPath(userId, taskId))
+          && getAfter(recurringTaskPath(userId, taskId)).data._lastOpId == data.correlationId
+          && ('before' in data)
+          && ('after' in data);
+    }
+
+    function isValidRecurringTaskDeleteHistoryInSameBatch(data, userId, taskId, historyId) {
+      return historyId == 'delete'
+          && data.action == 'DELETE'
+          && exists(recurringTaskPath(userId, taskId))
+          && !existsAfter(recurringTaskPath(userId, taskId))
+          && ('before' in data)
+          && !('after' in data);
     }
 
     function isValidBasisPoints(value, min, max) {
@@ -854,9 +983,21 @@ service cloud.firestore {
 
       match /recurringTasks/{taskId} {
         allow read: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidRecurringTaskCreate(userId);
-        allow update: if isOwner(userId) && isValidRecurringTaskUpdate(userId);
-        allow delete: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidRecurringTaskCreate(userId, taskId);
+        allow update: if isOwner(userId) && isValidRecurringTaskUpdate(userId, taskId);
+        allow delete: if isOwner(userId) && isValidRecurringTaskDelete(userId, taskId);
+
+        match /history/{historyId} {
+          allow read: if isOwner(userId);
+          allow create: if isOwner(userId)
+            && isValidRecurringTaskHistory(request.resource.data, taskId)
+            && (
+              isValidRecurringTaskCreateHistoryInSameBatch(request.resource.data, userId, taskId, historyId)
+              || isValidRecurringTaskUpdateHistoryInSameBatch(request.resource.data, userId, taskId, historyId)
+              || isValidRecurringTaskDeleteHistoryInSameBatch(request.resource.data, userId, taskId, historyId)
+            );
+          allow update, delete: if false;
+        }
       }
 
       match /recurring/{taskId} {
