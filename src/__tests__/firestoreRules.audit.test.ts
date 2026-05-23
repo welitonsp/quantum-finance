@@ -30,6 +30,7 @@ import {
   deleteDoc,
   deleteField,
   doc,
+  getDoc,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -52,6 +53,8 @@ const IMPORT_HASH_A = 'a'.repeat(64);
 const IMPORT_HASH_B = 'b'.repeat(64);
 const SAFE_CORRELATION_ID = 'op_safe_trace_0001';
 const SAFE_BULK_CORRELATION_ID = 'bulk_safe_trace_0001';
+const ACCOUNT_REAL = 'account-real-001';
+const LEGACY_ACCOUNT = 'account-legacy-001';
 
 const validHistoryPayload = () => ({
   action: 'UPDATE' as const,
@@ -71,6 +74,52 @@ const validAuditPayload = () => ({
   source: 'csv',
   amount_cents: 50000,
   details: 'Imported 5 transactions',
+});
+
+const validAccountPayload = (overrides: Record<string, unknown> = {}) => ({
+  name:          'Conta Principal',
+  type:          'corrente' as const,
+  balance:       150050,
+  schemaVersion: 2,
+  createdAt:     serverTimestamp(),
+  updatedAt:     serverTimestamp(),
+  ...overrides,
+});
+
+const fixedAccountPayload = (overrides: Record<string, unknown> = {}) => ({
+  name:          'Conta Principal',
+  type:          'corrente' as const,
+  balance:       150050,
+  schemaVersion: 2,
+  createdAt:     FIXED_TS,
+  updatedAt:     FIXED_TS,
+  ...overrides,
+});
+
+const accountHistorySnapshot = (overrides: Record<string, unknown> = {}) => ({
+  name:          'Conta Principal',
+  type:          'corrente' as const,
+  balance:       150050,
+  schemaVersion: 2,
+  createdAt:     FIXED_TS,
+  updatedAt:     FIXED_TS,
+  ...overrides,
+});
+
+const validAccountHistoryPayload = (
+  accountId: string,
+  overrides: Record<string, unknown> = {},
+) => ({
+  action:        'UPDATE' as const,
+  accountId,
+  createdAt:     serverTimestamp(),
+  schemaVersion: 1,
+  origin:        'manual' as const,
+  correlationId: SAFE_CORRELATION_ID,
+  before:        accountHistorySnapshot(),
+  after:         accountHistorySnapshot({ name: 'Conta Atualizada', updatedAt: serverTimestamp() }),
+  changedFields: ['name'],
+  ...overrides,
 });
 
 // ─── Suíte principal ──────────────────────────────────────────────────────────
@@ -120,6 +169,22 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
           date: '2026-01-01',
           source: 'csv',
           importHash: IMPORT_HASH_A,
+          createdAt: FIXED_TS,
+          updatedAt: FIXED_TS,
+        },
+      );
+
+      await setDoc(
+        doc(db, 'users', UID_A, 'accounts', ACCOUNT_REAL),
+        fixedAccountPayload(),
+      );
+
+      await setDoc(
+        doc(db, 'users', UID_A, 'accounts', LEGACY_ACCOUNT),
+        {
+          name:      'Conta Legada',
+          type:      'corrente',
+          balance:   1500.50,
           createdAt: FIXED_TS,
           updatedAt: FIXED_TS,
         },
@@ -1604,6 +1669,185 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       });
 
       await assertSucceeds(batch.commit());
+    });
+  });
+
+  // ── H. accounts/{accountId}/history — FASE 10F-3B ─────────────────────────
+
+  describe('H. accounts/{accountId}/history — Modelo A leve', () => {
+    const seedAccount = async (accountId: string, overrides: Record<string, unknown> = {}) => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(
+          doc(ctx.firestore(), 'users', UID_A, 'accounts', accountId),
+          fixedAccountPayload(overrides),
+        );
+      });
+    };
+
+    const commitCreateAccountWithHistory = async (
+      accountId: string,
+      accountOverrides: Record<string, unknown> = {},
+      historyOverrides: Record<string, unknown> = {},
+    ) => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      const accountRef = doc(db, 'users', UID_A, 'accounts', accountId);
+      const accountPayload = validAccountPayload(accountOverrides);
+
+      batch.set(accountRef, accountPayload);
+      batch.set(doc(db, 'users', UID_A, 'accounts', accountId, 'history', 'create'), {
+        action:        'CREATE',
+        accountId,
+        createdAt:     serverTimestamp(),
+        schemaVersion: 1,
+        origin:        'manual',
+        correlationId: SAFE_CORRELATION_ID,
+        after: {
+          name:          accountPayload.name,
+          type:          accountPayload.type,
+          balance:       accountPayload.balance,
+          schemaVersion: accountPayload.schemaVersion,
+          createdAt:     accountPayload.createdAt,
+          updatedAt:     accountPayload.updatedAt,
+        },
+        changedFields: ['name', 'type', 'balance', 'schemaVersion'],
+        ...historyOverrides,
+      });
+
+      return batch.commit();
+    };
+
+    const commitUpdateAccountWithHistory = async (
+      accountId: string,
+      opId: string,
+      updateOverrides: Record<string, unknown> = {},
+      historyOverrides: Record<string, unknown> = {},
+    ) => {
+      await seedAccount(accountId);
+
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      const updatePayload = {
+        name:      'Conta Atualizada',
+        updatedAt: serverTimestamp(),
+        _lastOpId: opId,
+        ...updateOverrides,
+      };
+
+      batch.update(doc(db, 'users', UID_A, 'accounts', accountId), updatePayload);
+      batch.set(doc(db, 'users', UID_A, 'accounts', accountId, 'history', opId), {
+        ...validAccountHistoryPayload(accountId, {
+          correlationId: opId,
+          after: accountHistorySnapshot({
+            name:      updatePayload.name,
+            updatedAt: updatePayload.updatedAt,
+          }),
+        }),
+        ...historyOverrides,
+      });
+
+      return batch.commit();
+    };
+
+    it('H1 — CREATE de account com history pareado deve passar', async () => {
+      await assertSucceeds(commitCreateAccountWithHistory('account-h1-create'));
+    });
+
+    it('H2 — CREATE de account sem history pareado deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertFails(setDoc(
+        doc(alice.firestore(), 'users', UID_A, 'accounts', 'account-h2-no-history'),
+        validAccountPayload(),
+      ));
+    });
+
+    it('H3 — UPDATE de account com history pareado deve passar', async () => {
+      await assertSucceeds(commitUpdateAccountWithHistory(
+        'account-h3-update',
+        'op_account_update_0001',
+      ));
+    });
+
+    it('H4 — UPDATE de account sem history pareado deve falhar', async () => {
+      const accountId = 'account-h4-no-history';
+      await seedAccount(accountId);
+
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertFails(updateDoc(doc(alice.firestore(), 'users', UID_A, 'accounts', accountId), {
+        name:      'Sem History',
+        updatedAt: serverTimestamp(),
+        _lastOpId: 'op_account_no_history',
+      }));
+    });
+
+    it('H5 — DELETE de account com history pareado deve passar', async () => {
+      const accountId = 'account-h5-delete';
+      await seedAccount(accountId);
+
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'users', UID_A, 'accounts', accountId, 'history', 'delete'), {
+        action:        'DELETE',
+        accountId,
+        createdAt:     serverTimestamp(),
+        schemaVersion: 1,
+        origin:        'manual',
+        correlationId: 'op_account_delete_0001',
+        before:        accountHistorySnapshot(),
+        changedFields: ['name', 'type', 'balance', 'schemaVersion'],
+      });
+      batch.delete(doc(db, 'users', UID_A, 'accounts', accountId));
+
+      await assertSucceeds(batch.commit());
+    });
+
+    it('H6 — history de account com correlationId inválido deve falhar', async () => {
+      await assertFails(commitUpdateAccountWithHistory(
+        'account-h6-bad-correlation',
+        'op_account_update_0002',
+        {},
+        { correlationId: 'unsafe correlation id!' },
+      ));
+    });
+
+    it('H7 — before/after com correlationId deve falhar', async () => {
+      await assertFails(commitUpdateAccountWithHistory(
+        'account-h7-snapshot-correlation',
+        'op_account_update_0003',
+        {},
+        { before: accountHistorySnapshot({ correlationId: 'op_account_update_0003' }) },
+      ));
+    });
+
+    it.each(['uid', 'id', 'path'])('H8 — before/after com campo proibido %s deve falhar', async (field) => {
+      await assertFails(commitUpdateAccountWithHistory(
+        `account-h8-${field}`,
+        `op_account_${field}_0004`,
+        {},
+        {
+          after: accountHistorySnapshot({
+            name:      'Conta Atualizada',
+            updatedAt: serverTimestamp(),
+            [field]:   `forbidden-${field}`,
+          }),
+        },
+      ));
+    });
+
+    it('H9 — campos monetários inválidos em account são rejeitados', async () => {
+      await assertFails(commitCreateAccountWithHistory(
+        'account-h9-invalid-money',
+        { balance: 12.5 },
+        { after: { ...accountHistorySnapshot(), balance: 12.5 } },
+      ));
+    });
+
+    it('H10 — contas legadas continuam legíveis', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertSucceeds(getDoc(doc(alice.firestore(), 'users', UID_A, 'accounts', LEGACY_ACCOUNT)));
     });
   });
 
