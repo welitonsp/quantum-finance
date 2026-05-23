@@ -50,6 +50,8 @@ const EXISTING_AUDIT_ID = 'existing-audit-001';
 const FIXED_TS = Timestamp.fromDate(new Date('2026-01-01T00:00:00Z'));
 const IMPORT_HASH_A = 'a'.repeat(64);
 const IMPORT_HASH_B = 'b'.repeat(64);
+const SAFE_CORRELATION_ID = 'op_safe_trace_0001';
+const SAFE_BULK_CORRELATION_ID = 'bulk_safe_trace_0001';
 
 const validHistoryPayload = () => ({
   action: 'UPDATE' as const,
@@ -307,10 +309,47 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
         ...validHistoryPayload(),
         action: 'BULK_UPDATE' as const,
         origin: 'bulk',
-        correlationId: 'batch-001',
+        correlationId: SAFE_BULK_CORRELATION_ID,
         before: { category: 'Outros' },
         after:  { category: 'Mercado' },
         changedFields: ['category'],
+      }));
+    });
+
+    it('A14 — correlationId seguro no root de history deve passar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL, 'history');
+      await assertSucceeds(addDoc(ref, {
+        ...validHistoryPayload(),
+        correlationId: SAFE_CORRELATION_ID,
+      }));
+    });
+
+    it.each([
+      ['vazio', ''],
+      ['muito longo', 'x'.repeat(81)],
+      ['objeto', { id: SAFE_CORRELATION_ID }],
+      ['número', 12345],
+      ['caracteres inseguros', 'op-safe/trace-0001'],
+    ])('A15 — correlationId inválido (%s) deve falhar', async (_label, correlationId) => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL, 'history');
+      await assertFails(addDoc(ref, {
+        ...validHistoryPayload(),
+        correlationId,
+      } as never));
+    });
+
+    it('A16 — correlationId em before/after deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'transactions', TX_REAL, 'history');
+      await assertFails(addDoc(ref, {
+        ...validHistoryPayload(),
+        before: { correlationId: SAFE_CORRELATION_ID, category: 'Outros' },
+      }));
+      await assertFails(addDoc(ref, {
+        ...validHistoryPayload(),
+        after: { correlationId: SAFE_CORRELATION_ID, category: 'Alimentação' },
       }));
     });
   });
@@ -840,15 +879,61 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       );
     });
 
+    it('F12b — BULK_UPDATE preserva correlationId de lote diferente de _lastOpId', async () => {
+      await assertSucceeds(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op_f12_bulk_corr_001', {}, {
+          action: 'BULK_UPDATE',
+          origin: 'bulk',
+          correlationId: SAFE_BULK_CORRELATION_ID,
+        }),
+      );
+    });
+
     it('F13 — UNDO_BULK_UPDATE com origin bulk e _lastOpId pareado deve passar', async () => {
       await assertSucceeds(
         commitUpdateWithHistoryBatch(TX_REAL, 'op-f13-undo', {}, { action: 'UNDO_BULK_UPDATE', origin: 'bulk' }),
       );
     });
 
+    it('F13b — UNDO_BULK_UPDATE preserva correlationId de lote diferente de _lastOpId', async () => {
+      await assertSucceeds(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op_f13_undo_corr_001', {}, {
+          action: 'UNDO_BULK_UPDATE',
+          origin: 'bulk',
+          correlationId: SAFE_BULK_CORRELATION_ID,
+        }),
+      );
+    });
+
     it('F14 — UPDATE com origin reconcile e _lastOpId pareado deve passar', async () => {
       await assertSucceeds(
         commitUpdateWithHistoryBatch(TX_REAL, 'op-f14-reconcile', {}, { origin: 'reconcile' }),
+      );
+    });
+
+    it('F14b — UPDATE com correlationId igual ao _lastOpId deve passar', async () => {
+      const opId = 'op_safe_update_001';
+      await assertSucceeds(
+        commitUpdateWithHistoryBatch(TX_REAL, opId, {}, { correlationId: opId }),
+      );
+    });
+
+    it('F14c — UPDATE com correlationId diferente do _lastOpId deve falhar', async () => {
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, 'op_safe_update_002', {}, {
+          correlationId: SAFE_CORRELATION_ID,
+        }),
+      );
+    });
+
+    it('F14d — transaction root não aceita correlationId mesmo com history pareado', async () => {
+      const opId = 'op_safe_update_003';
+      await assertFails(
+        commitUpdateWithHistoryBatch(TX_REAL, opId, {
+          correlationId: SAFE_CORRELATION_ID,
+        }, {
+          correlationId: opId,
+        }),
       );
     });
 

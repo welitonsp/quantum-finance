@@ -355,6 +355,7 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
         uid: 'uid-forged',
         value: 20,
         importHash: 'x'.repeat(64),
+        correlationId: 'op_safe_before_01',
         description: 'Antigo',
         category: 'Outros',
       },
@@ -363,11 +364,12 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
         uid: 'uid-forged',
         value: 20,
         importHash: 'x'.repeat(64),
+        correlationId: 'op_safe_after_01',
         description: 'Novo',
         category: 'Alimentação',
         value_cents: 2000,
       },
-      changedFields: ['description', 'category', 'value_cents', '_lastOpId'],
+      changedFields: ['description', 'category', 'value_cents', '_lastOpId', 'correlationId'],
       amount_cents: 2000,
       category: 'Alimentação',
     };
@@ -403,6 +405,7 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
       action: 'UPDATE',
       origin: 'manual',
       txId: 'tx-1',
+      correlationId: 'mock-doc-id',
       amount_cents: 2000,
       category: 'Alimentação',
       schemaVersion: 1,
@@ -411,7 +414,7 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
       after: { description: 'Novo', category: 'Alimentação', value_cents: 2000 },
       changedFields: ['description', 'category', 'value_cents'],
     }));
-    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId']) {
       expect(historyPayload['before']).not.toHaveProperty(forbidden);
       expect(historyPayload['after']).not.toHaveProperty(forbidden);
     }
@@ -441,7 +444,7 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
     const [, historyPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
     expect(historyPayload['origin']).toBe('ai');
     expect(historyPayload['amount_cents']).toBe(1500);
-    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId']) {
       expect(historyPayload['before']).not.toHaveProperty(forbidden);
       expect(historyPayload['after']).not.toHaveProperty(forbidden);
     }
@@ -463,7 +466,7 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
     const [, historyPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
     expect(historyPayload['origin']).toBe('reconcile');
     expect(historyPayload['amount_cents']).toBe(2000);
-    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId']) {
       expect(historyPayload['before']).not.toHaveProperty(forbidden);
       expect(historyPayload['after']).not.toHaveProperty(forbidden);
     }
@@ -499,11 +502,13 @@ describe('FirestoreService.updateTransactionWithHistory', () => {
     });
 
     const [, txPayload] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
-    const [historyRef] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [historyRef, historyPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
 
     expect(txPayload['_lastOpId']).toBeDefined();
     expect(txPayload['_lastOpId']).toBe((historyRef as { id: string }).id);
     expect(txPayload['_lastOpId']).toBe('mock-doc-id');
+    expect(txPayload).not.toHaveProperty('correlationId');
+    expect(historyPayload['correlationId']).toBe(txPayload['_lastOpId']);
   });
 
   it('repara shape legado seguro no update individual sem alterar importHash nem reintroduzir value', async () => {
@@ -813,6 +818,7 @@ describe('FirestoreService.softDeleteTransactionWithHistory', () => {
       action:       'SOFT_DELETE',
       origin:       'manual',
       txId:         'tx-delete-1',
+      correlationId: 'mock-doc-id',
       amount_cents: 2034,
       category:     'Outros',
       schemaVersion: 1,
@@ -832,7 +838,7 @@ describe('FirestoreService.softDeleteTransactionWithHistory', () => {
       }),
       changedFields: ['isDeleted', 'deletedAt', 'updatedAt'],
     }));
-    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId']) {
       expect(historyPayload['before']).not.toHaveProperty(forbidden);
       expect(historyPayload['after']).not.toHaveProperty(forbidden);
     }
@@ -860,11 +866,13 @@ describe('FirestoreService.softDeleteTransactionWithHistory', () => {
     });
 
     const [, txPayload] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
-    const [historyRef] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [historyRef, historyPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
 
     expect(txPayload['_lastOpId']).toBeDefined();
     expect(txPayload['_lastOpId']).toBe((historyRef as { id: string }).id);
     expect(txPayload['_lastOpId']).toBe('mock-doc-id');
+    expect(txPayload).not.toHaveProperty('correlationId');
+    expect(historyPayload['correlationId']).toBe(txPayload['_lastOpId']);
   });
 
   it('soft delete mantém action SOFT_DELETE, origin manual e não vaza importHash no updatePayload', async () => {
@@ -891,6 +899,7 @@ describe('FirestoreService.softDeleteTransactionWithHistory', () => {
     expect(txPayload['_lastOpId']).toBe('mock-doc-id');
     expect(historyPayload['action']).toBe('SOFT_DELETE');
     expect(historyPayload['origin']).toBe('manual');
+    expect(historyPayload['correlationId']).toBe(txPayload['_lastOpId']);
     expect(historyPayload['after']).toEqual(expect.objectContaining({
       isDeleted: true,
       deletedAt: { _serverTimestamp: true },
@@ -922,6 +931,7 @@ describe('FirestoreService.deleteBatchTransactionsWithHistory', () => {
     expect(histPayloadA).toEqual(expect.objectContaining({
       action: 'SOFT_DELETE',
       txId: 'tx-a',
+      correlationId: 'mock-doc-id',
       amount_cents: 1000,
       category: 'Lazer',
       origin: 'manual',
@@ -959,14 +969,18 @@ describe('FirestoreService.deleteBatchTransactionsWithHistory', () => {
 
     const [, txPayloadA] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
     const [, txPayloadB] = mockBatchUpdate.mock.calls[1] as [Record<string, unknown>, Record<string, unknown>];
-    const [histRefA] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
-    const [histRefB] = mockBatchSet.mock.calls[1] as [Record<string, unknown>, Record<string, unknown>];
+    const [histRefA, histPayloadA] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [histRefB, histPayloadB] = mockBatchSet.mock.calls[1] as [Record<string, unknown>, Record<string, unknown>];
 
     expect(txPayloadA['_lastOpId']).toBeDefined();
     expect(txPayloadA['_lastOpId']).toBe((histRefA as { id: string }).id);
+    expect(txPayloadA).not.toHaveProperty('correlationId');
+    expect(histPayloadA['correlationId']).toBe(txPayloadA['_lastOpId']);
 
     expect(txPayloadB['_lastOpId']).toBeDefined();
     expect(txPayloadB['_lastOpId']).toBe((histRefB as { id: string }).id);
+    expect(txPayloadB).not.toHaveProperty('correlationId');
+    expect(histPayloadB['correlationId']).toBe(txPayloadB['_lastOpId']);
   });
 
   it('delete batch não vaza importHash no updatePayload', async () => {
@@ -983,8 +997,11 @@ describe('FirestoreService.deleteBatchTransactionsWithHistory', () => {
     await FirestoreService.deleteBatchTransactionsWithHistory('uid1', [txWithHash]);
 
     const [, txPayload] = mockBatchUpdate.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    const [, historyPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
     expect(txPayload).not.toHaveProperty('importHash');
     expect(txPayload['_lastOpId']).toBe('mock-doc-id');
+    expect(txPayload).not.toHaveProperty('correlationId');
+    expect(historyPayload['correlationId']).toBe(txPayload['_lastOpId']);
   });
 
   it('delete batch mantém action SOFT_DELETE e origin manual', async () => {
@@ -995,6 +1012,7 @@ describe('FirestoreService.deleteBatchTransactionsWithHistory', () => {
     const [, historyPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
     expect(historyPayload['action']).toBe('SOFT_DELETE');
     expect(historyPayload['origin']).toBe('manual');
+    expect(historyPayload['correlationId']).toBe('mock-doc-id');
   });
 
   it('delete batch mantém chunking: 241 itens geram 2 commits com _lastOpId em todos', async () => {
@@ -1077,7 +1095,7 @@ describe('FirestoreService.batchUpdateTransactionsWithHistory', () => {
 
     expect(before1['category']).toBe('Outros');
     expect(after1['category']).toBe('Alimentação');
-    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId']) {
       expect(before1).not.toHaveProperty(forbidden);
       expect(after1).not.toHaveProperty(forbidden);
     }
@@ -1339,7 +1357,7 @@ describe('FirestoreService.batchUndoBulkUpdateTransactionsWithHistory', () => {
     expect(after1['category']).toBe('Lazer');
     expect(before1['value_cents']).toBe(1000);
     expect(after1['value_cents']).toBe(1000);
-    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId']) {
       expect(before1).not.toHaveProperty(forbidden);
       expect(after1).not.toHaveProperty(forbidden);
     }

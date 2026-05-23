@@ -252,11 +252,12 @@ describe('useTransactions - criação manual Spark via batch', () => {
 
   it('remove importHash apenas do payload sanitizado para history', () => {
     const importHash = 'a'.repeat(64);
-    const sanitized = sanitizeForHistory({
+    const transactionWithTrace = {
       id:            'tx-imported-1',
       uid:           'uid-1',
       value:         123.45,
       importHash,
+      correlationId: 'op_safe_history_01',
       description:   'Compra importada',
       value_cents:   12345 as Centavos,
       schemaVersion: 2,
@@ -266,12 +267,14 @@ describe('useTransactions - criação manual Spark via batch', () => {
       source:        'csv',
       fitId:         'fit-123',
       tags:          ['cartao'],
-    });
+    } as Parameters<typeof sanitizeForHistory>[0] & { correlationId: string };
+    const sanitized = sanitizeForHistory(transactionWithTrace);
 
     expect(sanitized).not.toHaveProperty('id');
     expect(sanitized).not.toHaveProperty('uid');
     expect(sanitized).not.toHaveProperty('value');
     expect(sanitized).not.toHaveProperty('importHash');
+    expect(sanitized).not.toHaveProperty('correlationId');
     expect(sanitized).toEqual(expect.objectContaining({
       description:   'Compra importada',
       value_cents:   12345,
@@ -384,7 +387,7 @@ describe('useTransactions - atualização manual com batch + history', () => {
       Record<string, unknown>,
       { before: Record<string, unknown>; after: Record<string, unknown> },
     ];
-    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId']) {
       expect(historyEvent.before).not.toHaveProperty(forbidden);
       expect(historyEvent.after).not.toHaveProperty(forbidden);
     }
@@ -402,6 +405,7 @@ describe('useTransactions - atualização manual com batch + history', () => {
         value:       10,
         importHash:  'x'.repeat(64),
         _lastOpId:   'op-anterior',
+        correlationId: 'op_anterior_safe_01',
         description: 'Compra original',
         value_cents: 1000,
         type:        'saida',
@@ -445,7 +449,7 @@ describe('useTransactions - atualização manual com batch + history', () => {
     }));
     expect(writeData).not.toHaveProperty('description');
     expect(writeData).not.toHaveProperty('date');
-    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId']) {
       expect(writeData).not.toHaveProperty(forbidden);
       expect(historyEvent.before).not.toHaveProperty(forbidden);
       expect(historyEvent.after).not.toHaveProperty(forbidden);
@@ -705,7 +709,7 @@ describe('useTransactions - delete lógico manual com batch + history', () => {
       string,
       { before: Record<string, unknown> },
     ];
-    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId']) {
       expect(historyEvent.before).not.toHaveProperty(forbidden);
     }
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
@@ -891,22 +895,23 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
         })
       ]),
       { category: 'Alimentação' },
-      expect.stringMatching(/\S+/)
+      expect.stringMatching(/^[A-Za-z0-9_-]{16,80}$/)
     ));
 
-    const [, snapshot] = mockBatchUpdateTransactionsWithHistory.mock.calls[0] as [
+    const [, snapshot, , correlationId] = mockBatchUpdateTransactionsWithHistory.mock.calls[0] as [
       string,
       Array<{ before?: Record<string, unknown> }>,
       Record<string, unknown>,
       string,
     ];
+    expect(correlationId).toMatch(/^bulk_[A-Za-z0-9_-]{12,76}$/);
     const before = snapshot[0]?.before;
     expect(before).toEqual(expect.objectContaining({
       category: 'Lazer',
       value_cents: 1000,
       description: 'Compra A',
     }));
-    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId']) {
       expect(before).not.toHaveProperty(forbidden);
     }
 
@@ -976,21 +981,22 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
           }),
         }),
       ]),
-      expect.stringMatching(/\S+/),
+      expect.stringMatching(/^[A-Za-z0-9_-]{16,80}$/),
     ));
 
-    const [, snapshot] = mockBatchUndoBulkUpdateTransactionsWithHistory.mock.calls[0] as [
+    const [, snapshot, correlationId] = mockBatchUndoBulkUpdateTransactionsWithHistory.mock.calls[0] as [
       string,
       Array<{ before?: Record<string, unknown> }>,
       string,
     ];
+    expect(correlationId).toMatch(/^undo_[A-Za-z0-9_-]{11,75}$/);
     const before = snapshot[0]?.before;
     expect(before).toEqual(expect.objectContaining({
       category: 'Lazer',
       value_cents: 1000,
       description: 'Compra A',
     }));
-    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId']) {
       expect(before).not.toHaveProperty(forbidden);
     }
 
@@ -1116,7 +1122,7 @@ describe('useTransactions - AI categorization usa updateTransactionWithHistory a
     expect(historyEvent['origin']).toBe('ai');
     expect(historyEvent['changedFields']).toEqual(['category']);
     expect(historyEvent['after']).toEqual(expect.objectContaining({ category: 'Alimentação' }));
-    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId']) {
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId']) {
       expect(historyEvent['before']).not.toHaveProperty(forbidden);
       expect(historyEvent['after']).not.toHaveProperty(forbidden);
     }
