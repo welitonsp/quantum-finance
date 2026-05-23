@@ -134,13 +134,37 @@ describe('LedgerService.importTransactions', () => {
 
     expect(result).toEqual({ added: 1, duplicates: 0, invalid: 0 });
     const transactionPayload = mockTransactionSet.mock.calls[0]?.[1] as Record<string, unknown>;
-    const auditPayload = mockTransactionSet.mock.calls[1]?.[1] as Record<string, unknown>;
+    const historyRef = mockTransactionSet.mock.calls[1]?.[0] as { path?: string };
+    const historyPayload = mockTransactionSet.mock.calls[1]?.[1] as Record<string, unknown>;
+    const auditPayload = mockTransactionSet.mock.calls[2]?.[1] as Record<string, unknown>;
 
     expect(transactionPayload).toEqual(expect.objectContaining({
       category: 'Academia',
       value_cents: 123456,
       importHash: expect.any(String),
     }));
+    expect(transactionPayload).not.toHaveProperty('correlationId');
+    expect(String(historyRef.path)).toContain(`transactions/${String(transactionPayload.importHash)}/history/create`);
+    expect(historyPayload).toEqual(expect.objectContaining({
+      action: 'CREATE',
+      origin: 'import',
+      txId: transactionPayload.importHash,
+      correlationId: expect.stringMatching(/^bulk_[A-Za-z0-9_-]{11,75}$/),
+      amount_cents: 123456,
+      category: 'Academia',
+      schemaVersion: 1,
+      after: expect.objectContaining({
+        description: 'Supermercado ABC',
+        category: 'Academia',
+        value_cents: 123456,
+        source: 'csv',
+      }),
+    }));
+    expect(historyPayload).not.toHaveProperty('before');
+    expect(historyPayload).not.toHaveProperty('importHash');
+    for (const forbidden of ['id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId']) {
+      expect(historyPayload.after as Record<string, unknown>).not.toHaveProperty(forbidden);
+    }
     expect(auditPayload).toEqual(expect.objectContaining({
       action: 'IMPORT_TRANSACTION',
       entity: 'TRANSACTION',
@@ -158,12 +182,30 @@ describe('LedgerService.importTransactions', () => {
 
     expect(result).toEqual({ added: 1, duplicates: 1, invalid: 0 });
     expect(mockRunTransaction).toHaveBeenCalledTimes(1);
-    expect(mockTransactionSet).toHaveBeenCalledTimes(2);
+    expect(mockTransactionSet).toHaveBeenCalledTimes(3);
     expect(mockTransactionSet.mock.calls[0]?.[1]).toEqual(expect.objectContaining({
       value_cents: 123456,
       importHash: expect.any(String),
       createdAt: { _serverTimestamp: true },
     }));
+  });
+
+  it('compartilha correlationId de lote entre histories da mesma importação', async () => {
+    const result = await LedgerService.importTransactions('uid1', [
+      baseInput,
+      { ...baseInput, fitId: 'FIT-2' },
+    ]);
+
+    expect(result).toEqual({ added: 2, duplicates: 0, invalid: 0 });
+    expect(mockTransactionSet).toHaveBeenCalledTimes(6);
+
+    const firstHistory = mockTransactionSet.mock.calls[1]?.[1] as Record<string, unknown>;
+    const secondHistory = mockTransactionSet.mock.calls[4]?.[1] as Record<string, unknown>;
+
+    expect(firstHistory['correlationId']).toMatch(/^bulk_[A-Za-z0-9_-]{11,75}$/);
+    expect(secondHistory['correlationId']).toBe(firstHistory['correlationId']);
+    expect(firstHistory['after']).not.toHaveProperty('importHash');
+    expect(secondHistory['after']).not.toHaveProperty('importHash');
   });
 
   it('duplicata existente no Firestore preserva createdAt original', async () => {

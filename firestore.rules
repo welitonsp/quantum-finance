@@ -163,10 +163,20 @@ service cloud.firestore {
           && (!('reconciledBy' in data) || data.reconciledBy == userId);
     }
 
-    function isValidImportTransactionCreate(userId) {
+    function isValidImportTransactionCreate(userId, txId) {
       let data = request.resource.data;
+      let historyPath = txHistoryCreatePath(userId, txId);
       return isValidTransactionCreateBase(userId)
-          && data.source != 'manual';
+          && data.source != 'manual'
+          && ('importHash' in data)
+          && data.importHash == txId
+          && !data.keys().hasAny([
+            'isDeleted', 'deletedAt',
+            'reconciliationStatus', 'reconciliationSource',
+            'reconciledAt', 'reconciledBy', '_lastOpId'
+          ])
+          && !exists(historyPath)
+          && existsAfter(historyPath);
     }
 
     function isValidManualTransactionCreate(userId, txId) {
@@ -184,7 +194,7 @@ service cloud.firestore {
     }
 
     function isValidTransactionCreate(userId, txId) {
-      return isValidImportTransactionCreate(userId)
+      return isValidImportTransactionCreate(userId, txId)
           || isValidManualTransactionCreate(userId, txId);
     }
 
@@ -284,9 +294,58 @@ service cloud.firestore {
           && data.origin == 'manual';
     }
 
+    function isImportCreateHistory(data) {
+      return data.action == 'CREATE'
+          && ('origin' in data)
+          && data.origin == 'import';
+    }
+
     function optionalHistoryFieldMatches(tx, after, field) {
       return (!(field in tx) && !(field in after))
           || ((field in tx) && (field in after) && tx[field] == after[field]);
+    }
+
+    function isValidImportCreateHistoryForTransaction(data, txId, tx) {
+      return tx.source in ['csv', 'ofx', 'pdf']
+          && ('importHash' in tx)
+          && tx.importHash == txId
+          && !tx.keys().hasAny([
+            'uid', 'id', 'value', 'isDeleted', 'deletedAt',
+            'reconciliationStatus', 'reconciliationSource',
+            'reconciledAt', 'reconciledBy', '_lastOpId'
+          ])
+          && isImportCreateHistory(data)
+          && !('before' in data)
+          && !('importHash' in data)
+          && ('correlationId' in data)
+          && ('amount_cents' in data)
+          && data.amount_cents == tx.value_cents
+          && ('category' in data)
+          && data.category == tx.category
+          && ('after' in data)
+          && data.after.keys().hasOnly([
+            'description', 'value_cents', 'schemaVersion', 'type', 'category',
+            'date', 'source', 'account', 'accountId', 'cardId', 'fitId',
+            'tags', 'isRecurring'
+          ])
+          && data.after.description == tx.description
+          && data.after.value_cents == tx.value_cents
+          && data.after.schemaVersion == 2
+          && data.after.type == tx.type
+          && data.after.category == tx.category
+          && data.after.date == tx.date
+          && data.after.source == tx.source
+          && optionalHistoryFieldMatches(tx, data.after, 'account')
+          && optionalHistoryFieldMatches(tx, data.after, 'accountId')
+          && optionalHistoryFieldMatches(tx, data.after, 'cardId')
+          && optionalHistoryFieldMatches(tx, data.after, 'fitId')
+          && optionalHistoryFieldMatches(tx, data.after, 'tags')
+          && optionalHistoryFieldMatches(tx, data.after, 'isRecurring')
+          && ('changedFields' in data)
+          && data.changedFields.hasAll([
+            'description', 'value_cents', 'schemaVersion', 'type',
+            'category', 'date', 'source'
+          ]);
     }
 
     function isValidManualCreateHistoryForTransaction(data, txId, tx) {
@@ -336,6 +395,15 @@ service cloud.firestore {
           && !exists(transactionPath)
           && existsAfter(transactionPath)
           && isValidManualCreateHistoryForTransaction(data, txId, getAfter(transactionPath).data);
+    }
+
+    function isValidImportCreateHistoryInSameBatch(data, userId, txId, historyId) {
+      let transactionPath = txPath(userId, txId);
+      return historyId == 'create'
+          && isImportCreateHistory(data)
+          && !exists(transactionPath)
+          && existsAfter(transactionPath)
+          && isValidImportCreateHistoryForTransaction(data, txId, getAfter(transactionPath).data);
     }
 
     function isValidAuditLog(data) {
@@ -560,7 +628,11 @@ service cloud.firestore {
             && isValidTransactionHistory(request.resource.data, txId)
             && (
               isValidManualCreateHistoryInSameBatch(request.resource.data, userId, txId, historyId)
-              || (!isManualCreateHistory(request.resource.data) && exists(txPath(userId, txId)))
+              || isValidImportCreateHistoryInSameBatch(request.resource.data, userId, txId, historyId)
+              || (
+                request.resource.data.action != 'CREATE'
+                && exists(txPath(userId, txId))
+              )
             );
           allow update, delete: if false;
         }

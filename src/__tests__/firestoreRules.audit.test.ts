@@ -620,6 +620,86 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       };
     };
 
+    const importAfterPayload = (
+      source: 'csv' | 'ofx' | 'pdf',
+      overrides: Record<string, unknown> = {},
+    ) => ({
+      description: 'New transaction',
+      value_cents: 25000,
+      schemaVersion: 2,
+      type: 'saida' as const,
+      category: 'Mercado',
+      date: '2026-02-01',
+      source,
+      fitId: null,
+      tags: [],
+      isRecurring: false,
+      ...overrides,
+    });
+
+    const importCreatePayload = (
+      txId: string,
+      source: 'csv' | 'ofx' | 'pdf',
+      overrides: Record<string, unknown> = {},
+    ) => ({
+      ...baseCreatePayload(source),
+      importHash: txId,
+      fitId: null,
+      tags: [],
+      isRecurring: false,
+      ...overrides,
+    });
+
+    const importHistoryPayload = (
+      txId: string,
+      source: 'csv' | 'ofx' | 'pdf',
+      overrides: Record<string, unknown> = {},
+    ) => {
+      const afterOverrides = (
+        typeof overrides['after'] === 'object'
+        && overrides['after'] !== null
+        && !Array.isArray(overrides['after'])
+      )
+        ? overrides['after'] as Record<string, unknown>
+        : undefined;
+      const { after: _after, ...restOverrides } = overrides;
+      void _after;
+      return {
+        action: 'CREATE' as const,
+        txId,
+        createdAt: serverTimestamp(),
+        schemaVersion: 1,
+        origin: 'import',
+        correlationId: SAFE_BULK_CORRELATION_ID,
+        amount_cents: 25000,
+        category: 'Mercado',
+        changedFields: [
+          'description',
+          'value_cents',
+          'schemaVersion',
+          'type',
+          'category',
+          'date',
+          'source',
+          'fitId',
+          'tags',
+          'isRecurring',
+        ],
+        ...restOverrides,
+        after: importAfterPayload(source, afterOverrides),
+      };
+    };
+
+    const importTxId = (seed: string) => seed.repeat(64).slice(0, 64);
+    const forbiddenAfterSeed: Record<string, string> = {
+      importHash: 'g',
+      correlationId: 'h',
+      uid: 'i',
+      id: 'j',
+      value: 'k',
+      _lastOpId: 'l',
+    };
+
     const commitManualCreateBatch = async (
       txId: string,
       txOverrides: Record<string, unknown> = {},
@@ -636,6 +716,23 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       batch.set(
         doc(db, 'users', UID_A, 'transactions', txId, 'history', 'create'),
         manualHistoryPayload(txId, historyOverrides),
+      );
+      return batch.commit();
+    };
+
+    const commitImportCreateBatch = async (
+      txId: string,
+      source: 'csv' | 'ofx' | 'pdf' = 'csv',
+      txOverrides: Record<string, unknown> = {},
+      historyOverrides: Record<string, unknown> = {},
+    ) => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'users', UID_A, 'transactions', txId), importCreatePayload(txId, source, txOverrides));
+      batch.set(
+        doc(db, 'users', UID_A, 'transactions', txId, 'history', 'create'),
+        importHistoryPayload(txId, source, historyOverrides),
       );
       return batch.commit();
     };
@@ -702,12 +799,57 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       })));
     });
 
-    it('D8 — CREATE de importação csv/ofx/pdf continua passando', async () => {
+    it('D8 — CREATE de importação csv/ofx/pdf com history pareado passa', async () => {
+      await assertSucceeds(commitImportCreateBatch(importTxId('c'), 'csv'));
+      await assertSucceeds(commitImportCreateBatch(importTxId('d'), 'ofx'));
+      await assertSucceeds(commitImportCreateBatch(importTxId('e'), 'pdf'));
+    });
+
+    it('D8b — CREATE de importação sem history pareado deve falhar', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
-      const ref = collection(alice.firestore(), 'users', UID_A, 'transactions');
-      await assertSucceeds(addDoc(ref, baseCreatePayload('csv')));
-      await assertSucceeds(addDoc(ref, baseCreatePayload('ofx')));
-      await assertSucceeds(addDoc(ref, baseCreatePayload('pdf')));
+      const txId = importTxId('f');
+      await assertFails(setDoc(
+        doc(alice.firestore(), 'users', UID_A, 'transactions', txId),
+        importCreatePayload(txId, 'csv'),
+      ));
+    });
+
+    it('D8c — CREATE de importação com importHash divergente do doc id deve falhar', async () => {
+      await assertFails(commitImportCreateBatch(
+        importTxId('0'),
+        'csv',
+        { importHash: importTxId('1') },
+      ));
+    });
+
+    it('D8d — history CREATE/import com correlationId inválido deve falhar', async () => {
+      await assertFails(commitImportCreateBatch(
+        importTxId('2'),
+        'csv',
+        {},
+        { correlationId: 'bad/id' },
+      ));
+    });
+
+    it.each(['importHash', 'correlationId', 'uid', 'id', 'value', '_lastOpId'])(
+      'D8e — history CREATE/import after com campo proibido %s deve falhar',
+      async (field) => {
+        await assertFails(commitImportCreateBatch(
+          importTxId(forbiddenAfterSeed[field] ?? 'm'),
+          'csv',
+          {},
+          { after: { [field]: field === 'value' ? 250 : 'forbidden' } },
+        ));
+      },
+    );
+
+    it('D8f — history CREATE/import isolado deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const txId = importTxId('9');
+      await assertFails(setDoc(
+        doc(alice.firestore(), 'users', UID_A, 'transactions', txId, 'history', 'create'),
+        importHistoryPayload(txId, 'csv'),
+      ));
     });
 
     it('D9 — CREATE manual em batch com historyId diferente de "create" deve falhar', async () => {

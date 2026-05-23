@@ -10,8 +10,10 @@ import { SOURCE_VALUES, transactionCreateSchema, type FinancialSource } from '..
 import { absCentavos, fromCentavos, toCentavos, type Centavos, type MoneyInput } from '../types/money';
 import type { ImportResult, Transaction } from '../types/transaction';
 import { canonicalizeTransactionType } from '../../utils/transactionUtils';
+import { generateSafeOperationId } from '../lib/operationTrace';
 
-const IMPORT_CHUNK_SIZE = 200;
+// 160 imported entries * 3 writes (transaction + history + audit) = 480 writes.
+const IMPORT_CHUNK_SIZE = 160;
 
 export interface LedgerImportInput {
   description?: string;
@@ -48,6 +50,7 @@ export interface NormalizedLedgerTransaction {
 interface PreparedImport {
   hash: string;
   txRef: DocumentReference;
+  historyRef: DocumentReference;
   auditRef: DocumentReference;
   payload: NormalizedLedgerTransaction;
 }
@@ -170,6 +173,7 @@ async function prepareImports(uid: string, inputs: LedgerImportInput[]): Promise
     prepared.push({
       hash,
       txRef: doc(db, 'users', uid, 'transactions', hash),
+      historyRef: doc(collection(db, 'users', uid, 'transactions', hash, 'history'), 'create'),
       auditRef: doc(collection(db, 'users', uid, 'audit_logs')),
       payload,
     });
@@ -178,11 +182,37 @@ async function prepareImports(uid: string, inputs: LedgerImportInput[]): Promise
   return { prepared, invalid, duplicateInputHashes };
 }
 
+function buildImportHistoryAfterSnapshot(payload: NormalizedLedgerTransaction): Record<string, unknown> {
+  const after: Record<string, unknown> = {
+    description: payload.description,
+    value_cents: payload.value_cents,
+    schemaVersion: payload.schemaVersion,
+    type: payload.type,
+    category: payload.category,
+    date: payload.date,
+    source: payload.source,
+    fitId: payload.fitId,
+    tags: payload.tags,
+    isRecurring: payload.isRecurring,
+  };
+
+  if (payload.account !== undefined) after['account'] = payload.account;
+  if (payload.accountId !== undefined) after['accountId'] = payload.accountId;
+  if (payload.cardId !== undefined) after['cardId'] = payload.cardId;
+
+  return after;
+}
+
+function buildImportHistoryChangedFields(after: Record<string, unknown>): string[] {
+  return Object.keys(after);
+}
+
 export const LedgerService = {
   async importTransactions(uid: string, inputs: LedgerImportInput[]): Promise<ImportResult> {
     if (!uid || inputs.length === 0) return { added: 0, duplicates: 0, invalid: 0 };
 
     const { prepared, invalid, duplicateInputHashes } = await prepareImports(uid, inputs);
+    const correlationId = generateSafeOperationId('bulk');
     let added = 0;
     let duplicates = duplicateInputHashes;
 
@@ -207,6 +237,20 @@ export const LedgerService = {
             importHash: item.hash,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
+          });
+
+          const historyAfter = buildImportHistoryAfterSnapshot(item.payload);
+          transaction.set(item.historyRef, {
+            action: 'CREATE',
+            txId: item.hash,
+            createdAt: serverTimestamp(),
+            schemaVersion: 1,
+            origin: 'import',
+            correlationId,
+            amount_cents: item.payload.value_cents,
+            category: item.payload.category,
+            after: historyAfter,
+            changedFields: buildImportHistoryChangedFields(historyAfter),
           });
 
           transaction.set(item.auditRef, {
