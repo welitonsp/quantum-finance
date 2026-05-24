@@ -4,6 +4,10 @@ const path = require('node:path');
 const { describe, it } = require('node:test');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
+const financialUtilsSource = fs.readFileSync(
+  path.join(__dirname, '..', 'src', 'lib', 'financialUtils.ts'),
+  'utf8',
+);
 
 describe('AI categorization minimization guardrails', () => {
   it('uses an opaque promptId instead of the client id in the categorization prompt', () => {
@@ -12,8 +16,8 @@ describe('AI categorization minimization guardrails', () => {
   });
 
   it('restricts prompt IDs to simple opaque values before calling Gemini', () => {
-    assert.ok(source.includes('const OPAQUE_CATEGORIZATION_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;'));
-    assert.ok(source.includes('function toSafeCategorizationPromptId(id, index)'));
+    assert.ok(financialUtilsSource.includes('export const OPAQUE_CATEGORIZATION_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;'));
+    assert.ok(financialUtilsSource.includes('export function toSafeCategorizationPromptId(id: unknown, index: number): string'));
     assert.ok(source.includes('promptId:    toSafeCategorizationPromptId(t.id, index)'));
   });
 });

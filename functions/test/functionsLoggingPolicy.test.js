@@ -4,6 +4,7 @@ const path = require('node:path');
 const { describe, it } = require('node:test');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
+const loggerSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', 'logger.ts'), 'utf8');
 const lines = source.split(/\r?\n/);
 
 function lineNumber(index) {
@@ -58,9 +59,11 @@ function assertStatementDoesNotContain(statements, regex, description) {
 
 describe('Functions logging policy', () => {
   it('keeps the server-side sanitization helpers present', () => {
-    assert.match(source, /function sanitizeFunctionError\(context, error\)/);
-    assert.match(source, /function safeErrorCode\(error\)/);
-    assert.match(source, /function safeSystemLogDetail\(context\)/);
+    assert.match(loggerSource, /export function sanitizeFunctionError\(context: unknown, error: unknown\)/);
+    assert.match(loggerSource, /export function safeErrorCode\(error: unknown\)/);
+    assert.match(loggerSource, /export function safeSystemLogDetail\(context: unknown\)/);
+    assert.match(source, /sanitizeFunctionError/);
+    assert.match(source, /safeSystemLogDetail/);
   });
 
   it('blocks high-risk console APIs and raw error objects in console logging', () => {
@@ -119,11 +122,8 @@ describe('Functions logging policy', () => {
       .filter(item => /\berror\.message\b/.test(item.text));
 
     assert.deepEqual(
-      messageLines,
-      [{
-        line: 54,
-        text: "throw new HttpsError('invalid-argument', error.message);",
-      }],
+      messageLines.map(item => item.text),
+      ["throw new HttpsError('invalid-argument', error.message);"],
       'error.message is allowed only for the controlled CreateTransactionValidationError client response',
     );
   });
