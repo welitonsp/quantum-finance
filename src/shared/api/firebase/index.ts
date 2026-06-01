@@ -26,14 +26,24 @@ if (import.meta.env.DEV && import.meta.env.VITE_USE_EMULATOR === 'true') {
 const _siteKey    = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined;
 const _isEmulator = import.meta.env.VITE_USE_EMULATOR === 'true';
 const _isTest     = import.meta.env.MODE === 'test' || import.meta.env.VITEST === 'true';
+const _mode       = import.meta.env.MODE;
+const _isLocalMode = _mode === 'development' || _mode === 'local';
+const _isProtectedBuild = import.meta.env.PROD || _mode === 'production' || _mode === 'staging';
+const _allowAppCheckDebugToken = import.meta.env.DEV && _isLocalMode && !_isProtectedBuild;
 
 if (_siteKey && !_isEmulator && !_isTest) {
-  if (import.meta.env.DEV) {
-    const _dbgToken = import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN as string | undefined;
-    if (_dbgToken) {
-      (globalThis as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN = _dbgToken;
-    }
+  const _env = import.meta.env as Record<string, string | boolean | undefined>;
+  const _dbgToken = _allowAppCheckDebugToken
+    ? _env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN
+    : undefined;
+
+  // App Check debug tokens are local-only; production and staging builds ignore them.
+  if (typeof _dbgToken === 'string' && _dbgToken.trim()) {
+    (globalThis as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN = _dbgToken;
+  } else if (import.meta.env.DEV && _env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN && _isProtectedBuild) {
+    console.warn('[Quantum] Firebase App Check debug token ignored outside local development.');
   }
+
   if (!import.meta.hot?.data?.appCheckInitialized) {
     initializeAppCheck(app, {
       provider: new ReCaptchaV3Provider(_siteKey),
