@@ -60,7 +60,7 @@ jobs:
         run: npm run test:rules
 
       - name: Coverage
-        run: npm run coverage --if-present
+        run: npm run coverage
 
       - name: Build
         run: npm run build
