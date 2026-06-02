@@ -185,6 +185,8 @@ async function checkAndIncrementRateLimit(uid) {
       return true;
     });
   } catch (e) {
+    // Intentional last-resort log: writeStructuredLog also writes to Firestore and would
+    // fail in the same outage scenario. sanitizeFunctionError ensures no PII or raw payload.
     console.error('[FunctionError]', sanitizeFunctionError('rate_limit_check', e));
     // Fail closed: deny on infrastructure error to prevent cost abuse during outages.
     // Legitimate users will retry; attackers cannot exploit an outage to bypass the limit.

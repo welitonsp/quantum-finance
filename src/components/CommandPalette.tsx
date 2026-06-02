@@ -24,43 +24,34 @@ const COMMANDER_COMMANDS: CommandItem[] = [
   {
     id:          'cmd-cut-lazer',
     label:       'Simular corte de 15% em lazer',
-    description: 'IA projeta economia mensal com redução de gastos em lazer',
+    description: 'Projeta economia mensal com redução de gastos em lazer — use o Centro de Simulação',
     icon:        Scissors,
     shortcut:    null,
     group:       'Comandante',
     action: () => {
-      toast.loading('🤖 A calcular cenário de corte…', { duration: 800 });
-      setTimeout(() => {
-        toast.success('Simulação: corte de 15% em lazer liberta ~R$ 187/mês. Projeção anual: R$ 2.244 poupados.', { icon: '✂️', duration: 6000 });
-      }, 900);
+      toast('Simulação de corte disponível no Centro de Simulação (Monte Carlo).', { icon: '✂️', duration: 5000 });
     },
   },
   {
     id:          'cmd-killer-habit',
     label:       'Qual hábito está me matando?',
-    description: 'IA identifica o padrão de gasto mais destrutivo do mês',
+    description: 'Análise de padrão destrutivo — em breve via Quantum AI',
     icon:        HeartPulse,
     shortcut:    null,
     group:       'Comandante',
     action: () => {
-      toast.loading('🧠 A analisar padrões comportamentais…', { duration: 1000 });
-      setTimeout(() => {
-        toast.success('Padrão detetado: gastos recorrentes às 3ª-feira (+43% acima da média). Categoria: Alimentação fora de casa.', { icon: '⚠️', duration: 7000 });
-      }, 1100);
+      toast('Funcionalidade em desenvolvimento. Em breve disponível no Quantum AI.', { icon: '🧠', duration: 5000 });
     },
   },
   {
     id:          'cmd-debt-report',
     label:       'Exportar relatório de endividamento',
-    description: 'Gera PDF com análise de exposição a dívidas e projeções',
+    description: 'Gera PDF com análise de exposição a dívidas e projeções — em breve',
     icon:        FileText,
     shortcut:    null,
     group:       'Comandante',
     action: () => {
-      toast.loading('📄 A preparar relatório…', { duration: 1200 });
-      setTimeout(() => {
-        toast.success('Relatório de endividamento pronto! (Funcionalidade completa em breve)', { icon: '📊', duration: 5000 });
-      }, 1300);
+      toast('Exportação de relatório de endividamento em desenvolvimento.', { icon: '📊', duration: 5000 });
     },
   },
 ];
