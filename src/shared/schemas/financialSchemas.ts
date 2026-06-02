@@ -59,6 +59,13 @@ const reconciledBySchema = z.string().trim().min(1).max(128);
 
 const tagsSchema = z.array(z.string().trim().min(1).max(32)).max(20).optional();
 
+// Accepts Firestore Timestamp objects, serverTimestamp() sentinels, and null.
+// Rejects primitive strings, numbers, and booleans that would indicate a schema bug.
+const firestoreTimestampSchema = z.custom<unknown>(
+  (val) => val === null || val === undefined || (typeof val === 'object' && !Array.isArray(val)),
+  { message: 'Timestamp inválido: deve ser um objeto Firestore Timestamp ou null.' },
+).optional();
+
 const transactionBaseSchema = z.object({
   ...forbiddenClientFields,
   description: z.string().trim().min(2, 'A descrição deve ter pelo menos 2 caracteres.').max(160),
@@ -76,7 +83,7 @@ const transactionBaseSchema = z.object({
   isRecurring: z.boolean().optional(),
   reconciliationStatus: reconciliationStatusSchema.optional(),
   reconciliationSource: reconciliationSourceSchema.optional(),
-  reconciledAt: z.unknown().optional(),
+  reconciledAt: firestoreTimestampSchema,
   reconciledBy: reconciledBySchema.optional(),
 }).strict();
 
@@ -98,10 +105,10 @@ export const transactionUpdateSchema = z.object({
   tags: tagsSchema,
   isRecurring: z.boolean().optional(),
   isDeleted: z.boolean().optional(),
-  deletedAt: z.unknown().optional(),
+  deletedAt: firestoreTimestampSchema,
   reconciliationStatus: reconciliationStatusSchema.optional(),
   reconciliationSource: reconciliationSourceSchema.optional(),
-  reconciledAt: z.unknown().optional(),
+  reconciledAt: firestoreTimestampSchema,
   reconciledBy: reconciledBySchema.optional(),
 }).strict().refine(value => Object.keys(value).length > 0, 'Atualização vazia.');
 

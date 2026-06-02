@@ -61,14 +61,22 @@ const catClass = (cat: string | undefined): string =>
   getCategoryBadgeClass(cat, MUTED_CATEGORY_BADGE_CLASS);
 
 // ─── Lógica de Merge ──────────────────────────────────────────────────────────
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+function parseISODate(raw: string | undefined): Date | null {
+  if (!raw || !ISO_DATE_RE.test(raw)) return null;
+  const d = new Date(`${raw}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 export function findMergeCandidate(tx: Transaction, existing: Transaction[]): MergeCandidateInfo {
   if (!existing?.length) return null;
-  const txDate  = new Date(tx.date ?? '');
+  const txDate  = parseISODate(tx.date);
   const txValue = getTransactionAbsCentavos(tx);
-  if (!txValue) return null;
+  if (!txDate || !txValue) return null;
 
   for (const ex of existing) {
-    const exDate  = new Date(ex.date ?? '');
+    const exDate  = parseISODate(ex.date);
+    if (!exDate) continue;
     const exValue = getTransactionAbsCentavos(ex);
     const dayDiff = Math.abs((txDate.getTime() - exDate.getTime()) / 86_400_000);
     if (dayDiff > 3) continue;
