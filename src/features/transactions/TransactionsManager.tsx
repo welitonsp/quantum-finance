@@ -325,7 +325,7 @@ const TransactionRow = React.memo(({ tx, runningBalanceCents, isSelected, onTogg
         )}
       </div>
 
-      <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity shrink-0">
+      <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 md:has-[:focus-visible]:opacity-100 transition-opacity shrink-0">
         <button
           onClick={(event) => {
             event.stopPropagation();
@@ -596,6 +596,12 @@ export default function TransactionsManager({
 
   const selectAll     = useCallback(() => setSelected(new Set(filtered.map(t => t.id))), [filtered]);
   const clearSelected = useCallback(() => { setSelected(new Set()); setBatchAction(null); setConfirmDelete(false); }, []);
+
+  // Clear selection when active filters change to prevent batch actions on stale items.
+  useEffect(() => {
+    setSelected(new Set());
+    setBatchAction(null);
+  }, [search, filterType, filterCat, dateFrom, dateTo, valueMin, valueMax, filterOrigin, filterReconciliationStatus]);
 
   const selectByType = useCallback((type: 'entrada' | 'saida') => {
     setSelected(new Set(
