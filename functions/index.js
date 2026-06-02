@@ -47,7 +47,7 @@ exports.createTransaction = onCall(
       'http://localhost:5174',
       'https://quantum-finance-39235.web.app',
       'https://quantum-finance-39235.firebaseapp.com',
-      /https:\/\/.*\.vercel\.app$/,
+      /https:\/\/quantum-finance[^.]*\.vercel\.app$/,
     ],
   },
   async (request) => {
@@ -57,9 +57,13 @@ exports.createTransaction = onCall(
 
     // uid SEMPRE do servidor — nunca do payload do cliente
     const uid  = request.auth.uid;
+    const rawPayload = request.data;
+    if (!rawPayload || typeof rawPayload !== 'object' || Array.isArray(rawPayload)) {
+      throw new HttpsError('invalid-argument', 'Payload deve ser um objeto JSON.');
+    }
     let data;
     try {
-      data = validateCreateTransactionPayload(request.data ?? {});
+      data = validateCreateTransactionPayload(rawPayload);
     } catch (error) {
       if (error instanceof CreateTransactionValidationError) {
         throw new HttpsError('invalid-argument', error.message);
@@ -182,7 +186,9 @@ async function checkAndIncrementRateLimit(uid) {
     });
   } catch (e) {
     console.error('[FunctionError]', sanitizeFunctionError('rate_limit_check', e));
-    return true; // fail open — never block on rate-limit infrastructure errors
+    // Fail closed: deny on infrastructure error to prevent cost abuse during outages.
+    // Legitimate users will retry; attackers cannot exploit an outage to bypass the limit.
+    return false;
   }
 }
 
@@ -249,6 +255,19 @@ async function callGemini(apiKey, fullPrompt, options = {}) {
   });
   const result = await model.generateContent(fullPrompt);
   return result.response.text();
+}
+
+function sanitizeFinancialContext(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  return {
+    saldo:          typeof raw.saldo    === 'number' ? raw.saldo    : 0,
+    entradas:       typeof raw.entradas === 'number' ? raw.entradas : 0,
+    saidas:         typeof raw.saidas   === 'number' ? raw.saidas   : 0,
+    currentMonth:   Number.isInteger(raw.currentMonth)  && raw.currentMonth  >= 1  && raw.currentMonth  <= 12   ? raw.currentMonth  : undefined,
+    currentYear:    Number.isInteger(raw.currentYear)   && raw.currentYear   >= 2000 && raw.currentYear <= 2100 ? raw.currentYear   : undefined,
+    transactions:   Array.isArray(raw.transactions)   ? raw.transactions.slice(0, 50)   : [],
+    recurringTasks: Array.isArray(raw.recurringTasks) ? raw.recurringTasks.slice(0, 50) : [],
+  };
 }
 
 function buildFinancialContext(financialContext = {}) {
@@ -370,7 +389,7 @@ Transações:\n${safeRows.map(t => `ID: ${t.promptId} | "${t.description}" | R$ 
 // FUNÇÃO 2 — Chat / Auditor CFO Pessoal
 // ═══════════════════════════════════════════════════════════════════════════════
 exports.chatWithQuantumAI = onCall(
-  { secrets: [GEMINI_API_KEY], region: 'southamerica-east1', timeoutSeconds: 60 },
+  { secrets: [GEMINI_API_KEY], region: 'southamerica-east1', timeoutSeconds: 60, enforceAppCheck: true },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
 
@@ -382,7 +401,7 @@ exports.chatWithQuantumAI = onCall(
       throw new HttpsError('resource-exhausted', `Limite diário de ${DAILY_AI_LIMIT} chamadas de IA atingido.`);
     }
 
-    const { prompt: userMessage, financialContext = {} } = request.data;
+    const { prompt: userMessage, financialContext: rawContext } = request.data ?? {};
     if (!userMessage || typeof userMessage !== 'string') {
       throw new HttpsError('invalid-argument', 'Mensagem em falta ou inválida.');
     }
@@ -390,7 +409,7 @@ exports.chatWithQuantumAI = onCall(
       throw new HttpsError('invalid-argument', `Mensagem excede ${MAX_PROMPT_LEN} caracteres.`);
     }
 
-    const contextStr   = buildFinancialContext(financialContext);
+    const contextStr   = buildFinancialContext(sanitizeFinancialContext(rawContext));
     const maskedPrompt = maskPII(userMessage);
     const fullPrompt   = `${SYSTEM_PERSONA}\n\n${contextStr}\n\nPERGUNTA: "${maskedPrompt}"`;
 
@@ -410,7 +429,7 @@ exports.chatWithQuantumAI = onCall(
 // FUNÇÃO 3 — Audit Report (Briefing Semanal Pró-Ativo)
 // ═══════════════════════════════════════════════════════════════════════════════
 exports.generateAuditReport = onCall(
-  { secrets: [GEMINI_API_KEY], region: 'southamerica-east1', timeoutSeconds: 60 },
+  { secrets: [GEMINI_API_KEY], region: 'southamerica-east1', timeoutSeconds: 60, enforceAppCheck: true },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
 
@@ -422,8 +441,7 @@ exports.generateAuditReport = onCall(
       throw new HttpsError('resource-exhausted', `Limite diário de ${DAILY_AI_LIMIT} chamadas de IA atingido.`);
     }
 
-    const financialContext = request.data?.financialContext ?? {};
-    const contextStr = buildFinancialContext(financialContext);
+    const contextStr = buildFinancialContext(sanitizeFinancialContext(request.data?.financialContext));
 
     const auditPrompt = `${SYSTEM_PERSONA}\n\n${contextStr}\n\nTAREFA: Gera um RELATÓRIO DE AUDITORIA COMPLETO. Analisa burn rate, anomalias por categoria, risco de despesas fixas e faz uma previsão de saldo para fim do mês. Identifica os 3 maiores riscos. Usa bullet points organizados por secção. Sê brutalmente honesto.`;
 
