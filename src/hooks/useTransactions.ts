@@ -26,10 +26,18 @@ export type BulkUpdate = {
   category?: string;
 };
 
+<<<<<<< HEAD
 // ─── addBatchStreamed result ───────────────────────────────────────────────────
 export type StreamedBatchResult = {
   succeeded: string[];
   failed: Array<{ item: Partial<Transaction>; error: Error }>;
+=======
+// ─── Dead Letter Queue — ops descartadas após MAX_RETRIES ─────────────────────
+export type DeadLetterOp = {
+  type: 'add' | 'update' | 'delete' | 'deleteBatch';
+  operation: FirebaseErrorOperation;
+  failedAt: number;
+>>>>>>> origin/main
 };
 
 // ─── Bulk Snapshot — estado anterior para undo em memória ─────────────────────
@@ -46,34 +54,45 @@ export type BulkSnapshot = {
 const MAX_RETRIES       = 5;
 const RETRY_INTERVAL_MS = 5_000;
 
+function computeBackoffMs(attempt: number): number {
+  const base   = 2_000;
+  const cap    = 60_000;
+  const jitter = Math.random() * 1_000;
+  return Math.min(base * 2 ** (attempt - 1), cap) + jitter;
+}
+
 // ─── Op Types (sem any) ───────────────────────────────────────────────────────
 
 interface AddOp {
-  type:    'add';
-  tempId:  string;
-  txId:    string;
-  data:    Partial<Transaction>;
-  retries: number;
+  type:        'add';
+  tempId:      string;
+  txId:        string;
+  data:        Partial<Transaction>;
+  retries:     number;
+  nextRetryAt: number;
 }
 interface UpdateOp {
-  type:     'update';
-  itemId:   string;
-  data:     Partial<Transaction>;
+  type:          'update';
+  itemId:        string;
+  data:          Partial<Transaction>;
   requestedData: Partial<Transaction>;
-  previous: Transaction | undefined;
-  retries:  number;
+  previous:      Transaction | undefined;
+  retries:       number;
+  nextRetryAt:   number;
 }
 interface DeleteOp {
-  type:     'delete';
-  itemId:   string;
-  previous: Transaction | undefined;
-  retries:  number;
+  type:        'delete';
+  itemId:      string;
+  previous:    Transaction | undefined;
+  retries:     number;
+  nextRetryAt: number;
 }
 interface DeleteBatchOp {
   type:          'deleteBatch';
   ids:           string[];
   previousBatch: Transaction[];
   retries:       number;
+  nextRetryAt:   number;
 }
 type Op = AddOp | UpdateOp | DeleteOp | DeleteBatchOp;
 
@@ -106,6 +125,7 @@ interface UseTransactionsReturn {
   bulkUpdateTransactions: (ids: string[], updates: BulkUpdate) => Promise<void>;
   undoLastBulkUpdate:     () => Promise<void>;
   clearBulkSnapshot:      () => void;
+  deadLetterOps:          DeadLetterOp[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -384,6 +404,8 @@ export function useTransactions(
   // ── Fila de sync ──────────────────────────────────────────────────────────
   const queueRef    = useRef<Op[]>([]);
   const processing  = useRef(false);
+  const dlqRef      = useRef<DeadLetterOp[]>([]);
+  const [deadLetterOps, setDeadLetterOps] = useState<DeadLetterOp[]>([]);
 
   /**
    * tempId → item optimista ainda não confirmado.
@@ -519,6 +541,9 @@ export function useTransactions(
     while (queueRef.current.length > 0) {
       const op = queueRef.current[0]!;
 
+      // Aguarda janela de backoff antes de retentar
+      if (op.nextRetryAt > Date.now()) break;
+
       // Descarta ops de add órfãos
       if (op.type === 'add' && !pendingAdds.current.has(op.tempId)) {
         pendingAddResolvers.current.get(op.tempId)?.reject(new Error('Movimentação otimista cancelada antes da confirmação.'));
@@ -629,6 +654,9 @@ export function useTransactions(
 
         if (op.retries >= MAX_RETRIES || !shouldRetrySyncError(err)) {
           console.warn('[SyncQueue] operação descartada após tentativas', { operation });
+          const dlqEntry: DeadLetterOp = { type: op.type, operation, failedAt: Date.now() };
+          dlqRef.current = [...dlqRef.current, dlqEntry];
+          setDeadLetterOps([...dlqRef.current]);
           const finalError = userFacingSyncError(err, operation);
           const hasAwaiter = op.type === 'add' && pendingAddResolvers.current.has(op.tempId);
           if (!hasAwaiter) toast.error(finalError.message);
@@ -663,7 +691,8 @@ export function useTransactions(
 
           queueRef.current.shift();
         } else {
-          break; // retry no próximo trigger
+          op.nextRetryAt = Date.now() + computeBackoffMs(op.retries);
+          break; // retry após janela de backoff
         }
       }
     }
@@ -678,10 +707,15 @@ export function useTransactions(
   // ── Retry: online event + polling ─────────────────────────────────────────
   useEffect(() => {
     const trigger = (): void => { void processQueueRef.current(); };
-    window.addEventListener('online', trigger);
+    const onOnline = (): void => {
+      // Rede voltou — reseta backoff de todas as ops pendentes para retomada imediata
+      queueRef.current.forEach(op => { op.nextRetryAt = 0; });
+      void processQueueRef.current();
+    };
+    window.addEventListener('online', onOnline);
     const timer = setInterval(trigger, RETRY_INTERVAL_MS);
     return () => {
-      window.removeEventListener('online', trigger);
+      window.removeEventListener('online', onOnline);
       clearInterval(timer);
     };
   }, []);
@@ -805,7 +839,7 @@ export function useTransactions(
 
     return new Promise<string>((resolve, reject) => {
       pendingAddResolvers.current.set(tempId, { resolve, reject });
-      enqueue({ type: 'add', tempId, txId, data: enriched, retries: 0 });
+      enqueue({ type: 'add', tempId, txId, data: enriched, retries: 0, nextRetryAt: 0 });
     });
   }, [uid, enqueue]);
 
@@ -831,7 +865,7 @@ export function useTransactions(
       );
     });
 
-    enqueue({ type: 'update', itemId: id, data: normalizedData, requestedData, previous, retries: 0 });
+    enqueue({ type: 'update', itemId: id, data: normalizedData, requestedData, previous, retries: 0, nextRetryAt: 0 });
   }, [uid, enqueue]);
 
   // ── REMOVE — Optimistic + enqueue ─────────────────────────────────────────
@@ -852,7 +886,7 @@ export function useTransactions(
       return prev.filter(tx => tx.id !== id);
     });
 
-    enqueue({ type: 'delete', itemId: id, previous, retries: 0 });
+    enqueue({ type: 'delete', itemId: id, previous, retries: 0, nextRetryAt: 0 });
   }, [uid, enqueue]);
 
   // ── ADD BATCH — Optimistic UI + enqueue (1 processQueue trigger) ──────────
@@ -917,7 +951,7 @@ export function useTransactions(
       optimistics.push(optimistic);
       tempIds.push(tempId);
       // Push directly to avoid N processQueue triggers; one call below handles all
-      queueRef.current.push({ type: 'add', tempId, txId, data: enriched, retries: 0 });
+      queueRef.current.push({ type: 'add', tempId, txId, data: enriched, retries: 0, nextRetryAt: 0 });
     });
 
     setTransactions(prev => [...optimistics, ...prev]);
@@ -984,7 +1018,7 @@ export function useTransactions(
     });
 
     if (realIds.length > 0) {
-      enqueue({ type: 'deleteBatch', ids: realIds, previousBatch, retries: 0 });
+      enqueue({ type: 'deleteBatch', ids: realIds, previousBatch, retries: 0, nextRetryAt: 0 });
     }
   }, [uid, enqueue]);
 
@@ -1129,5 +1163,6 @@ export function useTransactions(
     bulkUpdateTransactions,
     undoLastBulkUpdate,
     clearBulkSnapshot,
+    deadLetterOps,
   };
 }
