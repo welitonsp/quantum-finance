@@ -78,6 +78,11 @@ export function PreviewPanel({
           Nenhuma duplicata adicional encontrada
         </div>
       )}
+      {crossPageStatus === 'failed' && (
+        <div role="status" aria-live="polite" className="px-3 py-2 rounded-xl text-xs border bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted">
+          Verificação de duplicatas indisponível — revise manualmente antes de confirmar
+        </div>
+      )}
 
       <div>
         <div className="flex items-center justify-between mb-2">
