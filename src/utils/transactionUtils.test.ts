@@ -142,4 +142,59 @@ describe('calculateRunningBalances', () => {
     expect(balances.canonical).toBe(100);
     expect(balances['legacy-only']).toBe(100);
   });
+
+  // createdAtToMillis tiebreaker branches (linhas 76-90)
+  // Duas transações com a mesma date → tiebreaker usa createdAt
+
+  it('createdAt como string ISO é usado como tiebreaker (linha 76-77)', () => {
+    const txs = [
+      tx({ id: 'b', type: 'entrada', value_cents: cents(1000), date: '2026-05-01', createdAt: '2026-05-01T12:00:00Z' as any }),
+      tx({ id: 'a', type: 'entrada', value_cents: cents(500),  date: '2026-05-01', createdAt: '2026-05-01T08:00:00Z' as any }),
+    ];
+    const balances = calculateRunningBalances(txs);
+    // 'a' criado antes (8h) vem primeiro → balance 500, depois 'b' → 1500
+    expect(balances['a']).toBe(500);
+    expect(balances['b']).toBe(1500);
+  });
+
+  it('createdAt com objeto {toMillis} é usado como tiebreaker (linha 81-85)', () => {
+    const txs = [
+      tx({ id: 'late',  type: 'entrada', value_cents: cents(1000), date: '2026-05-01', createdAt: { toMillis: () => 2000 } as any }),
+      tx({ id: 'early', type: 'entrada', value_cents: cents(500),  date: '2026-05-01', createdAt: { toMillis: () => 1000 } as any }),
+    ];
+    const balances = calculateRunningBalances(txs);
+    expect(balances['early']).toBe(500);
+    expect(balances['late']).toBe(1500);
+  });
+
+  it('createdAt com objeto {seconds, nanoseconds} é usado como tiebreaker (linha 86-90)', () => {
+    const txs = [
+      tx({ id: 'b', type: 'entrada', value_cents: cents(1000), date: '2026-05-01', createdAt: { seconds: 2, nanoseconds: 0 } as any }),
+      tx({ id: 'a', type: 'entrada', value_cents: cents(500),  date: '2026-05-01', createdAt: { seconds: 1, nanoseconds: 0 } as any }),
+    ];
+    const balances = calculateRunningBalances(txs);
+    expect(balances['a']).toBe(500);
+    expect(balances['b']).toBe(1500);
+  });
+
+  it('createdAt com nanoseconds contribui para resolução sub-segundo', () => {
+    const txs = [
+      tx({ id: 'b', type: 'entrada', value_cents: cents(1000), date: '2026-05-01', createdAt: { seconds: 1, nanoseconds: 500_000_000 } as any }),
+      tx({ id: 'a', type: 'entrada', value_cents: cents(500),  date: '2026-05-01', createdAt: { seconds: 1, nanoseconds: 0 } as any }),
+    ];
+    const balances = calculateRunningBalances(txs);
+    expect(balances['a']).toBe(500);
+    expect(balances['b']).toBe(1500);
+  });
+
+  it('createdAt null/undefined cai para tiebreaker por id', () => {
+    const txs = [
+      tx({ id: 'zzz', type: 'entrada', value_cents: cents(1000), date: '2026-05-01', createdAt: undefined as any }),
+      tx({ id: 'aaa', type: 'entrada', value_cents: cents(500),  date: '2026-05-01', createdAt: undefined as any }),
+    ];
+    const balances = calculateRunningBalances(txs);
+    // 'aaa' < 'zzz' lexicograficamente → aaa primeiro
+    expect(balances['aaa']).toBe(500);
+    expect(balances['zzz']).toBe(1500);
+  });
 });

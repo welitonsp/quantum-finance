@@ -166,4 +166,61 @@ describe('calculateBudgetAlerts', () => {
 
     expect(alerts).toEqual([]);
   });
+
+  it('dois alertas: critical aparece antes de attention na ordenação (linha 145-147)', () => {
+    const budgets = [
+      { id: 'b1', category: 'Lazer',       month: '2026-05', targetAmountCents: cents(1000) },
+      { id: 'b2', category: 'Alimentação', month: '2026-05', targetAmountCents: cents(1000) },
+    ];
+    const txs = [
+      tx({ category: 'Lazer',       value_cents: cents(1100), date: '2026-05-01' }), // critical (110%)
+      tx({ category: 'Alimentação', value_cents: cents(850),  date: '2026-05-01' }), // attention (85%)
+    ];
+    const alerts = calculateBudgetAlerts(budgets, txs);
+    expect(alerts.length).toBe(2);
+    expect(alerts[0]!.status).toBe('critical');
+    expect(alerts[1]!.status).toBe('attention');
+  });
+});
+
+// ─── calcStatus — branches CRÍTICO, ATENÇÃO, EXCELENTE (linhas 61-62) ─────────
+
+describe('calcStatus — todos os ramos de status', () => {
+  it('status CRÍTICO quando saldo negativo', () => {
+    const result = calcStatus(-100, 500, 600, 1000, 0, 20);
+    expect(result.status).toBe('CRÍTICO');
+    expect(result.risk).toBe('ALTO');
+    expect(result.color).toBe('red');
+  });
+
+  it('status CRÍTICO quando debtRatio > 90', () => {
+    const result = calcStatus(100, 1000, 950, 1000, 0, 20);
+    expect(result.status).toBe('CRÍTICO');
+  });
+
+  it('status CRÍTICO quando patrimonyRisk > 150', () => {
+    // patrimônio = 100, dívidas = 200 → risco = 200%
+    const result = calcStatus(100, 1000, 800, 100, 200, 20);
+    expect(result.status).toBe('CRÍTICO');
+  });
+
+  it('status ATENÇÃO quando debtRatio > 70 e ≤ 90 (não CRÍTICO)', () => {
+    // receitas=1000, despesas=850 → debtRatio=85 (>70 ATENÇÃO, ≤90 não CRÍTICO)
+    const result = calcStatus(150, 1000, 850, 5000, 0, 20);
+    expect(result.status).toBe('ATENÇÃO');
+    expect(result.risk).toBe('MÉDIO');
+  });
+
+  it('status EXCELENTE quando score >= 80', () => {
+    const result = calcStatus(5000, 10000, 2000, 50000, 0, 20);
+    expect(result.status).toBe('EXCELENTE');
+    expect(result.score).toBeGreaterThanOrEqual(80);
+  });
+
+  it('status SAUDÁVEL quando score 70-79: savingsRate=30%, debtRatio=70%, patrimonyRisk=50%', () => {
+    // score = 25+14+25+14 = 78 → SAUDÁVEL (não EXCELENTE, não ATENÇÃO)
+    const result = calcStatus(300, 1000, 700, 1000, 500, 20);
+    expect(result.status).toBe('SAUDÁVEL');
+    expect(result.score).toBeLessThan(80);
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCSV, parseCSVWithMapping } from './csvParser';
+import { parseCSV, parseCSVWithMapping, type CSVParseError } from './csvParser';
 
 function csvFile(content: string): File {
   return new File([content], 'extrato.csv', { type: 'text/csv' });
@@ -116,5 +116,53 @@ describe('csvParser - parsing monetário brasileiro', () => {
       expect(transactions).toHaveLength(1);
       expect(transactions[0]!.value_cents).toBe(1200);
     });
+  });
+});
+
+// ─── Branches de erro não cobertos ────────────────────────────────────────────
+
+describe('csvParser — branches de erro (linhas 146, 214-222)', () => {
+  it('parseCSVWithMapping com mapeamento incompleto (dateIdx < 0) lança erro (linha 146)', async () => {
+    const file = csvFile('a;b;c\n2026-01-01;desc;100');
+    await expect(
+      parseCSVWithMapping(file, { dateIdx: -1, descIdx: 1, valueIdx: 2 })
+    ).rejects.toThrow('Mapeamento de colunas incompleto');
+  });
+
+  it('parseCSVWithMapping com descIdx < 0 lança erro', async () => {
+    const file = csvFile('a;b;c\n2026-01-01;desc;100');
+    await expect(
+      parseCSVWithMapping(file, { dateIdx: 0, descIdx: -1, valueIdx: 2 })
+    ).rejects.toThrow('Mapeamento de colunas incompleto');
+  });
+
+  it('parseCSVWithMapping com valueIdx < 0 lança erro', async () => {
+    const file = csvFile('a;b;c\n2026-01-01;desc;100');
+    await expect(
+      parseCSVWithMapping(file, { dateIdx: 0, descIdx: 1, valueIdx: -1 })
+    ).rejects.toThrow('Mapeamento de colunas incompleto');
+  });
+
+  it('parseCSV com headers não reconhecidos lança CSVParseError com code COLUMNS_NOT_FOUND (linhas 214-222)', async () => {
+    const file = csvFile('coluna_x;coluna_y;coluna_z\n2026-01-01;desc;100');
+    let caught: unknown;
+    try {
+      await parseCSV(file);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeDefined();
+    const err = caught as CSVParseError;
+    expect(err.code).toBe('COLUMNS_NOT_FOUND');
+    expect(err.headers).toBeDefined();
+    expect(Array.isArray(err.headers)).toBe(true);
+    expect(err.autoMap).toBeDefined();
+  });
+
+  it('validateDate com formato YYYYMMDD (linha 40)', async () => {
+    const file = csvFile('data;descricao;valor\n20260401;Cafe;12,50');
+    const txs = await parseCSV(file);
+    expect(txs).toHaveLength(1);
+    expect(txs[0]!.date).toBe('2026-04-01');
   });
 });

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { computeKPIs } from './useFinancialKPIs';
+import { renderHook } from '@testing-library/react';
+import { computeKPIs, useFinancialKPIs } from './useFinancialKPIs';
 import type { Transaction } from '../shared/types/transaction';
 
 // Dia 15 de abril de 2026 (30 dias no mês)
@@ -58,5 +59,24 @@ describe('computeKPIs — cálculos financeiros', () => {
     const txs = [tx('saida', -500)];   // valor negativo deve ser tratado como 500
     const kpis = computeKPIs(txs, FIXED_DATE);
     expect(kpis.totalExpense).toBe(500);
+  });
+});
+
+// ─── useFinancialKPIs hook — branch now ?? new Date() (linhas 47-48) ──────────
+
+describe('useFinancialKPIs hook', () => {
+  it('executa sem now explícito usando new Date() interno (linha 47)', () => {
+    const txs: Transaction[] = [];
+    const { result } = renderHook(() => useFinancialKPIs(txs));
+    expect(Number.isFinite(result.current.burnRate)).toBe(true);
+    expect(Number.isFinite(result.current.balance)).toBe(true);
+  });
+
+  it('aceita now explícito e retorna KPIs determinísticos', () => {
+    const now = new Date('2026-05-15T00:00:00Z');
+    const txs: Transaction[] = [];
+    const { result } = renderHook(() => useFinancialKPIs(txs, now));
+    expect(result.current.totalIncome).toBe(0);
+    expect(result.current.totalExpense).toBe(0);
   });
 });

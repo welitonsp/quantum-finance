@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RecurringTask } from '../shared/types/transaction';
 
@@ -319,6 +319,22 @@ describe('useRecurring — history Modelo A leve', () => {
     expect(mockBatchUpdate).not.toHaveBeenCalled();
     expect(mockBatchDelete).not.toHaveBeenCalled();
     expect(mockBatchCommit).not.toHaveBeenCalled();
+
+    unmount();
+  });
+
+  it('erro no onSnapshot preenche state de error (linhas 73-75)', async () => {
+    const firebaseErr = Object.assign(new Error('permission-denied'), { code: 'permission-denied' });
+    mockOnSnapshot.mockImplementation((_q: unknown, _onNext: unknown, onError: (e: Error) => void) => {
+      onError(firebaseErr);
+      return vi.fn();
+    });
+
+    const { result, unmount } = renderHook(() => useRecurring('uid-1'));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toBe('permission-denied');
+    expect(result.current.recurringTasks).toEqual([]);
 
     unmount();
   });
