@@ -596,10 +596,6 @@ export const FirestoreService = {
       _lastOpId: historyRef.id,
     };
 
-    if (import.meta.env.DEV) {
-      console.warn('[Firestore][Audit] Update keys:', Object.keys(writePayload));
-    }
-
     const historyPayload: Record<string, unknown> = {
       action: 'UPDATE',
       txId: id,
@@ -611,12 +607,6 @@ export const FirestoreService = {
       after: sanitizeHistorySnapshot(historyEvent.after),
       changedFields: historyEvent.changedFields.filter(f => f !== '_lastOpId' && f !== 'correlationId'),
     };
-
-    if (import.meta.env.DEV) {
-      console.warn('[Firestore][Audit] History changedFields:', historyPayload.changedFields);
-      console.warn('[Firestore][Audit] History before keys:', Object.keys(historyPayload.before as object));
-      console.warn('[Firestore][Audit] History after keys:', Object.keys(historyPayload.after as object));
-    }
 
     if (historyEvent.amount_cents !== undefined) historyPayload.amount_cents = historyEvent.amount_cents;
     if (historyEvent.category !== undefined) historyPayload.category = historyEvent.category;
