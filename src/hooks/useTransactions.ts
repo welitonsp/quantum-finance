@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   collection, query, orderBy, onSnapshot, limit,
-  doc, getDoc, getDocs, startAfter,
-  type QueryDocumentSnapshot, type DocumentData, type Timestamp,
+  doc, getDoc,
+  type Timestamp,
 } from 'firebase/firestore';
+import { useTransactionsPagination } from './useTransactionsPagination';
 import { db } from '../shared/api/firebase/index';
 import { FirestoreService } from '../shared/services/FirestoreService';
 import { AuditService } from '../shared/services/AuditService';
@@ -11,7 +12,7 @@ import type { Transaction } from '../shared/types/transaction';
 import { fromCentavos, type Centavos } from '../shared/types/money';
 import { categorizeTransaction } from '../utils/aiCategorize';
 import { categorizeWithAI } from '../services/AICategorizationService';
-import { PAGE_SIZE, mergeTransactionPages, hasMorePages } from '../utils/transactionPagination';
+import { PAGE_SIZE, mergeTransactionPages } from '../utils/transactionPagination';
 import {
   getFirebaseErrorCode,
   getUserFriendlyErrorMessage,
@@ -147,7 +148,7 @@ function getTxCentavos(tx: Partial<Transaction>): Centavos | undefined {
   return undefined;
 }
 
-function normalizeTransaction(tx: Transaction): Transaction {
+export function normalizeTransaction(tx: Transaction): Transaction {
   // FIX: O cliente não deve reconstruir value_cents a partir de value legado nem na leitura.
   // Se estiver ausente, a transação é considerada incompleta (Admin Repair).
   const rawCents = tx.value_cents;
@@ -381,10 +382,6 @@ export function useTransactions(
   const [isBulkUpdating,    setIsBulkUpdating]    = useState(false);
   const [isUndoing,         setIsUndoing]         = useState(false);
   const [hasUndoSnapshot,   setHasUndoSnapshot]   = useState(false);
-  // ── Paginação ──────────────────────────────────────────────────────────────
-  const [hasMoreTransactions, setHasMoreTransactions] = useState(false);
-  const [isLoadingMore,       setIsLoadingMore]       = useState(false);
-
   // ── Refs para guards sem recrear callbacks ────────────────────────────────
   const isBulkUpdatingRef  = useRef(false);
   const isUndoingRef       = useRef(false);
@@ -392,13 +389,16 @@ export function useTransactions(
   /** Espelho síncrono de `transactions` para leitura dentro de callbacks. */
   const transactionsRef    = useRef<Transaction[]>([]);
 
-  // ── Refs de paginação ─────────────────────────────────────────────────────
-  /** Último documento da página mais recentemente carregada; cursor para startAfter. */
-  const lastPageDocRef   = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
-  /** Transações de páginas antigas (getDocs); fundidas com o estado no render. */
-  const olderPagesRef    = useRef<Transaction[]>([]);
-  /** Guard contra loadMore concorrente. */
-  const isLoadingMoreRef = useRef(false);
+  // ── Paginação — delegada ao hook extraído ─────────────────────────────────
+  const {
+    hasMoreTransactions,
+    isLoadingMore,
+    loadMoreTransactions,
+    lastPageDocRef,
+    olderPagesRef,
+    setHasMoreTransactions,
+    resetPagination,
+  } = useTransactionsPagination(uid, transactionsRef, setTransactions);
 
   // ── Fila de sync ──────────────────────────────────────────────────────────
   const queueRef    = useRef<Op[]>([]);
@@ -442,11 +442,7 @@ export function useTransactions(
     postAddCallbacks.current      = new Map();
     pendingAddResolvers.current   = new Map();
     // Limpa paginação ao trocar de utilizador
-    olderPagesRef.current         = [];
-    lastPageDocRef.current        = null;
-    isLoadingMoreRef.current      = false;
-    setHasMoreTransactions(false);
-    setIsLoadingMore(false);
+    resetPagination();
 
     setLoading(true);
     setError(null);
@@ -724,59 +720,6 @@ export function useTransactions(
     queueRef.current.push(op);
     void processQueue();
   }, [processQueue]);
-
-  // ── loadMoreTransactions ───────────────────────────────────────────────────
-  const loadMoreTransactions = useCallback(async (): Promise<void> => {
-    if (!uid || isLoadingMoreRef.current || !lastPageDocRef.current) return;
-
-    isLoadingMoreRef.current = true;
-    setIsLoadingMore(true);
-
-    try {
-      const q = query(
-        collection(db, 'users', uid, 'transactions'),
-        orderBy('createdAt', 'desc'),
-        startAfter(lastPageDocRef.current),
-        limit(PAGE_SIZE)
-      );
-
-      const snap = await getDocs(q);
-
-      const newDocs = snap.docs
-        .map(d => normalizeTransaction({
-          id: d.id,
-          ...(d.data() as Omit<Transaction, 'id'>),
-        }))
-        .filter(tx => tx.isDeleted !== true && !tx.deletedAt);
-
-      // Atualiza cursor para o último documento desta página
-      if (snap.docs.length > 0) {
-        lastPageDocRef.current = snap.docs[snap.docs.length - 1] ?? null;
-      }
-
-      // Deduplica contra o estado actual (inclui páginas antigas já carregadas)
-      const existingIds = new Set(transactionsRef.current.map(tx => tx.id));
-      const uniqueNew   = newDocs.filter(tx => !existingIds.has(tx.id));
-
-      olderPagesRef.current = [...olderPagesRef.current, ...uniqueNew];
-
-      setHasMoreTransactions(hasMorePages(PAGE_SIZE, snap.docs.length));
-
-      if (uniqueNew.length > 0) {
-        setTransactions(prev => {
-          const prevIds  = new Set(prev.map(tx => tx.id));
-          const deduped  = uniqueNew.filter(tx => !prevIds.has(tx.id));
-          return [...prev, ...deduped];
-        });
-      }
-    } catch (err) {
-      logSanitizedFirebaseError('transaction_load_more', err);
-      toast.error(getUserFriendlyErrorMessage(err, 'transaction_load_more'));
-    } finally {
-      isLoadingMoreRef.current = false;
-      setIsLoadingMore(false);
-    }
-  }, [uid]);
 
   // ── ADD — Optimistic + enqueue ────────────────────────────────────────────
   const add = useCallback(async (data: Partial<Transaction>): Promise<string> => {
