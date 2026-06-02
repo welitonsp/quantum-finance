@@ -26,18 +26,17 @@ export type BulkUpdate = {
   category?: string;
 };
 
-<<<<<<< HEAD
 // ─── addBatchStreamed result ───────────────────────────────────────────────────
 export type StreamedBatchResult = {
   succeeded: string[];
   failed: Array<{ item: Partial<Transaction>; error: Error }>;
-=======
+};
+
 // ─── Dead Letter Queue — ops descartadas após MAX_RETRIES ─────────────────────
 export type DeadLetterOp = {
   type: 'add' | 'update' | 'delete' | 'deleteBatch';
   operation: FirebaseErrorOperation;
   failedAt: number;
->>>>>>> origin/main
 };
 
 // ─── Bulk Snapshot — estado anterior para undo em memória ─────────────────────
