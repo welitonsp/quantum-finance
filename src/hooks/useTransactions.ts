@@ -26,6 +26,12 @@ export type BulkUpdate = {
   category?: string;
 };
 
+// ─── addBatchStreamed result ───────────────────────────────────────────────────
+export type StreamedBatchResult = {
+  succeeded: string[];
+  failed: Array<{ item: Partial<Transaction>; error: Error }>;
+};
+
 // ─── Bulk Snapshot — estado anterior para undo em memória ─────────────────────
 export type BulkSnapshot = {
   id:          string;
@@ -93,6 +99,7 @@ interface UseTransactionsReturn {
   // ── Operações ────────────────────────────────────────────────────────────
   add:                    (data: Partial<Transaction>) => Promise<string>;
   addBatch:               (items: Partial<Transaction>[]) => Promise<string[]>;
+  addBatchStreamed:        (items: Partial<Transaction>[], onProgress?: (done: number, total: number) => void) => Promise<StreamedBatchResult>;
   remove:                 (id: string) => Promise<void>;
   removeBatch:            (ids: string[]) => Promise<void>;
   update:                 (id: string, data: Partial<Transaction>) => Promise<void>;
@@ -919,6 +926,43 @@ export function useTransactions(
     return tempIds;
   }, [uid, processQueue]);
 
+  // ── ADD BATCH STREAMED — Chunked async import com progress callback ────────
+  const addBatchStreamed = useCallback(async (
+    items: Partial<Transaction>[],
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<StreamedBatchResult> => {
+    if (!uid) throw new Error('[useTransactions][addBatchStreamed] UID ausente.');
+    if (!items.length) return { succeeded: [], failed: [] };
+
+    const CHUNK_SIZE = 10;
+    const succeeded: string[]                                    = [];
+    const failed: StreamedBatchResult['failed']                  = [];
+
+    for (let i = 0; i < items.length; i += CHUNK_SIZE) {
+      const chunk = items.slice(i, i + CHUNK_SIZE);
+
+      const results = await Promise.allSettled(
+        chunk.map(item => add(item))
+      );
+
+      results.forEach((result, j) => {
+        const item = chunk[j]!;
+        if (result.status === 'fulfilled') {
+          succeeded.push(result.value);
+        } else {
+          failed.push({ item, error: result.reason instanceof Error ? result.reason : new Error(String(result.reason)) });
+        }
+      });
+
+      onProgress?.(Math.min(i + CHUNK_SIZE, items.length), items.length);
+
+      // Cede ao event loop entre chunks para não bloquear a UI
+      await new Promise<void>(resolve => { queueMicrotask(resolve); });
+    }
+
+    return { succeeded, failed };
+  }, [uid, add]);
+
   // ── REMOVE BATCH — Optimistic + enqueue ───────────────────────────────────
   const removeBatch = useCallback(async (ids: string[]): Promise<void> => {
     if (!uid || !ids.length) return;
@@ -1078,6 +1122,7 @@ export function useTransactions(
     loadMoreTransactions,
     add,
     addBatch,
+    addBatchStreamed,
     remove,
     removeBatch,
     update,
