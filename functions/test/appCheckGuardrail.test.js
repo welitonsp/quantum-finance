@@ -5,12 +5,10 @@ const { describe, it } = require('node:test');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
 
-const CALLABLES_WITH_APP_CHECK_ENFORCEMENT = [
+// All callables now require App Check enforcement (rollout completed in security audit 2026-06-02).
+const ALL_CALLABLES_WITH_APP_CHECK_ENFORCEMENT = [
   'createTransaction',
   'categorizeTransactionsBatch',
-];
-
-const AI_CALLABLES_STILL_PENDING_GRADUAL_ENFORCEMENT = [
   'chatWithQuantumAI',
   'generateAuditReport',
 ];
@@ -22,23 +20,13 @@ function callableOptions(exportName) {
   return match[1];
 }
 
-describe('App Check guardrails during gradual AI enforcement rollout', () => {
-  it('enforces App Check on createTransaction and AI batch categorization only', () => {
-    for (const callableName of CALLABLES_WITH_APP_CHECK_ENFORCEMENT) {
+describe('App Check guardrails — full enforcement', () => {
+  it('enforces App Check on all callables', () => {
+    for (const callableName of ALL_CALLABLES_WITH_APP_CHECK_ENFORCEMENT) {
       assert.match(
         callableOptions(callableName),
         /\benforceAppCheck\s*:\s*true\b/,
-        `${callableName} must enforce App Check in the current rollout state`,
-      );
-    }
-  });
-
-  it('keeps chat and audit AI callables temporarily without enforcement', () => {
-    for (const callableName of AI_CALLABLES_STILL_PENDING_GRADUAL_ENFORCEMENT) {
-      assert.doesNotMatch(
-        callableOptions(callableName),
-        /\benforceAppCheck\b/,
-        `${callableName} must remain unenforced until its explicit rollout phase`,
+        `${callableName} must enforce App Check`,
       );
     }
   });
