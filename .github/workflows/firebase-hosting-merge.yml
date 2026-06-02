@@ -25,6 +25,34 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 20
 
+  deploy_rules:
+    name: 🔒 Deploy Firestore Rules
+    runs-on: ubuntu-latest
+    needs: wait_for_ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Firebase Tools
+        run: npm install -g firebase-tools
+
+      - name: Deploy Firestore Rules
+        # Deploys only firestore.rules — never hosting or functions.
+        # Runs after CI (which includes test:rules against the emulator) to ensure
+        # local rules and published rules are always in sync.
+        # Uses the same service account already trusted for hosting deploys.
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_QUANTUM_FINANCE_39235 }}
+        run: |
+          echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > /tmp/sa.json
+          GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json \
+            firebase deploy --only firestore:rules --project quantum-finance-39235 --non-interactive
+          rm -f /tmp/sa.json
+
   build_and_deploy:
     name: 🚀 Deploy to Firebase Hosting
     runs-on: ubuntu-latest

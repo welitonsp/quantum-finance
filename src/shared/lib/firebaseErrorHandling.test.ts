@@ -107,4 +107,53 @@ describe('firebaseErrorHandling', () => {
     }));
     expect(JSON.stringify(warn.mock.calls[0]?.[1])).not.toContain('uid-secreto');
   });
+
+  // ─── Branches adicionais para cobertura completa ───────────────────────────
+
+  it('stringProp retorna string vazia para não-objeto (linha 74)', () => {
+    // sanitizeErrorForLog com erro que não é Error nem objeto com name/message
+    const safe = sanitizeErrorForLog(null);
+    expect(safe.code).toBe('unknown');
+    expect(safe).not.toHaveProperty('name');
+    expect(safe).not.toHaveProperty('message');
+  });
+
+  it('sanitizeErrorForLog processa erro com name e message como propriedades de objeto puro (linhas 143-150)', () => {
+    const objError = { code: 'permission-denied', name: 'FirebaseError', message: 'Access denied' };
+    const safe = sanitizeErrorForLog(objError);
+    expect(safe.code).toBe('permission-denied');
+    expect(safe.name).toBeDefined();
+    expect(safe.message).toBeDefined();
+  });
+
+  it('sanitizeErrorForLog processa erro do tipo string (linha 148)', () => {
+    const safe = sanitizeErrorForLog('Erro genérico de string');
+    expect(safe.code).toBe('unknown');
+    expect(safe.message).toBeDefined();
+  });
+
+  it('sanitizeErrorForLog trunka mensagem acima de 240 chars (linha 80)', () => {
+    const longMsg = 'X'.repeat(300);
+    const safe = sanitizeErrorForLog(new Error(longMsg));
+    expect(safe.message!.length).toBeLessThanOrEqual(245); // 240 + "…" + margem
+  });
+
+  it('sanitizeFirebaseErrorContext aceita objeto com campo operation válido (linha 108)', () => {
+    const ctx = { operation: 'transaction_update' } as FirebaseErrorLogContext;
+    expect(sanitizeFirebaseErrorContext(ctx)).toEqual({ operation: 'transaction_update' });
+  });
+
+  it('sanitizeFirebaseErrorContext aceita string como context direto', () => {
+    expect(sanitizeFirebaseErrorContext('transaction_add')).toEqual({ operation: 'transaction_add' });
+  });
+
+  it('getFirebaseErrorCode retorna unknown quando code está ausente', () => {
+    expect(getFirebaseErrorCode({})).toBe('unknown');
+    expect(getFirebaseErrorCode(null)).toBe('unknown');
+    expect(getFirebaseErrorCode('sem code')).toBe('unknown');
+  });
+
+  it('getFirebaseErrorCode extrai parte final do código com namespace (ex: firestore/permission-denied)', () => {
+    expect(getFirebaseErrorCode({ code: 'firestore/permission-denied' })).toBe('permission-denied');
+  });
 });
