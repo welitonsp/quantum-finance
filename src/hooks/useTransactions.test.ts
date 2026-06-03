@@ -55,6 +55,7 @@ vi.mock('firebase/firestore', () => ({
   orderBy:    mockOrderBy,
   query:      mockQuery,
   startAfter: mockStartAfter,
+  where:      vi.fn((field: string, op: string, val: string) => ({ kind: 'where', field, op, val })),
 }));
 
 vi.mock('firebase/functions', () => ({
@@ -1217,6 +1218,107 @@ describe('useTransactions - AI categorization usa updateTransactionWithHistory a
 
     expect(mockCategorize).not.toHaveBeenCalled();
     expect(mockUpdateTransactionWithHistory).not.toHaveBeenCalled();
+
+    unmount();
+  });
+});
+
+// ─── SnapshotWindow ────────────────────────────────────────────────────────────
+
+describe('useTransactions — SnapshotWindow', () => {
+  beforeEach(() => {
+    mockQuery.mockClear();
+    mockOrderBy.mockClear();
+    mockOnSnapshot.mockReset();
+    mockOnSnapshot.mockReturnValue(() => {});
+  });
+
+  it('sem snapshotWindow usa orderBy("createdAt") — comportamento padrão', () => {
+    const { unmount } = renderHook(() => useTransactions('uid-1'));
+
+    const createdAtCall = mockOrderBy.mock.calls.find(
+      (args: unknown[]) => args[0] === 'createdAt',
+    );
+    expect(createdAtCall).toBeDefined();
+    unmount();
+  });
+
+  it('com snapshotWindow usa orderBy("date", "desc")', () => {
+    const { unmount } = renderHook(() =>
+      useTransactions('uid-1', [], { dateFrom: '2026-06-01', dateTo: '2026-06-30' }),
+    );
+
+    const dateCall = mockOrderBy.mock.calls.find(
+      (args: unknown[]) => args[0] === 'date',
+    );
+    expect(dateCall).toBeDefined();
+    expect(dateCall?.[1]).toBe('desc');
+    unmount();
+  });
+
+  it('com snapshotWindow query recebe cláusulas where de intervalo de datas', () => {
+    // mockQuery recebe os args da query — incluindo os objetos retornados por where()
+    // O mock de where retorna { kind: 'where', field, op, val }
+    const { unmount } = renderHook(() =>
+      useTransactions('uid-1', [], { dateFrom: '2026-06-01', dateTo: '2026-06-30' }),
+    );
+
+    // query foi chamada com os argumentos construídos pela hook
+    const queryArgs: unknown[] = mockQuery.mock.calls.flat();
+
+    // Deve conter cláusula where para dateFrom
+    const hasDateFrom = queryArgs.some(
+      (a: unknown) =>
+        typeof a === 'object' && a !== null &&
+        (a as Record<string, unknown>)['kind'] === 'where' &&
+        (a as Record<string, unknown>)['field'] === 'date' &&
+        (a as Record<string, unknown>)['op'] === '>=' &&
+        (a as Record<string, unknown>)['val'] === '2026-06-01',
+    );
+    const hasDateTo = queryArgs.some(
+      (a: unknown) =>
+        typeof a === 'object' && a !== null &&
+        (a as Record<string, unknown>)['kind'] === 'where' &&
+        (a as Record<string, unknown>)['field'] === 'date' &&
+        (a as Record<string, unknown>)['op'] === '<=' &&
+        (a as Record<string, unknown>)['val'] === '2026-06-30',
+    );
+
+    expect(hasDateFrom).toBe(true);
+    expect(hasDateTo).toBe(true);
+    unmount();
+  });
+
+  it('sem snapshotWindow query NÃO usa where de data', () => {
+    const { unmount } = renderHook(() => useTransactions('uid-1'));
+
+    const queryArgs: unknown[] = mockQuery.mock.calls.flat();
+    const hasDateWhere = queryArgs.some(
+      (a: unknown) =>
+        typeof a === 'object' && a !== null &&
+        (a as Record<string, unknown>)['kind'] === 'where' &&
+        (a as Record<string, unknown>)['field'] === 'date',
+    );
+    expect(hasDateWhere).toBe(false);
+    unmount();
+  });
+
+  it('com snapshotWindow hasMoreTransactions é sempre false', () => {
+    const { result, unmount } = renderHook(() =>
+      useTransactions('uid-1', [], { dateFrom: '2026-06-01', dateTo: '2026-06-30' }),
+    );
+    expect(result.current.hasMoreTransactions).toBe(false);
+    unmount();
+  });
+
+  it('com snapshotWindow loadMoreTransactions é noop que resolve sem erro', async () => {
+    const { result, unmount } = renderHook(() =>
+      useTransactions('uid-1', [], { dateFrom: '2026-06-01', dateTo: '2026-06-30' }),
+    );
+
+    await act(async () => {
+      await expect(result.current.loadMoreTransactions()).resolves.toBeUndefined();
+    });
 
     unmount();
   });
