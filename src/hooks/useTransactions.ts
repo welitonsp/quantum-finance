@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  collection, query, orderBy, onSnapshot, limit,
+  collection, query, orderBy, onSnapshot, limit, where,
   doc, getDoc,
   type Timestamp,
 } from 'firebase/firestore';
@@ -25,6 +25,14 @@ import toast from 'react-hot-toast';
 // ─── Bulk Update — tipo restrito (não expõe Partial<Transaction> livre) ────────
 export type BulkUpdate = {
   category?: string;
+};
+
+// ─── SnapshotWindow — filtro server-side por intervalo de datas ───────────────
+export type SnapshotWindow = {
+  /** ISO date string YYYY-MM-DD — inclusive. */
+  dateFrom: string;
+  /** ISO date string YYYY-MM-DD — inclusive. */
+  dateTo: string;
 };
 
 // ─── addBatchStreamed result ───────────────────────────────────────────────────
@@ -374,7 +382,8 @@ function computeChangedFields(
 
 export function useTransactions(
   uid: string,
-  userRules: import('./useCategoryRules').UserCategoryRule[] = []
+  userRules: import('./useCategoryRules').UserCategoryRule[] = [],
+  snapshotWindow?: SnapshotWindow,
 ): UseTransactionsReturn {
   const [transactions,      setTransactions]      = useState<Transaction[]>([]);
   const [loading,           setLoading]           = useState(true);
@@ -447,11 +456,19 @@ export function useTransactions(
     setLoading(true);
     setError(null);
 
-    const q = query(
-      collection(db, 'users', uid, 'transactions'),
-      orderBy('createdAt', 'desc'),
-      limit(PAGE_SIZE)
-    );
+    const q = snapshotWindow
+      ? query(
+          collection(db, 'users', uid, 'transactions'),
+          where('date', '>=', snapshotWindow.dateFrom),
+          where('date', '<=', snapshotWindow.dateTo),
+          orderBy('date', 'desc'),
+          limit(PAGE_SIZE),
+        )
+      : query(
+          collection(db, 'users', uid, 'transactions'),
+          orderBy('createdAt', 'desc'),
+          limit(PAGE_SIZE),
+        );
 
     const unsub = onSnapshot(
       q,
@@ -523,7 +540,8 @@ export function useTransactions(
     );
 
     return () => unsub();
-  }, [uid]);
+  // snapshotWindow strings are primitives — safe as direct deps
+  }, [uid, snapshotWindow?.dateFrom, snapshotWindow?.dateTo]);
 
   // ── Mantém transactionsRef sincronizado para leitura nos callbacks ─────────
   useEffect(() => { transactionsRef.current = transactions; }, [transactions]);
@@ -1092,10 +1110,13 @@ export function useTransactions(
     isBulkUpdating,
     isUndoing,
     hasUndoSnapshot,
-    hasMoreTransactions,
-    isLoadingMore,
+    // When snapshotWindow is active, pagination is incompatible (snapshot uses
+    // orderBy('date') while loadMoreTransactions cursor uses orderBy('createdAt')).
+    // Block loadMore to prevent invalid cross-index cursor reads.
+    hasMoreTransactions: snapshotWindow ? false : hasMoreTransactions,
+    isLoadingMore: snapshotWindow ? false : isLoadingMore,
     loadedCount: transactions.filter(tx => !isTemp(tx.id)).length,
-    loadMoreTransactions,
+    loadMoreTransactions: snapshotWindow ? (async () => Promise.resolve()) : loadMoreTransactions,
     add,
     addBatch,
     addBatchStreamed,
