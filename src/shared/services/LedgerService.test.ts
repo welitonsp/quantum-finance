@@ -216,4 +216,61 @@ describe('LedgerService.importTransactions', () => {
     expect(result).toEqual({ added: 0, duplicates: 1, invalid: 0 });
     expect(mockTransactionSet).not.toHaveBeenCalled();
   });
+
+  it('contabiliza entradas inválidas no contador invalid (linha 162-163)', async () => {
+    const invalidInput = { description: 'X', value_cents: toCentavos(10), date: 'not-a-date', source: 'csv' as const };
+    const result = await LedgerService.importTransactions('uid1', [invalidInput, baseInput]);
+
+    // invalidInput falha na validação de data → invalid=1, baseInput válido → added=1
+    expect(result.invalid).toBe(1);
+    expect(result.added).toBe(1);
+  });
+
+  it('retorna cedo com zeros quando uid está vazio', async () => {
+    const result = await LedgerService.importTransactions('', [baseInput]);
+    expect(result).toEqual({ added: 0, duplicates: 0, invalid: 0 });
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+  });
+
+  it('retorna cedo com zeros quando lista de entradas está vazia', async () => {
+    const result = await LedgerService.importTransactions('uid1', []);
+    expect(result).toEqual({ added: 0, duplicates: 0, invalid: 0 });
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Suite: normalizeImportTransaction — branches adicionais ──────────────────
+
+describe('LedgerService.normalizeImportTransaction — branches não cobertos', () => {
+  it('retorna null quando description é muito curta (< 2 chars)', () => {
+    expect(normalizeImportTransaction({ ...baseInput, description: 'A' })).toBeNull();
+    expect(normalizeImportTransaction({ ...baseInput, description: '' })).toBeNull();
+  });
+
+  it('retorna null quando value_cents e value são ambos ausentes', () => {
+    const { value_cents, ...withoutValue } = baseInput;
+    void value_cents;
+    expect(normalizeImportTransaction(withoutValue)).toBeNull();
+  });
+
+  it('aceita value como fallback quando value_cents ausente', () => {
+    const { value_cents, ...withoutCents } = baseInput;
+    void value_cents;
+    const result = normalizeImportTransaction({ ...withoutCents, value: '1.234,56' });
+    expect(result).not.toBeNull();
+    expect(result!.value_cents).toBe(123456);
+  });
+
+  it('inclui account, accountId, cardId quando fornecidos', () => {
+    const result = normalizeImportTransaction({
+      ...baseInput,
+      account: 'Conta Corrente',
+      accountId: 'acc-1',
+      cardId: 'card-1',
+    });
+    expect(result).not.toBeNull();
+    expect(result!.account).toBe('Conta Corrente');
+    expect(result!.accountId).toBe('acc-1');
+    expect(result!.cardId).toBe('card-1');
+  });
 });

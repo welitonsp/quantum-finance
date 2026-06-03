@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   collection, query, orderBy, onSnapshot, limit, where,
-  doc, getDoc, getDocs, startAfter,
-  type QueryDocumentSnapshot, type DocumentData, type Timestamp,
+  doc, getDoc,
+  type Timestamp,
 } from 'firebase/firestore';
+import { useTransactionsPagination } from './useTransactionsPagination';
 import { db } from '../shared/api/firebase/index';
 import { FirestoreService } from '../shared/services/FirestoreService';
 import { AuditService } from '../shared/services/AuditService';
@@ -11,7 +12,7 @@ import type { Transaction } from '../shared/types/transaction';
 import { fromCentavos, type Centavos } from '../shared/types/money';
 import { categorizeTransaction } from '../utils/aiCategorize';
 import { categorizeWithAI } from '../services/AICategorizationService';
-import { PAGE_SIZE, mergeTransactionPages, hasMorePages } from '../utils/transactionPagination';
+import { PAGE_SIZE, mergeTransactionPages } from '../utils/transactionPagination';
 import {
   getFirebaseErrorCode,
   getUserFriendlyErrorMessage,
@@ -34,6 +35,19 @@ export type SnapshotWindow = {
   dateTo: string;
 };
 
+// ─── addBatchStreamed result ───────────────────────────────────────────────────
+export type StreamedBatchResult = {
+  succeeded: string[];
+  failed: Array<{ item: Partial<Transaction>; error: Error }>;
+};
+
+// ─── Dead Letter Queue — ops descartadas após MAX_RETRIES ─────────────────────
+export type DeadLetterOp = {
+  type: 'add' | 'update' | 'delete' | 'deleteBatch';
+  operation: FirebaseErrorOperation;
+  failedAt: number;
+};
+
 // ─── Bulk Snapshot — estado anterior para undo em memória ─────────────────────
 export type BulkSnapshot = {
   id:          string;
@@ -48,34 +62,45 @@ export type BulkSnapshot = {
 const MAX_RETRIES       = 5;
 const RETRY_INTERVAL_MS = 5_000;
 
+function computeBackoffMs(attempt: number): number {
+  const base   = 2_000;
+  const cap    = 60_000;
+  const jitter = Math.random() * 1_000;
+  return Math.min(base * 2 ** (attempt - 1), cap) + jitter;
+}
+
 // ─── Op Types (sem any) ───────────────────────────────────────────────────────
 
 interface AddOp {
-  type:    'add';
-  tempId:  string;
-  txId:    string;
-  data:    Partial<Transaction>;
-  retries: number;
+  type:        'add';
+  tempId:      string;
+  txId:        string;
+  data:        Partial<Transaction>;
+  retries:     number;
+  nextRetryAt: number;
 }
 interface UpdateOp {
-  type:     'update';
-  itemId:   string;
-  data:     Partial<Transaction>;
+  type:          'update';
+  itemId:        string;
+  data:          Partial<Transaction>;
   requestedData: Partial<Transaction>;
-  previous: Transaction | undefined;
-  retries:  number;
+  previous:      Transaction | undefined;
+  retries:       number;
+  nextRetryAt:   number;
 }
 interface DeleteOp {
-  type:     'delete';
-  itemId:   string;
-  previous: Transaction | undefined;
-  retries:  number;
+  type:        'delete';
+  itemId:      string;
+  previous:    Transaction | undefined;
+  retries:     number;
+  nextRetryAt: number;
 }
 interface DeleteBatchOp {
   type:          'deleteBatch';
   ids:           string[];
   previousBatch: Transaction[];
   retries:       number;
+  nextRetryAt:   number;
 }
 type Op = AddOp | UpdateOp | DeleteOp | DeleteBatchOp;
 
@@ -101,12 +126,14 @@ interface UseTransactionsReturn {
   // ── Operações ────────────────────────────────────────────────────────────
   add:                    (data: Partial<Transaction>) => Promise<string>;
   addBatch:               (items: Partial<Transaction>[]) => Promise<string[]>;
+  addBatchStreamed:        (items: Partial<Transaction>[], onProgress?: (done: number, total: number) => void) => Promise<StreamedBatchResult>;
   remove:                 (id: string) => Promise<void>;
   removeBatch:            (ids: string[]) => Promise<void>;
   update:                 (id: string, data: Partial<Transaction>) => Promise<void>;
   bulkUpdateTransactions: (ids: string[], updates: BulkUpdate) => Promise<void>;
   undoLastBulkUpdate:     () => Promise<void>;
   clearBulkSnapshot:      () => void;
+  deadLetterOps:          DeadLetterOp[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -129,7 +156,7 @@ function getTxCentavos(tx: Partial<Transaction>): Centavos | undefined {
   return undefined;
 }
 
-function normalizeTransaction(tx: Transaction): Transaction {
+export function normalizeTransaction(tx: Transaction): Transaction {
   // FIX: O cliente não deve reconstruir value_cents a partir de value legado nem na leitura.
   // Se estiver ausente, a transação é considerada incompleta (Admin Repair).
   const rawCents = tx.value_cents;
@@ -364,10 +391,6 @@ export function useTransactions(
   const [isBulkUpdating,    setIsBulkUpdating]    = useState(false);
   const [isUndoing,         setIsUndoing]         = useState(false);
   const [hasUndoSnapshot,   setHasUndoSnapshot]   = useState(false);
-  // ── Paginação ──────────────────────────────────────────────────────────────
-  const [hasMoreTransactions, setHasMoreTransactions] = useState(false);
-  const [isLoadingMore,       setIsLoadingMore]       = useState(false);
-
   // ── Refs para guards sem recrear callbacks ────────────────────────────────
   const isBulkUpdatingRef  = useRef(false);
   const isUndoingRef       = useRef(false);
@@ -375,17 +398,22 @@ export function useTransactions(
   /** Espelho síncrono de `transactions` para leitura dentro de callbacks. */
   const transactionsRef    = useRef<Transaction[]>([]);
 
-  // ── Refs de paginação ─────────────────────────────────────────────────────
-  /** Último documento da página mais recentemente carregada; cursor para startAfter. */
-  const lastPageDocRef   = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
-  /** Transações de páginas antigas (getDocs); fundidas com o estado no render. */
-  const olderPagesRef    = useRef<Transaction[]>([]);
-  /** Guard contra loadMore concorrente. */
-  const isLoadingMoreRef = useRef(false);
+  // ── Paginação — delegada ao hook extraído ─────────────────────────────────
+  const {
+    hasMoreTransactions,
+    isLoadingMore,
+    loadMoreTransactions,
+    lastPageDocRef,
+    olderPagesRef,
+    setHasMoreTransactions,
+    resetPagination,
+  } = useTransactionsPagination(uid, transactionsRef, setTransactions);
 
   // ── Fila de sync ──────────────────────────────────────────────────────────
   const queueRef    = useRef<Op[]>([]);
   const processing  = useRef(false);
+  const dlqRef      = useRef<DeadLetterOp[]>([]);
+  const [deadLetterOps, setDeadLetterOps] = useState<DeadLetterOp[]>([]);
 
   /**
    * tempId → item optimista ainda não confirmado.
@@ -423,11 +451,7 @@ export function useTransactions(
     postAddCallbacks.current      = new Map();
     pendingAddResolvers.current   = new Map();
     // Limpa paginação ao trocar de utilizador
-    olderPagesRef.current         = [];
-    lastPageDocRef.current        = null;
-    isLoadingMoreRef.current      = false;
-    setHasMoreTransactions(false);
-    setIsLoadingMore(false);
+    resetPagination();
 
     setLoading(true);
     setError(null);
@@ -517,7 +541,6 @@ export function useTransactions(
 
     return () => unsub();
   // snapshotWindow strings are primitives — safe as direct deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uid, snapshotWindow?.dateFrom, snapshotWindow?.dateTo]);
 
   // ── Mantém transactionsRef sincronizado para leitura nos callbacks ─────────
@@ -530,6 +553,9 @@ export function useTransactions(
 
     while (queueRef.current.length > 0) {
       const op = queueRef.current[0]!;
+
+      // Aguarda janela de backoff antes de retentar
+      if (op.nextRetryAt > Date.now()) break;
 
       // Descarta ops de add órfãos
       if (op.type === 'add' && !pendingAdds.current.has(op.tempId)) {
@@ -641,6 +667,9 @@ export function useTransactions(
 
         if (op.retries >= MAX_RETRIES || !shouldRetrySyncError(err)) {
           console.warn('[SyncQueue] operação descartada após tentativas', { operation });
+          const dlqEntry: DeadLetterOp = { type: op.type, operation, failedAt: Date.now() };
+          dlqRef.current = [...dlqRef.current, dlqEntry];
+          setDeadLetterOps([...dlqRef.current]);
           const finalError = userFacingSyncError(err, operation);
           const hasAwaiter = op.type === 'add' && pendingAddResolvers.current.has(op.tempId);
           if (!hasAwaiter) toast.error(finalError.message);
@@ -675,7 +704,8 @@ export function useTransactions(
 
           queueRef.current.shift();
         } else {
-          break; // retry no próximo trigger
+          op.nextRetryAt = Date.now() + computeBackoffMs(op.retries);
+          break; // retry após janela de backoff
         }
       }
     }
@@ -690,10 +720,15 @@ export function useTransactions(
   // ── Retry: online event + polling ─────────────────────────────────────────
   useEffect(() => {
     const trigger = (): void => { void processQueueRef.current(); };
-    window.addEventListener('online', trigger);
+    const onOnline = (): void => {
+      // Rede voltou — reseta backoff de todas as ops pendentes para retomada imediata
+      queueRef.current.forEach(op => { op.nextRetryAt = 0; });
+      void processQueueRef.current();
+    };
+    window.addEventListener('online', onOnline);
     const timer = setInterval(trigger, RETRY_INTERVAL_MS);
     return () => {
-      window.removeEventListener('online', trigger);
+      window.removeEventListener('online', onOnline);
       clearInterval(timer);
     };
   }, []);
@@ -703,59 +738,6 @@ export function useTransactions(
     queueRef.current.push(op);
     void processQueue();
   }, [processQueue]);
-
-  // ── loadMoreTransactions ───────────────────────────────────────────────────
-  const loadMoreTransactions = useCallback(async (): Promise<void> => {
-    if (!uid || isLoadingMoreRef.current || !lastPageDocRef.current) return;
-
-    isLoadingMoreRef.current = true;
-    setIsLoadingMore(true);
-
-    try {
-      const q = query(
-        collection(db, 'users', uid, 'transactions'),
-        orderBy('createdAt', 'desc'),
-        startAfter(lastPageDocRef.current),
-        limit(PAGE_SIZE)
-      );
-
-      const snap = await getDocs(q);
-
-      const newDocs = snap.docs
-        .map(d => normalizeTransaction({
-          id: d.id,
-          ...(d.data() as Omit<Transaction, 'id'>),
-        }))
-        .filter(tx => tx.isDeleted !== true && !tx.deletedAt);
-
-      // Atualiza cursor para o último documento desta página
-      if (snap.docs.length > 0) {
-        lastPageDocRef.current = snap.docs[snap.docs.length - 1] ?? null;
-      }
-
-      // Deduplica contra o estado actual (inclui páginas antigas já carregadas)
-      const existingIds = new Set(transactionsRef.current.map(tx => tx.id));
-      const uniqueNew   = newDocs.filter(tx => !existingIds.has(tx.id));
-
-      olderPagesRef.current = [...olderPagesRef.current, ...uniqueNew];
-
-      setHasMoreTransactions(hasMorePages(PAGE_SIZE, snap.docs.length));
-
-      if (uniqueNew.length > 0) {
-        setTransactions(prev => {
-          const prevIds  = new Set(prev.map(tx => tx.id));
-          const deduped  = uniqueNew.filter(tx => !prevIds.has(tx.id));
-          return [...prev, ...deduped];
-        });
-      }
-    } catch (err) {
-      logSanitizedFirebaseError('transaction_load_more', err);
-      toast.error(getUserFriendlyErrorMessage(err, 'transaction_load_more'));
-    } finally {
-      isLoadingMoreRef.current = false;
-      setIsLoadingMore(false);
-    }
-  }, [uid]);
 
   // ── ADD — Optimistic + enqueue ────────────────────────────────────────────
   const add = useCallback(async (data: Partial<Transaction>): Promise<string> => {
@@ -817,7 +799,7 @@ export function useTransactions(
 
     return new Promise<string>((resolve, reject) => {
       pendingAddResolvers.current.set(tempId, { resolve, reject });
-      enqueue({ type: 'add', tempId, txId, data: enriched, retries: 0 });
+      enqueue({ type: 'add', tempId, txId, data: enriched, retries: 0, nextRetryAt: 0 });
     });
   }, [uid, enqueue]);
 
@@ -843,7 +825,7 @@ export function useTransactions(
       );
     });
 
-    enqueue({ type: 'update', itemId: id, data: normalizedData, requestedData, previous, retries: 0 });
+    enqueue({ type: 'update', itemId: id, data: normalizedData, requestedData, previous, retries: 0, nextRetryAt: 0 });
   }, [uid, enqueue]);
 
   // ── REMOVE — Optimistic + enqueue ─────────────────────────────────────────
@@ -864,7 +846,7 @@ export function useTransactions(
       return prev.filter(tx => tx.id !== id);
     });
 
-    enqueue({ type: 'delete', itemId: id, previous, retries: 0 });
+    enqueue({ type: 'delete', itemId: id, previous, retries: 0, nextRetryAt: 0 });
   }, [uid, enqueue]);
 
   // ── ADD BATCH — Optimistic UI + enqueue (1 processQueue trigger) ──────────
@@ -929,7 +911,7 @@ export function useTransactions(
       optimistics.push(optimistic);
       tempIds.push(tempId);
       // Push directly to avoid N processQueue triggers; one call below handles all
-      queueRef.current.push({ type: 'add', tempId, txId, data: enriched, retries: 0 });
+      queueRef.current.push({ type: 'add', tempId, txId, data: enriched, retries: 0, nextRetryAt: 0 });
     });
 
     setTransactions(prev => [...optimistics, ...prev]);
@@ -937,6 +919,43 @@ export function useTransactions(
 
     return tempIds;
   }, [uid, processQueue]);
+
+  // ── ADD BATCH STREAMED — Chunked async import com progress callback ────────
+  const addBatchStreamed = useCallback(async (
+    items: Partial<Transaction>[],
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<StreamedBatchResult> => {
+    if (!uid) throw new Error('[useTransactions][addBatchStreamed] UID ausente.');
+    if (!items.length) return { succeeded: [], failed: [] };
+
+    const CHUNK_SIZE = 10;
+    const succeeded: string[]                                    = [];
+    const failed: StreamedBatchResult['failed']                  = [];
+
+    for (let i = 0; i < items.length; i += CHUNK_SIZE) {
+      const chunk = items.slice(i, i + CHUNK_SIZE);
+
+      const results = await Promise.allSettled(
+        chunk.map(item => add(item))
+      );
+
+      results.forEach((result, j) => {
+        const item = chunk[j]!;
+        if (result.status === 'fulfilled') {
+          succeeded.push(result.value);
+        } else {
+          failed.push({ item, error: result.reason instanceof Error ? result.reason : new Error(String(result.reason)) });
+        }
+      });
+
+      onProgress?.(Math.min(i + CHUNK_SIZE, items.length), items.length);
+
+      // Cede ao event loop entre chunks para não bloquear a UI
+      await new Promise<void>(resolve => { queueMicrotask(resolve); });
+    }
+
+    return { succeeded, failed };
+  }, [uid, add]);
 
   // ── REMOVE BATCH — Optimistic + enqueue ───────────────────────────────────
   const removeBatch = useCallback(async (ids: string[]): Promise<void> => {
@@ -959,7 +978,7 @@ export function useTransactions(
     });
 
     if (realIds.length > 0) {
-      enqueue({ type: 'deleteBatch', ids: realIds, previousBatch, retries: 0 });
+      enqueue({ type: 'deleteBatch', ids: realIds, previousBatch, retries: 0, nextRetryAt: 0 });
     }
   }, [uid, enqueue]);
 
@@ -1091,17 +1110,22 @@ export function useTransactions(
     isBulkUpdating,
     isUndoing,
     hasUndoSnapshot,
-    hasMoreTransactions,
-    isLoadingMore,
+    // When snapshotWindow is active, pagination is incompatible (snapshot uses
+    // orderBy('date') while loadMoreTransactions cursor uses orderBy('createdAt')).
+    // Block loadMore to prevent invalid cross-index cursor reads.
+    hasMoreTransactions: snapshotWindow ? false : hasMoreTransactions,
+    isLoadingMore: snapshotWindow ? false : isLoadingMore,
     loadedCount: transactions.filter(tx => !isTemp(tx.id)).length,
-    loadMoreTransactions,
+    loadMoreTransactions: snapshotWindow ? (async () => Promise.resolve()) : loadMoreTransactions,
     add,
     addBatch,
+    addBatchStreamed,
     remove,
     removeBatch,
     update,
     bulkUpdateTransactions,
     undoLastBulkUpdate,
     clearBulkSnapshot,
+    deadLetterOps,
   };
 }

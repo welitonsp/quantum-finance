@@ -99,4 +99,71 @@ describe('Money - Centavos', () => {
       expect(toCentavosTyped(12.34)).toBe(1234);
     });
   });
+
+  // ─── Branches de normalizeMoneyString ainda não cobertas ────────────────────
+
+  describe('normalizeMoneyString — branches de erro', () => {
+    it('rejeita string vazia após remoção de R$ e espaços (linha 38)', () => {
+      expect(() => toCentavos('R$')).toThrow('Valor monetário vazio.');
+      expect(() => toCentavos('   ')).toThrow('Valor monetário vazio.');
+    });
+
+    it('rejeita formato inválido com caracteres não numéricos (linha 47)', () => {
+      expect(() => toCentavos('abc')).toThrow('Formato monetário inválido');
+      expect(() => toCentavos('12,abc')).toThrow('Formato monetário inválido');
+    });
+
+    it('múltiplos pontos sem vírgula são removidos (linha 64) — "1.2.3" vira 123 reais', () => {
+      // "1.2.3" tem 2 pontos → branch linha 64 remove todos → "123" → toCentavos = 12300 centavos
+      expect(toCentavos('1.2.3')).toBe(12300);
+    });
+
+    it('aceita valor positivo explícito com sinal + (linha 68)', () => {
+      expect(toCentavos('+10,50')).toBe(1050);
+    });
+
+    it('aceita valor negativo com parênteses (formato financeiro US)', () => {
+      expect(toCentavos('(10,50)')).toBe(-1050);
+    });
+  });
+
+  // ─── Branches de toDecimal com Decimal NaN/Infinity (linha 16 / 73) ─────────
+
+  describe('toDecimal — branches com Decimal inválido', () => {
+    it('rejeita Decimal NaN (assertFiniteDecimal linha 16)', () => {
+      const nanDecimal = new Decimal(NaN);
+      expect(() => toCentavos(nanDecimal)).toThrow('NaN ou Infinity não são permitidos');
+    });
+
+    it('rejeita Decimal Infinity', () => {
+      const infDecimal = new Decimal(Infinity);
+      expect(() => toCentavos(infDecimal)).toThrow('NaN ou Infinity não são permitidos');
+    });
+  });
+
+  // ─── Branches de divideCentavos e multiplyCentavos com Decimal ───────────────
+
+  describe('divideCentavos — branches de erro', () => {
+    it('rejeita divisão por zero', () => {
+      expect(() => divideCentavos(1000, 0)).toThrow('Divisão por zero');
+    });
+
+    it('aceita divisor como Decimal', () => {
+      expect(divideCentavos(1000, new Decimal(4))).toBe(250);
+    });
+
+    it('rejeita divisor Infinity', () => {
+      expect(() => divideCentavos(1000, Infinity)).toThrow();
+    });
+  });
+
+  describe('multiplyCentavos — branches de erro', () => {
+    it('aceita multiplicador como Decimal', () => {
+      expect(multiplyCentavos(500, new Decimal(3))).toBe(1500);
+    });
+
+    it('rejeita multiplicador Infinity', () => {
+      expect(() => multiplyCentavos(500, Infinity)).toThrow();
+    });
+  });
 });
