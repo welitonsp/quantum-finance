@@ -65,7 +65,8 @@ export default function DataPrivacyPanel({ uid }: Props) {
         <h2 className="text-lg font-semibold text-quantum-fg">Meus Dados (LGPD)</h2>
         <p className="text-sm text-quantum-fgMuted">
           Pela Lei Geral de Proteção de Dados (LGPD), você tem direito à portabilidade dos seus dados.
-          Clique abaixo para baixar uma cópia completa de todas as suas movimentações, contas, categorias e histórico de auditoria.
+          Clique abaixo para baixar uma cópia completa de todas as suas movimentações, contas, categorias,
+          orçamentos, histórico de auditoria e demais dados associados à sua conta.
         </p>
         <button
           onClick={() => void handleExport()}
@@ -83,7 +84,13 @@ export default function DataPrivacyPanel({ uid }: Props) {
       <section className="bg-quantum-card border border-red-800/60 rounded-2xl p-6 space-y-3">
         <h2 className="text-lg font-semibold text-red-400">Zona de Perigo</h2>
         <p className="text-sm text-quantum-fgMuted">
-          Esta ação é irreversível. Todos os seus dados serão removidos e sua conta será encerrada permanentemente.
+          Esta ação é irreversível. O acesso à sua conta será encerrado e os dados de configuração
+          (orçamentos, regras de categoria, cartões e simulações) serão removidos imediatamente.
+        </p>
+        <p className="text-xs text-quantum-fgMuted/70 leading-relaxed">
+          Movimentações financeiras, histórico de auditoria e registros de importação são preservados
+          conforme a política de retenção de dados e tornam-se inacessíveis. A remoção completa
+          desses registros será concluída via processo administrativo em até 30 dias.
         </p>
 
         {!showDeleteConfirm && (

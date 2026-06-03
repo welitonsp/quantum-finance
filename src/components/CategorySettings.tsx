@@ -4,6 +4,7 @@ import { collection, query, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/
 import { db } from '../shared/api/firebase';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import toast from 'react-hot-toast';
+import DataPrivacyPanel from '../features/settings/DataPrivacyPanel';
 
 interface CategoryRule {
   id: string;
@@ -142,6 +143,7 @@ export default function CategorySettings({ uid, onClose }: Props) {
               </h3>
             </div>
 
+
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 text-quantum-fgMuted">
                 <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-4" />
@@ -176,6 +178,11 @@ export default function CategorySettings({ uid, onClose }: Props) {
               </div>
             )}
           </div>
+          {/* ── Privacidade e Dados (LGPD) ─────────────────────────────────── */}
+          <div className="border-t border-quantum-border/50 pt-6">
+            <DataPrivacyPanel uid={uid} />
+          </div>
+
         </div>
       </div>
     </div>
