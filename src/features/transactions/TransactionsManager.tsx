@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Search, Filter, Trash2, Edit3, ArrowUpRight, ArrowDownRight,
+  Search, Filter, Trash2,
   CheckSquare, Square, MinusSquare, X, SlidersHorizontal,
   TrendingUp, TrendingDown, Minus, Tag, ArrowUpDown,
   Layers, RotateCcw, AlertTriangle, Check, ShieldAlert, History, Download,
@@ -20,33 +20,39 @@ import { auth } from '../../shared/api/firebase/auth';
 import {
   calculateRunningBalances,
   getTransactionAbsCentavos,
-  getTransactionOriginLabel,
   isIncome as checkIncome,
   isExpense as checkExpense,
-  isImportedTransaction,
-  isReconciledTransaction,
   isImportedUnreconciledTransaction,
 } from '../../utils/transactionUtils';
-import { fromCentavos, type Centavos } from '../../shared/types/money';
+import { fromCentavos } from '../../shared/types/money';
 import AuditTimeline from '../../components/AuditTimeline';
 import TransactionHistoryDrawer from '../../components/TransactionHistoryDrawer';
 import type { UserCategory } from '../../shared/schemas/categorySchemas';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { getCategoryStyle as catStyle } from '../../shared/lib/categoryStyles';
 import {
   getUserFriendlyErrorMessage,
   logSanitizedFirebaseError,
 } from '../../shared/lib/firebaseErrorHandling';
+import {
+  calculateTransactionTotalsCents,
+  buildTransactionGroup,
+  getDateLabel,
+  parseBRLToCents,
+  type Group,
+} from './transactionGroupUtils';
+// Re-export para compatibilidade com testes que importam deste módulo
+export { calculateTransactionTotals } from './transactionGroupUtils';
+import { FilterChip }      from './components/FilterChip';
+import { GroupHeader }     from './components/GroupHeader';
+import { TransactionRow }  from './components/TransactionRow';
 
 const VIRTUAL_THRESHOLD = 100;
-const RUNNING_BALANCE_HELP =
-  'Considera apenas os lançamentos visíveis/carregados após filtros. Não representa o saldo da conta.';
 
 type VirtualRowEntry =
   | { kind: 'header'; group: Group }
   | { kind: 'row'; tx: Transaction };
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types locais do componente ───────────────────────────────────────────────
 type SortBy = 'date_desc' | 'date_asc' | 'value_desc' | 'value_asc' | 'cat';
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -55,9 +61,9 @@ const SOURCE_LABELS: Record<string, string> = {
   ofx:    'OFX',
   pdf:    'PDF',
 };
-type GroupByOption = 'date' | 'category' | 'none';
-type BatchAction = 'delete' | 'recategorize' | null;
-type FilterType = 'all' | 'entrada' | 'saida';
+type GroupByOption              = 'date' | 'category' | 'none';
+type BatchAction                = 'delete' | 'recategorize' | null;
+type FilterType                 = 'all' | 'entrada' | 'saida';
 type ReconciliationStatusFilter = 'all' | 'reconciled' | 'unreconciled';
 
 const RECONCILIATION_FILTER_LABELS: Record<ReconciliationStatusFilter, string> = {
@@ -65,51 +71,6 @@ const RECONCILIATION_FILTER_LABELS: Record<ReconciliationStatusFilter, string> =
   reconciled:   'Conciliadas',
   unreconciled: 'Importadas não conciliadas',
 };
-
-interface Group {
-  key: string;
-  label: string;
-  items: Transaction[];
-  count: number;
-  totalInCents: number;
-  totalOutCents: number;
-  netCents: number;
-}
-
-type TransactionTotalSource = Pick<Transaction, 'type' | 'value_cents' | 'value' | 'schemaVersion'>;
-
-function calculateTransactionTotalsCents(transactions: TransactionTotalSource[]) {
-  let totalInCents = 0;
-  let totalOutCents = 0;
-
-  transactions.forEach(tx => {
-    const cents = getTransactionAbsCentavos(tx);
-    if (checkIncome(tx.type)) totalInCents += cents;
-    else                     totalOutCents += cents;
-  });
-
-  return { totalInCents, totalOutCents, netCents: totalInCents - totalOutCents };
-}
-
-export function calculateTransactionTotals(transactions: TransactionTotalSource[]) {
-  const totals = calculateTransactionTotalsCents(transactions);
-
-  return {
-    totalIn:  fromCentavos(totals.totalInCents),
-    totalOut: fromCentavos(totals.totalOutCents),
-    net:      fromCentavos(totals.netCents),
-  };
-}
-
-function buildTransactionGroup(key: string, label: string, items: Transaction[]): Group {
-  return {
-    key,
-    label,
-    items,
-    count: items.length,
-    ...calculateTransactionTotalsCents(items),
-  };
-}
 
 interface Props {
   transactions?: Transaction[];
@@ -132,238 +93,6 @@ interface Props {
   loadedCount?: number;
   loadMoreTransactions?: () => Promise<void>;
 }
-
-// ─── Label amigável para datas ────────────────────────────────────────────────
-function getDateLabel(dateStr: string): string {
-  if (!dateStr) return 'Sem Data';
-  const today = new Date();
-  const d = new Date(dateStr + 'T12:00:00');
-  const diff = Math.round((today.getTime() - d.getTime()) / 86400000);
-  if (diff === 0)  return 'Hoje';
-  if (diff === 1)  return 'Ontem';
-  if (diff === -1) return 'Amanhã';
-  return d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-function formatDateShort(dateStr: string | undefined): string {
-  if (!dateStr) return '—';
-  return new Date(dateStr + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-}
-
-// ─── Parser BRL → centavos (strict) ──────────────────────────────────────────
-function parseBRLToCents(s: string): number | null {
-  const cleaned = s.trim().replace(/^R\$\s*/, '').replace(/\s/g, '');
-  if (!cleaned) return null;
-  // Aceita: "50", "50,00", "1.234,56", "1.234" — rejeita "50abc", "-50", etc.
-  if (!/^(\d{1,3}(\.\d{3})*(,\d{1,2})?|\d+(,\d{1,2})?)$/.test(cleaned)) return null;
-  const n = Number(cleaned.replace(/\./g, '').replace(',', '.'));
-  if (isNaN(n) || n < 0) return null;
-  return Math.round(n * 100);
-}
-
-// ─── Chip de Filtro Ativo ─────────────────────────────────────────────────────
-interface FilterChipProps {
-  label: string;
-  onRemove: () => void;
-}
-function FilterChip({ label, onRemove }: FilterChipProps) {
-  return (
-    <motion.span
-      initial={{ opacity: 0, scale: 0.85 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.85 }}
-      className="inline-flex items-center gap-1 px-2 py-0.5 bg-quantum-accent/10 border border-quantum-accent/20 text-quantum-accent rounded-md text-[11px] font-bold"
-    >
-      {label}
-      <button onClick={onRemove} aria-label={`Remover filtro ${label || 'ativo'}`} className="hover:text-quantum-fg transition-colors">
-        <X className="w-3 h-3" aria-hidden="true" />
-      </button>
-    </motion.span>
-  );
-}
-
-// ─── Cabeçalho de Grupo ───────────────────────────────────────────────────────
-interface GroupHeaderProps {
-  label: string;
-  count: number;
-  totalInCents: number;
-  totalOutCents: number;
-  netCents: number;
-}
-function GroupHeader({ label, count, totalInCents, totalOutCents, netCents }: GroupHeaderProps) {
-  return (
-    <div className="flex items-center gap-3 py-2 px-1">
-      <span className="text-xs font-black text-quantum-fg uppercase tracking-wider whitespace-nowrap">{label}</span>
-      <div className="flex-1 h-px bg-quantum-border" />
-      <span className="text-[10px] text-quantum-fgMuted font-mono">{count} reg.</span>
-      {totalInCents > 0 && (
-        <span className="text-[10px] text-quantum-accent font-mono font-bold">
-          +{formatCurrency(totalInCents, { cents: true })}
-        </span>
-      )}
-      {totalOutCents > 0 && (
-        <span className="text-[10px] text-quantum-red font-mono font-bold">
-          -{formatCurrency(totalOutCents, { cents: true })}
-        </span>
-      )}
-      <span className={`text-[10px] font-mono font-black ${netCents >= 0 ? 'text-quantum-accent' : 'text-quantum-red'}`}>
-        {netCents >= 0 ? '+' : ''}{formatCurrency(netCents, { cents: true })}
-      </span>
-    </div>
-  );
-}
-
-// ─── Linha de Transação ───────────────────────────────────────────────────────
-interface TransactionRowProps {
-  tx: Transaction;
-  runningBalanceCents?: Centavos | undefined;
-  isSelected: boolean;
-  onToggle: (id: string) => void;
-  onEdit: (tx: Transaction) => void;
-  onDelete: (tx: Transaction) => void;
-  onHistory: (tx: Transaction) => void;
-}
-const TransactionRow = React.memo(({ tx, runningBalanceCents, isSelected, onToggle, onEdit, onDelete, onHistory }: TransactionRowProps) => {
-  const isIncome = checkIncome(tx.type);
-  const cs = catStyle(tx.category ?? 'Diversos');
-  const runningIsPositive = (runningBalanceCents ?? 0) >= 0;
-
-  return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      transition={{ duration: 0.15 }}
-      className={`group flex items-center gap-3 p-3 rounded-xl border transition-all duration-150 ${
-        isSelected
-          ? 'bg-quantum-accent/5 border-quantum-accent/25'
-          : 'bg-quantum-bgSecondary/50 border-quantum-border hover:border-quantum-accent/20 hover:bg-quantum-bgSecondary'
-      }`}
-    >
-      <button
-        onClick={() => onToggle(tx.id)}
-        aria-label={`${isSelected ? 'Desmarcar' : 'Selecionar'} movimentação ${tx.description || 'sem descrição'}`}
-        className="shrink-0 text-quantum-fgMuted hover:text-quantum-accent transition-colors"
-      >
-        {isSelected
-          ? <CheckSquare className="w-4 h-4 text-quantum-accent" />
-          : <Square className="w-4 h-4" />}
-      </button>
-
-      <div aria-hidden="true" className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-        isIncome ? 'bg-quantum-accentDim text-quantum-accent' : 'bg-quantum-redDim text-quantum-red'
-      }`}>
-        {isIncome
-          ? <ArrowUpRight className="w-4 h-4" />
-          : <ArrowDownRight className="w-4 h-4" />}
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-bold text-quantum-fg truncate leading-tight">{tx.description}</p>
-        <div className="flex flex-wrap items-center gap-2 mt-1">
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${cs.bg} ${cs.text} ${cs.border}`}>
-            {tx.category ?? 'Diversos'}
-          </span>
-
-          <div className="flex items-center gap-1.5 border-l border-quantum-border pl-2">
-            {isReconciledTransaction(tx) && (
-              <span
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[9px] font-black uppercase tracking-wider"
-                title="Transação conciliada com extrato"
-              >
-                <Check className="w-2.5 h-2.5" />
-                Conciliada
-              </span>
-            )}
-
-            {isImportedUnreconciledTransaction(tx) && (
-              <span
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-400 text-[9px] font-black uppercase tracking-wider"
-                title="Importada do extrato bancário (não conciliada)"
-              >
-                <AlertTriangle className="w-2.5 h-2.5" />
-                Importada
-              </span>
-            )}
-
-            <span
-              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[9px] font-bold uppercase tracking-wider ${
-                isImportedTransaction(tx)
-                  ? 'bg-quantum-accent/10 border-quantum-accent/25 text-quantum-accent'
-                  : 'bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted'
-              }`}
-              title={`Origem: ${getTransactionOriginLabel(tx)}`}
-            >
-              {isImportedTransaction(tx) ? <ShieldAlert className="w-2.5 h-2.5" /> : <History className="w-2.5 h-2.5" />}
-              {getTransactionOriginLabel(tx)}
-            </span>
-          </div>
-
-          <span className="text-[10px] text-quantum-fgMuted font-mono border-l border-quantum-border pl-2">{formatDateShort(tx.date)}</span>
-        </div>
-      </div>
-
-      <div className="flex flex-col items-end gap-0.5 shrink-0 min-w-[118px]">
-        <p className={`font-mono font-black text-sm leading-tight ${
-          isIncome ? 'text-quantum-accent' : 'text-quantum-fg'
-        }`}>
-          {isIncome ? '+' : '-'}{formatCurrency(fromCentavos(getTransactionAbsCentavos(tx)))}
-        </p>
-        {runningBalanceCents !== undefined && (
-          <div
-            className="text-right leading-none"
-            title={RUNNING_BALANCE_HELP}
-            aria-label={`Acumulado visível. ${RUNNING_BALANCE_HELP}`}
-          >
-            <p className="text-[9px] text-quantum-fgMuted uppercase tracking-wide">Acumulado visível</p>
-            <span className="sr-only">{RUNNING_BALANCE_HELP}</span>
-            <p className={`text-[10px] font-mono font-bold ${runningIsPositive ? 'text-quantum-accent' : 'text-quantum-red'}`}>
-              {runningIsPositive ? '+' : ''}{formatCurrency(runningBalanceCents, { cents: true })}
-            </p>
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 md:has-[:focus-visible]:opacity-100 transition-opacity shrink-0">
-        <button
-          onClick={(event) => {
-            event.stopPropagation();
-            onHistory(tx);
-          }}
-          className="p-1.5 text-quantum-fgMuted hover:text-quantum-accent hover:bg-quantum-accentDim rounded-lg transition-all"
-          title="Histórico"
-          aria-label={`Ver histórico da movimentação ${tx.description || 'sem descrição'}`}
-        >
-          <History className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={(event) => {
-            event.stopPropagation();
-            onEdit(tx);
-          }}
-          className="p-1.5 text-quantum-fgMuted hover:text-quantum-accent hover:bg-quantum-accentDim rounded-lg transition-all"
-          title="Editar (E)"
-          aria-label={`Editar movimentação ${tx.description || 'sem descrição'}`}
-        >
-          <Edit3 className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={(event) => {
-            event.stopPropagation();
-            onDelete(tx);
-          }}
-          className="p-1.5 text-quantum-fgMuted hover:text-quantum-red hover:bg-quantum-redDim rounded-lg transition-all"
-          title="Apagar (Del)"
-          aria-label={`Excluir movimentação ${tx.description || 'sem descrição'}`}
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      </div>
-    </motion.div>
-  );
-});
-TransactionRow.displayName = 'TransactionRow';
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
 export default function TransactionsManager({
