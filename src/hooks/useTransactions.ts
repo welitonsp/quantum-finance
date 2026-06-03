@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   collection, query, orderBy, onSnapshot, limit, where,
   doc, getDoc,
-  type Timestamp,
 } from 'firebase/firestore';
 import { useTransactionsPagination } from './useTransactionsPagination';
 import { db } from '../shared/api/firebase/index';
@@ -21,6 +20,16 @@ import {
 } from '../shared/lib/firebaseErrorHandling';
 import { generateSafeOperationId } from '../shared/lib/operationTrace';
 import toast from 'react-hot-toast';
+import {
+  normalizeTransaction,
+  normalizeWriteData,
+  buildUpdateWriteData,
+  sanitizeForHistory,
+  computeChangedFields,
+  toMillis,
+} from './transactionNormalizer';
+// Re-export public API para compatibilidade com callers externos
+export { normalizeTransaction, sanitizeForHistory } from './transactionNormalizer';
 
 // ─── Bulk Update — tipo restrito (não expõe Partial<Transaction> livre) ────────
 export type BulkUpdate = {
@@ -156,122 +165,6 @@ function getTxCentavos(tx: Partial<Transaction>): Centavos | undefined {
   return undefined;
 }
 
-export function normalizeTransaction(tx: Transaction): Transaction {
-  // FIX: O cliente não deve reconstruir value_cents a partir de value legado nem na leitura.
-  // Se estiver ausente, a transação é considerada incompleta (Admin Repair).
-  const rawCents = tx.value_cents;
-  const value_cents = (typeof rawCents === 'number' && Number.isSafeInteger(rawCents) && rawCents >= 0)
-    ? (rawCents as Centavos)
-    : (0 as Centavos); // Fallback apenas para exibição UI, mas schemaVersion continua original
-
-  return {
-    ...tx,
-    value_cents,
-    value: fromCentavos(value_cents),
-    schemaVersion: tx.schemaVersion ?? 1, // Preserva versão original se não for 2
-  };
-}
-
-function normalizeWriteData(data: Partial<Transaction>): Partial<Transaction> {
-  const {
-    id: _id,
-    uid: _uid,
-    value: _legacyValue,
-    createdAt: _createdAt,
-    updatedAt: _updatedAt,
-    deletedAt: _deletedAt,
-    importHash: _importHash,
-    isDeleted: _isDeleted,
-    value_cents: rawCents,
-    ...rest
-  } = data;
-  void _id;
-  void _uid;
-  void _legacyValue;
-  void _createdAt;
-  void _updatedAt;
-  void _deletedAt;
-  void _importHash;
-  void _isDeleted;
-
-  const result: Partial<Transaction> = { schemaVersion: 2 };
-
-  // Filtra undefined para garantir que propriedades ausentes não existam no payload
-  Object.entries(rest).forEach(([key, val]) => {
-    if (val !== undefined) {
-      (result as Record<string, unknown>)[key] = val;
-    }
-  });
-
-  if (typeof rawCents === 'number' && Number.isSafeInteger(rawCents) && rawCents >= 0) {
-    result.value_cents = rawCents as Centavos;
-  }
-
-  return result;
-}
-
-function buildUpdateWriteData(current: Transaction | undefined, data: Partial<Transaction>): Partial<Transaction> {
-  const base: Partial<Transaction> = {};
-  if (current) {
-    // FIX: Somente preservar value_cents se for um inteiro seguro vindo do SNAPSHOT real (schemaVersion 2).
-    const currentCents = current.value_cents;
-    if (current.schemaVersion === 2 && typeof currentCents === 'number' && Number.isSafeInteger(currentCents) && currentCents >= 0) {
-      base.value_cents = currentCents as Centavos;
-    }
-
-    base.schemaVersion = 2;
-
-    // Normalização defensiva do snapshot — não "inventar" type se estiver ausente
-    if (current.type) {
-      const rawType = String(current.type).toLowerCase();
-      if (rawType === 'entrada' || rawType === 'receita') {
-        base.type = 'entrada';
-      } else if (rawType === 'saida' || rawType === 'despesa') {
-        base.type = 'saida';
-      }
-    }
-
-    if (current.source) {
-      const rawSource = String(current.source).toLowerCase();
-      if (rawSource === 'csv') base.source = 'csv';
-      else if (rawSource === 'ofx') base.source = 'ofx';
-      else if (rawSource === 'pdf') base.source = 'pdf';
-      else if (rawSource === 'manual') base.source = 'manual';
-      else base.source = 'manual'; // REPARO de valor inválido presente
-    }
-  }
-
-  // FIX: Priorizar value_cents vindo de data. Ignorar data.value para integridade financeira.
-  const incomingCents = data.value_cents;
-  let finalCents: Centavos | undefined = base.value_cents;
-
-  if (typeof incomingCents === 'number' && Number.isSafeInteger(incomingCents) && incomingCents >= 0) {
-    finalCents = incomingCents as Centavos;
-  }
-
-  const merged: Partial<Transaction> = {
-    ...base,
-    ...data,
-  };
-
-  if (finalCents !== undefined) {
-    merged.value_cents = finalCents;
-  } else {
-    delete merged.value_cents;
-  }
-
-  // Normalização final do campo source no payload de escrita
-  if (merged.source) {
-    const s = String(merged.source).toLowerCase();
-    if (s === 'csv') merged.source = 'csv';
-    else if (s === 'ofx') merged.source = 'ofx';
-    else if (s === 'pdf') merged.source = 'pdf';
-    else if (s === 'manual') merged.source = 'manual';
-    else merged.source = 'manual';
-  }
-
-  return normalizeWriteData(merged);
-}
 
 async function fetchTransactionForHistory(uid: string, id: string): Promise<Transaction | undefined> {
   const txRef = doc(db, 'users', uid, 'transactions', id);
@@ -324,59 +217,7 @@ function operationFromQueueOp(type: Op['type']): FirebaseErrorOperation {
   }
 }
 
-/**
- * Normaliza qualquer forma de timestamp (Firestore Timestamp, number ms, string ISO)
- * para milissegundos (number).  Devolve 0 se não reconhecido.
- */
-function toMillis(ts: Transaction['updatedAt'] | Transaction['createdAt']): number {
-  if (ts === null || ts === undefined) return 0;
-  // Firestore Timestamp — tem o método toMillis()
-  if (typeof ts === 'object' && 'toMillis' in ts) {
-    return (ts as Timestamp).toMillis();
-  }
-  if (typeof ts === 'number') return ts;
-  if (typeof ts === 'string') {
-    const parsed = Date.parse(ts);
-    return isNaN(parsed) ? 0 : parsed;
-  }
-  return 0;
-}
 
-// ─── Helpers de histórico (puros) ─────────────────────────────────────────────
-
-/**
- * Serializa uma transação para o payload de histórico.
- * Exclui id, uid, value (legado) e importHash — campos proibidos ou redundantes com o path.
- * Filtra undefined para garantir escrita válida no Firestore.
- */
-export function sanitizeForHistory(tx: Partial<Transaction>): Record<string, unknown> {
-  const excluded = new Set<string>(['id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId']);
-  const result: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(tx)) {
-    if (!excluded.has(k) && v !== undefined) {
-      result[k] = v;
-    }
-  }
-  return result;
-}
-
-/**
- * Retorna os nomes dos campos que diferem entre before e after.
- * Usa JSON.stringify para comparação — suficiente para tipos primitivos e objetos simples.
- */
-function computeChangedFields(
-  before: Record<string, unknown>,
-  after:  Record<string, unknown>,
-): string[] {
-  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
-  return [...keys].filter(k => {
-    try {
-      return JSON.stringify(before[k]) !== JSON.stringify(after[k]);
-    } catch {
-      return before[k] !== after[k];
-    }
-  });
-}
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 

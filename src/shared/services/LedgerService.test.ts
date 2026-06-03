@@ -3,8 +3,10 @@ import {
   LedgerService,
   generateTransactionImportHash,
   normalizeImportTransaction,
+  transactionToLedgerInput,
 } from './LedgerService';
 import { toCentavos } from '../types/money';
+import type { Transaction } from '../types/transaction';
 
 const {
   mockCollection,
@@ -272,5 +274,68 @@ describe('LedgerService.normalizeImportTransaction — branches não cobertos', 
     expect(result!.account).toBe('Conta Corrente');
     expect(result!.accountId).toBe('acc-1');
     expect(result!.cardId).toBe('card-1');
+  });
+});
+
+// ─── Suite: transactionToLedgerInput ─────────────────────────────────────────
+
+describe('transactionToLedgerInput', () => {
+
+  it('extrai todos os campos presentes de uma transaction completa', () => {
+    const tx: Partial<Transaction> = {
+      description: 'Supermercado',
+      value_cents: toCentavos(10),
+      type: 'saida',
+      category: 'Alimentação',
+      date: '2026-01-01',
+      source: 'csv',
+      fitId: 'FIT-1',
+      account: 'Conta Principal',
+      accountId: 'acc-1',
+      cardId: 'card-1',
+      tags: ['casa'],
+      isRecurring: true,
+    };
+    const input = transactionToLedgerInput(tx);
+    expect(input.description).toBe('Supermercado');
+    expect(input.value_cents).toBe(toCentavos(10));
+    expect(input.type).toBe('saida');
+    expect(input.category).toBe('Alimentação');
+    expect(input.date).toBe('2026-01-01');
+    expect(input.source).toBe('csv');
+    expect(input.fitId).toBe('FIT-1');
+    expect(input.account).toBe('Conta Principal');
+    expect(input.accountId).toBe('acc-1');
+    expect(input.cardId).toBe('card-1');
+    expect(input.tags).toEqual(['casa']);
+    expect(input.isRecurring).toBe(true);
+  });
+
+  it('exclui source inválido (não inclui no input)', () => {
+    const tx: Partial<Transaction> = {
+      description: 'Test',
+      value_cents: toCentavos(5),
+      source: 'bank-api' as never,
+    };
+    const input = transactionToLedgerInput(tx);
+    expect(input).not.toHaveProperty('source');
+  });
+
+  it('inclui todos os source válidos', () => {
+    for (const source of ['csv', 'ofx', 'pdf', 'manual'] as const) {
+      const input = transactionToLedgerInput({ source });
+      expect(input.source).toBe(source);
+    }
+  });
+
+  it('retorna objeto vazio para transaction sem campos', () => {
+    const input = transactionToLedgerInput({});
+    expect(Object.keys(input)).toHaveLength(0);
+  });
+
+  it('inclui value legado quando presente (para compatibilidade)', () => {
+    const tx: Partial<Transaction> = { value: 12.34 };
+    const input = transactionToLedgerInput(tx);
+    expect(input.value).toBe(12.34);
   });
 });

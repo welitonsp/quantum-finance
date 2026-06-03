@@ -42,6 +42,9 @@ export const FIREBASE_ERROR_OPERATIONS = [
   'callable_ai_report',
   'callable_ai_briefing',
   'firestore_query',
+  'data_export',
+  'data_delete_subcollections',
+  'data_delete_auth_user',
   'unknown_operation',
 ] as const;
 

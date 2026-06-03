@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { computeFinancialMetrics } from './useFinancialMetrics';
+import { renderHook } from '@testing-library/react';
+import { computeFinancialMetrics, useFinancialMetrics } from './useFinancialMetrics';
 import type { Account, Transaction } from '../shared/types/transaction';
 import type { Centavos } from '../shared/types/money';
 
@@ -91,5 +92,38 @@ describe('computeFinancialMetrics - centavos canônicos', () => {
     const metrics = computeFinancialMetrics([corrupt]);
 
     expect(metrics.receita).toBe(0);
+  });
+
+  it('transações fora do período não afetam métricas mensais', () => {
+    const txs: Transaction[] = [
+      mkTx({ id: '1', value_cents: c(200000), type: 'entrada', date: '2026-03-01' }),
+    ];
+    const metrics = computeFinancialMetrics(txs, [], 4, 2026);
+    expect(metrics.receita).toBe(0);
+    expect(metrics.despesa).toBe(0);
+  });
+});
+
+// ─── Suite: useFinancialMetrics hook branches (uid vazio, sem dados) ──────────
+
+describe('useFinancialMetrics — branches do hook', () => {
+
+  it('retorna null quando uid está vazio', () => {
+    const { result } = renderHook(() => useFinancialMetrics('', [], []));
+    expect(result.current.metrics).toBeNull();
+  });
+
+  it('retorna null quando não há transações nem contas', () => {
+    const { result } = renderHook(() => useFinancialMetrics('uid-1', [], []));
+    expect(result.current.metrics).toBeNull();
+  });
+
+  it('computa métricas quando há apenas contas sem transações', () => {
+    const accounts: Account[] = [
+      mkAcc({ id: 'a1', type: 'corrente', balance: c(50000) }),
+    ];
+    const { result } = renderHook(() => useFinancialMetrics('uid-1', [], accounts));
+    expect(result.current.metrics).not.toBeNull();
+    expect(result.current.metrics!.ativos).toBe(500);
   });
 });

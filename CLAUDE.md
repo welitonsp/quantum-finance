@@ -2,49 +2,68 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — Retomada Pós-PR #122 e FASE 10D — 2026-05-19
+## Estado Consolidado — Pós-Auditoria Big Tech / Big Four — 2026-06-03
+
+> Bloco anterior (Retomada Pós-PR #122 / FASE 10D) foi substituído porque estava factualmente desatualizado. O histórico das fases anteriores é preservado nas seções abaixo. Em caso de divergência entre seções antigas e este bloco, **este bloco é a referência**.
 
 ### 1. Status atual
-- Projeto retomado após perda de histórico de chats.
-- `CLAUDE.md` recuperado como base de conhecimento primária.
-- Relatórios Gemini/Codex passam a ser fonte operacional auxiliar.
-- Estado atual confirmado: `main` limpa, PR #122 consolidado, sem PRs abertos.
-- Stash legado preservado e intocado (`stash@{0}: WIP on main: f84e641 descrição clara`).
+- Branch principal: `main`.
+- Topo da main: `bbd2bb7 fix(test): remove unused Decimal import in financialSchemas.test.ts`
+- Working tree com WIP em: `useAuditLogs.test.ts`, `useCreditCards.test.ts`, `useTransactions.test.ts`, `useTransactions.ts`, `vite.config.ts` — esses arquivos têm cobertura de testes em andamento; **não commitar sem revisão**.
+- Nenhum PR aberto.
+- Stash legado preservado e intocado.
 
-### 2. Topo atual da main
-- `9d2e726 fix(transactions): repair manual update and soft delete audit flow (#122)`
-- `30f2d38 test(functions): diagnose legacy transaction migration candidates (#121)`
-- `10bd686 fix(transactions): prevent legacy update payload regressions (#120)`
+### 2. Commits recentes relevantes (PRs #122 → #157+)
+
+| Commit | PR | Descrição |
+|---|---|---|
+| `bbd2bb7` | — | fix(test): remove unused Decimal import (FASE A) |
+| `5d640ed` | — | test(coverage): uplift branches to 52.4% |
+| `d328b8f` | — | feat(products): add category review UI |
+| `c7f1c0e` | #157 | refactor(hooks): extract useTransactionsPagination |
+| `25faf38` | #155 | feat(hooks): addBatchStreamed (chunked async import) |
+| `a5fb87b` | #153 | feat(sync-queue): exponential backoff + dead letter queue |
+| `df968ca` | #154 | feat(hooks): useRunningBalance with overflow guard |
+| `ca563b6` | #148 | docs(retention): data inventory + retention policy |
+| `362abf5` | #149 | security(functions): harden AI callables and rate limit |
+| `7e734b7` | #141 | security: governance quick wins |
+| `e0330c2` | #139 | feat(recurring): history for recurring task changes |
+| `9411a99` | #138 | feat(accounts): history for account changes |
+| `46f7f8c` | #137 | feat(import): transaction history for imported entries |
+| `5838ad6` | #135 | feat(audit): safe correlation id to transaction history |
+| `aa1ee20` | #132 | feat(dashboard): critical budget alerts |
+| `6c13db0` | #129 | feat(transactions): running balance per row |
+| `9d2e726` | #122 | fix(transactions): repair manual update and soft delete audit flow |
 
 ### 3. Contratos críticos vivos
-- `value_cents` é a fonte canônica.
-- `value` legado não deve ser usado para reconstrução financeira automática.
-- É **proibido** usar `Math.round(value * 100)`, `parseFloat`, `Number(value)` ou heurística float para migração financeira.
-- **Modelo A obrigatório:** Todo UPDATE exige `_lastOpId` + `history` pareado.
-- `importHash` permanece preservado na transação real e é **proibido** em `audit_logs` e `snapshots`.
-- Logs devem ser rigorosamente sanitizados.
-- Firestore Rules devem permanecer alinhadas com o código e deploy real.
+- `value_cents` é a fonte canônica. `value` legado **nunca** é usado em cálculo financeiro.
+- **Proibido:** `Math.round(value * 100)`, `parseFloat`, `Number(value)` ou heurística float para migração financeira.
+- **Modelo A obrigatório:** Todo UPDATE de `transactions/{txId}` exige `_lastOpId` + `history/{_lastOpId}` criado no mesmo `writeBatch`. Validado por `existsAfter` nas Firestore Rules.
+- `importHash` permanece na transação real (deduplicação). **Proibido** em `audit_logs`, snapshots `before`/`after` e history.
+- Logs sanitizados obrigatoriamente em `src/` — `console.*` cru bloqueado por teste estático (`consoleLoggingPolicy.test.ts`).
+- Firestore Rules devem permanecer alinhadas com código e deploy real.
 - Stash legado não deve ser tocado sem ordem explícita.
 
-### 4. Estado pós-incidente 10C-2J / PR #122
-- O incidente anterior envolveu desalinhamento entre Firestore Rules locais/testadas e as Rules publicadas.
-- Criação manual, edição de categoria e soft-delete voltaram a funcionar após o hotfix e publicação manual das rules.
-- Próximas fases que alterem contrato de rules devem prever validação estrita de alinhamento local/emulador/deploy.
+### 4. App Check — estado real
+- **`enforceAppCheck: true`** está ativo em **todas** as 4 Cloud Functions:
+  - `createTransaction` (linha 44 de `functions/index.js`)
+  - `categorizeTransactionsBatch` (linha 321)
+  - `chatWithQuantumAI` (linha 394)
+  - `generateAuditReport` (linha 434)
+- Não há callable sem enforcement. A seção anterior que dizia "monitor-only" está obsoleta.
 
-### 5. FASE 10D — Migração legada
-- FASE 10D-0 (read-only) concluiu que não existe script de migração de escrita automático.
-- Existe diagnóstico read-only `diagnoseLegacyTransactions`.
-- Transações legadas sem `value_cents` devem ser tratadas como `Admin Repair` ou `migrationBlocked`.
-- Migração automática de float legado para `value_cents` está bloqueada por segurança.
-- Qualquer migração futura deve ser classificatória, *dry-run* por padrão, auditável, idempotente e bloqueante por padrão.
-- **Não aprovar escrita real antes de:**
-  a) contraparecer técnico 10D-1A;
-  b) testes de guardrail;
-  c) plano de backup/export;
-  d) confirmação explícita do usuário.
+### 5. FASE 10D — Migração legada (política inalterada)
+- FASE 10D-0 (read-only) concluiu: não existe script de migração automática.
+- Script de diagnóstico read-only: `functions/scripts/diagnoseLegacyTransactions.js`.
+- Scripts de escrita existem (`executeLegacyMigration.js`, `rollbackLegacyMigration.js`) mas têm bloqueio de execução (`BLOCKED_EXECUTION_MESSAGE`) — **não executar sem todos os guardrails**.
+- Migração automática de float legado para `value_cents` continua **bloqueada**.
+- Qualquer migração futura: classificatória, dry-run por padrão, auditável, idempotente.
 
-### 6. Próxima etapa recomendada
-**FASE 10D-1A** — Contraparecer técnico da migração legada, read-only, sem alteração de arquivos, para remover a recomendação insegura de `Math.round(value * 100)` e desenhar política segura de migração.
+### 6. Próximas etapas recomendadas
+1. **Commitar o WIP restante** (hooks + vite.config) após revisão — subir thresholds de cobertura.
+2. **FASE B-2 — Direitos do Titular LGPD**: exportação completa de dados + fluxo de exclusão de conta.
+3. **FASE C — Refatorar arquivos monolíticos**: `TransactionsManager.tsx` (1481 linhas), `useTransactions.ts` (1131), `FirestoreService.ts` (886).
+4. **FASE D — Testes de UI/E2E**: atualmente 37 `.test.ts` e apenas 4 `.test.tsx`; fluxos de importação e conciliação sem cobertura de componente.
 
 ### 7. Comandos de validação padrão
 ```bash
@@ -65,6 +84,33 @@ npm --prefix functions run build
 - Atualizar main local.
 - Confirmar git status limpo.
 - Atualizar `CLAUDE.md` após marco relevante.
+
+## Referência Rápida de Arquivos Críticos (estado real — 2026-06-03)
+
+| Arquivo | Linhas | Responsabilidade |
+|---|---|---|
+| `src/features/transactions/TransactionsManager.tsx` | 1481 | Listagem, filtros, ordenação, agrupamento, ações em lote |
+| `src/hooks/useTransactions.ts` | 1131 | Hook central de CRUD/paginação/import/sync-queue |
+| `src/shared/services/FirestoreService.ts` | 886 | Helpers de escrita atômica (Modelo A) |
+| `src/features/transactions/ReconciliationEngine.tsx` | 554 | Modal de reconciliação interativa |
+| `src/features/transactions/ImportButton.tsx` | 456 | Fluxo de importação CSV/OFX/PDF |
+| `src/components/TransactionHistoryDrawer.tsx` | 334 | Drawer de histórico por transação |
+| `src/hooks/useTransactionHistory.ts` | 218 | Hook de histórico por transação |
+| `src/hooks/useAuditLogs.ts` | 261 | Hook de logs globais |
+| `src/components/AuditTimeline.tsx` | 219 | Timeline global de auditoria |
+| `firestore.rules` | 1019 | Regras de segurança com schema versionado v2 |
+| `functions/index.js` | 461 | 4 Cloud Functions (createTransaction + 3 IA) |
+
+## Hooks presentes (2026-06-03)
+
+`useAccounts`, `useAppLogic`, `useAuditLogs`, `useBudgets`, `useCategories`, `useCategoryRules`, `useCreditCards`, `useFinancialData`, `useFinancialKPIs`, `useFinancialMetrics`, `useForecast`, `useImportActions`, `useModalState`, `useRecurring`, `useRunningBalance`, `useTransactionActions`, `useTransactionHistory`, `useTransactions`, `useTransactionsPagination`
+
+## Suíte de testes (2026-06-03)
+
+- 41 arquivos de teste (40 passando + 1 skipped — rules)
+- 645 testes passando · 153 skipped (rules rodam em `npm run test:rules` com emulator)
+- 37 `.test.ts` · 4 `.test.tsx`
+- Thresholds de cobertura: lines 66% · functions 61% · branches 54% · statements 61%
 
 ## Estado Consolidado — Política de Observabilidade e Logging (FASE 9F/9G) — 2026-05-15
 
@@ -265,11 +311,11 @@ npm run build
   - #81 preparar testes callable com App Check context
   - #82 enforceAppCheck ativo em createTransaction
 - Fase 5 Auditoria Forte: concluída
-- Fase 7B App Check:
-  - enforceAppCheck ativo SOMENTE em createTransaction
-  - consumeAppCheckToken: NÃO ativo
-  - callables IA: SEM enforcement
-  - rollback: remover enforceAppCheck da linha 30 de functions/index.js + deploy
+- Fase 7B App Check (**ESTADO DESATUALIZADO — ver bloco 2026-06-03**):
+  - ~~enforceAppCheck ativo SOMENTE em createTransaction~~ → **ATUAL: enforce em TODAS as 4 callables**
+  - consumeAppCheckToken: NÃO ativo (ainda válido)
+  - ~~callables IA: SEM enforcement~~ → **ATUAL: todas com enforceAppCheck: true**
+  - rollback original: remover enforceAppCheck da linha 30 de functions/index.js + deploy (obsoleto)
 - Testes: 200+ unitários + testes de rules com emulator + testes de callable
 - CI: typecheck + lint + test + functions test + rules test + build
 - Itens resolvidos neste PR:
@@ -1078,16 +1124,19 @@ Estes quatro comandos devem passar antes de qualquer commit/PR.
 
 | Arquivo | Tamanho | Responsabilidade |
 |---|---|---|
-| `src/features/transactions/TransactionsManager.tsx` | ~1166 linhas | Listagem, filtros, ordenação, agrupamento, ações em lote |
-| `src/features/transactions/ImportButton.tsx` | ~1728 linhas | Fluxo de importação CSV/OFX/PDF + reconciliação |
-| `src/features/transactions/ReconciliationEngine.tsx` | ~440 linhas | Modal de reconciliação interativa |
-| `src/features/transactions/importCandidateSearch.ts` | 68 linhas | Helper de busca cross-page (PR #45, integrado no PR #47) |
-| `src/components/TransactionHistoryDrawer.tsx` | ~263 linhas | Drawer de histórico por transação |
-| `src/components/AuditTimeline.tsx` | ~186 linhas | Drawer de timeline global de auditoria |
-| `src/hooks/useTransactions.ts` | ~910 linhas | Hook central de CRUD/paginação/import |
-| `src/hooks/useTransactionHistory.ts` | ~175 linhas | Hook de histórico por transação |
-| `src/hooks/useAuditLogs.ts` | ~138 linhas | Hook de logs globais |
-| `firestore.rules` | — | Regras de segurança com schema versionado v2 |
+| `src/features/transactions/TransactionsManager.tsx` | 1481 linhas | Listagem, filtros, ordenação, agrupamento, ações em lote |
+| `src/features/transactions/ImportButton.tsx` | 456 linhas | Fluxo de importação CSV/OFX/PDF (refatorado pós-PR #137+) |
+| `src/features/transactions/ReconciliationEngine.tsx` | 554 linhas | Modal de reconciliação interativa |
+| `src/components/TransactionHistoryDrawer.tsx` | 334 linhas | Drawer de histórico por transação |
+| `src/components/AuditTimeline.tsx` | 219 linhas | Drawer de timeline global de auditoria |
+| `src/hooks/useTransactions.ts` | 1131 linhas | Hook central de CRUD/paginação/import/sync-queue |
+| `src/hooks/useTransactionsPagination.ts` | — | Paginação extraída de useTransactions (PR #157) |
+| `src/hooks/useTransactionHistory.ts` | 218 linhas | Hook de histórico por transação |
+| `src/hooks/useAuditLogs.ts` | 261 linhas | Hook de logs globais |
+| `src/hooks/useRunningBalance.ts` | — | Saldo acumulado por linha com overflow guard (PR #154) |
+| `src/shared/services/FirestoreService.ts` | 886 linhas | Helpers de escrita atômica (Modelo A) |
+| `firestore.rules` | 1019 linhas | Regras de segurança com schema versionado v2 |
+| `functions/index.js` | 461 linhas | 4 Cloud Functions (createTransaction + 3 IA) |
 
 ## Collections Firestore com Regras Explícitas
 

@@ -107,4 +107,57 @@ describe('useTransactionActions', () => {
     expect(setTransactionToDelete).toHaveBeenCalledWith(null);
     expect(remove).toHaveBeenCalledWith('tx-1');
   });
+
+  it('confirmDelete com transactionToDelete null retorna sem chamar remove', async () => {
+    const { result, remove } = setup(null);
+
+    await act(async () => {
+      await result.current.confirmDelete(null);
+    });
+
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it('confirmDelete propaga erro com toast.error quando remove rejeita', async () => {
+    const { result, remove } = setup();
+    remove.mockRejectedValueOnce(Object.assign(new Error('net err'), { code: 'unavailable' }));
+
+    await act(async () => {
+      await result.current.confirmDelete(baseTransaction);
+    });
+
+    expect(mockToastError).toHaveBeenCalled();
+  });
+
+  it('handleBatchDelete com ids vazios retorna sem chamar removeBatch', async () => {
+    const { result, removeBatch } = setup();
+
+    await act(async () => {
+      await result.current.handleBatchDelete([]);
+    });
+
+    expect(removeBatch).not.toHaveBeenCalled();
+  });
+
+  it('handleBatchDelete com ids válidos chama removeBatch e toast.success', async () => {
+    const { result, removeBatch } = setup();
+
+    await act(async () => {
+      await result.current.handleBatchDelete(['tx-1', 'tx-2']);
+    });
+
+    expect(removeBatch).toHaveBeenCalledWith(['tx-1', 'tx-2']);
+    expect(mockToastSuccess).toHaveBeenCalledWith('2 movimentações eliminadas.');
+  });
+
+  it('handleBatchDelete propaga erro com toast.error quando removeBatch rejeita', async () => {
+    const { result, removeBatch } = setup();
+    removeBatch.mockRejectedValueOnce(Object.assign(new Error('batch err'), { code: 'unavailable' }));
+
+    await act(async () => {
+      await result.current.handleBatchDelete(['tx-1']);
+    });
+
+    expect(mockToastError).toHaveBeenCalled();
+  });
 });

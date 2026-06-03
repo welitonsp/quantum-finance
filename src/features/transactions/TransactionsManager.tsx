@@ -1,9 +1,9 @@
 // src/features/transactions/TransactionsManager.tsx
 // Motor de Gestão de Movimentações — Quantum Finance v2
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Search, Filter, Trash2, Edit3, ArrowUpRight, ArrowDownRight,
+  Search, Filter, Trash2,
   CheckSquare, Square, MinusSquare, X, SlidersHorizontal,
   TrendingUp, TrendingDown, Minus, Tag, ArrowUpDown,
   Layers, RotateCcw, AlertTriangle, Check, ShieldAlert, History, Download,
@@ -11,105 +11,34 @@ import {
 } from 'lucide-react';
 import { transactionsToCSV, downloadCSV } from '../../utils/exportCSV';
 import { formatCurrency } from '../../utils/formatters';
-import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
 import toast from 'react-hot-toast';
 import type { Transaction } from '../../shared/types/transaction';
 import type { BulkUpdate } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { auth } from '../../shared/api/firebase/auth';
-import {
-  calculateRunningBalances,
-  getTransactionAbsCentavos,
-  getTransactionOriginLabel,
-  isIncome as checkIncome,
-  isExpense as checkExpense,
-  isImportedTransaction,
-  isReconciledTransaction,
-  isImportedUnreconciledTransaction,
-} from '../../utils/transactionUtils';
-import { fromCentavos, type Centavos } from '../../shared/types/money';
 import AuditTimeline from '../../components/AuditTimeline';
 import TransactionHistoryDrawer from '../../components/TransactionHistoryDrawer';
 import type { UserCategory } from '../../shared/schemas/categorySchemas';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { getCategoryStyle as catStyle } from '../../shared/lib/categoryStyles';
 import {
   getUserFriendlyErrorMessage,
   logSanitizedFirebaseError,
 } from '../../shared/lib/firebaseErrorHandling';
+// Re-export para compatibilidade com testes que importam deste módulo
+export { calculateTransactionTotals } from './transactionGroupUtils';
+import { FilterChip }     from './components/FilterChip';
+import { GroupHeader }    from './components/GroupHeader';
+import { TransactionRow } from './components/TransactionRow';
+import {
+  useTransactionFilters,
+  SOURCE_LABELS,
+  type SortBy,
+  type GroupByOption,
+  type FilterType,
+  type ReconciliationStatusFilter,
+} from './hooks/useTransactionFilters';
+import { useTransactionSelection } from './hooks/useTransactionSelection';
 
-const VIRTUAL_THRESHOLD = 100;
-const RUNNING_BALANCE_HELP =
-  'Considera apenas os lançamentos visíveis/carregados após filtros. Não representa o saldo da conta.';
-
-type VirtualRowEntry =
-  | { kind: 'header'; group: Group }
-  | { kind: 'row'; tx: Transaction };
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-type SortBy = 'date_desc' | 'date_asc' | 'value_desc' | 'value_asc' | 'cat';
-
-const SOURCE_LABELS: Record<string, string> = {
-  manual: 'Manual',
-  csv:    'CSV',
-  ofx:    'OFX',
-  pdf:    'PDF',
-};
-type GroupByOption = 'date' | 'category' | 'none';
-type BatchAction = 'delete' | 'recategorize' | null;
-type FilterType = 'all' | 'entrada' | 'saida';
-type ReconciliationStatusFilter = 'all' | 'reconciled' | 'unreconciled';
-
-const RECONCILIATION_FILTER_LABELS: Record<ReconciliationStatusFilter, string> = {
-  all:          'Todas',
-  reconciled:   'Conciliadas',
-  unreconciled: 'Importadas não conciliadas',
-};
-
-interface Group {
-  key: string;
-  label: string;
-  items: Transaction[];
-  count: number;
-  totalInCents: number;
-  totalOutCents: number;
-  netCents: number;
-}
-
-type TransactionTotalSource = Pick<Transaction, 'type' | 'value_cents' | 'value' | 'schemaVersion'>;
-
-function calculateTransactionTotalsCents(transactions: TransactionTotalSource[]) {
-  let totalInCents = 0;
-  let totalOutCents = 0;
-
-  transactions.forEach(tx => {
-    const cents = getTransactionAbsCentavos(tx);
-    if (checkIncome(tx.type)) totalInCents += cents;
-    else                     totalOutCents += cents;
-  });
-
-  return { totalInCents, totalOutCents, netCents: totalInCents - totalOutCents };
-}
-
-export function calculateTransactionTotals(transactions: TransactionTotalSource[]) {
-  const totals = calculateTransactionTotalsCents(transactions);
-
-  return {
-    totalIn:  fromCentavos(totals.totalInCents),
-    totalOut: fromCentavos(totals.totalOutCents),
-    net:      fromCentavos(totals.netCents),
-  };
-}
-
-function buildTransactionGroup(key: string, label: string, items: Transaction[]): Group {
-  return {
-    key,
-    label,
-    items,
-    count: items.length,
-    ...calculateTransactionTotalsCents(items),
-  };
-}
 
 interface Props {
   transactions?: Transaction[];
@@ -133,238 +62,6 @@ interface Props {
   loadMoreTransactions?: () => Promise<void>;
 }
 
-// ─── Label amigável para datas ────────────────────────────────────────────────
-function getDateLabel(dateStr: string): string {
-  if (!dateStr) return 'Sem Data';
-  const today = new Date();
-  const d = new Date(dateStr + 'T12:00:00');
-  const diff = Math.round((today.getTime() - d.getTime()) / 86400000);
-  if (diff === 0)  return 'Hoje';
-  if (diff === 1)  return 'Ontem';
-  if (diff === -1) return 'Amanhã';
-  return d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-function formatDateShort(dateStr: string | undefined): string {
-  if (!dateStr) return '—';
-  return new Date(dateStr + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-}
-
-// ─── Parser BRL → centavos (strict) ──────────────────────────────────────────
-function parseBRLToCents(s: string): number | null {
-  const cleaned = s.trim().replace(/^R\$\s*/, '').replace(/\s/g, '');
-  if (!cleaned) return null;
-  // Aceita: "50", "50,00", "1.234,56", "1.234" — rejeita "50abc", "-50", etc.
-  if (!/^(\d{1,3}(\.\d{3})*(,\d{1,2})?|\d+(,\d{1,2})?)$/.test(cleaned)) return null;
-  const n = Number(cleaned.replace(/\./g, '').replace(',', '.'));
-  if (isNaN(n) || n < 0) return null;
-  return Math.round(n * 100);
-}
-
-// ─── Chip de Filtro Ativo ─────────────────────────────────────────────────────
-interface FilterChipProps {
-  label: string;
-  onRemove: () => void;
-}
-function FilterChip({ label, onRemove }: FilterChipProps) {
-  return (
-    <motion.span
-      initial={{ opacity: 0, scale: 0.85 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.85 }}
-      className="inline-flex items-center gap-1 px-2 py-0.5 bg-quantum-accent/10 border border-quantum-accent/20 text-quantum-accent rounded-md text-[11px] font-bold"
-    >
-      {label}
-      <button onClick={onRemove} aria-label={`Remover filtro ${label || 'ativo'}`} className="hover:text-quantum-fg transition-colors">
-        <X className="w-3 h-3" aria-hidden="true" />
-      </button>
-    </motion.span>
-  );
-}
-
-// ─── Cabeçalho de Grupo ───────────────────────────────────────────────────────
-interface GroupHeaderProps {
-  label: string;
-  count: number;
-  totalInCents: number;
-  totalOutCents: number;
-  netCents: number;
-}
-function GroupHeader({ label, count, totalInCents, totalOutCents, netCents }: GroupHeaderProps) {
-  return (
-    <div className="flex items-center gap-3 py-2 px-1">
-      <span className="text-xs font-black text-quantum-fg uppercase tracking-wider whitespace-nowrap">{label}</span>
-      <div className="flex-1 h-px bg-quantum-border" />
-      <span className="text-[10px] text-quantum-fgMuted font-mono">{count} reg.</span>
-      {totalInCents > 0 && (
-        <span className="text-[10px] text-quantum-accent font-mono font-bold">
-          +{formatCurrency(totalInCents, { cents: true })}
-        </span>
-      )}
-      {totalOutCents > 0 && (
-        <span className="text-[10px] text-quantum-red font-mono font-bold">
-          -{formatCurrency(totalOutCents, { cents: true })}
-        </span>
-      )}
-      <span className={`text-[10px] font-mono font-black ${netCents >= 0 ? 'text-quantum-accent' : 'text-quantum-red'}`}>
-        {netCents >= 0 ? '+' : ''}{formatCurrency(netCents, { cents: true })}
-      </span>
-    </div>
-  );
-}
-
-// ─── Linha de Transação ───────────────────────────────────────────────────────
-interface TransactionRowProps {
-  tx: Transaction;
-  runningBalanceCents?: Centavos | undefined;
-  isSelected: boolean;
-  onToggle: (id: string) => void;
-  onEdit: (tx: Transaction) => void;
-  onDelete: (tx: Transaction) => void;
-  onHistory: (tx: Transaction) => void;
-}
-const TransactionRow = React.memo(({ tx, runningBalanceCents, isSelected, onToggle, onEdit, onDelete, onHistory }: TransactionRowProps) => {
-  const isIncome = checkIncome(tx.type);
-  const cs = catStyle(tx.category ?? 'Diversos');
-  const runningIsPositive = (runningBalanceCents ?? 0) >= 0;
-
-  return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      transition={{ duration: 0.15 }}
-      className={`group flex items-center gap-3 p-3 rounded-xl border transition-all duration-150 ${
-        isSelected
-          ? 'bg-quantum-accent/5 border-quantum-accent/25'
-          : 'bg-quantum-bgSecondary/50 border-quantum-border hover:border-quantum-accent/20 hover:bg-quantum-bgSecondary'
-      }`}
-    >
-      <button
-        onClick={() => onToggle(tx.id)}
-        aria-label={`${isSelected ? 'Desmarcar' : 'Selecionar'} movimentação ${tx.description || 'sem descrição'}`}
-        className="shrink-0 text-quantum-fgMuted hover:text-quantum-accent transition-colors"
-      >
-        {isSelected
-          ? <CheckSquare className="w-4 h-4 text-quantum-accent" />
-          : <Square className="w-4 h-4" />}
-      </button>
-
-      <div aria-hidden="true" className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-        isIncome ? 'bg-quantum-accentDim text-quantum-accent' : 'bg-quantum-redDim text-quantum-red'
-      }`}>
-        {isIncome
-          ? <ArrowUpRight className="w-4 h-4" />
-          : <ArrowDownRight className="w-4 h-4" />}
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-bold text-quantum-fg truncate leading-tight">{tx.description}</p>
-        <div className="flex flex-wrap items-center gap-2 mt-1">
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${cs.bg} ${cs.text} ${cs.border}`}>
-            {tx.category ?? 'Diversos'}
-          </span>
-
-          <div className="flex items-center gap-1.5 border-l border-quantum-border pl-2">
-            {isReconciledTransaction(tx) && (
-              <span
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[9px] font-black uppercase tracking-wider"
-                title="Transação conciliada com extrato"
-              >
-                <Check className="w-2.5 h-2.5" />
-                Conciliada
-              </span>
-            )}
-
-            {isImportedUnreconciledTransaction(tx) && (
-              <span
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-400 text-[9px] font-black uppercase tracking-wider"
-                title="Importada do extrato bancário (não conciliada)"
-              >
-                <AlertTriangle className="w-2.5 h-2.5" />
-                Importada
-              </span>
-            )}
-
-            <span
-              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[9px] font-bold uppercase tracking-wider ${
-                isImportedTransaction(tx)
-                  ? 'bg-quantum-accent/10 border-quantum-accent/25 text-quantum-accent'
-                  : 'bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted'
-              }`}
-              title={`Origem: ${getTransactionOriginLabel(tx)}`}
-            >
-              {isImportedTransaction(tx) ? <ShieldAlert className="w-2.5 h-2.5" /> : <History className="w-2.5 h-2.5" />}
-              {getTransactionOriginLabel(tx)}
-            </span>
-          </div>
-
-          <span className="text-[10px] text-quantum-fgMuted font-mono border-l border-quantum-border pl-2">{formatDateShort(tx.date)}</span>
-        </div>
-      </div>
-
-      <div className="flex flex-col items-end gap-0.5 shrink-0 min-w-[118px]">
-        <p className={`font-mono font-black text-sm leading-tight ${
-          isIncome ? 'text-quantum-accent' : 'text-quantum-fg'
-        }`}>
-          {isIncome ? '+' : '-'}{formatCurrency(fromCentavos(getTransactionAbsCentavos(tx)))}
-        </p>
-        {runningBalanceCents !== undefined && (
-          <div
-            className="text-right leading-none"
-            title={RUNNING_BALANCE_HELP}
-            aria-label={`Acumulado visível. ${RUNNING_BALANCE_HELP}`}
-          >
-            <p className="text-[9px] text-quantum-fgMuted uppercase tracking-wide">Acumulado visível</p>
-            <span className="sr-only">{RUNNING_BALANCE_HELP}</span>
-            <p className={`text-[10px] font-mono font-bold ${runningIsPositive ? 'text-quantum-accent' : 'text-quantum-red'}`}>
-              {runningIsPositive ? '+' : ''}{formatCurrency(runningBalanceCents, { cents: true })}
-            </p>
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 md:has-[:focus-visible]:opacity-100 transition-opacity shrink-0">
-        <button
-          onClick={(event) => {
-            event.stopPropagation();
-            onHistory(tx);
-          }}
-          className="p-1.5 text-quantum-fgMuted hover:text-quantum-accent hover:bg-quantum-accentDim rounded-lg transition-all"
-          title="Histórico"
-          aria-label={`Ver histórico da movimentação ${tx.description || 'sem descrição'}`}
-        >
-          <History className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={(event) => {
-            event.stopPropagation();
-            onEdit(tx);
-          }}
-          className="p-1.5 text-quantum-fgMuted hover:text-quantum-accent hover:bg-quantum-accentDim rounded-lg transition-all"
-          title="Editar (E)"
-          aria-label={`Editar movimentação ${tx.description || 'sem descrição'}`}
-        >
-          <Edit3 className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={(event) => {
-            event.stopPropagation();
-            onDelete(tx);
-          }}
-          className="p-1.5 text-quantum-fgMuted hover:text-quantum-red hover:bg-quantum-redDim rounded-lg transition-all"
-          title="Apagar (Del)"
-          aria-label={`Excluir movimentação ${tx.description || 'sem descrição'}`}
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      </div>
-    </motion.div>
-  );
-});
-TransactionRow.displayName = 'TransactionRow';
-
 // ─── Componente Principal ─────────────────────────────────────────────────────
 export default function TransactionsManager({
   transactions = [],
@@ -387,29 +84,52 @@ export default function TransactionsManager({
   const effectiveUid = uid ?? auth.currentUser?.uid ?? '';
   const { categories: loadedCategories } = useCategories(providedCategories ? '' : effectiveUid);
   const categories = providedCategories ?? loadedCategories;
-  const [search,        setSearch]        = useState('');
-  const [filterType,    setFilterType]    = useState<FilterType>('all');
-  const [filterCat,     setFilterCat]     = useState('');
-  const [sortBy,        setSortBy]        = useState<SortBy>('date_desc');
-  const [groupBy,       setGroupBy]       = useState<GroupByOption>('date');
-  const [filtersOpen,   setFiltersOpen]   = useState(false);
-  const [auditOpen,     setAuditOpen]     = useState(false);
-  const [historyTx,     setHistoryTx]     = useState<Transaction | null>(null);
 
-  const [selected,      setSelected]      = useState<Set<string>>(new Set());
-  const [batchAction,   setBatchAction]   = useState<BatchAction>(null);
-  const [newCat,        setNewCat]        = useState<string>(ALLOWED_CATEGORIES[0] ?? 'Outros');
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [dateFrom,      setDateFrom]      = useState('');
-  const [dateTo,        setDateTo]        = useState('');
-  const [valueMin,      setValueMin]      = useState('');
-  const [valueMax,      setValueMax]      = useState('');
-  const [filterOrigin,  setFilterOrigin]  = useState('');
-  const [filterReconciliationStatus, setFilterReconciliationStatus] = useState<ReconciliationStatusFilter>('all');
+  // ── Estado de UI (painéis) ────────────────────────────────────────────────
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [auditOpen,   setAuditOpen]   = useState(false);
+  const [historyTx,   setHistoryTx]   = useState<Transaction | null>(null);
 
   const searchRef    = useRef<HTMLInputElement>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRef      = useRef<HTMLDivElement>(null);
+
+  // ── Filtros e dados derivados (hook extraído) ─────────────────────────────
+  const {
+    search,    setSearch,
+    filterType,  setFilterType,
+    filterCat,   setFilterCat,
+    sortBy,      setSortBy,
+    groupBy,     setGroupBy,
+    dateFrom,    setDateFrom,
+    dateTo,      setDateTo,
+    valueMin,    setValueMin,
+    valueMax,    setValueMax,
+    filterOrigin,  setFilterOrigin,
+    filterReconciliationStatus, setFilterReconciliationStatus,
+    categoryOptions,
+    filtered,
+    groups,
+    stats,
+    runningBalances,
+    virtualRowEntries,
+    useVirtualList,
+    catCounts,
+    shouldShowDateScopeNotice,
+    activeFilters,
+    clearAllFilters,
+  } = useTransactionFilters(transactions, categories);
+
+  // ── Seleção e ações em lote (hook extraído) ───────────────────────────────
+  const {
+    selected, setSelected,
+    batchAction,   setBatchAction,
+    newCat,        setNewCat,
+    confirmDelete, setConfirmDelete,
+    toggleOne, selectAll, clearSelected, cancelBatch,
+    selectByType, selectByCategory, selectAllTransactions,
+    allFilteredSelected, allTransactionsSelected, someSelected,
+  } = useTransactionSelection(transactions, filtered, categoryOptions);
 
   // Limpa timer de undo ao desmontar (evita clearBulkSnapshot em componente morto)
   useEffect(() => () => {
@@ -422,129 +142,26 @@ export default function TransactionsManager({
         e.preventDefault();
         searchRef.current?.focus();
       }
-      if (e.key === 'Escape' && !auditOpen && historyTx === null) { setBatchAction(null); setConfirmDelete(false); }
+      if (e.key === 'Escape' && !auditOpen && historyTx === null) {
+        cancelBatch();
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [auditOpen, historyTx]);
+  }, [auditOpen, historyTx, cancelBatch]);
 
-  const categoryOptions = useMemo(() => {
-    const byName = new Map<string, string>();
-    categories
-      .filter(category => category.isActive)
-      .forEach(category => byName.set(category.name, category.name));
-    transactions.forEach(tx => {
-      const name = tx.category ?? 'Outros';
-      byName.set(name, name);
-    });
-    ALLOWED_CATEGORIES.forEach(category => byName.set(category, category));
-    return [...byName.values()].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
-  }, [categories, transactions]);
-
+  // Sincroniza newCat com as categorias disponíveis
   useEffect(() => {
     if (categoryOptions.length > 0 && !categoryOptions.includes(newCat)) {
       setNewCat(categoryOptions[0]!);
     }
-  }, [categoryOptions, newCat]);
+  }, [categoryOptions, newCat, setNewCat]);
 
-  const minCents = parseBRLToCents(valueMin);
-  const maxCents = parseBRLToCents(valueMax);
-
-  const filtered = useMemo(() => {
-    let list = transactions;
-
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(tx =>
-        (tx.description ?? '').toLowerCase().includes(q) ||
-        (tx.category    ?? '').toLowerCase().includes(q)
-      );
-    }
-    if (filterType !== 'all') {
-      list = list.filter(tx =>
-        filterType === 'entrada'
-          ? checkIncome(tx.type)
-          : checkExpense(tx.type)
-      );
-    }
-    if (filterCat) {
-      list = list.filter(tx => tx.category === filterCat);
-    }
-    if (dateFrom) {
-      list = list.filter(tx => (tx.date ?? '') >= dateFrom);
-    }
-    if (dateTo) {
-      list = list.filter(tx => (tx.date ?? '') <= dateTo);
-    }
-    if (minCents !== null) {
-      list = list.filter(tx => getTransactionAbsCentavos(tx) >= minCents);
-    }
-    if (maxCents !== null) {
-      list = list.filter(tx => getTransactionAbsCentavos(tx) <= maxCents);
-    }
-    if (filterOrigin) {
-      list = list.filter(tx => (tx.source ?? 'manual') === filterOrigin);
-    }
-    if (filterReconciliationStatus === 'reconciled') {
-      list = list.filter(tx => tx.reconciliationStatus === 'reconciled');
-    }
-    if (filterReconciliationStatus === 'unreconciled') {
-      list = list.filter(isImportedUnreconciledTransaction);
-    }
-
-    return [...list].sort((a, b) => {
-      if (sortBy === 'date_desc')  return (b.date ?? '').localeCompare(a.date ?? '');
-      if (sortBy === 'date_asc')   return (a.date ?? '').localeCompare(b.date ?? '');
-      if (sortBy === 'value_desc') return getTransactionAbsCentavos(b) - getTransactionAbsCentavos(a);
-      if (sortBy === 'value_asc')  return getTransactionAbsCentavos(a) - getTransactionAbsCentavos(b);
-      if (sortBy === 'cat')        return (a.category ?? '').localeCompare(b.category ?? '');
-      return 0;
-    });
-  }, [transactions, search, filterType, filterCat, dateFrom, dateTo, minCents, maxCents, filterOrigin, filterReconciliationStatus, sortBy]);
-
-  const groups = useMemo<Group[]>(() => {
-    if (groupBy === 'none') return [buildTransactionGroup('', '', filtered)];
-
-    const map = new Map<string, Transaction[]>();
-    filtered.forEach(tx => {
-      const key = groupBy === 'date'
-        ? (tx.date ?? 'sem-data')
-        : (tx.category ?? 'Outros');
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(tx);
-    });
-
-    const keys = [...map.keys()];
-    if (groupBy === 'date')     keys.sort((a, b) => b.localeCompare(a));
-    if (groupBy === 'category') keys.sort();
-
-    return keys.map(k => buildTransactionGroup(
-      k,
-      groupBy === 'date' ? getDateLabel(k) : k,
-      map.get(k)!
-    ));
-  }, [filtered, groupBy]);
-
-  const stats = useMemo(() => {
-    const totals = calculateTransactionTotalsCents(filtered);
-    return { count: filtered.length, ...totals };
-  }, [filtered]);
-
-  const runningBalances = useMemo(
-    () => calculateRunningBalances(filtered),
-    [filtered],
-  );
-
-  const virtualRowEntries = useMemo<VirtualRowEntry[]>(() => {
-    const rows: VirtualRowEntry[] = [];
-    for (const group of groups) {
-      if (group.key) rows.push({ kind: 'header', group });
-      for (const tx of group.items) rows.push({ kind: 'row', tx });
-    }
-    return rows;
-  }, [groups]);
-
-  const useVirtualList = filtered.length > VIRTUAL_THRESHOLD;
+  // Limpa seleção ao mudar filtros — evita batch actions sobre itens obsoletos
+  useEffect(() => {
+    setSelected(new Set());
+    setBatchAction(null);
+  }, [search, filterType, filterCat, dateFrom, dateTo, valueMin, valueMax, filterOrigin, filterReconciliationStatus]);
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
@@ -553,77 +170,6 @@ export default function TransactionsManager({
     estimateSize: (i) => (virtualRowEntries[i]?.kind === 'header' ? 48 : 80),
     overscan: 10,
   });
-
-  const baseForCategoryCounts = useMemo(() => {
-    let list = transactions;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(tx =>
-        (tx.description ?? '').toLowerCase().includes(q) ||
-        (tx.category    ?? '').toLowerCase().includes(q)
-      );
-    }
-    if (filterType !== 'all') {
-      list = list.filter(tx =>
-        filterType === 'entrada' ? checkIncome(tx.type) : checkExpense(tx.type)
-      );
-    }
-    if (dateFrom)          list = list.filter(tx => (tx.date ?? '') >= dateFrom);
-    if (dateTo)            list = list.filter(tx => (tx.date ?? '') <= dateTo);
-    if (minCents !== null) list = list.filter(tx => getTransactionAbsCentavos(tx) >= minCents);
-    if (maxCents !== null) list = list.filter(tx => getTransactionAbsCentavos(tx) <= maxCents);
-    if (filterOrigin)      list = list.filter(tx => (tx.source ?? 'manual') === filterOrigin);
-    if (filterReconciliationStatus === 'reconciled')   list = list.filter(tx => tx.reconciliationStatus === 'reconciled');
-    if (filterReconciliationStatus === 'unreconciled') list = list.filter(isImportedUnreconciledTransaction);
-    return list;
-  }, [transactions, search, filterType, dateFrom, dateTo, minCents, maxCents, filterOrigin, filterReconciliationStatus]);
-
-  const catCounts = useMemo(() => {
-    const map: Record<string, number> = {};
-    baseForCategoryCounts.forEach(tx => {
-      const c = tx.category ?? 'Outros';
-      map[c] = (map[c] ?? 0) + 1;
-    });
-    return map;
-  }, [baseForCategoryCounts]);
-
-  const toggleOne = useCallback((id: string) => setSelected(s => {
-    const n = new Set(s);
-    if (n.has(id)) n.delete(id);
-    else n.add(id);
-    return n;
-  }), []);
-
-  const selectAll     = useCallback(() => setSelected(new Set(filtered.map(t => t.id))), [filtered]);
-  const clearSelected = useCallback(() => { setSelected(new Set()); setBatchAction(null); setConfirmDelete(false); }, []);
-
-  // Clear selection when active filters change to prevent batch actions on stale items.
-  useEffect(() => {
-    setSelected(new Set());
-    setBatchAction(null);
-  }, [search, filterType, filterCat, dateFrom, dateTo, valueMin, valueMax, filterOrigin, filterReconciliationStatus]);
-
-  const selectByType = useCallback((type: 'entrada' | 'saida') => {
-    setSelected(new Set(
-      filtered.filter(tx =>
-        type === 'entrada'
-          ? checkIncome(tx.type)
-          : checkExpense(tx.type)
-      ).map(t => t.id)
-    ));
-  }, [filtered]);
-
-  const selectByCategory = useCallback((cat: string) => {
-    setSelected(new Set(filtered.filter(tx => tx.category === cat).map(t => t.id)));
-  }, [filtered]);
-
-  const selectAllTransactions = useCallback(() => {
-    setSelected(new Set(transactions.map(t => t.id)));
-  }, [transactions]);
-
-  const allFilteredSelected     = filtered.length > 0 && filtered.every(t => selected.has(t.id));
-  const allTransactionsSelected = transactions.length > 0 && transactions.every(t => selected.has(t.id));
-  const someSelected            = selected.size > 0 && !allFilteredSelected;
 
   const handleBatchDelete = useCallback(async () => {
     const ids = Array.from(selected);
@@ -701,47 +247,6 @@ export default function TransactionsManager({
       toast.error(getUserFriendlyErrorMessage(error, 'transaction_bulk_update'), { id: loadingId });
     }
   }, [selected, newCat, onBulkUpdate, undoLastBulkUpdate, clearBulkSnapshot, clearSelected]);
-
-  const fmtDateBR = (s: string) => s.split('-').reverse().join('/');
-
-  interface ActiveFilter { id: string; label: string; clear: () => void }
-  const activeFilters = (
-    [
-      filterType !== 'all' ? { id: 'type',       label: filterType === 'entrada' ? '↑ Entradas' : '↓ Saídas', clear: () => setFilterType('all') } : null,
-      filterCat            ? { id: 'cat',        label: filterCat, clear: () => setFilterCat('') }                                                 : null,
-      search.trim()        ? { id: 'search',     label: `"${search.trim()}"`, clear: () => setSearch('') }                                        : null,
-      dateFrom             ? { id: 'date-from',  label: `A partir de ${fmtDateBR(dateFrom)}`, clear: () => setDateFrom('') }                      : null,
-      dateTo               ? { id: 'date-to',    label: `Até ${fmtDateBR(dateTo)}`, clear: () => setDateTo('') }                                  : null,
-      minCents !== null    ? { id: 'value-min',  label: `Mínimo ${formatCurrency(fromCentavos(minCents))}`, clear: () => setValueMin('') }        : null,
-      maxCents !== null    ? { id: 'value-max',  label: `Máximo ${formatCurrency(fromCentavos(maxCents))}`, clear: () => setValueMax('') }        : null,
-      filterOrigin         ? { id: 'origin',     label: `Origem: ${SOURCE_LABELS[filterOrigin] ?? filterOrigin}`, clear: () => setFilterOrigin('') } : null,
-      filterReconciliationStatus !== 'all'
-        ? { id: 'reconciliation', label: `Conciliação: ${RECONCILIATION_FILTER_LABELS[filterReconciliationStatus]}`, clear: () => setFilterReconciliationStatus('all') }
-        : null,
-    ] as (ActiveFilter | null)[]
-  ).filter((f): f is ActiveFilter => f !== null);
-
-  const hasDateFilterActive = Boolean(dateFrom || dateTo);
-  const loadedDateRange = useMemo<{ min: string; max: string } | null>(() => {
-    let minDate: string | null = null;
-    let maxDate: string | null = null;
-
-    for (const tx of transactions) {
-      const date = tx.date;
-      if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
-      if (minDate === null || date < minDate) minDate = date;
-      if (maxDate === null || date > maxDate) maxDate = date;
-    }
-
-    return minDate && maxDate ? { min: minDate, max: maxDate } : null;
-  }, [transactions]);
-  const shouldShowDateScopeNotice = hasDateFilterActive && (
-    !loadedDateRange ||
-    (dateFrom ? dateFrom < loadedDateRange.min : false) ||
-    (dateTo ? dateTo > loadedDateRange.max : false)
-  );
-
-  const clearAllFilters = () => { setSearch(''); setFilterType('all'); setFilterCat(''); setDateFrom(''); setDateTo(''); setValueMin(''); setValueMax(''); setFilterOrigin(''); setFilterReconciliationStatus('all'); };
 
   if (loading) return (
     <div role="status" aria-label="Carregando movimentações" className="flex flex-col items-center justify-center py-20 gap-3 text-quantum-fgMuted">

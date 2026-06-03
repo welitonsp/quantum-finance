@@ -131,4 +131,93 @@ describe('useCreditCards - limite em centavos', () => {
 
     unmount();
   });
+
+  it('onSnapshot error callback loga e para loading (linha 93)', async () => {
+    const firebaseErr = Object.assign(new Error('permission-denied'), { code: 'permission-denied' });
+    mockOnSnapshot.mockImplementation((_q: unknown, _onNext: unknown, onError: (e: Error) => void) => {
+      onError(firebaseErr);
+      return vi.fn();
+    });
+
+    const { result, unmount } = renderHook(() => useCreditCards('uid-1'));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.cards).toEqual([]);
+
+    unmount();
+  });
+
+  it('removeCard com id vazio retorna sem chamar deleteDoc (linha 126)', async () => {
+    const { result, unmount } = renderHook(() => useCreditCards('uid-1'));
+
+    await act(async () => {
+      await result.current.removeCard('');
+    });
+
+    expect(mockDeleteDoc).not.toHaveBeenCalled();
+
+    unmount();
+  });
+
+  it('removeCard com id válido chama deleteDoc', async () => {
+    const { result, unmount } = renderHook(() => useCreditCards('uid-1'));
+
+    await act(async () => {
+      await result.current.removeCard('card-1');
+    });
+
+    expect(mockDeleteDoc).toHaveBeenCalledTimes(1);
+
+    unmount();
+  });
+
+  it('calcCardMetrics alertLevel critical quando compromisso >= 90%', async () => {
+    mockOnSnapshot.mockImplementation((_q: unknown, onNext: (snap: { docs: Array<{ id: string; data: () => Record<string, unknown> }> }) => void) => {
+      onNext({
+        docs: [{
+          id: 'card-x',
+          data: () => ({
+            name: 'Card Quase Cheio', limit: 10000, closingDay: 5, dueDay: 15,
+            color: '#ff0000', active: true,
+          }),
+        }],
+      });
+      return vi.fn();
+    });
+
+    const { result, unmount } = renderHook(() => useCreditCards('uid-1', [{
+      id: 'tx-1', cardId: 'card-x', type: 'saida', value_cents: 9500,
+      date: new Date().toISOString().slice(0, 10),
+    } as never]));
+
+    await waitFor(() => expect(result.current.cards).toHaveLength(1));
+    expect(result.current.cards[0]?.metrics.alertLevel).toBe('critical');
+
+    unmount();
+  });
+
+  it('calcCardMetrics alertLevel warning quando compromisso 70-89%', async () => {
+    mockOnSnapshot.mockImplementation((_q: unknown, onNext: (snap: { docs: Array<{ id: string; data: () => Record<string, unknown> }> }) => void) => {
+      onNext({
+        docs: [{
+          id: 'card-y',
+          data: () => ({
+            name: 'Card Médio', limit: 10000, closingDay: 5, dueDay: 15,
+            color: '#ff0000', active: true,
+          }),
+        }],
+      });
+      return vi.fn();
+    });
+
+    const { result, unmount } = renderHook(() => useCreditCards('uid-1', [{
+      id: 'tx-2', cardId: 'card-y', type: 'saida', value_cents: 7500,
+      date: new Date().toISOString().slice(0, 10),
+    } as never]));
+
+    await waitFor(() => expect(result.current.cards).toHaveLength(1));
+    expect(result.current.cards[0]?.metrics.alertLevel).toBe('warning');
+
+    unmount();
+  });
 });
