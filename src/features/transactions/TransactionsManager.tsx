@@ -1,6 +1,6 @@
 // src/features/transactions/TransactionsManager.tsx
 // Motor de Gestão de Movimentações — Quantum Finance v2
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Filter, Trash2,
@@ -18,13 +18,9 @@ import type { BulkUpdate } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { auth } from '../../shared/api/firebase/auth';
 import {
-  calculateRunningBalances,
-  getTransactionAbsCentavos,
   isIncome as checkIncome,
   isExpense as checkExpense,
-  isImportedUnreconciledTransaction,
 } from '../../utils/transactionUtils';
-import { fromCentavos } from '../../shared/types/money';
 import AuditTimeline from '../../components/AuditTimeline';
 import TransactionHistoryDrawer from '../../components/TransactionHistoryDrawer';
 import type { UserCategory } from '../../shared/schemas/categorySchemas';
@@ -33,44 +29,22 @@ import {
   getUserFriendlyErrorMessage,
   logSanitizedFirebaseError,
 } from '../../shared/lib/firebaseErrorHandling';
-import {
-  calculateTransactionTotalsCents,
-  buildTransactionGroup,
-  getDateLabel,
-  parseBRLToCents,
-  type Group,
-} from './transactionGroupUtils';
 // Re-export para compatibilidade com testes que importam deste módulo
 export { calculateTransactionTotals } from './transactionGroupUtils';
-import { FilterChip }      from './components/FilterChip';
-import { GroupHeader }     from './components/GroupHeader';
-import { TransactionRow }  from './components/TransactionRow';
-
-const VIRTUAL_THRESHOLD = 100;
-
-type VirtualRowEntry =
-  | { kind: 'header'; group: Group }
-  | { kind: 'row'; tx: Transaction };
+import { FilterChip }     from './components/FilterChip';
+import { GroupHeader }    from './components/GroupHeader';
+import { TransactionRow } from './components/TransactionRow';
+import {
+  useTransactionFilters,
+  SOURCE_LABELS,
+  type SortBy,
+  type GroupByOption,
+  type FilterType,
+  type ReconciliationStatusFilter,
+} from './hooks/useTransactionFilters';
 
 // ─── Types locais do componente ───────────────────────────────────────────────
-type SortBy = 'date_desc' | 'date_asc' | 'value_desc' | 'value_asc' | 'cat';
-
-const SOURCE_LABELS: Record<string, string> = {
-  manual: 'Manual',
-  csv:    'CSV',
-  ofx:    'OFX',
-  pdf:    'PDF',
-};
-type GroupByOption              = 'date' | 'category' | 'none';
-type BatchAction                = 'delete' | 'recategorize' | null;
-type FilterType                 = 'all' | 'entrada' | 'saida';
-type ReconciliationStatusFilter = 'all' | 'reconciled' | 'unreconciled';
-
-const RECONCILIATION_FILTER_LABELS: Record<ReconciliationStatusFilter, string> = {
-  all:          'Todas',
-  reconciled:   'Conciliadas',
-  unreconciled: 'Importadas não conciliadas',
-};
+type BatchAction = 'delete' | 'recategorize' | null;
 
 interface Props {
   transactions?: Transaction[];
@@ -116,29 +90,45 @@ export default function TransactionsManager({
   const effectiveUid = uid ?? auth.currentUser?.uid ?? '';
   const { categories: loadedCategories } = useCategories(providedCategories ? '' : effectiveUid);
   const categories = providedCategories ?? loadedCategories;
-  const [search,        setSearch]        = useState('');
-  const [filterType,    setFilterType]    = useState<FilterType>('all');
-  const [filterCat,     setFilterCat]     = useState('');
-  const [sortBy,        setSortBy]        = useState<SortBy>('date_desc');
-  const [groupBy,       setGroupBy]       = useState<GroupByOption>('date');
+
+  // ── Estado de UI (não filtros) ─────────────────────────────────────────────
   const [filtersOpen,   setFiltersOpen]   = useState(false);
   const [auditOpen,     setAuditOpen]     = useState(false);
   const [historyTx,     setHistoryTx]     = useState<Transaction | null>(null);
-
   const [selected,      setSelected]      = useState<Set<string>>(new Set());
   const [batchAction,   setBatchAction]   = useState<BatchAction>(null);
   const [newCat,        setNewCat]        = useState<string>(ALLOWED_CATEGORIES[0] ?? 'Outros');
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [dateFrom,      setDateFrom]      = useState('');
-  const [dateTo,        setDateTo]        = useState('');
-  const [valueMin,      setValueMin]      = useState('');
-  const [valueMax,      setValueMax]      = useState('');
-  const [filterOrigin,  setFilterOrigin]  = useState('');
-  const [filterReconciliationStatus, setFilterReconciliationStatus] = useState<ReconciliationStatusFilter>('all');
 
   const searchRef    = useRef<HTMLInputElement>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRef      = useRef<HTMLDivElement>(null);
+
+  // ── Filtros e dados derivados (hook extraído) ─────────────────────────────
+  const {
+    search,    setSearch,
+    filterType,  setFilterType,
+    filterCat,   setFilterCat,
+    sortBy,      setSortBy,
+    groupBy,     setGroupBy,
+    dateFrom,    setDateFrom,
+    dateTo,      setDateTo,
+    valueMin,    setValueMin,
+    valueMax,    setValueMax,
+    filterOrigin,  setFilterOrigin,
+    filterReconciliationStatus, setFilterReconciliationStatus,
+    categoryOptions,
+    filtered,
+    groups,
+    stats,
+    runningBalances,
+    virtualRowEntries,
+    useVirtualList,
+    catCounts,
+    shouldShowDateScopeNotice,
+    activeFilters,
+    clearAllFilters,
+  } = useTransactionFilters(transactions, categories);
 
   // Limpa timer de undo ao desmontar (evita clearBulkSnapshot em componente morto)
   useEffect(() => () => {
@@ -151,129 +141,21 @@ export default function TransactionsManager({
         e.preventDefault();
         searchRef.current?.focus();
       }
-      if (e.key === 'Escape' && !auditOpen && historyTx === null) { setBatchAction(null); setConfirmDelete(false); }
+      if (e.key === 'Escape' && !auditOpen && historyTx === null) {
+        setBatchAction(null);
+        setConfirmDelete(false);
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [auditOpen, historyTx]);
 
-  const categoryOptions = useMemo(() => {
-    const byName = new Map<string, string>();
-    categories
-      .filter(category => category.isActive)
-      .forEach(category => byName.set(category.name, category.name));
-    transactions.forEach(tx => {
-      const name = tx.category ?? 'Outros';
-      byName.set(name, name);
-    });
-    ALLOWED_CATEGORIES.forEach(category => byName.set(category, category));
-    return [...byName.values()].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
-  }, [categories, transactions]);
-
+  // Sincroniza newCat com as categorias disponíveis
   useEffect(() => {
     if (categoryOptions.length > 0 && !categoryOptions.includes(newCat)) {
       setNewCat(categoryOptions[0]!);
     }
   }, [categoryOptions, newCat]);
-
-  const minCents = parseBRLToCents(valueMin);
-  const maxCents = parseBRLToCents(valueMax);
-
-  const filtered = useMemo(() => {
-    let list = transactions;
-
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(tx =>
-        (tx.description ?? '').toLowerCase().includes(q) ||
-        (tx.category    ?? '').toLowerCase().includes(q)
-      );
-    }
-    if (filterType !== 'all') {
-      list = list.filter(tx =>
-        filterType === 'entrada'
-          ? checkIncome(tx.type)
-          : checkExpense(tx.type)
-      );
-    }
-    if (filterCat) {
-      list = list.filter(tx => tx.category === filterCat);
-    }
-    if (dateFrom) {
-      list = list.filter(tx => (tx.date ?? '') >= dateFrom);
-    }
-    if (dateTo) {
-      list = list.filter(tx => (tx.date ?? '') <= dateTo);
-    }
-    if (minCents !== null) {
-      list = list.filter(tx => getTransactionAbsCentavos(tx) >= minCents);
-    }
-    if (maxCents !== null) {
-      list = list.filter(tx => getTransactionAbsCentavos(tx) <= maxCents);
-    }
-    if (filterOrigin) {
-      list = list.filter(tx => (tx.source ?? 'manual') === filterOrigin);
-    }
-    if (filterReconciliationStatus === 'reconciled') {
-      list = list.filter(tx => tx.reconciliationStatus === 'reconciled');
-    }
-    if (filterReconciliationStatus === 'unreconciled') {
-      list = list.filter(isImportedUnreconciledTransaction);
-    }
-
-    return [...list].sort((a, b) => {
-      if (sortBy === 'date_desc')  return (b.date ?? '').localeCompare(a.date ?? '');
-      if (sortBy === 'date_asc')   return (a.date ?? '').localeCompare(b.date ?? '');
-      if (sortBy === 'value_desc') return getTransactionAbsCentavos(b) - getTransactionAbsCentavos(a);
-      if (sortBy === 'value_asc')  return getTransactionAbsCentavos(a) - getTransactionAbsCentavos(b);
-      if (sortBy === 'cat')        return (a.category ?? '').localeCompare(b.category ?? '');
-      return 0;
-    });
-  }, [transactions, search, filterType, filterCat, dateFrom, dateTo, minCents, maxCents, filterOrigin, filterReconciliationStatus, sortBy]);
-
-  const groups = useMemo<Group[]>(() => {
-    if (groupBy === 'none') return [buildTransactionGroup('', '', filtered)];
-
-    const map = new Map<string, Transaction[]>();
-    filtered.forEach(tx => {
-      const key = groupBy === 'date'
-        ? (tx.date ?? 'sem-data')
-        : (tx.category ?? 'Outros');
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(tx);
-    });
-
-    const keys = [...map.keys()];
-    if (groupBy === 'date')     keys.sort((a, b) => b.localeCompare(a));
-    if (groupBy === 'category') keys.sort();
-
-    return keys.map(k => buildTransactionGroup(
-      k,
-      groupBy === 'date' ? getDateLabel(k) : k,
-      map.get(k)!
-    ));
-  }, [filtered, groupBy]);
-
-  const stats = useMemo(() => {
-    const totals = calculateTransactionTotalsCents(filtered);
-    return { count: filtered.length, ...totals };
-  }, [filtered]);
-
-  const runningBalances = useMemo(
-    () => calculateRunningBalances(filtered),
-    [filtered],
-  );
-
-  const virtualRowEntries = useMemo<VirtualRowEntry[]>(() => {
-    const rows: VirtualRowEntry[] = [];
-    for (const group of groups) {
-      if (group.key) rows.push({ kind: 'header', group });
-      for (const tx of group.items) rows.push({ kind: 'row', tx });
-    }
-    return rows;
-  }, [groups]);
-
-  const useVirtualList = filtered.length > VIRTUAL_THRESHOLD;
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
@@ -282,39 +164,6 @@ export default function TransactionsManager({
     estimateSize: (i) => (virtualRowEntries[i]?.kind === 'header' ? 48 : 80),
     overscan: 10,
   });
-
-  const baseForCategoryCounts = useMemo(() => {
-    let list = transactions;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(tx =>
-        (tx.description ?? '').toLowerCase().includes(q) ||
-        (tx.category    ?? '').toLowerCase().includes(q)
-      );
-    }
-    if (filterType !== 'all') {
-      list = list.filter(tx =>
-        filterType === 'entrada' ? checkIncome(tx.type) : checkExpense(tx.type)
-      );
-    }
-    if (dateFrom)          list = list.filter(tx => (tx.date ?? '') >= dateFrom);
-    if (dateTo)            list = list.filter(tx => (tx.date ?? '') <= dateTo);
-    if (minCents !== null) list = list.filter(tx => getTransactionAbsCentavos(tx) >= minCents);
-    if (maxCents !== null) list = list.filter(tx => getTransactionAbsCentavos(tx) <= maxCents);
-    if (filterOrigin)      list = list.filter(tx => (tx.source ?? 'manual') === filterOrigin);
-    if (filterReconciliationStatus === 'reconciled')   list = list.filter(tx => tx.reconciliationStatus === 'reconciled');
-    if (filterReconciliationStatus === 'unreconciled') list = list.filter(isImportedUnreconciledTransaction);
-    return list;
-  }, [transactions, search, filterType, dateFrom, dateTo, minCents, maxCents, filterOrigin, filterReconciliationStatus]);
-
-  const catCounts = useMemo(() => {
-    const map: Record<string, number> = {};
-    baseForCategoryCounts.forEach(tx => {
-      const c = tx.category ?? 'Outros';
-      map[c] = (map[c] ?? 0) + 1;
-    });
-    return map;
-  }, [baseForCategoryCounts]);
 
   const toggleOne = useCallback((id: string) => setSelected(s => {
     const n = new Set(s);
@@ -430,47 +279,6 @@ export default function TransactionsManager({
       toast.error(getUserFriendlyErrorMessage(error, 'transaction_bulk_update'), { id: loadingId });
     }
   }, [selected, newCat, onBulkUpdate, undoLastBulkUpdate, clearBulkSnapshot, clearSelected]);
-
-  const fmtDateBR = (s: string) => s.split('-').reverse().join('/');
-
-  interface ActiveFilter { id: string; label: string; clear: () => void }
-  const activeFilters = (
-    [
-      filterType !== 'all' ? { id: 'type',       label: filterType === 'entrada' ? '↑ Entradas' : '↓ Saídas', clear: () => setFilterType('all') } : null,
-      filterCat            ? { id: 'cat',        label: filterCat, clear: () => setFilterCat('') }                                                 : null,
-      search.trim()        ? { id: 'search',     label: `"${search.trim()}"`, clear: () => setSearch('') }                                        : null,
-      dateFrom             ? { id: 'date-from',  label: `A partir de ${fmtDateBR(dateFrom)}`, clear: () => setDateFrom('') }                      : null,
-      dateTo               ? { id: 'date-to',    label: `Até ${fmtDateBR(dateTo)}`, clear: () => setDateTo('') }                                  : null,
-      minCents !== null    ? { id: 'value-min',  label: `Mínimo ${formatCurrency(fromCentavos(minCents))}`, clear: () => setValueMin('') }        : null,
-      maxCents !== null    ? { id: 'value-max',  label: `Máximo ${formatCurrency(fromCentavos(maxCents))}`, clear: () => setValueMax('') }        : null,
-      filterOrigin         ? { id: 'origin',     label: `Origem: ${SOURCE_LABELS[filterOrigin] ?? filterOrigin}`, clear: () => setFilterOrigin('') } : null,
-      filterReconciliationStatus !== 'all'
-        ? { id: 'reconciliation', label: `Conciliação: ${RECONCILIATION_FILTER_LABELS[filterReconciliationStatus]}`, clear: () => setFilterReconciliationStatus('all') }
-        : null,
-    ] as (ActiveFilter | null)[]
-  ).filter((f): f is ActiveFilter => f !== null);
-
-  const hasDateFilterActive = Boolean(dateFrom || dateTo);
-  const loadedDateRange = useMemo<{ min: string; max: string } | null>(() => {
-    let minDate: string | null = null;
-    let maxDate: string | null = null;
-
-    for (const tx of transactions) {
-      const date = tx.date;
-      if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
-      if (minDate === null || date < minDate) minDate = date;
-      if (maxDate === null || date > maxDate) maxDate = date;
-    }
-
-    return minDate && maxDate ? { min: minDate, max: maxDate } : null;
-  }, [transactions]);
-  const shouldShowDateScopeNotice = hasDateFilterActive && (
-    !loadedDateRange ||
-    (dateFrom ? dateFrom < loadedDateRange.min : false) ||
-    (dateTo ? dateTo > loadedDateRange.max : false)
-  );
-
-  const clearAllFilters = () => { setSearch(''); setFilterType('all'); setFilterCat(''); setDateFrom(''); setDateTo(''); setValueMin(''); setValueMax(''); setFilterOrigin(''); setFilterReconciliationStatus('all'); };
 
   if (loading) return (
     <div role="status" aria-label="Carregando movimentações" className="flex flex-col items-center justify-center py-20 gap-3 text-quantum-fgMuted">
