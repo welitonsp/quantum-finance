@@ -11,16 +11,11 @@ import {
 } from 'lucide-react';
 import { transactionsToCSV, downloadCSV } from '../../utils/exportCSV';
 import { formatCurrency } from '../../utils/formatters';
-import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
 import toast from 'react-hot-toast';
 import type { Transaction } from '../../shared/types/transaction';
 import type { BulkUpdate } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { auth } from '../../shared/api/firebase/auth';
-import {
-  isIncome as checkIncome,
-  isExpense as checkExpense,
-} from '../../utils/transactionUtils';
 import AuditTimeline from '../../components/AuditTimeline';
 import TransactionHistoryDrawer from '../../components/TransactionHistoryDrawer';
 import type { UserCategory } from '../../shared/schemas/categorySchemas';
@@ -42,9 +37,8 @@ import {
   type FilterType,
   type ReconciliationStatusFilter,
 } from './hooks/useTransactionFilters';
+import { useTransactionSelection } from './hooks/useTransactionSelection';
 
-// ─── Types locais do componente ───────────────────────────────────────────────
-type BatchAction = 'delete' | 'recategorize' | null;
 
 interface Props {
   transactions?: Transaction[];
@@ -91,14 +85,10 @@ export default function TransactionsManager({
   const { categories: loadedCategories } = useCategories(providedCategories ? '' : effectiveUid);
   const categories = providedCategories ?? loadedCategories;
 
-  // ── Estado de UI (não filtros) ─────────────────────────────────────────────
-  const [filtersOpen,   setFiltersOpen]   = useState(false);
-  const [auditOpen,     setAuditOpen]     = useState(false);
-  const [historyTx,     setHistoryTx]     = useState<Transaction | null>(null);
-  const [selected,      setSelected]      = useState<Set<string>>(new Set());
-  const [batchAction,   setBatchAction]   = useState<BatchAction>(null);
-  const [newCat,        setNewCat]        = useState<string>(ALLOWED_CATEGORIES[0] ?? 'Outros');
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  // ── Estado de UI (painéis) ────────────────────────────────────────────────
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [auditOpen,   setAuditOpen]   = useState(false);
+  const [historyTx,   setHistoryTx]   = useState<Transaction | null>(null);
 
   const searchRef    = useRef<HTMLInputElement>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -130,6 +120,17 @@ export default function TransactionsManager({
     clearAllFilters,
   } = useTransactionFilters(transactions, categories);
 
+  // ── Seleção e ações em lote (hook extraído) ───────────────────────────────
+  const {
+    selected, setSelected,
+    batchAction,   setBatchAction,
+    newCat,        setNewCat,
+    confirmDelete, setConfirmDelete,
+    toggleOne, selectAll, clearSelected, cancelBatch,
+    selectByType, selectByCategory, selectAllTransactions,
+    allFilteredSelected, allTransactionsSelected, someSelected,
+  } = useTransactionSelection(transactions, filtered, categoryOptions);
+
   // Limpa timer de undo ao desmontar (evita clearBulkSnapshot em componente morto)
   useEffect(() => () => {
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
@@ -142,20 +143,25 @@ export default function TransactionsManager({
         searchRef.current?.focus();
       }
       if (e.key === 'Escape' && !auditOpen && historyTx === null) {
-        setBatchAction(null);
-        setConfirmDelete(false);
+        cancelBatch();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [auditOpen, historyTx]);
+  }, [auditOpen, historyTx, cancelBatch]);
 
   // Sincroniza newCat com as categorias disponíveis
   useEffect(() => {
     if (categoryOptions.length > 0 && !categoryOptions.includes(newCat)) {
       setNewCat(categoryOptions[0]!);
     }
-  }, [categoryOptions, newCat]);
+  }, [categoryOptions, newCat, setNewCat]);
+
+  // Limpa seleção ao mudar filtros — evita batch actions sobre itens obsoletos
+  useEffect(() => {
+    setSelected(new Set());
+    setBatchAction(null);
+  }, [search, filterType, filterCat, dateFrom, dateTo, valueMin, valueMax, filterOrigin, filterReconciliationStatus]);
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
@@ -164,44 +170,6 @@ export default function TransactionsManager({
     estimateSize: (i) => (virtualRowEntries[i]?.kind === 'header' ? 48 : 80),
     overscan: 10,
   });
-
-  const toggleOne = useCallback((id: string) => setSelected(s => {
-    const n = new Set(s);
-    if (n.has(id)) n.delete(id);
-    else n.add(id);
-    return n;
-  }), []);
-
-  const selectAll     = useCallback(() => setSelected(new Set(filtered.map(t => t.id))), [filtered]);
-  const clearSelected = useCallback(() => { setSelected(new Set()); setBatchAction(null); setConfirmDelete(false); }, []);
-
-  // Clear selection when active filters change to prevent batch actions on stale items.
-  useEffect(() => {
-    setSelected(new Set());
-    setBatchAction(null);
-  }, [search, filterType, filterCat, dateFrom, dateTo, valueMin, valueMax, filterOrigin, filterReconciliationStatus]);
-
-  const selectByType = useCallback((type: 'entrada' | 'saida') => {
-    setSelected(new Set(
-      filtered.filter(tx =>
-        type === 'entrada'
-          ? checkIncome(tx.type)
-          : checkExpense(tx.type)
-      ).map(t => t.id)
-    ));
-  }, [filtered]);
-
-  const selectByCategory = useCallback((cat: string) => {
-    setSelected(new Set(filtered.filter(tx => tx.category === cat).map(t => t.id)));
-  }, [filtered]);
-
-  const selectAllTransactions = useCallback(() => {
-    setSelected(new Set(transactions.map(t => t.id)));
-  }, [transactions]);
-
-  const allFilteredSelected     = filtered.length > 0 && filtered.every(t => selected.has(t.id));
-  const allTransactionsSelected = transactions.length > 0 && transactions.every(t => selected.has(t.id));
-  const someSelected            = selected.size > 0 && !allFilteredSelected;
 
   const handleBatchDelete = useCallback(async () => {
     const ids = Array.from(selected);
