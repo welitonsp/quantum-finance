@@ -8,6 +8,10 @@ import {
   transactionCreateSchema,
   transactionUpdateSchema,
   validateTransaction,
+  validateCreditCard,
+  toCentavos,
+  fromCentavos,
+  toDecimal,
 } from './financialSchemas';
 
 const baseTransaction = {
@@ -169,5 +173,60 @@ describe('financialSchemas - contas, recorrências e cartões', () => {
       dueDay: 15,
       schemaVersion: 2,
     }).success).toBe(false);
+  });
+});
+
+// ─── toCentavos / fromCentavos / toDecimal — branches null/undefined/vazio ────
+
+describe('financialSchemas — helpers de conversão monetária (linhas 171, 185-186)', () => {
+  it('toCentavos com null retorna 0', () => {
+    expect(toCentavos(null)).toBe(0);
+  });
+
+  it('toCentavos com undefined retorna 0', () => {
+    expect(toCentavos(undefined)).toBe(0);
+  });
+
+  it('toCentavos com string vazia retorna 0 (linha 171)', () => {
+    expect(toCentavos('')).toBe(0);
+  });
+
+  it('toCentavos com valor numérico converte corretamente', () => {
+    expect(toCentavos(10.5)).toBe(1050);
+  });
+
+  it('fromCentavos com null retorna 0 (linha 185)', () => {
+    expect(fromCentavos(null)).toBe(0);
+  });
+
+  it('fromCentavos com undefined retorna 0 (linha 185)', () => {
+    expect(fromCentavos(undefined)).toBe(0);
+  });
+
+  it('fromCentavos com valor inteiro converte para reais', () => {
+    expect(fromCentavos(1050)).toBe(10.5);
+  });
+
+  it('toDecimal com null retorna Decimal(0) (linha 186)', () => {
+    expect(toDecimal(null).toNumber()).toBe(0);
+  });
+
+  it('toDecimal com undefined retorna Decimal(0)', () => {
+    expect(toDecimal(undefined).toNumber()).toBe(0);
+  });
+
+  it('toDecimal com string vazia retorna Decimal(0)', () => {
+    expect(toDecimal('').toNumber()).toBe(0);
+  });
+
+  it('toDecimal com valor numérico converte para Decimal em reais', () => {
+    expect(toDecimal('12,50').toNumber()).toBe(12.5);
+  });
+
+  it('validateCreditCard delega para creditCardSchema', () => {
+    const valid = validateCreditCard({ name: 'Card', limit: 10000, closingDay: 5, dueDay: 15, schemaVersion: 2 });
+    expect(valid.success).toBe(true);
+    const invalid = validateCreditCard({ name: 'Card' });
+    expect(invalid.success).toBe(false);
   });
 });
