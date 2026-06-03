@@ -937,6 +937,63 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
     unmount();
   });
 
+  it('Modelo A: orphan doc existe sem value_cents — deleta value_cents do before (linha 1019)', async () => {
+    mockGetDoc.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({
+        description: 'Legado sem cents',
+        category: 'Outros',
+        type: 'saida',
+        date: '2026-01-01',
+        source: 'manual',
+        schemaVersion: 2,
+        // sem value_cents propositalmente
+      }),
+    });
+
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.bulkUpdateTransactions(['tx-orphan-no-cents'], { category: 'Alimentação' });
+    });
+
+    expect(mockBatchUpdateTransactionsWithHistory).toHaveBeenCalledOnce();
+    const [, snap] = mockBatchUpdateTransactionsWithHistory.mock.calls[0] as [string, Array<{ before?: Record<string, unknown> }>];
+    expect(snap[0]?.before).not.toHaveProperty('value_cents');
+
+    unmount();
+  });
+
+  it('Modelo A: orphan doc existe + updates sem category — não define newCategory (linha 1021)', async () => {
+    mockGetDoc.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({
+        description: 'Orphan sem category update',
+        category: 'Lazer',
+        type: 'saida',
+        date: '2026-01-01',
+        source: 'manual',
+        schemaVersion: 2,
+        value_cents: 500,
+      }),
+    });
+
+    const { result, unmount } = renderHook(() => useTransactions('uid-1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    // bulkUpdate sem campo category → item.newCategory não deve ser definido
+    await act(async () => {
+      await result.current.bulkUpdateTransactions(['tx-orphan-no-cat'], {});
+    });
+
+    expect(mockBatchUpdateTransactionsWithHistory).toHaveBeenCalledOnce();
+    const [, snap] = mockBatchUpdateTransactionsWithHistory.mock.calls[0] as [string, Array<{ newCategory?: string }>];
+    expect(snap[0]).not.toHaveProperty('newCategory');
+
+    unmount();
+  });
+
   it('restaura o estado otimista quando batchUpdateTransactionsWithHistory falha', async () => {
     mockBatchUpdateTransactionsWithHistory.mockRejectedValueOnce(new Error('invalid operation'));
 

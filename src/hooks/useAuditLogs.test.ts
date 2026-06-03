@@ -1,19 +1,47 @@
-import { describe, expect, it, vi } from 'vitest';
+import { renderHook, act, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { AuditLog } from '../shared/services/AuditService';
 
+const { mockOnSnapshot, mockGetDocs } = vi.hoisted(() => ({
+  mockOnSnapshot: vi.fn(),
+  mockGetDocs: vi.fn(),
+}));
+
 vi.mock('firebase/firestore', () => ({
-  collection: vi.fn(),
-  query: vi.fn(),
+  collection: vi.fn(() => ({ kind: 'col' })),
+  query: vi.fn((ref: unknown) => ref),
   orderBy: vi.fn(),
   limit: vi.fn(),
-  onSnapshot: vi.fn(),
+  startAfter: vi.fn(),
+  onSnapshot: mockOnSnapshot,
+  getDocs: mockGetDocs,
 }));
 
 vi.mock('../shared/api/firebase/index', () => ({
   db: { _isMock: true },
 }));
 
-import { mapLog } from './useAuditLogs';
+import { mapLog, useAuditLogs } from './useAuditLogs';
+
+function makeDoc(id: string, overrides: Partial<AuditLog> & Record<string, unknown> = {}) {
+  return {
+    id,
+    data: () => ({
+      action: 'BULK_UPDATE',
+      entity: 'TRANSACTION',
+      userId: 'uid-1',
+      metadata: { count: 1, changes: [] },
+      createdAt: { toMillis: () => Date.now() },
+      schemaVersion: 2,
+      ...overrides,
+    }),
+  };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockOnSnapshot.mockReturnValue(vi.fn()); // default: unsub noop
+});
 
 const createdAt = { toMillis: () => 1710000000000 };
 
@@ -168,5 +196,116 @@ describe('mapLog', () => {
     }));
     expect(view.title).toBe('Ação do sistema');
     expect(view.subtitle).toBe('5 itens afetados');
+  });
+});
+
+// ─── useAuditLogs hook ────────────────────────────────────────────────────────
+
+describe('useAuditLogs hook', () => {
+  it('uid vazio: loading=false, logs vazios, sem onSnapshot', async () => {
+    const { result, unmount } = renderHook(() => useAuditLogs(''));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.logs).toEqual([]);
+    expect(mockOnSnapshot).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it('carrega logs via onSnapshot e para loading', async () => {
+    mockOnSnapshot.mockImplementation((_q: unknown, onNext: (snap: { docs: ReturnType<typeof makeDoc>[] }) => void) => {
+      onNext({ docs: [makeDoc('log-1')] });
+      return vi.fn();
+    });
+
+    const { result, unmount } = renderHook(() => useAuditLogs('uid-1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.logs).toHaveLength(1);
+    unmount();
+  });
+
+  it('onSnapshot error callback define error state', async () => {
+    mockOnSnapshot.mockImplementation((_q: unknown, _onNext: unknown, onError: (e: Error) => void) => {
+      onError(new Error('permission-denied'));
+      return vi.fn();
+    });
+
+    const { result, unmount } = renderHook(() => useAuditLogs('uid-1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toBeTruthy();
+    unmount();
+  });
+
+  it('snap menor que PAGE_SIZE — hasMoreLogs=false', async () => {
+    const docs = Array.from({ length: 10 }, (_, i) => makeDoc(`log-${i}`));
+    mockOnSnapshot.mockImplementation((_q: unknown, onNext: (snap: { docs: typeof docs }) => void) => {
+      onNext({ docs });
+      return vi.fn();
+    });
+
+    const { result, unmount } = renderHook(() => useAuditLogs('uid-1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.hasMoreLogs).toBe(false);
+    unmount();
+  });
+
+  it('snap igual a PAGE_SIZE (50) — hasMoreLogs=true', async () => {
+    const docs = Array.from({ length: 50 }, (_, i) => makeDoc(`log-${i}`));
+    mockOnSnapshot.mockImplementation((_q: unknown, onNext: (snap: { docs: typeof docs }) => void) => {
+      onNext({ docs });
+      return vi.fn();
+    });
+
+    const { result, unmount } = renderHook(() => useAuditLogs('uid-1'));
+    await waitFor(() => expect(result.current.hasMoreLogs).toBe(true));
+    unmount();
+  });
+
+  it('loadMoreLogs sem lastDoc retorna sem chamar getDocs', async () => {
+    mockOnSnapshot.mockImplementation((_q: unknown, onNext: (snap: { docs: never[] }) => void) => {
+      onNext({ docs: [] });
+      return vi.fn();
+    });
+
+    const { result, unmount } = renderHook(() => useAuditLogs('uid-1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => { await result.current.loadMoreLogs(); });
+
+    expect(mockGetDocs).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it('loadMoreLogs com lastDoc carrega página adicional', async () => {
+    const fullPage = Array.from({ length: 50 }, (_, i) => makeDoc(`log-${i}`));
+    mockOnSnapshot.mockImplementation((_q: unknown, onNext: (snap: { docs: typeof fullPage }) => void) => {
+      onNext({ docs: fullPage });
+      return vi.fn();
+    });
+    mockGetDocs.mockResolvedValueOnce({ docs: [makeDoc('older-1'), makeDoc('older-2')] });
+
+    const { result, unmount } = renderHook(() => useAuditLogs('uid-1'));
+    await waitFor(() => expect(result.current.hasMoreLogs).toBe(true));
+
+    await act(async () => { await result.current.loadMoreLogs(); });
+
+    expect(mockGetDocs).toHaveBeenCalledOnce();
+    await waitFor(() => expect(result.current.logs.length).toBeGreaterThan(50));
+    unmount();
+  });
+
+  it('loadMoreLogs error define error state', async () => {
+    const fullPage = Array.from({ length: 50 }, (_, i) => makeDoc(`log-${i}`));
+    mockOnSnapshot.mockImplementation((_q: unknown, onNext: (snap: { docs: typeof fullPage }) => void) => {
+      onNext({ docs: fullPage });
+      return vi.fn();
+    });
+    mockGetDocs.mockRejectedValueOnce(new Error('network error'));
+
+    const { result, unmount } = renderHook(() => useAuditLogs('uid-1'));
+    await waitFor(() => expect(result.current.hasMoreLogs).toBe(true));
+
+    await act(async () => { await result.current.loadMoreLogs(); });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    unmount();
   });
 });
