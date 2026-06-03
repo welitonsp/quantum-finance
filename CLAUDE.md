@@ -2,37 +2,28 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — Pós-Auditoria Big Tech / Big Four — 2026-06-03
+## Estado Consolidado — Pós-PRs #159 e #160 — 2026-06-03
 
-> Bloco anterior (Retomada Pós-PR #122 / FASE 10D) foi substituído porque estava factualmente desatualizado. O histórico das fases anteriores é preservado nas seções abaixo. Em caso de divergência entre seções antigas e este bloco, **este bloco é a referência**.
+> Bloco anterior (Pós-Auditoria Big Tech / Big Four) foi substituído. Histórico preservado abaixo. Em caso de divergência, **este bloco é a referência**.
 
 ### 1. Status atual
 - Branch principal: `main`.
-- Topo da main: `bbd2bb7 fix(test): remove unused Decimal import in financialSchemas.test.ts`
-- Working tree com WIP em: `useAuditLogs.test.ts`, `useCreditCards.test.ts`, `useTransactions.test.ts`, `useTransactions.ts`, `vite.config.ts` — esses arquivos têm cobertura de testes em andamento; **não commitar sem revisão**.
-- Nenhum PR aberto.
-- Stash legado preservado e intocado.
+- Topo da main: `f179f54 test(hooks): add direct coverage for transaction refactors (FASE 10G-1) (#160)`
+- Working tree limpa. Nenhum PR aberto. Stash legado preservado e intocado.
 
-### 2. Commits recentes relevantes (PRs #122 → #157+)
+### 2. Commits recentes relevantes (PRs #122 → #160)
 
 | Commit | PR | Descrição |
 |---|---|---|
-| `bbd2bb7` | — | fix(test): remove unused Decimal import (FASE A) |
-| `5d640ed` | — | test(coverage): uplift branches to 52.4% |
-| `d328b8f` | — | feat(products): add category review UI |
+| `f179f54` | #160 | test(hooks): cobertura direta hooks/normalizadores (FASE 10G-1) |
+| `190bf30` | #159 | feat(lgpd): LGPD export/delete + refatoração TransactionsManager + SnapshotWindow |
+| `cb383a9` | #156 | feat(hooks): SnapshotWindow — filtro server-side por data em useTransactions |
 | `c7f1c0e` | #157 | refactor(hooks): extract useTransactionsPagination |
 | `25faf38` | #155 | feat(hooks): addBatchStreamed (chunked async import) |
 | `a5fb87b` | #153 | feat(sync-queue): exponential backoff + dead letter queue |
 | `df968ca` | #154 | feat(hooks): useRunningBalance with overflow guard |
 | `ca563b6` | #148 | docs(retention): data inventory + retention policy |
 | `362abf5` | #149 | security(functions): harden AI callables and rate limit |
-| `7e734b7` | #141 | security: governance quick wins |
-| `e0330c2` | #139 | feat(recurring): history for recurring task changes |
-| `9411a99` | #138 | feat(accounts): history for account changes |
-| `46f7f8c` | #137 | feat(import): transaction history for imported entries |
-| `5838ad6` | #135 | feat(audit): safe correlation id to transaction history |
-| `aa1ee20` | #132 | feat(dashboard): critical budget alerts |
-| `6c13db0` | #129 | feat(transactions): running balance per row |
 | `9d2e726` | #122 | fix(transactions): repair manual update and soft delete audit flow |
 
 ### 3. Contratos críticos vivos
@@ -50,20 +41,38 @@
   - `categorizeTransactionsBatch` (linha 321)
   - `chatWithQuantumAI` (linha 394)
   - `generateAuditReport` (linha 434)
-- Não há callable sem enforcement. A seção anterior que dizia "monitor-only" está obsoleta.
+- Não há callable sem enforcement.
 
-### 5. FASE 10D — Migração legada (política inalterada)
+### 5. LGPD — estado real (pós-PR #159)
+- `DataPrivacyService.ts`: `exportAllUserData()` + `deleteUserAccount()` implementados.
+- `DataPrivacyPanel.tsx`: integrado em `CategorySettings` (acessível via botão Settings na sidebar).
+- Exclusão: remove `budgets`, `categoryRules`, `creditCards`, `simulations` + auth user.
+- `transactions`, `audit_logs`, `history`, `categories` preservados conforme política de retenção — inacessíveis após deleção de auth. Remoção completa via Admin SDK (Blaze) futura.
+- Texto de exclusão é juridicamente honesto: menciona política de retenção e prazo de 30 dias.
+
+### 6. Refatoração — estado real (pós-PR #159)
+- `TransactionsManager.tsx`: **986 linhas** (era 1481 — −33%)
+- `useTransactions.ts`: **972 linhas** (era 1131 — −14%)
+- Novos arquivos extraídos:
+  - `src/features/transactions/transactionGroupUtils.ts`
+  - `src/features/transactions/components/FilterChip.tsx`
+  - `src/features/transactions/components/GroupHeader.tsx`
+  - `src/features/transactions/components/TransactionRow.tsx`
+  - `src/features/transactions/hooks/useTransactionFilters.ts`
+  - `src/features/transactions/hooks/useTransactionSelection.ts`
+  - `src/hooks/transactionNormalizer.ts`
+
+### 7. FASE 10D — Migração legada (política inalterada)
 - FASE 10D-0 (read-only) concluiu: não existe script de migração automática.
 - Script de diagnóstico read-only: `functions/scripts/diagnoseLegacyTransactions.js`.
-- Scripts de escrita existem (`executeLegacyMigration.js`, `rollbackLegacyMigration.js`) mas têm bloqueio de execução (`BLOCKED_EXECUTION_MESSAGE`) — **não executar sem todos os guardrails**.
+- Scripts de escrita com bloqueio de execução (`BLOCKED_EXECUTION_MESSAGE`) — **não executar sem guardrails**.
 - Migração automática de float legado para `value_cents` continua **bloqueada**.
-- Qualquer migração futura: classificatória, dry-run por padrão, auditável, idempotente.
 
-### 6. Próximas etapas recomendadas
-1. **Commitar o WIP restante** (hooks + vite.config) após revisão — subir thresholds de cobertura.
-2. **FASE B-2 — Direitos do Titular LGPD**: exportação completa de dados + fluxo de exclusão de conta.
-3. **FASE C — Refatorar arquivos monolíticos**: `TransactionsManager.tsx` (1481 linhas), `useTransactions.ts` (1131), `FirestoreService.ts` (886).
-4. **FASE D — Testes de UI/E2E**: atualmente 37 `.test.ts` e apenas 4 `.test.tsx`; fluxos de importação e conciliação sem cobertura de componente.
+### 8. Próximas etapas recomendadas
+1. **Criar `firestore.indexes.json`** com índice composto para `SnapshotWindow` (`date` + filtro por `uid`) — necessário em produção.
+2. **Testes E2E (Playwright)**: fluxos de importação e conciliação ainda sem cobertura E2E.
+3. **Upgrade Blaze**: habilitar hard delete de `transactions`/`audit_logs` via Admin SDK ao excluir conta.
+4. **Score de saúde financeira**: aproveita `detectAnomalies` + forecast existente.
 
 ### 7. Comandos de validação padrão
 ```bash
@@ -105,12 +114,20 @@ npm --prefix functions run build
 
 `useAccounts`, `useAppLogic`, `useAuditLogs`, `useBudgets`, `useCategories`, `useCategoryRules`, `useCreditCards`, `useFinancialData`, `useFinancialKPIs`, `useFinancialMetrics`, `useForecast`, `useImportActions`, `useModalState`, `useRecurring`, `useRunningBalance`, `useTransactionActions`, `useTransactionHistory`, `useTransactions`, `useTransactionsPagination`
 
-## Suíte de testes (2026-06-03)
+## Suíte de testes (2026-06-03 — pós-PR #160)
 
-- 41 arquivos de teste (40 passando + 1 skipped — rules)
-- 645 testes passando · 153 skipped (rules rodam em `npm run test:rules` com emulator)
-- 37 `.test.ts` · 4 `.test.tsx`
+- 49 arquivos de teste (48 passando + 1 skipped — rules)
+- 823 testes passando · 153 skipped (rules rodam em `npm run test:rules` com emulator)
+- 44 `.test.ts` · 5 `.test.tsx`
 - Thresholds de cobertura: lines 66% · functions 61% · branches 54% · statements 61%
+- Cobertura real: lines **67.52%** · branches **55.45%** · functions **63.43%** · statements **63.14%**
+
+### Novos arquivos de teste adicionados (PR #160 — FASE 10G-1)
+- `src/hooks/transactionNormalizer.test.ts` — 29 testes diretos do normalizador
+- `src/features/transactions/hooks/useTransactionFilters.test.ts` — 38 testes de filtros
+- `src/features/transactions/hooks/useTransactionSelection.test.ts` — 25 testes de seleção
+- `src/hooks/useTransactionsPagination.test.ts` — 15 testes de paginação
+- `src/hooks/useTransactions.test.ts` — +6 testes de SnapshotWindow
 
 ## Estado Consolidado — Política de Observabilidade e Logging (FASE 9F/9G) — 2026-05-15
 
