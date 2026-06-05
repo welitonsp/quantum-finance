@@ -177,7 +177,7 @@ describe('useCreditCards - limite em centavos', () => {
         docs: [{
           id: 'card-x',
           data: () => ({
-            name: 'Card Quase Cheio', limit: 10000, closingDay: 5, dueDay: 15,
+            name: 'Card Quase Cheio', limit: 10000, closingDay: 1, dueDay: 15,
             color: '#ff0000', active: true,
           }),
         }],
@@ -202,7 +202,7 @@ describe('useCreditCards - limite em centavos', () => {
         docs: [{
           id: 'card-y',
           data: () => ({
-            name: 'Card Médio', limit: 10000, closingDay: 5, dueDay: 15,
+            name: 'Card Médio', limit: 10000, closingDay: 1, dueDay: 15,
             color: '#ff0000', active: true,
           }),
         }],
@@ -217,6 +217,45 @@ describe('useCreditCards - limite em centavos', () => {
 
     await waitFor(() => expect(result.current.cards).toHaveLength(1));
     expect(result.current.cards[0]?.metrics.alertLevel).toBe('warning');
+
+    unmount();
+  });
+
+  it('regressão: closingDay == dia atual não silencia alerta (mistura UTC/local)', async () => {
+    // Reproduz o bug original: closingDay igual ao dia de hoje fazia a transação cair
+    // fora da janela de fatura porque new Date("YYYY-MM-DD") é meia-noite UTC enquanto
+    // new Date(ano, mês, dia) é meia-noite local — em UTC-3 a diferença é 3 h e a
+    // transação ficava antes de inicioFatura. O fix usa comparação de strings YYYY-MM-DD.
+    const now       = new Date();
+    const diaHoje   = now.getDate();
+    const todayLocal = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(diaHoje).padStart(2, '0'),
+    ].join('-');
+
+    mockOnSnapshot.mockImplementation((_q: unknown, onNext: (snap: { docs: Array<{ id: string; data: () => Record<string, unknown> }> }) => void) => {
+      onNext({
+        docs: [{
+          id: 'card-reg',
+          data: () => ({
+            name: 'Card Regressão', limit: 10000, closingDay: diaHoje, dueDay: 15,
+            color: '#ff0000', active: true,
+          }),
+        }],
+      });
+      return vi.fn();
+    });
+
+    const { result, unmount } = renderHook(() => useCreditCards('uid-1', [{
+      id: 'tx-reg', cardId: 'card-reg', type: 'saida', value_cents: 9500,
+      date: todayLocal,
+    } as never]));
+
+    await waitFor(() => expect(result.current.cards).toHaveLength(1));
+    // compromisso = 9500 centavos / 10000 centavos = 95 % → critical
+    // antes do fix retornava 'safe' em ambientes UTC-3
+    expect(result.current.cards[0]?.metrics.alertLevel).toBe('critical');
 
     unmount();
   });
