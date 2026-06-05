@@ -22,12 +22,17 @@ function calcCardMetrics(card: CreditCard, transactions: Transaction[]): CardMet
     fimFatura    = new Date(hoje.getFullYear(), hoje.getMonth() + 1, card.closingDay - 1);
   }
 
+  const toYMD = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const inicioStr = toYMD(inicioFatura);
+  const fimStr    = toYMD(fimFatura);
+
   const faturaAtual = transactions
     .filter(tx => {
       if (tx.cardId !== card.id) return false;
       if (!isExpense(tx.type)) return false;
-      const d = new Date(String(tx.date || tx.createdAt));
-      return d >= inicioFatura && d <= fimFatura;
+      const txDate = String(tx.date || tx.createdAt).slice(0, 10);
+      return txDate >= inicioStr && txDate <= fimStr;
     })
     .reduce((acc, tx) => acc + fromCentavos(getTransactionAbsCentavos(tx)), 0);
 
