@@ -2,90 +2,102 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — Pós-PRs #159 e #160 — 2026-06-03
+## Estado Consolidado — FASES 11–17A — 2026-06-06
 
-> Bloco anterior (Pós-Auditoria Big Tech / Big Four) foi substituído. Histórico preservado abaixo. Em caso de divergência, **este bloco é a referência**.
+> Bloco anterior (Pós-PRs #159/#160) foi substituído. Histórico preservado abaixo. Em caso de divergência, **este bloco é a referência**.
 
 ### 1. Status atual
 - Branch principal: `main`.
-- Topo da main: `f179f54 test(hooks): add direct coverage for transaction refactors (FASE 10G-1) (#160)`
-- Working tree limpa. Nenhum PR aberto. Stash legado preservado e intocado.
+- Último commit na main: `e3e62bc fix(cards): make invoice date window timezone-safe (#162)`
+- Working tree com alterações não comitadas das FASES 11–17A (pendente PR).
+- Stash legado preservado e intocado.
 
-### 2. Commits recentes relevantes (PRs #122 → #160)
+### 2. Fases implementadas nesta sessão (não comitadas ainda)
 
-| Commit | PR | Descrição |
-|---|---|---|
-| `f179f54` | #160 | test(hooks): cobertura direta hooks/normalizadores (FASE 10G-1) |
-| `190bf30` | #159 | feat(lgpd): LGPD export/delete + refatoração TransactionsManager + SnapshotWindow |
-| `cb383a9` | #156 | feat(hooks): SnapshotWindow — filtro server-side por data em useTransactions |
-| `c7f1c0e` | #157 | refactor(hooks): extract useTransactionsPagination |
-| `25faf38` | #155 | feat(hooks): addBatchStreamed (chunked async import) |
-| `a5fb87b` | #153 | feat(sync-queue): exponential backoff + dead letter queue |
-| `df968ca` | #154 | feat(hooks): useRunningBalance with overflow guard |
-| `ca563b6` | #148 | docs(retention): data inventory + retention policy |
-| `362abf5` | #149 | security(functions): harden AI callables and rate limit |
-| `9d2e726` | #122 | fix(transactions): repair manual update and soft delete audit flow |
+| Fase | Escopo |
+|---|---|
+| FASE 11C | Parcelamento: `createInstallmentGroupWithHistory`, `InstallmentGroupDTO`, `addMonthsToDate`, badge no `TransactionRow`, toggle no `TransactionForm` |
+| FASE 12A | Display visual de transferências (ícone azul `⇄`, badge "Transferência") em `TransactionRow` |
+| FASE 12B | Filtro "Transferências" como 4ª tab em `useTransactionFilters` + `TransactionsManager` |
+| FASE 12C | `firestore.indexes.json` com 4 índices compostos para `transactions` |
+| FASE 12D | `FinancialHealthScore.tsx` — score 0-100 com 4 pilares (poupança, dívida, reserva, comprometimento) |
+| FASE 13A | `InstallmentGroupDrawer.tsx` — gestão de parcelas (listar, cancelar futuras via `cancelRemainingInstallments`) |
+| FASE 13B | `computeMonthlyReport` + `generateMonthlyReportCSV` em `exportCSV.ts` + picker de mês/ano em `TransactionsManager` |
+| FASE 13C | `SavingsGoal` type + `useGoals` hook + `GoalsPanel.tsx` com barra de progresso animada |
+| FASE 14A | Edição inline de progresso das metas (`GoalCard`) |
+| FASE 14B | Picker de mês/ano para relatório em qualquer período |
+| FASE 14C | Edição inline de contas em `AccountsManager` (nome + saldo, Enter/Escape, pencil/save/cancel) |
+| FASE 14D | `AnomalyAlerts.tsx` — alertas de anomalia via `GeminiService.detectAnomalies`, integrado no Dashboard |
+| FASE 14E | `useRecurringAutoExecute` — scaffold client-side de materialização de recorrentes mensais |
+| FASE 15A | Testes unitários: `exportCSV.test.ts` (18 testes), `GeminiService.test.ts` (10), `useRecurringAutoExecute.test.ts` (13) |
+| FASE 15B | Recorrentes anuais: `dueMonth?` em `RecurringTask`, lógica anual em `useRecurringAutoExecute`, picker de mês em `RecurringManager` |
+| FASE 15C | UI de gestão de recorrentes: badge Executado/Pendente/Pausado, botão pause/resume, ordenação automática |
+| FASE 16 | Playwright E2E: config, Auth Emulator, 5 suítes (`smoke`, `transaction-create`, `filters`, `import-csv`, `goals-panel`) |
+| FASE 17A | Sincronização deste `CLAUDE.md` |
 
-### 3. Contratos críticos vivos
+### 3. Contratos críticos vivos (inalterados)
 - `value_cents` é a fonte canônica. `value` legado **nunca** é usado em cálculo financeiro.
-- **Proibido:** `Math.round(value * 100)`, `parseFloat`, `Number(value)` ou heurística float para migração financeira.
-- **Modelo A obrigatório:** Todo UPDATE de `transactions/{txId}` exige `_lastOpId` + `history/{_lastOpId}` criado no mesmo `writeBatch`. Validado por `existsAfter` nas Firestore Rules.
-- `importHash` permanece na transação real (deduplicação). **Proibido** em `audit_logs`, snapshots `before`/`after` e history.
-- Logs sanitizados obrigatoriamente em `src/` — `console.*` cru bloqueado por teste estático (`consoleLoggingPolicy.test.ts`).
-- Firestore Rules devem permanecer alinhadas com código e deploy real.
+- **Proibido:** `Math.round(value * 100)`, `parseFloat`, `Number(value)` ou heurística float.
+- **Modelo A obrigatório:** Todo UPDATE de `transactions/{txId}` exige `_lastOpId` + `history/{_lastOpId}` no mesmo `writeBatch`. Validado por `existsAfter` nas Firestore Rules.
+- `importHash` permanece na transação real. **Proibido** em `audit_logs`, `before`/`after` e history.
+- Logs sanitizados obrigatoriamente em `src/` — `console.*` cru bloqueado por `consoleLoggingPolicy.test.ts`.
+- Firestore Rules alinhadas com código e deploy real.
 - Stash legado não deve ser tocado sem ordem explícita.
 
 ### 4. App Check — estado real
-- **`enforceAppCheck: true`** está ativo em **todas** as 4 Cloud Functions:
+- **`enforceAppCheck: true`** em **todas** as 4 Cloud Functions:
   - `createTransaction` (linha 44 de `functions/index.js`)
   - `categorizeTransactionsBatch` (linha 321)
   - `chatWithQuantumAI` (linha 394)
   - `generateAuditReport` (linha 434)
-- Não há callable sem enforcement.
+- `consumeAppCheckToken` (replay protection) — **pendente**.
 
-### 5. LGPD — estado real (pós-PR #159)
-- `DataPrivacyService.ts`: `exportAllUserData()` + `deleteUserAccount()` implementados.
-- `DataPrivacyPanel.tsx`: integrado em `CategorySettings` (acessível via botão Settings na sidebar).
-- Exclusão: remove `budgets`, `categoryRules`, `creditCards`, `simulations` + auth user.
-- `transactions`, `audit_logs`, `history`, `categories` preservados conforme política de retenção — inacessíveis após deleção de auth. Remoção completa via Admin SDK (Blaze) futura.
-- Texto de exclusão é juridicamente honesto: menciona política de retenção e prazo de 30 dias.
+### 5. LGPD — estado real (pós-PR #159, inalterado)
+- `DataPrivacyService.ts`: `exportAllUserData()` + `deleteUserAccount()`.
+- `DataPrivacyPanel.tsx`: acessível via Settings na sidebar.
+- Hard delete via Admin SDK (Blaze) — **pendente**.
 
-### 6. Refatoração — estado real (pós-PR #159)
-- `TransactionsManager.tsx`: **986 linhas** (era 1481 — −33%)
-- `useTransactions.ts`: **972 linhas** (era 1131 — −14%)
-- Novos arquivos extraídos:
-  - `src/features/transactions/transactionGroupUtils.ts`
-  - `src/features/transactions/components/FilterChip.tsx`
-  - `src/features/transactions/components/GroupHeader.tsx`
-  - `src/features/transactions/components/TransactionRow.tsx`
-  - `src/features/transactions/hooks/useTransactionFilters.ts`
-  - `src/features/transactions/hooks/useTransactionSelection.ts`
-  - `src/hooks/transactionNormalizer.ts`
+### 6. Novos tipos em `Transaction` (FASES 11–15)
+```ts
+// Parcelamento
+installmentGroupId?:    string;
+installmentIndex?:      number;
+installmentCount?:      number;
+installmentTotalCents?: Centavos;
+
+// Recorrentes
+dueMonth?:          number;        // 1–12, anuais
+lastExecutedMonth?: string;        // formato YYYY-MM
+```
 
 ### 7. FASE 10D — Migração legada (política inalterada)
-- FASE 10D-0 (read-only) concluiu: não existe script de migração automática.
 - Script de diagnóstico read-only: `functions/scripts/diagnoseLegacyTransactions.js`.
-- Scripts de escrita com bloqueio de execução (`BLOCKED_EXECUTION_MESSAGE`) — **não executar sem guardrails**.
-- Migração automática de float legado para `value_cents` continua **bloqueada**.
+- Migração automática de float → `value_cents` continua **bloqueada**.
 
 ### 8. Próximas etapas recomendadas
-1. **Criar `firestore.indexes.json`** com índice composto para `SnapshotWindow` (`date` + filtro por `uid`) — necessário em produção.
-2. **Testes E2E (Playwright)**: fluxos de importação e conciliação ainda sem cobertura E2E.
-3. **Upgrade Blaze**: habilitar hard delete de `transactions`/`audit_logs` via Admin SDK ao excluir conta.
-4. **Score de saúde financeira**: aproveita `detectAnomalies` + forecast existente.
+1. **PR das FASES 11–17A** — comitar e abrir PR com todo o trabalho desta sessão.
+2. **FASE 17B — Busca server-side**: filtro por `description` via Firestore query + índice.
+3. **FASE 17C — consumeAppCheckToken**: replay protection nas Cloud Functions.
+4. **FASE 17D — Sentry**: monitoramento de erros em produção (aproveita logging sanitizado).
+5. **Upgrade Blaze**: hard delete de `transactions`/`audit_logs` via Admin SDK.
+6. **CI para E2E**: adicionar `test:e2e` ao GitHub Actions com emuladores.
 
-### 7. Comandos de validação padrão
+### 9. Comandos de validação padrão
 ```bash
 npm run typecheck
 npm run lint
 npm run test -- --run
-npm run test:rules
+npm run test:rules          # requer emulator Firestore (Java/JDK)
 npm run build
 npm --prefix functions test
 npm --prefix functions run build
+
+# E2E (requer emulators rodando)
+firebase emulators:start --only auth,firestore
+npm run test:e2e
 ```
 
-### 8. Processo operacional permanente
+### 10. Processo operacional permanente
 - Read-only antes de implementação.
 - PR pequeno.
 - Auditoria independente antes de merge.
@@ -94,40 +106,54 @@ npm --prefix functions run build
 - Confirmar git status limpo.
 - Atualizar `CLAUDE.md` após marco relevante.
 
-## Referência Rápida de Arquivos Críticos (estado real — 2026-06-03)
+## Referência Rápida de Arquivos Críticos (estado real — 2026-06-06)
 
 | Arquivo | Linhas | Responsabilidade |
 |---|---|---|
-| `src/features/transactions/TransactionsManager.tsx` | 1481 | Listagem, filtros, ordenação, agrupamento, ações em lote |
-| `src/hooks/useTransactions.ts` | 1131 | Hook central de CRUD/paginação/import/sync-queue |
-| `src/shared/services/FirestoreService.ts` | 886 | Helpers de escrita atômica (Modelo A) |
+| `src/features/transactions/TransactionsManager.tsx` | 1070 | Listagem, filtros (4 tabs incl. Transferências), relatório mensal, parcelamentos |
+| `src/hooks/useTransactions.ts` | 972 | Hook central de CRUD/paginação/import/sync-queue |
+| `src/shared/services/FirestoreService.ts` | 1149 | Helpers de escrita atômica (Modelo A) + parcelamentos + cancelamento |
 | `src/features/transactions/ReconciliationEngine.tsx` | 554 | Modal de reconciliação interativa |
 | `src/features/transactions/ImportButton.tsx` | 456 | Fluxo de importação CSV/OFX/PDF |
+| `src/features/transactions/TransactionForm.tsx` | 565 | Formulário de criação/edição + toggle de parcelamento |
 | `src/components/TransactionHistoryDrawer.tsx` | 334 | Drawer de histórico por transação |
 | `src/hooks/useTransactionHistory.ts` | 218 | Hook de histórico por transação |
 | `src/hooks/useAuditLogs.ts` | 261 | Hook de logs globais |
 | `src/components/AuditTimeline.tsx` | 219 | Timeline global de auditoria |
+| `src/components/FinancialHealthScore.tsx` | — | Score 0-100 com 4 pilares financeiros |
+| `src/components/AnomalyAlerts.tsx` | — | Alertas de anomalia por categoria (client-side) |
+| `src/components/GoalsPanel.tsx` | — | Metas de poupança com progresso animado |
+| `src/components/RecurringManager.tsx` | 349 | Gestão de recorrentes (mensal + anual, pause/resume, badge status) |
+| `src/features/transactions/components/InstallmentGroupDrawer.tsx` | — | Gestão de parcelas (listar, cancelar futuras) |
+| `src/hooks/useGoals.ts` | — | CRUD em tempo real de `users/{uid}/goals` |
+| `src/hooks/useRecurringAutoExecute.ts` | — | Scaffold client-side de materialização de recorrentes |
+| `src/utils/exportCSV.ts` | — | `computeMonthlyReport` + `generateMonthlyReportCSV` |
 | `firestore.rules` | 1019 | Regras de segurança com schema versionado v2 |
+| `firestore.indexes.json` | — | 4 índices compostos para `transactions` |
 | `functions/index.js` | 461 | 4 Cloud Functions (createTransaction + 3 IA) |
+| `playwright.config.ts` | — | Config E2E: Chromium, webServer com VITE_USE_EMULATOR |
+| `e2e/tests/` | — | 5 suítes E2E: smoke, create, filters, import-csv, goals |
 
-## Hooks presentes (2026-06-03)
+## Hooks presentes (2026-06-06)
 
-`useAccounts`, `useAppLogic`, `useAuditLogs`, `useBudgets`, `useCategories`, `useCategoryRules`, `useCreditCards`, `useFinancialData`, `useFinancialKPIs`, `useFinancialMetrics`, `useForecast`, `useImportActions`, `useModalState`, `useRecurring`, `useRunningBalance`, `useTransactionActions`, `useTransactionHistory`, `useTransactions`, `useTransactionsPagination`
+`useAccounts`, `useAppLogic`, `useAuditLogs`, `useBudgets`, `useCategories`, `useCategoryRules`, `useCreditCards`, `useFinancialData`, `useFinancialKPIs`, `useFinancialMetrics`, `useForecast`, `useGoals`, `useImportActions`, `useModalState`, `useRecurring`, `useRecurringAutoExecute`, `useRunningBalance`, `useTransactionActions`, `useTransactionHistory`, `useTransactions`, `useTransactionsPagination`
 
-## Suíte de testes (2026-06-03 — pós-PR #160)
+## Suíte de testes (2026-06-06 — pós-FASE 15A/15B)
 
-- 49 arquivos de teste (48 passando + 1 skipped — rules)
-- 823 testes passando · 153 skipped (rules rodam em `npm run test:rules` com emulator)
-- 44 `.test.ts` · 5 `.test.tsx`
-- Thresholds de cobertura: lines 66% · functions 61% · branches 54% · statements 61%
-- Cobertura real: lines **67.52%** · branches **55.45%** · functions **63.43%** · statements **63.14%**
+- **52 arquivos de teste** (51 passando + 1 skipped — rules)
+- **915 testes passando · 159 skipped** (rules rodam em `npm run test:rules` com emulator)
+- 47 `.test.ts` · 5 `.test.tsx`
+- **5 suítes E2E Playwright** (requerem emuladores Firebase)
 
-### Novos arquivos de teste adicionados (PR #160 — FASE 10G-1)
-- `src/hooks/transactionNormalizer.test.ts` — 29 testes diretos do normalizador
-- `src/features/transactions/hooks/useTransactionFilters.test.ts` — 38 testes de filtros
-- `src/features/transactions/hooks/useTransactionSelection.test.ts` — 25 testes de seleção
-- `src/hooks/useTransactionsPagination.test.ts` — 15 testes de paginação
-- `src/hooks/useTransactions.test.ts` — +6 testes de SnapshotWindow
+### Arquivos de teste adicionados nas FASES 15A/15B
+- `src/utils/exportCSV.test.ts` — 18 testes (`computeMonthlyReport`, `generateMonthlyReportCSV`)
+- `src/features/ai-chat/GeminiService.test.ts` — 10 testes (`detectAnomalies`)
+- `src/hooks/useRecurringAutoExecute.test.ts` — 25 testes (pendingTasks mensal + anual, dueDateForTask, hook integration)
+- `e2e/tests/01-smoke.spec.ts` — 3 testes E2E de carregamento
+- `e2e/tests/02-transaction-create.spec.ts` — 4 testes E2E de criação
+- `e2e/tests/03-transaction-filters.spec.ts` — 5 testes E2E de filtros
+- `e2e/tests/04-import-csv.spec.ts` — 3 testes E2E de importação
+- `e2e/tests/05-goals-panel.spec.ts` — 4 testes E2E de metas
 
 ## Estado Consolidado — Política de Observabilidade e Logging (FASE 9F/9G) — 2026-05-15
 

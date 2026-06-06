@@ -1,11 +1,14 @@
 import type { Transaction } from '../shared/types/transaction';
 import { absCentavos, addCentavos, subtractCentavos, toCentavos, type Centavos } from '../shared/types/money';
 
+export const isTransfer = (t: string): boolean =>
+  t === 'transferencia';
+
 export const isIncome = (t: string): boolean =>
-  t === 'entrada' || t === 'receita';
+  !isTransfer(t) && (t === 'entrada' || t === 'receita');
 
 export const isExpense = (t: string): boolean =>
-  t === 'saida' || t === 'despesa';
+  !isTransfer(t) && (t === 'saida' || t === 'despesa');
 
 /** Convenience overload accepting a full Transaction object. */
 export const isIncomeTx = (tx: Transaction): boolean => isIncome(tx.type);
@@ -29,7 +32,10 @@ export function getTransactionAbsCentavos(tx: Pick<Transaction, 'value_cents' | 
   return absCentavos(centavos ?? 0);
 }
 
-export function canonicalizeTransactionType(type: string | undefined): 'entrada' | 'saida' {
+export function canonicalizeTransactionType(
+  type: string | undefined,
+): 'entrada' | 'saida' | 'transferencia' {
+  if (isTransfer(type ?? '')) return 'transferencia';
   return isIncome(type ?? '') ? 'entrada' : 'saida';
 }
 

@@ -7,6 +7,7 @@ import {
   getDoc,
   query,
   orderBy,
+  where,
   writeBatch,
   serverTimestamp,
   deleteField,
@@ -49,10 +50,16 @@ const transactionWriteCreateSchema = z.object({
   source: sourceSchema,
   account: z.string().trim().min(1).max(120).optional(),
   accountId: z.string().trim().min(1).max(120).optional(),
-  cardId: z.string().trim().min(1).max(120).optional(),
+  cardId:        z.string().trim().min(1).max(120).optional(),
+  fromAccountId: z.string().trim().min(1).max(128).optional(),
+  toAccountId:   z.string().trim().min(1).max(128).optional(),
   fitId: z.string().trim().min(1).max(160).nullable().optional(),
   tags: z.array(z.string().trim().min(1).max(32)).max(20).optional(),
   isRecurring: z.boolean().optional(),
+  installmentGroupId:    z.string().trim().min(1).max(128).optional(),
+  installmentIndex:      z.number().int().min(1).max(999).optional(),
+  installmentCount:      z.number().int().min(1).max(999).optional(),
+  installmentTotalCents: centavosSchema.optional(),
   reconciliationStatus: reconciliationStatusSchema.optional(),
   reconciliationSource: reconciliationSourceSchema.optional(),
   reconciledAt: z.unknown().optional(),
@@ -77,6 +84,8 @@ const TRANSACTION_ALLOWED_KEYS = new Set([
   'account',
   'accountId',
   'cardId',
+  'fromAccountId',
+  'toAccountId',
   'fitId',
   'tags',
   'isRecurring',
@@ -90,6 +99,10 @@ const TRANSACTION_ALLOWED_KEYS = new Set([
   'reconciledAt',
   'reconciledBy',
   '_lastOpId',
+  'installmentGroupId',
+  'installmentIndex',
+  'installmentCount',
+  'installmentTotalCents',
 ]);
 
 const HISTORY_SNAPSHOT_FORBIDDEN_FIELDS = new Set(['id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId']);
@@ -97,6 +110,37 @@ const HISTORY_SNAPSHOT_ALLOWED_KEYS = new Set(
   [...TRANSACTION_ALLOWED_KEYS].filter(key => !HISTORY_SNAPSHOT_FORBIDDEN_FIELDS.has(key)),
 );
 const LEGACY_REPAIR_DELETE_SENTINELS = new WeakSet<object>();
+
+export interface TransferCreateDTO {
+  fromAccountId: string;
+  toAccountId:   string;
+  value_cents:   Centavos;
+  date:          string;
+  description?:  string;
+}
+
+export interface InstallmentGroupCreateDTO {
+  description:      string;
+  totalValueCents:  Centavos;
+  installmentCount: number;
+  date:             string;
+  category:         string;
+  accountId?:       string;
+  cardId?:          string;
+}
+
+function addMonthsToDate(dateStr: string, months: number): string {
+  const parts = dateStr.split('-').map(Number);
+  const y = parts[0] ?? 2000;
+  const m = parts[1] ?? 1;
+  const d = parts[2] ?? 1;
+  const targetMonthRaw = (m - 1) + months;
+  const targetYear  = y + Math.floor(targetMonthRaw / 12);
+  const targetMonth = targetMonthRaw % 12; // 0-based
+  const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+  const day = Math.min(d, lastDay);
+  return `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
 
 export interface TransactionUpdateDTO {
   description?: string;
@@ -145,6 +189,8 @@ const MANUAL_CREATE_CHANGED_FIELDS = [
   'account',
   'accountId',
   'cardId',
+  'fromAccountId',
+  'toAccountId',
 ] as const;
 
 function buildManualCreatePayload(data: ManualTransactionCreateDTO): Record<string, unknown> {
@@ -853,6 +899,223 @@ export const FirestoreService = {
 
       await batch.commit();
     }
+  },
+
+  async createTransferWithHistory(
+    uid: string,
+    data: TransferCreateDTO,
+    txId?: string,
+  ): Promise<string> {
+    if (!uid) throw new Error('[Firestore][createTransferWithHistory] UID ausente.');
+    if (!data.fromAccountId || !data.toAccountId) {
+      throw new Error('[Firestore][createTransferWithHistory] fromAccountId e toAccountId obrigatórios.');
+    }
+    if (data.fromAccountId === data.toAccountId) {
+      throw new Error('[Firestore][createTransferWithHistory] Origem e destino não podem ser iguais.');
+    }
+    if (txId !== undefined) assertValidManualTxId(txId);
+
+    const txRef = txId !== undefined ? doc(txCol(uid), txId) : doc(txCol(uid));
+    const historyRef = doc(
+      collection(db, 'users', uid, 'transactions', txRef.id, 'history'),
+      'create',
+    );
+    const timestamp = serverTimestamp();
+    const valueCents = Math.abs(data.value_cents) as Centavos;
+
+    const txPayload = {
+      description:   data.description?.trim() ?? 'Transferência',
+      value_cents:   valueCents,
+      schemaVersion: 2 as const,
+      type:          'transferencia' as const,
+      category:      'Transferência',
+      date:          data.date,
+      source:        'manual' as const,
+      fromAccountId: data.fromAccountId,
+      toAccountId:   data.toAccountId,
+      isRecurring:   false,
+      createdAt:     timestamp,
+      updatedAt:     timestamp,
+    };
+
+    const afterSnapshot = {
+      type:          'transferencia',
+      value_cents:   valueCents,
+      date:          data.date,
+      source:        'manual',
+      fromAccountId: data.fromAccountId,
+      toAccountId:   data.toAccountId,
+    };
+
+    const historyPayload = {
+      action:        'CREATE',
+      txId:          txRef.id,
+      createdAt:     timestamp,
+      schemaVersion: 1,
+      origin:        'manual',
+      amount_cents:  valueCents,
+      category:      'Transferência',
+      after:         afterSnapshot,
+      changedFields: Object.keys(afterSnapshot),
+    };
+
+    const batch = writeBatch(db);
+    batch.set(txRef, txPayload);
+    batch.set(historyRef, historyPayload);
+    await batch.commit();
+    return txRef.id;
+  },
+
+  async createInstallmentGroupWithHistory(
+    uid: string,
+    data: InstallmentGroupCreateDTO,
+  ): Promise<string> {
+    if (!uid) throw new Error('[Firestore][createInstallmentGroupWithHistory] UID ausente.');
+    if (data.installmentCount < 2 || data.installmentCount > 999) {
+      throw new Error('[Firestore][createInstallmentGroupWithHistory] installmentCount deve ser entre 2 e 999.');
+    }
+    if (!data.description.trim()) {
+      throw new Error('[Firestore][createInstallmentGroupWithHistory] Descrição obrigatória.');
+    }
+
+    const n = data.installmentCount;
+    const total = Math.abs(data.totalValueCents) as Centavos;
+    const perInstallment = Math.floor(total / n) as Centavos;
+    const lastInstallment = (total - perInstallment * (n - 1)) as Centavos;
+
+    // Gera o groupId a partir de um doc ref gerado pelo Firestore
+    const groupAnchorRef = doc(txCol(uid));
+    const groupId = groupAnchorRef.id;
+
+    const timestamp = serverTimestamp();
+
+    // Cria todas as parcelas em lotes de 240 pares (480 ops) — seguro abaixo do limite de 500
+    const BATCH_SIZE = 240;
+    for (let batchStart = 0; batchStart < n; batchStart += BATCH_SIZE) {
+      const batch = writeBatch(db);
+      const batchEnd = Math.min(batchStart + BATCH_SIZE, n);
+
+      for (let i = batchStart; i < batchEnd; i++) {
+        const index = i + 1; // 1-based
+        const valueCents = index === n ? lastInstallment : perInstallment;
+        const date = addMonthsToDate(data.date, i);
+
+        const txRef = i === 0 ? groupAnchorRef : doc(txCol(uid));
+        const historyRef = doc(
+          collection(db, 'users', uid, 'transactions', txRef.id, 'history'),
+          'create',
+        );
+
+        const txPayload = {
+          description:          `${data.description.trim()} (${index}/${n})`,
+          value_cents:          valueCents,
+          schemaVersion:        2 as const,
+          type:                 'saida' as const,
+          category:             data.category,
+          date,
+          source:               'manual' as const,
+          isRecurring:          false,
+          installmentGroupId:   groupId,
+          installmentIndex:     index,
+          installmentCount:     n,
+          installmentTotalCents: total,
+          createdAt:            timestamp,
+          updatedAt:            timestamp,
+          ...(data.accountId ? { accountId: data.accountId } : {}),
+          ...(data.cardId    ? { cardId:    data.cardId    } : {}),
+        };
+
+        const afterSnapshot = {
+          type:                 'saida',
+          value_cents:          valueCents,
+          date,
+          source:               'manual',
+          category:             data.category,
+          installmentGroupId:   groupId,
+          installmentIndex:     index,
+          installmentCount:     n,
+          installmentTotalCents: total,
+        };
+
+        const historyPayload = {
+          action:        'CREATE',
+          txId:          txRef.id,
+          createdAt:     timestamp,
+          schemaVersion: 1,
+          origin:        'manual',
+          amount_cents:  valueCents,
+          category:      data.category,
+          after:         afterSnapshot,
+          changedFields: Object.keys(afterSnapshot),
+        };
+
+        batch.set(txRef, txPayload);
+        batch.set(historyRef, historyPayload);
+      }
+
+      await batch.commit();
+    }
+
+    return groupId;
+  },
+
+  async getInstallmentGroup(uid: string, groupId: string): Promise<Transaction[]> {
+    if (!uid || !groupId) return [];
+    const q = query(
+      txCol(uid),
+      where('installmentGroupId', '==', groupId),
+      orderBy('installmentIndex', 'asc'),
+    );
+    const snap = await getDocs(q);
+    return snap.docs
+      .map(d => ({ ...(d.data() as Omit<Transaction, 'id'>), id: d.id } as Transaction))
+      .filter(tx => tx.isDeleted !== true && !tx.deletedAt);
+  },
+
+  async cancelRemainingInstallments(
+    uid: string,
+    groupId: string,
+    fromIndex: number,
+  ): Promise<number> {
+    if (!uid || !groupId) return 0;
+    const allTxs = await FirestoreService.getInstallmentGroup(uid, groupId);
+    const toCancel = allTxs.filter(
+      tx => (tx.installmentIndex ?? 0) > fromIndex,
+    );
+    if (toCancel.length === 0) return 0;
+
+    const CHUNK = 200;
+    const timestamp = serverTimestamp();
+    for (let i = 0; i < toCancel.length; i += CHUNK) {
+      const batch = writeBatch(db);
+      const chunk = toCancel.slice(i, i + CHUNK);
+      for (const tx of chunk) {
+        const txRef = doc(txCol(uid), tx.id);
+        const lastOpId = `cancel-${tx.id}-${Date.now()}`;
+        const historyRef = doc(
+          collection(db, 'users', uid, 'transactions', tx.id, 'history'),
+          lastOpId,
+        );
+        batch.update(txRef, {
+          isDeleted:  true,
+          deletedAt:  timestamp,
+          updatedAt:  timestamp,
+          _lastOpId:  lastOpId,
+        });
+        batch.set(historyRef, {
+          action:        'SOFT_DELETE',
+          txId:          tx.id,
+          createdAt:     timestamp,
+          schemaVersion: 1,
+          origin:        'manual',
+          amount_cents:  tx.value_cents ?? 0,
+          category:      tx.category ?? 'Outros',
+          changedFields: ['isDeleted', 'deletedAt'],
+        });
+      }
+      await batch.commit();
+    }
+    return toCancel.length;
   },
 
   async saveAllTransactions(

@@ -14,7 +14,10 @@
     "test:ui": "vitest --ui",
     "coverage": "vitest run --coverage --pool=threads --maxWorkers=1",
     "deploy": "npm run build && firebase deploy --only hosting",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-quantum-finance \"vitest run src/__tests__/firestoreRules.audit.test.ts\""
+    "test:rules": "firebase emulators:exec --only firestore --project demo-quantum-finance \"vitest run src/__tests__/firestoreRules.audit.test.ts\"",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report e2e-report"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.95.2",
@@ -37,6 +40,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@firebase/rules-unit-testing": "^3.0.4",
+    "@playwright/test": "^1.60.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -46,6 +50,7 @@
     "@vitejs/plugin-react": "^5.1.1",
     "@vitest/coverage-v8": "^4.1.4",
     "autoprefixer": "^10.4.27",
+    "cross-env": "^10.1.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",

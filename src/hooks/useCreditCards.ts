@@ -27,14 +27,18 @@ function calcCardMetrics(card: CreditCard, transactions: Transaction[]): CardMet
   const inicioStr = toYMD(inicioFatura);
   const fimStr    = toYMD(fimFatura);
 
-  const faturaAtual = transactions
-    .filter(tx => {
-      if (tx.cardId !== card.id) return false;
-      if (!isExpense(tx.type)) return false;
-      const txDate = String(tx.date || tx.createdAt).slice(0, 10);
-      return txDate >= inicioStr && txDate <= fimStr;
-    })
-    .reduce((acc, tx) => acc + fromCentavos(getTransactionAbsCentavos(tx)), 0);
+  const billingTxs = transactions.filter(tx => {
+    if (tx.cardId !== card.id) return false;
+    if (!isExpense(tx.type)) return false;
+    const txDate = String(tx.date || tx.createdAt).slice(0, 10);
+    return txDate >= inicioStr && txDate <= fimStr;
+  });
+
+  const faturaCents = billingTxs.reduce(
+    (acc, tx) => (acc + getTransactionAbsCentavos(tx)) as ReturnType<typeof getTransactionAbsCentavos>,
+    0 as ReturnType<typeof getTransactionAbsCentavos>,
+  );
+  const faturaAtual = fromCentavos(faturaCents);
 
   const limitVal    = fromCentavos(card.limit);
   const disponivel  = Math.max(limitVal - faturaAtual, 0);
@@ -49,6 +53,7 @@ function calcCardMetrics(card: CreditCard, transactions: Transaction[]): CardMet
   return {
     limitVal,
     faturaAtual,
+    faturaCents,
     disponivel,
     compromisso,
     daysUntilDue,
@@ -59,6 +64,8 @@ function calcCardMetrics(card: CreditCard, transactions: Transaction[]): CardMet
 
 interface UseCreditCardsReturn {
   cards: CreditCardWithMetrics[];
+  /** Soma das faturas abertas de todos os cartões em centavos inteiros. */
+  totalFaturaCents: import('../shared/types/money').Centavos;
   loading: boolean;
   addCard: (data: CreditCardWriteInput) => Promise<string>;
   updateCard: (id: string, data: CreditCardUpdateInput) => Promise<void>;
@@ -132,5 +139,13 @@ export function useCreditCards(uid: string, transactions: Transaction[] = []): U
     await deleteDoc(doc(db, 'users', uid, 'creditCards', id));
   }, [uid]);
 
-  return { cards: cardsWithMetrics, loading, addCard, updateCard, removeCard };
+  const totalFaturaCents = useMemo(
+    () => cardsWithMetrics.reduce(
+      (sum, c) => (sum + c.metrics.faturaCents) as import('../shared/types/money').Centavos,
+      0 as import('../shared/types/money').Centavos,
+    ),
+    [cardsWithMetrics],
+  );
+
+  return { cards: cardsWithMetrics, totalFaturaCents, loading, addCard, updateCard, removeCard };
 }

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Trash2, Repeat, AlertTriangle, Wallet, Calendar, X, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, Repeat, AlertTriangle, Wallet, Calendar, X, CheckCircle2, Pause, Play, Clock } from 'lucide-react';
 import Decimal from 'decimal.js';
 import { useRecurring } from '../hooks/useRecurring';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
@@ -7,13 +7,15 @@ import { formatCurrency } from '../utils/formatters';
 import toast from 'react-hot-toast';
 import type { RecurringTask } from '../shared/types/transaction';
 import { fromCentavos, toCentavos } from '../shared/types/money';
+import { currentYearMonth } from '../hooks/useRecurringAutoExecute';
 
 interface Props {
   uid: string;
 }
 
 export default function RecurringManager({ uid }: Props) {
-  const { recurringTasks, loading, addRecurring, removeRecurring } = useRecurring(uid);
+  const { recurringTasks, loading, addRecurring, updateRecurring, removeRecurring } = useRecurring(uid);
+  const thisMonth = currentYearMonth();
 
   const [itemToDelete,    setItemToDelete]    = useState<RecurringTask | null>(null);
   const [isAddModalOpen,  setIsAddModalOpen]  = useState(false);
@@ -23,6 +25,8 @@ export default function RecurringManager({ uid }: Props) {
   const [newValue,       setNewValue]       = useState('');
   const [newCategory,    setNewCategory]    = useState('Moradia');
   const [newFrequency,   setNewFrequency]   = useState<'mensal' | 'anual'>('mensal');
+  const [newDueDay,      setNewDueDay]      = useState(1);
+  const [newDueMonth,    setNewDueMonth]    = useState(1);
 
   const { totalMensal, totalAnual, itensAtivos } = useMemo(() => {
     let mensal = new Decimal(0);
@@ -65,17 +69,38 @@ export default function RecurringManager({ uid }: Props) {
         value:       parsedValue,
         category:    newCategory,
         frequency:   newFrequency,
-        dueDay:      1,
+        dueDay:      newDueDay,
+        ...(newFrequency === 'anual' ? { dueMonth: newDueMonth } : {}),
         active:      true,
       });
       toast.success('Despesa fixa registada!');
       setIsAddModalOpen(false);
       setNewDescription(''); setNewValue(''); setNewCategory('Moradia'); setNewFrequency('mensal');
+      setNewDueDay(1); setNewDueMonth(1);
     } catch (err) {
       logSanitizedFirebaseError('recurring_create', err);
       toast.error('Erro na encriptação da despesa.');
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const sortedTasks = useMemo(() => {
+    const rank = (t: RecurringTask) => {
+      if (!t.active) return 2;
+      if (t.lastExecutedMonth === thisMonth) return 1;
+      return 0;
+    };
+    return [...(recurringTasks ?? [])].sort((a, b) => rank(a) - rank(b));
+  }, [recurringTasks, thisMonth]);
+
+  const handleToggleActive = async (item: RecurringTask) => {
+    try {
+      await updateRecurring(item.id, { active: !item.active });
+      toast.success(item.active ? 'Contrato pausado.' : 'Contrato reativado.');
+    } catch (err) {
+      logSanitizedFirebaseError('recurring_create', err);
+      toast.error('Erro ao atualizar contrato.');
     }
   };
 
@@ -142,7 +167,7 @@ export default function RecurringManager({ uid }: Props) {
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-          {(!recurringTasks || recurringTasks.length === 0) ? (
+          {sortedTasks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <div className="w-16 h-16 bg-quantum-bgSecondary/50 rounded-full flex items-center justify-center mb-4">
                 <Repeat className="w-8 h-8 text-quantum-fgMuted" />
@@ -152,32 +177,69 @@ export default function RecurringManager({ uid }: Props) {
             </div>
           ) : (
             <div className="divide-y divide-slate-800/50">
-              {recurringTasks.map(item => (
-                <div key={item.id} className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-quantum-bgSecondary/30 transition-colors group">
-                  <div className="flex items-center gap-4">
-                    <div className={`p-2 rounded-xl ${item.active !== false ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-quantum-bgSecondary text-quantum-fgMuted border border-quantum-border'}`}>
-                      <CheckCircle2 className="w-5 h-5" />
+              {sortedTasks.map(item => {
+                const executedThisMonth = item.lastExecutedMonth === thisMonth;
+                const isActive = item.active !== false;
+
+                return (
+                  <div key={item.id} className={`p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-colors group ${isActive ? 'hover:bg-quantum-bgSecondary/30' : 'opacity-60 hover:opacity-80'}`}>
+                    <div className="flex items-center gap-4">
+                      <div className={`p-2 rounded-xl ${isActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-quantum-bgSecondary text-quantum-fgMuted border border-quantum-border'}`}>
+                        {isActive ? <CheckCircle2 className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-bold text-quantum-fg">{item.description}</h3>
+                          {isActive && executedThisMonth && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <CheckCircle2 className="w-2.5 h-2.5" /> Executado
+                            </span>
+                          )}
+                          {isActive && !executedThisMonth && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-400 border border-amber-500/25 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Clock className="w-2.5 h-2.5" /> Pendente
+                            </span>
+                          )}
+                          {!isActive && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider bg-quantum-bgSecondary text-quantum-fgMuted border border-quantum-border px-2 py-0.5 rounded-full">
+                              Pausado
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <span className="text-[9px] font-bold uppercase tracking-wider bg-quantum-bgSecondary text-quantum-fg px-2 py-0.5 rounded border border-quantum-border">{item.category}</span>
+                          <span className="text-[9px] font-bold uppercase tracking-wider bg-cyan-900/30 text-cyan-400 border border-cyan-800/50 px-2 py-0.5 rounded">
+                            {item.frequency === 'anual' && item.dueMonth
+                              ? `Anual · ${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][(item.dueMonth - 1)] ?? ''} dia ${item.dueDay}`
+                              : item.frequency === 'mensal'
+                                ? `Mensal · dia ${item.dueDay}`
+                                : item.frequency}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-quantum-fg">{item.description}</h3>
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <span className="text-[9px] font-bold uppercase tracking-wider bg-quantum-bgSecondary text-quantum-fg px-2 py-0.5 rounded border border-quantum-border">{item.category}</span>
-                        <span className="text-[9px] font-bold uppercase tracking-wider bg-cyan-900/30 text-cyan-400 border border-cyan-800/50 px-2 py-0.5 rounded">{item.frequency}</span>
+                    <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                      <span className="font-mono text-base font-bold text-quantum-fg">{formatCurrency(Number(item.value))}</span>
+                      <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
+                        <button
+                          onClick={() => void handleToggleActive(item)}
+                          className={`p-2.5 rounded-xl transition-all ${isActive ? 'text-quantum-fgMuted hover:text-amber-400 hover:bg-amber-500/10' : 'text-quantum-fgMuted hover:text-emerald-400 hover:bg-emerald-500/10'}`}
+                          title={isActive ? 'Pausar' : 'Reativar'}
+                        >
+                          {isActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => setItemToDelete(item)}
+                          className="p-2.5 text-quantum-fgMuted hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all"
+                          title="Remover"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-5 w-full sm:w-auto justify-between sm:justify-end">
-                    <span className="font-mono text-base font-bold text-quantum-fg">{formatCurrency(Number(item.value))}</span>
-                    <button
-                      onClick={() => setItemToDelete(item)}
-                      className="p-2.5 text-quantum-fgMuted opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all"
-                      title="Remover"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -223,6 +285,27 @@ export default function RecurringManager({ uid }: Props) {
                     <option value="anual">Anual</option>
                   </select>
                 </div>
+              </div>
+
+              <div className={`grid gap-4 ${newFrequency === 'anual' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                <div>
+                  <label className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Dia de Vencimento</label>
+                  <input
+                    type="number" min={1} max={31} value={newDueDay}
+                    onChange={e => setNewDueDay(Math.min(31, Math.max(1, Number(e.target.value))))}
+                    className="w-full bg-quantum-bg border border-quantum-border rounded-xl px-4 py-3 text-sm text-quantum-fg focus:outline-none focus:border-cyan-500 transition-colors"
+                  />
+                </div>
+                {newFrequency === 'anual' && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Mês de Vencimento</label>
+                    <select value={newDueMonth} onChange={e => setNewDueMonth(Number(e.target.value))} className="w-full bg-quantum-bg border border-quantum-border rounded-xl px-4 py-3 text-sm text-quantum-fg focus:outline-none focus:border-cyan-500 transition-colors">
+                      {['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map((m, i) => (
+                        <option key={m} value={i + 1}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               <div className="pt-4">

@@ -25,7 +25,7 @@ import {
 
 export type SortBy                  = 'date_desc' | 'date_asc' | 'value_desc' | 'value_asc' | 'cat';
 export type GroupByOption           = 'date' | 'category' | 'none';
-export type FilterType              = 'all' | 'entrada' | 'saida';
+export type FilterType              = 'all' | 'entrada' | 'saida' | 'transferencia';
 export type ReconciliationStatusFilter = 'all' | 'reconciled' | 'unreconciled';
 
 export type VirtualRowEntry =
@@ -97,9 +97,12 @@ export function useTransactionFilters(
       );
     }
     if (filterType !== 'all') {
-      list = list.filter(tx =>
-        filterType === 'entrada' ? checkIncome(tx.type) : checkExpense(tx.type)
-      );
+      list = list.filter(tx => {
+        if (filterType === 'entrada')       return checkIncome(tx.type);
+        if (filterType === 'saida')         return checkExpense(tx.type);
+        if (filterType === 'transferencia') return tx.type === 'transferencia';
+        return true;
+      });
     }
     if (filterCat)         list = list.filter(tx => tx.category === filterCat);
     if (dateFrom)          list = list.filter(tx => (tx.date ?? '') >= dateFrom);
@@ -187,9 +190,12 @@ export function useTransactionFilters(
       );
     }
     if (filterType !== 'all') {
-      list = list.filter(tx =>
-        filterType === 'entrada' ? checkIncome(tx.type) : checkExpense(tx.type)
-      );
+      list = list.filter(tx => {
+        if (filterType === 'entrada')       return checkIncome(tx.type);
+        if (filterType === 'saida')         return checkExpense(tx.type);
+        if (filterType === 'transferencia') return tx.type === 'transferencia';
+        return true;
+      });
     }
     if (dateFrom)          list = list.filter(tx => (tx.date ?? '') >= dateFrom);
     if (dateTo)            list = list.filter(tx => (tx.date ?? '') <= dateTo);

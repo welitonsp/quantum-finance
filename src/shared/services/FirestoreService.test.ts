@@ -1471,3 +1471,291 @@ describe('FirestoreService.batchUndoBulkUpdateTransactionsWithHistory', () => {
     expect(lastPayload['_lastOpId']).toBeDefined();
   });
 });
+
+// ── FASE 11A-2: createTransferWithHistory ────────────────────────────────────
+
+describe('FirestoreService.createTransferWithHistory', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockBatchCommit.mockResolvedValue(undefined);
+  });
+
+  it('chama writeBatch com exatamente 2 writes: transaction + history/create', async () => {
+    await FirestoreService.createTransferWithHistory('uid1', {
+      fromAccountId: 'acc-corrente',
+      toAccountId:   'acc-poupanca',
+      value_cents:   50000 as never,
+      date:          '2026-06-01',
+    });
+
+    expect(mockWriteBatch).toHaveBeenCalledTimes(1);
+    expect(mockBatchSet).toHaveBeenCalledTimes(2);
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+    expect(mockBatchUpdate).not.toHaveBeenCalled();
+  });
+
+  it('payload da transaction tem type transferencia, fromAccountId, toAccountId e sem cardId', async () => {
+    await FirestoreService.createTransferWithHistory('uid1', {
+      fromAccountId: 'acc-corrente',
+      toAccountId:   'acc-poupanca',
+      value_cents:   50000 as never,
+      date:          '2026-06-01',
+      description:   'Reserva de emergência',
+    });
+
+    const [, txPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    expect(txPayload['type']).toBe('transferencia');
+    expect(txPayload['fromAccountId']).toBe('acc-corrente');
+    expect(txPayload['toAccountId']).toBe('acc-poupanca');
+    expect(txPayload['value_cents']).toBe(50000);
+    expect(txPayload['description']).toBe('Reserva de emergência');
+    expect(txPayload['schemaVersion']).toBe(2);
+    expect(txPayload['source']).toBe('manual');
+    expect(txPayload).not.toHaveProperty('cardId');
+    expect(txPayload).not.toHaveProperty('_lastOpId');
+    expect(txPayload).not.toHaveProperty('importHash');
+  });
+
+  it('history/create tem action CREATE, origin manual e after com campos da transferência', async () => {
+    await FirestoreService.createTransferWithHistory('uid1', {
+      fromAccountId: 'acc-corrente',
+      toAccountId:   'acc-poupanca',
+      value_cents:   50000 as never,
+      date:          '2026-06-01',
+    });
+
+    const [, histPayload] = mockBatchSet.mock.calls[1] as [Record<string, unknown>, Record<string, unknown>];
+    expect(histPayload['action']).toBe('CREATE');
+    expect(histPayload['origin']).toBe('manual');
+    expect(histPayload['schemaVersion']).toBe(1);
+    expect(histPayload['amount_cents']).toBe(50000);
+
+    const after = histPayload['after'] as Record<string, unknown>;
+    expect(after['type']).toBe('transferencia');
+    expect(after['fromAccountId']).toBe('acc-corrente');
+    expect(after['toAccountId']).toBe('acc-poupanca');
+    expect(after).not.toHaveProperty('id');
+    expect(after).not.toHaveProperty('uid');
+    expect(after).not.toHaveProperty('importHash');
+  });
+
+  it('usa description padrão quando não fornecida', async () => {
+    await FirestoreService.createTransferWithHistory('uid1', {
+      fromAccountId: 'acc-a',
+      toAccountId:   'acc-b',
+      value_cents:   1000 as never,
+      date:          '2026-06-01',
+    });
+
+    const [, txPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
+    expect(txPayload['description']).toBe('Transferência');
+  });
+
+  it('lança erro quando UID está ausente', async () => {
+    await expect(FirestoreService.createTransferWithHistory('', {
+      fromAccountId: 'acc-a',
+      toAccountId:   'acc-b',
+      value_cents:   1000 as never,
+      date:          '2026-06-01',
+    })).rejects.toThrow();
+  });
+
+  it('lança erro quando fromAccountId e toAccountId são iguais', async () => {
+    await expect(FirestoreService.createTransferWithHistory('uid1', {
+      fromAccountId: 'acc-a',
+      toAccountId:   'acc-a',
+      value_cents:   1000 as never,
+      date:          '2026-06-01',
+    })).rejects.toThrow();
+  });
+
+  it('lança erro quando fromAccountId está ausente', async () => {
+    await expect(FirestoreService.createTransferWithHistory('uid1', {
+      fromAccountId: '',
+      toAccountId:   'acc-b',
+      value_cents:   1000 as never,
+      date:          '2026-06-01',
+    })).rejects.toThrow();
+  });
+
+  it('aceita txId explícito para idempotência de retry', async () => {
+    await FirestoreService.createTransferWithHistory('uid1', {
+      fromAccountId: 'acc-a',
+      toAccountId:   'acc-b',
+      value_cents:   1000 as never,
+      date:          '2026-06-01',
+    }, 'meu-tx-id-fixo');
+
+    const docCalls = mockDoc.mock.calls as Array<unknown[]>;
+    const txDocCall = docCalls.find(c => c.includes('meu-tx-id-fixo'));
+    expect(txDocCall).toBeDefined();
+  });
+});
+
+// ─── createInstallmentGroupWithHistory ────────────────────────────────────────
+
+describe('FirestoreService.createInstallmentGroupWithHistory', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockBatchSet.mockReset();
+    mockBatchCommit.mockResolvedValue(undefined);
+  });
+
+  it('cria exatamente 2 writes por parcela (tx + history)', async () => {
+    const n = 3;
+    await FirestoreService.createInstallmentGroupWithHistory('uid1', {
+      description:      'Notebook',
+      totalValueCents:  300000 as never,
+      installmentCount: n,
+      date:             '2026-06-01',
+      category:         'Tecnologia',
+    });
+
+    // n parcelas × 2 writes = 2n calls to batchSet; 1 batch commit
+    expect(mockBatchSet).toHaveBeenCalledTimes(n * 2);
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it('distribui o valor corretamente com resto na última parcela', async () => {
+    // 100001 centavos / 3 = 33333 cada, última fica com 33335
+    await FirestoreService.createInstallmentGroupWithHistory('uid1', {
+      description:      'Eletrodoméstico',
+      totalValueCents:  100001 as never,
+      installmentCount: 3,
+      date:             '2026-06-01',
+      category:         'Casa',
+    });
+
+    const setCalls = mockBatchSet.mock.calls as Array<[unknown, Record<string, unknown>]>;
+    const txPayloads = setCalls
+      .filter((_, i) => i % 2 === 0)
+      .map(([, payload]) => payload);
+
+    expect(txPayloads[0]!['value_cents']).toBe(33333);
+    expect(txPayloads[1]!['value_cents']).toBe(33333);
+    expect(txPayloads[2]!['value_cents']).toBe(33335);
+  });
+
+  it('incrementa a data por mês em cada parcela', async () => {
+    await FirestoreService.createInstallmentGroupWithHistory('uid1', {
+      description:      'Curso',
+      totalValueCents:  60000 as never,
+      installmentCount: 3,
+      date:             '2026-01-31',
+      category:         'Educação',
+    });
+
+    const setCalls = mockBatchSet.mock.calls as Array<[unknown, Record<string, unknown>]>;
+    const txPayloads = setCalls
+      .filter((_, i) => i % 2 === 0)
+      .map(([, payload]) => payload);
+
+    expect(txPayloads[0]!['date']).toBe('2026-01-31');
+    expect(txPayloads[1]!['date']).toBe('2026-02-28'); // Feb não tem 31
+    expect(txPayloads[2]!['date']).toBe('2026-03-31');
+  });
+
+  it('inclui installmentGroupId consistente em todas as parcelas', async () => {
+    await FirestoreService.createInstallmentGroupWithHistory('uid1', {
+      description:      'TV',
+      totalValueCents:  200000 as never,
+      installmentCount: 4,
+      date:             '2026-06-01',
+      category:         'Casa',
+    });
+
+    const setCalls = mockBatchSet.mock.calls as Array<[unknown, Record<string, unknown>]>;
+    const txPayloads = setCalls
+      .filter((_, i) => i % 2 === 0)
+      .map(([, payload]) => payload);
+
+    const groupId = txPayloads[0]!['installmentGroupId'] as string;
+    expect(groupId).toBeTruthy();
+    txPayloads.forEach(p => {
+      expect(p['installmentGroupId']).toBe(groupId);
+      expect(p['installmentCount']).toBe(4);
+      expect(p['installmentTotalCents']).toBe(200000);
+    });
+    expect(txPayloads[0]!['installmentIndex']).toBe(1);
+    expect(txPayloads[3]!['installmentIndex']).toBe(4);
+  });
+
+  it('formata descrição com índice/total em cada parcela', async () => {
+    await FirestoreService.createInstallmentGroupWithHistory('uid1', {
+      description:      'Geladeira',
+      totalValueCents:  240000 as never,
+      installmentCount: 2,
+      date:             '2026-06-01',
+      category:         'Casa',
+    });
+
+    const setCalls = mockBatchSet.mock.calls as Array<[unknown, Record<string, unknown>]>;
+    const txPayloads = setCalls
+      .filter((_, i) => i % 2 === 0)
+      .map(([, payload]) => payload);
+
+    expect(txPayloads[0]!['description']).toBe('Geladeira (1/2)');
+    expect(txPayloads[1]!['description']).toBe('Geladeira (2/2)');
+  });
+
+  it('registra history com action CREATE e origin manual', async () => {
+    await FirestoreService.createInstallmentGroupWithHistory('uid1', {
+      description:      'Sofá',
+      totalValueCents:  120000 as never,
+      installmentCount: 2,
+      date:             '2026-06-01',
+      category:         'Casa',
+    });
+
+    const setCalls = mockBatchSet.mock.calls as Array<[unknown, Record<string, unknown>]>;
+    const historyPayloads = setCalls
+      .filter((_, i) => i % 2 === 1)
+      .map(([, payload]) => payload);
+
+    historyPayloads.forEach(h => {
+      expect(h['action']).toBe('CREATE');
+      expect(h['origin']).toBe('manual');
+      expect(h['schemaVersion']).toBe(1);
+      expect(h).not.toHaveProperty('id');
+      expect(h).not.toHaveProperty('uid');
+      expect(h).not.toHaveProperty('importHash');
+    });
+  });
+
+  it('lança erro quando UID está ausente', async () => {
+    await expect(
+      FirestoreService.createInstallmentGroupWithHistory('', {
+        description:      'X',
+        totalValueCents:  10000 as never,
+        installmentCount: 2,
+        date:             '2026-06-01',
+        category:         'Outros',
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('lança erro quando installmentCount < 2', async () => {
+    await expect(
+      FirestoreService.createInstallmentGroupWithHistory('uid1', {
+        description:      'X',
+        totalValueCents:  10000 as never,
+        installmentCount: 1,
+        date:             '2026-06-01',
+        category:         'Outros',
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('retorna o groupId (string não vazia)', async () => {
+    const id = await FirestoreService.createInstallmentGroupWithHistory('uid1', {
+      description:      'Ar-condicionado',
+      totalValueCents:  360000 as never,
+      installmentCount: 12,
+      date:             '2026-06-01',
+      category:         'Casa',
+    });
+
+    expect(typeof id).toBe('string');
+    expect(id.length).toBeGreaterThan(0);
+  });
+});

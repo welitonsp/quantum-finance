@@ -107,7 +107,8 @@ service cloud.firestore {
         'date', 'source', 'account', 'accountId', 'cardId', 'fitId', 'tags',
         'isRecurring', 'importHash', 'createdAt', 'updatedAt', 'isDeleted',
         'deletedAt', 'reconciliationStatus', 'reconciliationSource',
-        'reconciledAt', 'reconciledBy', '_lastOpId'
+        'reconciledAt', 'reconciledBy', '_lastOpId',
+        'fromAccountId', 'toAccountId'
       ];
     }
 
@@ -164,7 +165,7 @@ service cloud.firestore {
           && isStringSized(data.description, 2, 160)
           && isPositiveSafeInt(data.value_cents)
           && data.schemaVersion == 2
-          && data.type in ['entrada', 'saida']
+          && data.type in ['entrada', 'saida', 'transferencia']
           && isStringSized(data.category, 1, 80)
           && isIsoDate(data.date)
           && data.source in ['csv', 'ofx', 'pdf', 'manual']

@@ -7,9 +7,9 @@ import {
   CheckSquare, Square, MinusSquare, X, SlidersHorizontal,
   TrendingUp, TrendingDown, Minus, Tag, ArrowUpDown,
   Layers, RotateCcw, AlertTriangle, Check, ShieldAlert, History, Download,
-  ChevronDown,
+  ChevronDown, ArrowRightLeft,
 } from 'lucide-react';
-import { transactionsToCSV, downloadCSV } from '../../utils/exportCSV';
+import { transactionsToCSV, downloadCSV, generateMonthlyReportCSV } from '../../utils/exportCSV';
 import { formatCurrency } from '../../utils/formatters';
 import toast from 'react-hot-toast';
 import type { Transaction } from '../../shared/types/transaction';
@@ -18,6 +18,7 @@ import { useCategories } from '../../hooks/useCategories';
 import { auth } from '../../shared/api/firebase/auth';
 import AuditTimeline from '../../components/AuditTimeline';
 import TransactionHistoryDrawer from '../../components/TransactionHistoryDrawer';
+import InstallmentGroupDrawer from './components/InstallmentGroupDrawer';
 import type { UserCategory } from '../../shared/schemas/categorySchemas';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
@@ -86,9 +87,13 @@ export default function TransactionsManager({
   const categories = providedCategories ?? loadedCategories;
 
   // ── Estado de UI (painéis) ────────────────────────────────────────────────
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [auditOpen,   setAuditOpen]   = useState(false);
-  const [historyTx,   setHistoryTx]   = useState<Transaction | null>(null);
+  const [filtersOpen,   setFiltersOpen]   = useState(false);
+  const [auditOpen,     setAuditOpen]     = useState(false);
+  const [historyTx,     setHistoryTx]     = useState<Transaction | null>(null);
+  const [installmentTx, setInstallmentTx] = useState<Transaction | null>(null);
+  const [reportPickerOpen, setReportPickerOpen] = useState(false);
+  const [reportYear,  setReportYear]  = useState(() => new Date().getFullYear());
+  const [reportMonth, setReportMonth] = useState(() => new Date().getMonth() + 1);
 
   const searchRef    = useRef<HTMLInputElement>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -256,9 +261,10 @@ export default function TransactionsManager({
   );
 
   const TYPE_TABS: { v: FilterType; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-    { v: 'all',    label: 'Todos',    icon: Minus },
-    { v: 'entrada', label: 'Entradas', icon: TrendingUp },
-    { v: 'saida',   label: 'Saídas',   icon: TrendingDown },
+    { v: 'all',           label: 'Todos',         icon: Minus           },
+    { v: 'entrada',       label: 'Entradas',      icon: TrendingUp      },
+    { v: 'saida',         label: 'Saídas',        icon: TrendingDown    },
+    { v: 'transferencia', label: 'Transferências', icon: ArrowRightLeft  },
   ];
 
   const QUICK_RECON_FILTERS = [
@@ -300,9 +306,10 @@ export default function TransactionsManager({
                 aria-label={label}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                   filterType === v
-                    ? v === 'entrada' ? 'bg-quantum-accentDim text-quantum-accent border border-quantum-accent/20'
-                    : v === 'saida'   ? 'bg-quantum-redDim   text-quantum-red    border border-quantum-red/20'
-                    :                   'bg-quantum-cardHover text-quantum-fg          border border-quantum-border'
+                    ? v === 'entrada'       ? 'bg-quantum-accentDim text-quantum-accent border border-quantum-accent/20'
+                    : v === 'saida'         ? 'bg-quantum-redDim   text-quantum-red    border border-quantum-red/20'
+                    : v === 'transferencia' ? 'bg-blue-500/15 text-blue-400 border border-blue-500/25'
+                    :                         'bg-quantum-cardHover text-quantum-fg border border-quantum-border'
                     : 'text-quantum-fgMuted hover:text-quantum-fg'
                 }`}
               >
@@ -372,6 +379,72 @@ export default function TransactionsManager({
               <Download className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Exportar CSV</span>
             </button>
+
+            <div className="relative">
+              <button
+                onClick={() => setReportPickerOpen(o => !o)}
+                aria-label="Relatório mensal"
+                className="flex items-center gap-2 px-3 py-2 bg-quantum-card border border-quantum-border rounded-xl text-xs font-bold text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/40 transition-all"
+                title="Baixar relatório mensal em CSV"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Relatório Mensal</span>
+              </button>
+
+              <AnimatePresence>
+                {reportPickerOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0,  scale: 1 }}
+                    exit={{ opacity: 0, y: 4, scale: 0.97 }}
+                    className="absolute right-0 top-full mt-2 z-50 bg-[#0d1424] border border-quantum-border rounded-2xl p-4 shadow-2xl min-w-[220px]"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <p className="text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-3">Período do Relatório</p>
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <div>
+                        <label className="text-[10px] text-quantum-fgMuted">Mês</label>
+                        <select
+                          value={reportMonth}
+                          onChange={e => setReportMonth(Number(e.target.value))}
+                          className="input-quantum w-full text-sm mt-1"
+                        >
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                            <option key={m} value={m}>
+                              {new Date(2000, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long' })}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-quantum-fgMuted">Ano</label>
+                        <select
+                          value={reportYear}
+                          onChange={e => setReportYear(Number(e.target.value))}
+                          className="input-quantum w-full text-sm mt-1"
+                        >
+                          {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                            <option key={y} value={y}>{y}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const pad = (n: number) => String(n).padStart(2, '0');
+                        const csv = generateMonthlyReportCSV(transactions, reportYear, reportMonth);
+                        downloadCSV(`relatorio-${reportYear}-${pad(reportMonth)}.csv`, csv);
+                        setReportPickerOpen(false);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold bg-quantum-accent/15 border border-quantum-accent/30 text-quantum-accent hover:bg-quantum-accent/25 transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Baixar CSV
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
 
@@ -822,6 +895,15 @@ export default function TransactionsManager({
         onClose={() => setHistoryTx(null)}
       />
 
+      {installmentTx?.installmentGroupId && (
+        <InstallmentGroupDrawer
+          uid={effectiveUid}
+          groupId={installmentTx.installmentGroupId}
+          onClose={() => setInstallmentTx(null)}
+          onCanceled={() => setInstallmentTx(null)}
+        />
+      )}
+
       {/* ═══ LISTA DE TRANSAÇÕES ════════════════════════════════════════════ */}
       <div ref={listRef} className="flex-1 overflow-y-auto p-4 md:p-5 space-y-3 custom-scrollbar">
         {filtered.length === 0 ? (
@@ -884,6 +966,7 @@ export default function TransactionsManager({
                         onEdit={onEdit}
                         onDelete={onDeleteRequest}
                         onHistory={setHistoryTx}
+                        onInstallmentClick={setInstallmentTx}
                       />
                     ) : null}
                   </div>
@@ -944,6 +1027,7 @@ export default function TransactionsManager({
                         onEdit={onEdit}
                         onDelete={onDeleteRequest}
                         onHistory={setHistoryTx}
+                        onInstallmentClick={setInstallmentTx}
                       />
                     ))}
                   </div>

@@ -94,6 +94,7 @@ export function computeFinancialMetrics(
   accounts: Account[] = [],
   currentMonth?: number,
   currentYear?: number,
+  cardOpenInvoicesCents?: number,
 ): FinancialMetrics {
   // ── 1. Receitas, despesas e custos fixos das transações ────────────────
   let receita = new Decimal(0);
@@ -135,6 +136,11 @@ export function computeFinancialMetrics(
     // Fallback legado: usa soma de transações (preserva contratos antigos)
     ativos   = receita;
     passivos = despesa;
+  }
+
+  // ── 2b. Faturas abertas de cartões (fonte: useCreditCards.totalFaturaCents) ──
+  if (cardOpenInvoicesCents && Number.isFinite(cardOpenInvoicesCents) && cardOpenInvoicesCents > 0) {
+    passivos = passivos.plus(new Decimal(Math.abs(Math.trunc(cardOpenInvoicesCents))));
   }
 
   // ── 3. KPIs derivados ─────────────────────────────────────────────────
@@ -193,6 +199,7 @@ export function useFinancialMetrics(
   accounts: Account[] = [],
   currentMonth?: number,
   currentYear?: number,
+  cardOpenInvoicesCents?: number,
 ): UseFinancialMetricsReturn {
   const metrics = useMemo<FinancialMetrics | null>(() => {
     if (!uid) return null;
@@ -202,12 +209,12 @@ export function useFinancialMetrics(
     }
 
     try {
-      return computeFinancialMetrics(transactions ?? [], accounts, currentMonth, currentYear);
+      return computeFinancialMetrics(transactions ?? [], accounts, currentMonth, currentYear, cardOpenInvoicesCents);
     } catch (err) {
       logSanitizedFirebaseError('financial_metrics_compute', err);
       return null;
     }
-  }, [uid, transactions, accounts, currentMonth, currentYear]);
+  }, [uid, transactions, accounts, currentMonth, currentYear, cardOpenInvoicesCents]);
 
   return {
     metrics,

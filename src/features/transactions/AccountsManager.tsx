@@ -1,6 +1,6 @@
 // src/features/transactions/AccountsManager.tsx
 import { useState, useMemo } from 'react';
-import { Plus, Building2, PiggyBank, TrendingUp, CreditCard, Landmark, Trash2, Wallet } from 'lucide-react';
+import { Plus, Building2, PiggyBank, TrendingUp, CreditCard, Landmark, Trash2, Wallet, Pencil, Check, X } from 'lucide-react';
 import { useAccounts } from '../../hooks/useAccounts';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 import Decimal from 'decimal.js';
@@ -15,13 +15,34 @@ interface Props {
 }
 
 export default function AccountsManager({ uid }: Props) {
-  const { accounts, loadingAccounts, addAccount, removeAccount } = useAccounts(uid);
-  const [isModalOpen,    setIsModalOpen]    = useState(false);
+  const { accounts, loadingAccounts, addAccount, updateAccount, removeAccount } = useAccounts(uid);
+  const [isModalOpen,     setIsModalOpen]     = useState(false);
   const [accountToDelete, setAccountToDelete] = useState<Account | null>(null);
+  const [editingId,       setEditingId]       = useState<string | null>(null);
+  const [editName,        setEditName]        = useState('');
+  const [editBalance,     setEditBalance]     = useState('');
 
   const [name,    setName]    = useState('');
   const [type,    setType]    = useState<AccountType>('corrente');
   const [balance, setBalance] = useState('');
+
+  const openEdit = (acc: Account) => {
+    setEditingId(acc.id);
+    setEditName(acc.name);
+    setEditBalance(fromCentavos(acc.balance).toFixed(2));
+  };
+
+  const saveEdit = async (acc: Account) => {
+    const newBalance = parseFloat(editBalance.replace(',', '.'));
+    if (!editName.trim() || isNaN(newBalance)) { setEditingId(null); return; }
+    try {
+      await updateAccount(acc.id, { name: editName.trim(), balance: newBalance });
+    } catch (err) {
+      logSanitizedFirebaseError('credit_card_update', err);
+    } finally {
+      setEditingId(null);
+    }
+  };
 
   const { totalAtivos, totalPassivos, patrimonioLiquido } = useMemo(() => {
     let ativos    = new Decimal(0);
@@ -149,23 +170,45 @@ export default function AccountsManager({ uid }: Props) {
                     {getIcon(acc.type)}
                   </div>
                   <div>
-                    <h4 className="font-bold text-quantum-fg text-sm leading-tight">{acc.name}</h4>
+                    {editingId === acc.id ? (
+                      <input
+                        type="text" value={editName} onChange={e => setEditName(e.target.value)}
+                        className="text-sm font-bold bg-transparent border-b border-quantum-accent text-quantum-fg outline-none w-32"
+                        autoFocus
+                      />
+                    ) : (
+                      <h4 className="font-bold text-quantum-fg text-sm leading-tight">{acc.name}</h4>
+                    )}
                     <p className="text-[10px] uppercase font-bold text-quantum-fgMuted tracking-wider mt-0.5">{acc.type}</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => setAccountToDelete(acc)}
-                  className="p-1.5 text-quantum-fgMuted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                  title="Apagar Conta"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                  {editingId === acc.id ? (
+                    <>
+                      <button onClick={() => void saveEdit(acc)} className="p-1.5 text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors" title="Salvar"><Check className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setEditingId(null)} className="p-1.5 text-quantum-fgMuted hover:text-quantum-fg rounded-lg transition-colors" title="Cancelar"><X className="w-3.5 h-3.5" /></button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => openEdit(acc)} className="p-1.5 text-quantum-fgMuted hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" title="Editar"><Pencil className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setAccountToDelete(acc)} className="p-1.5 text-quantum-fgMuted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors" title="Apagar Conta"><Trash2 className="w-4 h-4" /></button>
+                    </>
+                  )}
+                </div>
               </div>
               <div className="relative z-10 mt-2">
                 <p className="text-xs text-quantum-fgMuted mb-1">Saldo Atual</p>
-                <p className={`text-xl font-black tracking-tight ${acc.balance < 0 ? 'text-red-500 dark:text-red-400' : 'text-quantum-fg'}`}>
-                  {formatCurrency(fromCentavos(acc.balance))}
-                </p>
+                {editingId === acc.id ? (
+                  <input
+                    type="number" step="0.01" value={editBalance} onChange={e => setEditBalance(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') void saveEdit(acc); if (e.key === 'Escape') setEditingId(null); }}
+                    className="text-xl font-black bg-transparent border-b border-quantum-accent text-quantum-fg outline-none w-36"
+                  />
+                ) : (
+                  <p className={`text-xl font-black tracking-tight ${acc.balance < 0 ? 'text-red-500 dark:text-red-400' : 'text-quantum-fg'}`}>
+                    {formatCurrency(fromCentavos(acc.balance))}
+                  </p>
+                )}
               </div>
             </div>
           ))}

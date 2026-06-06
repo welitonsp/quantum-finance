@@ -2,8 +2,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import {
-  CheckSquare, Square, ArrowUpRight, ArrowDownRight,
-  Edit3, Trash2, History, AlertTriangle, Check, ShieldAlert,
+  CheckSquare, Square, ArrowUpRight, ArrowDownRight, ArrowRightLeft,
+  Edit3, Trash2, History, AlertTriangle, Check, ShieldAlert, CreditCard,
 } from 'lucide-react';
 import type { Transaction } from '../../../shared/types/transaction';
 import { fromCentavos, type Centavos } from '../../../shared/types/money';
@@ -22,13 +22,14 @@ import { formatDateShort, RUNNING_BALANCE_HELP } from '../transactionGroupUtils'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface TransactionRowProps {
-  tx:                   Transaction;
-  runningBalanceCents?: Centavos | undefined;
-  isSelected:           boolean;
-  onToggle:             (id: string) => void;
-  onEdit:               (tx: Transaction) => void;
-  onDelete:             (tx: Transaction) => void;
-  onHistory:            (tx: Transaction) => void;
+  tx:                     Transaction;
+  runningBalanceCents?:   Centavos | undefined;
+  isSelected:             boolean;
+  onToggle:               (id: string) => void;
+  onEdit:                 (tx: Transaction) => void;
+  onDelete:               (tx: Transaction) => void;
+  onHistory:              (tx: Transaction) => void;
+  onInstallmentClick?:    (tx: Transaction) => void;
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────
@@ -41,8 +42,10 @@ export const TransactionRow = React.memo(function TransactionRow({
   onEdit,
   onDelete,
   onHistory,
+  onInstallmentClick,
 }: TransactionRowProps) {
   const isIncome        = checkIncome(tx.type);
+  const isTransfer      = tx.type === 'transferencia';
   const cs              = catStyle(tx.category ?? 'Diversos');
   const runningIsPositive = (runningBalanceCents ?? 0) >= 0;
 
@@ -70,11 +73,17 @@ export const TransactionRow = React.memo(function TransactionRow({
       </button>
 
       <div aria-hidden="true" className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-        isIncome ? 'bg-quantum-accentDim text-quantum-accent' : 'bg-quantum-redDim text-quantum-red'
+        isTransfer
+          ? 'bg-blue-500/15 text-blue-400'
+          : isIncome
+            ? 'bg-quantum-accentDim text-quantum-accent'
+            : 'bg-quantum-redDim text-quantum-red'
       }`}>
-        {isIncome
-          ? <ArrowUpRight className="w-4 h-4" />
-          : <ArrowDownRight className="w-4 h-4" />}
+        {isTransfer
+          ? <ArrowRightLeft className="w-4 h-4" />
+          : isIncome
+            ? <ArrowUpRight className="w-4 h-4" />
+            : <ArrowDownRight className="w-4 h-4" />}
       </div>
 
       <div className="flex-1 min-w-0">
@@ -85,6 +94,28 @@ export const TransactionRow = React.memo(function TransactionRow({
           </span>
 
           <div className="flex items-center gap-1.5 border-l border-quantum-border pl-2">
+            {isTransfer && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/25 text-blue-400 text-[9px] font-black uppercase tracking-wider"
+                title="Transferência entre contas"
+              >
+                <ArrowRightLeft className="w-2.5 h-2.5" />
+                Transferência
+              </span>
+            )}
+
+            {tx.installmentGroupId && tx.installmentIndex !== undefined && tx.installmentCount !== undefined && (
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); onInstallmentClick?.(tx); }}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/25 text-purple-400 text-[9px] font-black uppercase tracking-wider hover:bg-purple-500/20 transition-colors"
+                title={`Parcela ${tx.installmentIndex} de ${tx.installmentCount} — clique para gerir`}
+              >
+                <CreditCard className="w-2.5 h-2.5" />
+                {tx.installmentIndex}/{tx.installmentCount}
+              </button>
+            )}
+
             {isReconciledTransaction(tx) && (
               <span
                 className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[9px] font-black uppercase tracking-wider"
@@ -128,9 +159,13 @@ export const TransactionRow = React.memo(function TransactionRow({
 
       <div className="flex flex-col items-end gap-0.5 shrink-0 min-w-[118px]">
         <p className={`font-mono font-black text-sm leading-tight ${
-          isIncome ? 'text-quantum-accent' : 'text-quantum-fg'
+          isTransfer
+            ? 'text-blue-400'
+            : isIncome
+              ? 'text-quantum-accent'
+              : 'text-quantum-fg'
         }`}>
-          {isIncome ? '+' : '-'}{formatCurrency(fromCentavos(getTransactionAbsCentavos(tx)))}
+          {isTransfer ? '⇄ ' : isIncome ? '+' : '-'}{formatCurrency(fromCentavos(getTransactionAbsCentavos(tx)))}
         </p>
         {runningBalanceCents !== undefined && (
           <div
