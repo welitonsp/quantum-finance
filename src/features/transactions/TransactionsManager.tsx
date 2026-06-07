@@ -508,6 +508,26 @@ export default function TransactionsManager({
                     </select>
                   </div>
 
+                  {onServerCategoryFilter && (
+                    <div className="relative">
+                      <span className="pointer-events-none absolute -top-1.5 left-2 z-10 rounded bg-quantum-bgSecondary px-1 text-[9px] font-bold uppercase text-blue-400">
+                        Servidor
+                      </span>
+                      <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-blue-400/70" />
+                      <select
+                        value={serverCategoryFilter}
+                        onChange={e => onServerCategoryFilter(e.target.value)}
+                        aria-label="Filtrar por categoria no servidor"
+                        className="input-quantum pl-9 py-2 text-xs appearance-none border-blue-500/30 focus:border-blue-500/60"
+                      >
+                        <option value="">Todas (servidor)</option>
+                        {categoryOptions.map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <div className="relative">
                     <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-quantum-fgMuted" />
                     <select
