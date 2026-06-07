@@ -16,6 +16,7 @@ import { useCategoryRules } from './hooks/useCategoryRules';
 import { useCategories } from './hooks/useCategories';
 import { useAppLogic } from './hooks/useAppLogic';
 import { logSanitizedFirebaseError } from './shared/lib/firebaseErrorHandling';
+import { captureError } from './shared/services/SentryService';
 
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -100,7 +101,10 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren, ErrorBounda
     this.state = { hasError: false };
   }
   static getDerivedStateFromError(): ErrorBoundaryState { return { hasError: true }; }
-  componentDidCatch(error: Error) { logSanitizedFirebaseError('app_error_boundary', error); }
+  componentDidCatch(error: Error) {
+    logSanitizedFirebaseError('app_error_boundary', error);
+    captureError('app_error_boundary', error);
+  }
   render() {
     if (this.state.hasError) {
       return (
