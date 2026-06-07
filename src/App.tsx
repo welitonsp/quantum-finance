@@ -148,12 +148,18 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   // Regras do usuário aplicadas em writes manuais; importação passa pelo LedgerService.
   const { asUserRules: userCategoryRules } = useCategoryRules(safeUID);
   const { categories } = useCategories(safeUID);
+  const [serverSearchTerm, setServerSearchTerm] = useState('');
   const {
     transactions, loading, add, remove, removeBatch, update,
     bulkUpdateTransactions, isBulkUpdating,
     undoLastBulkUpdate, isUndoing, hasUndoSnapshot, clearBulkSnapshot,
     hasMoreTransactions, isLoadingMore, loadedCount, loadMoreTransactions,
-  } = useTransactions(safeUID, userCategoryRules);
+  } = useTransactions(
+    safeUID,
+    userCategoryRules,
+    undefined,
+    serverSearchTerm.trim().length >= 2 ? { term: serverSearchTerm } : undefined,
+  );
   const { accounts } = useAccounts(safeUID);
   const { recurringTasks } = useRecurring(safeUID);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
@@ -317,6 +323,8 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     isLoadingMore={isLoadingMore}
                     loadedCount={loadedCount}
                     loadMoreTransactions={loadMoreTransactions}
+                    serverSearchTerm={serverSearchTerm}
+                    onServerSearch={setServerSearchTerm}
                   />
                 )}
                 {currentPage === 'reports' && (

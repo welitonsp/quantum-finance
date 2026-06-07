@@ -42,6 +42,7 @@ exports.createTransaction = onCall(
     region: 'southamerica-east1',
     timeoutSeconds: 30,
     enforceAppCheck: true,
+    consumeAppCheckToken: true,
     cors: [
       'http://localhost:5173',
       'http://localhost:5174',
@@ -53,6 +54,9 @@ exports.createTransaction = onCall(
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Acesso negado.');
+    }
+    if (request.app?.alreadyConsumed) {
+      throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
     }
 
     // uid SEMPRE do servidor — nunca do payload do cliente
@@ -318,9 +322,10 @@ REGRAS: Seja direto e objetivo. Foque em anomalias. Use alertas ("🔴 Alerta", 
 // FUNÇÃO 1 — Categorização em Batch
 // ═══════════════════════════════════════════════════════════════════════════════
 exports.categorizeTransactionsBatch = onCall(
-  { secrets: [GEMINI_API_KEY], region: 'southamerica-east1', timeoutSeconds: 30, enforceAppCheck: true },
+  { secrets: [GEMINI_API_KEY], region: 'southamerica-east1', timeoutSeconds: 30, enforceAppCheck: true, consumeAppCheckToken: true },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
+    if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
 
     const uid = request.auth.uid;
 
@@ -391,9 +396,10 @@ Transações:\n${safeRows.map(t => `ID: ${t.promptId} | "${t.description}" | R$ 
 // FUNÇÃO 2 — Chat / Auditor CFO Pessoal
 // ═══════════════════════════════════════════════════════════════════════════════
 exports.chatWithQuantumAI = onCall(
-  { secrets: [GEMINI_API_KEY], region: 'southamerica-east1', timeoutSeconds: 60, enforceAppCheck: true },
+  { secrets: [GEMINI_API_KEY], region: 'southamerica-east1', timeoutSeconds: 60, enforceAppCheck: true, consumeAppCheckToken: true },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
+    if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
 
     const uid = request.auth.uid;
 
@@ -431,9 +437,10 @@ exports.chatWithQuantumAI = onCall(
 // FUNÇÃO 3 — Audit Report (Briefing Semanal Pró-Ativo)
 // ═══════════════════════════════════════════════════════════════════════════════
 exports.generateAuditReport = onCall(
-  { secrets: [GEMINI_API_KEY], region: 'southamerica-east1', timeoutSeconds: 60, enforceAppCheck: true },
+  { secrets: [GEMINI_API_KEY], region: 'southamerica-east1', timeoutSeconds: 60, enforceAppCheck: true, consumeAppCheckToken: true },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
+    if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
 
     const uid = request.auth.uid;
 
