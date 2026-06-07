@@ -64,6 +64,7 @@ const transactionWriteCreateSchema = z.object({
   reconciliationSource: reconciliationSourceSchema.optional(),
   reconciledAt: z.unknown().optional(),
   reconciledBy: z.string().trim().min(1).max(128).optional(),
+  descriptionLower: z.string().trim().max(160).optional(),
 }).strict();
 
 const transactionWriteUpdateSchema = transactionWriteCreateSchema.partial()
@@ -103,6 +104,7 @@ const TRANSACTION_ALLOWED_KEYS = new Set([
   'installmentIndex',
   'installmentCount',
   'installmentTotalCents',
+  'descriptionLower',
 ]);
 
 const HISTORY_SNAPSHOT_FORBIDDEN_FIELDS = new Set(['id', 'uid', 'value', 'importHash', '_lastOpId', 'correlationId']);
@@ -177,6 +179,7 @@ function resolveCentavos(data: Pick<TransactionUpdateDTO, 'value' | 'value_cents
 
 const MANUAL_CREATE_CHANGED_FIELDS = [
   'description',
+  'descriptionLower',
   'value_cents',
   'schemaVersion',
   'type',
@@ -194,8 +197,10 @@ const MANUAL_CREATE_CHANGED_FIELDS = [
 ] as const;
 
 function buildManualCreatePayload(data: ManualTransactionCreateDTO): Record<string, unknown> {
+  const rawDescription = data.description ?? '';
   const payload: Record<string, unknown> = {
-    description: data.description ?? '',
+    description: rawDescription,
+    descriptionLower: rawDescription.trim().toLowerCase(),
     value_cents: resolveCentavos(data),
     schemaVersion: 2,
     type: canonicalizeTransactionType(data.type ?? 'saida'),

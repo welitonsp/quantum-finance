@@ -112,6 +112,7 @@ const baseCreate = {
 
 const manualCreateAfter = {
   description: 'Supermercado ABC',
+  descriptionLower: 'supermercado abc',
   value_cents: 12345,
   schemaVersion: 2,
   type: 'saida',
@@ -123,6 +124,7 @@ const manualCreateAfter = {
 
 const manualCreateChangedFields = [
   'description',
+  'descriptionLower',
   'value_cents',
   'schemaVersion',
   'type',
@@ -285,6 +287,7 @@ describe('FirestoreService.createManualTransactionWithHistory', () => {
     expect(historyPayload).not.toHaveProperty('importHash');
     expect(historyPayload['after']).toEqual(expect.objectContaining({
       description: 'Supermercado ABC',
+      descriptionLower: 'supermercado abc',
       value_cents: 12345,
       type: 'saida',
       category: 'Alimentação',

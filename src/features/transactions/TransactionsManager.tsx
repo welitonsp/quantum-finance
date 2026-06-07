@@ -61,6 +61,9 @@ interface Props {
   isLoadingMore?: boolean;
   loadedCount?: number;
   loadMoreTransactions?: () => Promise<void>;
+  // ── Busca server-side ────────────────────────────────────────────────────
+  serverSearchTerm?: string;
+  onServerSearch?: (term: string) => void;
 }
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
@@ -81,6 +84,8 @@ export default function TransactionsManager({
   isLoadingMore = false,
   loadedCount,
   loadMoreTransactions,
+  serverSearchTerm = '',
+  onServerSearch,
 }: Props) {
   const effectiveUid = uid ?? auth.currentUser?.uid ?? '';
   const { categories: loadedCategories } = useCategories(providedCategories ? '' : effectiveUid);
@@ -98,6 +103,27 @@ export default function TransactionsManager({
   const searchRef    = useRef<HTMLInputElement>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRef      = useRef<HTMLDivElement>(null);
+
+  // ── Busca server-side com debounce ────────────────────────────────────────
+  const [localSearch, setLocalSearch] = useState(serverSearchTerm);
+  const serverSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearchChange = useCallback((value: string) => {
+    setLocalSearch(value);
+    if (!onServerSearch) return;
+    if (serverSearchDebounceRef.current) clearTimeout(serverSearchDebounceRef.current);
+    serverSearchDebounceRef.current = setTimeout(() => {
+      onServerSearch(value);
+    }, 400);
+  }, [onServerSearch]);
+
+  useEffect(() => {
+    return () => {
+      if (serverSearchDebounceRef.current) clearTimeout(serverSearchDebounceRef.current);
+    };
+  }, []);
+
+  const isServerSearchActive = serverSearchTerm.trim().length >= 2;
 
   // ── Filtros e dados derivados (hook extraído) ─────────────────────────────
   const {
@@ -285,13 +311,17 @@ export default function TransactionsManager({
               ref={searchRef}
               type="text"
               aria-label="Pesquisar descrição ou categoria"
-              placeholder="Pesquisar descrição ou categoria... (Alt+F)"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
+              placeholder={onServerSearch ? 'Buscar no servidor... (Alt+F)' : 'Pesquisar descrição ou categoria... (Alt+F)'}
+              value={onServerSearch ? localSearch : search}
+              onChange={e => onServerSearch ? handleSearchChange(e.target.value) : setSearch(e.target.value)}
               className="input-quantum pl-10 pr-8 py-2.5 text-sm"
             />
-            {search && (
-              <button onClick={() => setSearch('')} aria-label="Limpar busca" className="absolute right-3 top-1/2 -translate-y-1/2 text-quantum-fgMuted hover:text-quantum-fg transition-colors">
+            {(onServerSearch ? localSearch : search) && (
+              <button
+                onClick={() => onServerSearch ? (handleSearchChange(''), onServerSearch('')) : setSearch('')}
+                aria-label="Limpar busca"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-quantum-fgMuted hover:text-quantum-fg transition-colors"
+              >
                 <X className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
             )}
@@ -639,6 +669,21 @@ export default function TransactionsManager({
           )}
         </AnimatePresence>
       </div>
+
+      {/* ═══ SERVER SEARCH BANNER ═══════════════════════════════════════════ */}
+      {isServerSearchActive && (
+        <div className="flex items-center gap-2 px-4 md:px-5 py-2 bg-quantum-accentDim/30 border-b border-quantum-accent/20 text-xs text-quantum-accent">
+          <Search className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+          <span>Resultados do servidor para <strong>&quot;{serverSearchTerm}&quot;</strong></span>
+          <button
+            onClick={() => { handleSearchChange(''); onServerSearch?.(''); }}
+            aria-label="Limpar busca no servidor"
+            className="ml-auto flex items-center gap-1 text-quantum-accent/70 hover:text-quantum-accent transition-colors"
+          >
+            <X className="w-3 h-3" aria-hidden="true" /> Limpar
+          </button>
+        </div>
+      )}
 
       {/* ═══ STATS BAR ══════════════════════════════════════════════════════ */}
       <div className="flex items-center gap-3 px-4 md:px-5 py-3 bg-quantum-bg/20 border-b border-quantum-border text-xs overflow-x-auto custom-scrollbar">
