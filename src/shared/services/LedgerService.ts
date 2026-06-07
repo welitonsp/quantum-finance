@@ -33,6 +33,7 @@ export interface LedgerImportInput {
 
 export interface NormalizedLedgerTransaction {
   description: string;
+  descriptionLower: string;
   value_cents: Centavos;
   type: 'entrada' | 'saida' | 'transferencia';
   category: string;
@@ -127,6 +128,7 @@ export function normalizeImportTransaction(input: LedgerImportInput): Normalized
 
   const payload: NormalizedLedgerTransaction = {
     description,
+    descriptionLower: description.toLowerCase(),
     value_cents,
     type: canonicalizeTransactionType(input.type),
     category: input.category ?? 'Outros',
@@ -185,6 +187,7 @@ async function prepareImports(uid: string, inputs: LedgerImportInput[]): Promise
 function buildImportHistoryAfterSnapshot(payload: NormalizedLedgerTransaction): Record<string, unknown> {
   const after: Record<string, unknown> = {
     description: payload.description,
+    descriptionLower: payload.descriptionLower,
     value_cents: payload.value_cents,
     schemaVersion: payload.schemaVersion,
     type: payload.type,

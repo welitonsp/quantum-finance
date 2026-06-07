@@ -149,17 +149,18 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   const { asUserRules: userCategoryRules } = useCategoryRules(safeUID);
   const { categories } = useCategories(safeUID);
   const [serverSearchTerm, setServerSearchTerm] = useState('');
+  const [serverCategoryFilter, setServerCategoryFilter] = useState('');
+  const serverSearch = serverSearchTerm.trim().length >= 2
+    ? { term: serverSearchTerm }
+    : serverCategoryFilter.trim().length > 0
+      ? { category: serverCategoryFilter }
+      : undefined;
   const {
     transactions, loading, add, remove, removeBatch, update,
     bulkUpdateTransactions, isBulkUpdating,
     undoLastBulkUpdate, isUndoing, hasUndoSnapshot, clearBulkSnapshot,
     hasMoreTransactions, isLoadingMore, loadedCount, loadMoreTransactions,
-  } = useTransactions(
-    safeUID,
-    userCategoryRules,
-    undefined,
-    serverSearchTerm.trim().length >= 2 ? { term: serverSearchTerm } : undefined,
-  );
+  } = useTransactions(safeUID, userCategoryRules, undefined, serverSearch);
   const { accounts } = useAccounts(safeUID);
   const { recurringTasks } = useRecurring(safeUID);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
@@ -325,6 +326,8 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     loadMoreTransactions={loadMoreTransactions}
                     serverSearchTerm={serverSearchTerm}
                     onServerSearch={setServerSearchTerm}
+                    serverCategoryFilter={serverCategoryFilter}
+                    onServerCategoryFilter={setServerCategoryFilter}
                   />
                 )}
                 {currentPage === 'reports' && (
