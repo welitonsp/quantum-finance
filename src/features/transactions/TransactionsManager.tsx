@@ -64,6 +64,8 @@ interface Props {
   // ── Busca server-side ────────────────────────────────────────────────────
   serverSearchTerm?: string;
   onServerSearch?: (term: string) => void;
+  serverCategoryFilter?: string;
+  onServerCategoryFilter?: (cat: string) => void;
 }
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
@@ -86,6 +88,8 @@ export default function TransactionsManager({
   loadMoreTransactions,
   serverSearchTerm = '',
   onServerSearch,
+  serverCategoryFilter = '',
+  onServerCategoryFilter,
 }: Props) {
   const effectiveUid = uid ?? auth.currentUser?.uid ?? '';
   const { categories: loadedCategories } = useCategories(providedCategories ? '' : effectiveUid);
@@ -124,6 +128,7 @@ export default function TransactionsManager({
   }, []);
 
   const isServerSearchActive = serverSearchTerm.trim().length >= 2;
+  const isServerCategoryActive = !isServerSearchActive && serverCategoryFilter.trim().length > 0;
 
   // ── Filtros e dados derivados (hook extraído) ─────────────────────────────
   const {
@@ -679,6 +684,21 @@ export default function TransactionsManager({
             onClick={() => { handleSearchChange(''); onServerSearch?.(''); }}
             aria-label="Limpar busca no servidor"
             className="ml-auto flex items-center gap-1 text-quantum-accent/70 hover:text-quantum-accent transition-colors"
+          >
+            <X className="w-3 h-3" aria-hidden="true" /> Limpar
+          </button>
+        </div>
+      )}
+
+      {/* ═══ SERVER CATEGORY BANNER ══════════════════════════════════════════ */}
+      {isServerCategoryActive && (
+        <div className="flex items-center gap-2 px-4 md:px-5 py-2 bg-blue-500/10 border-b border-blue-500/20 text-xs text-blue-400">
+          <Tag className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+          <span>Categoria no servidor: <strong>{serverCategoryFilter}</strong></span>
+          <button
+            onClick={() => onServerCategoryFilter?.('')}
+            aria-label="Limpar filtro de categoria no servidor"
+            className="ml-auto flex items-center gap-1 text-blue-400/70 hover:text-blue-400 transition-colors"
           >
             <X className="w-3 h-3" aria-hidden="true" /> Limpar
           </button>

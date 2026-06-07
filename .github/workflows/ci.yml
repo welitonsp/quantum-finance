@@ -47,6 +47,13 @@ jobs:
       - name: Install Firebase Tools
         run: npm install -g firebase-tools
 
+      - name: Cache Firebase emulator binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: firebase-emulators-${{ runner.os }}-
+
       - name: TypeScript
         run: npm run typecheck
 
@@ -116,6 +123,13 @@ jobs:
 
       - name: Install Firebase Tools
         run: npm install -g firebase-tools
+
+      - name: Cache Firebase emulator binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: firebase-emulators-${{ runner.os }}-
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
