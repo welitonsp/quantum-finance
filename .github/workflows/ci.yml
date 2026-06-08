@@ -96,7 +96,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: quality
-    continue-on-error: true
 
     env:
       VITE_FIREBASE_API_KEY: fake-api-key
@@ -133,20 +132,14 @@ jobs:
           key: firebase-emulators-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
           restore-keys: firebase-emulators-${{ runner.os }}-
 
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
       - name: Download Firebase Emulator JARs
         run: firebase setup:emulators:firestore && firebase setup:emulators:auth || true
 
-      - name: Start Firebase Emulators
-        run: firebase emulators:start --only auth,firestore --project demo-quantum-finance &
-
-      - name: Wait for emulators
-        run: npx wait-on http://127.0.0.1:9099 http://127.0.0.1:8080 --timeout 60000
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
 
       - name: Run E2E tests
-        run: npm run test:e2e
+        run: firebase emulators:exec --only auth,firestore --project demo-quantum-finance "npm run test:e2e"
 
       - name: Upload Playwright report
         if: failure()
