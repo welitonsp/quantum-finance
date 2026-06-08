@@ -179,6 +179,27 @@ describe('useRecurringAutoExecute', () => {
     unmount();
   });
 
+  it('chama onExecuted com contagem de tarefas bem-sucedidas', async () => {
+    const onExecuted = vi.fn();
+    const tasks = [
+      task({ id: 'a', dueDay: 1, description: 'A', value_cents: cents(1000) }),
+      task({ id: 'b', dueDay: 2, description: 'B', value_cents: cents(2000) }),
+    ];
+    const { unmount } = renderHook(() =>
+      useRecurringAutoExecute('uid-1', tasks, false, onExecuted),
+    );
+    await vi.waitFor(() => expect(onExecuted).toHaveBeenCalledTimes(1));
+    expect(onExecuted).toHaveBeenCalledWith(2);
+    unmount();
+  });
+
+  it('nao chama onExecuted quando nenhuma tarefa e executada', async () => {
+    const onExecuted = vi.fn();
+    renderHook(() => useRecurringAutoExecute('uid-1', [], false, onExecuted));
+    await Promise.resolve();
+    expect(onExecuted).not.toHaveBeenCalled();
+  });
+
   it('nao usa Math.round — value_cents ausente pula a tarefa', async () => {
     // Garante que a heuristica float proibida nao existe: sem value_cents, pula
     const t = task({ dueDay: 1 });

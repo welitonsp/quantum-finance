@@ -47,8 +47,11 @@ export function useRecurringAutoExecute(
   uid: string,
   tasks: RecurringTask[],
   loading: boolean,
+  onExecuted?: (count: number) => void,
 ): void {
-  const executedRef = useRef(false);
+  const executedRef   = useRef(false);
+  const onExecutedRef = useRef(onExecuted);
+  onExecutedRef.current = onExecuted;
 
   useEffect(() => {
     if (loading || !uid || executedRef.current || tasks.length === 0) return;
@@ -64,6 +67,7 @@ export function useRecurringAutoExecute(
     );
 
     void (async () => {
+      let successCount = 0;
       for (const task of pending) {
         try {
           // value_cents é o único caminho canônico; sem ele a tarefa é ignorada
@@ -83,9 +87,13 @@ export function useRecurringAutoExecute(
           });
 
           await updateRecurringWithHistory(uid, task.id, { lastExecutedMonth: yearMonth });
+          successCount++;
         } catch (err) {
           logSanitizedFirebaseError('recurring_create', err);
         }
+      }
+      if (successCount > 0) {
+        onExecutedRef.current?.(successCount);
       }
     })();
   }, [uid, tasks, loading]);
