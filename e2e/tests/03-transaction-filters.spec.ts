@@ -11,22 +11,17 @@ test.describe('Filtros de tipo em Movimentações', () => {
     await expect(page.getByText('Movimentações').first()).toBeVisible({ timeout: 20_000 });
     await page.getByText('Movimentações').first().click();
     // Aguarda o painel de transações
-    await expect(page.getByText('Todas').first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('button', { name: 'Todas' }).first()).toBeVisible({ timeout: 10_000 });
   });
 
   test('tab "Todas" está ativa por padrão', async ({ page }) => {
-    const todas = page.getByRole('button', { name: 'Todas' }).or(
-      page.getByText('Todas').first()
-    );
-    await expect(todas).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Todas' }).first()).toBeVisible();
   });
 
   test('clicar em "Entradas" altera o filtro ativo', async ({ page }) => {
     const entradasBtn = page.getByRole('button', { name: /Entradas/i }).first();
     await expect(entradasBtn).toBeVisible({ timeout: 5_000 });
     await entradasBtn.click();
-
-    // Botão deve ficar ativo (verificamos que está clicável e visível)
     await expect(entradasBtn).toBeVisible();
   });
 
@@ -45,13 +40,8 @@ test.describe('Filtros de tipo em Movimentações', () => {
   });
 
   test('clicar em "Todas" volta ao estado inicial', async ({ page }) => {
-    // Vai para Entradas e depois volta para Todas
     await page.getByRole('button', { name: /Entradas/i }).first().click();
-    await page.getByRole('button', { name: 'Todas' }).or(
-      page.getByText('Todas').first()
-    ).click();
-
-    const todasBtn = page.getByRole('button', { name: 'Todas' }).first();
-    await expect(todasBtn).toBeVisible();
+    await page.getByRole('button', { name: 'Todas' }).first().click();
+    await expect(page.getByRole('button', { name: 'Todas' }).first()).toBeVisible();
   });
 });

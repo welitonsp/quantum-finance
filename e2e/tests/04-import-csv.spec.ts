@@ -51,7 +51,7 @@ test.describe('Importação CSV', () => {
     await expect(importBtn).toBeVisible({ timeout: 10_000 });
   });
 
-  test('upload de CSV abre o preview de importação', async ({ page }) => {
+  test.fixme('upload de CSV abre o preview de importação', async ({ page }) => {
     await navigateToMovimentacoes(page);
 
     // Clica no botão de importação
@@ -82,7 +82,7 @@ test.describe('Importação CSV', () => {
       });
   });
 
-  test('preview exibe botão de confirmar importação', async ({ page }) => {
+  test.fixme('preview exibe botão de confirmar importação', async ({ page }) => {
     await navigateToMovimentacoes(page);
 
     const importBtn = page

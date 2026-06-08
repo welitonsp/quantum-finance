@@ -34,6 +34,7 @@ import QuantumInsights from './QuantumInsights';
 import FinancialHealthScore from './FinancialHealthScore';
 import GoalsPanel from './GoalsPanel';
 import AnomalyAlerts from './AnomalyAlerts';
+import toast from 'react-hot-toast';
 import { useRecurringAutoExecute } from '../hooks/useRecurringAutoExecute';
 import type { TimeRange } from '../hooks/useFinancialData';
 import type { UserCategory } from '../shared/schemas/categorySchemas';
@@ -202,7 +203,10 @@ export default function DashboardContent({
   categories = [],
 }: Props) {
   const { currentMonth, currentYear } = useNavigation();
-  useRecurringAutoExecute(user?.uid ?? '', recurringTasks, loading);
+  useRecurringAutoExecute(user?.uid ?? '', recurringTasks, loading, (count) => {
+    const label = count === 1 ? 'despesa fixa lançada' : 'despesas fixas lançadas';
+    toast.success(`${count} ${label} automaticamente.`, { duration: 5000 });
+  });
 
   // ── Hero metrics from existing moduleBalances prop ────────────────────────
   const saldo    = moduleBalances?.geral?.saldo    ?? 0;

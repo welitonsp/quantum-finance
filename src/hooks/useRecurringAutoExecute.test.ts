@@ -3,17 +3,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RecurringTask } from '../shared/types/transaction';
 import type { Centavos } from '../shared/types/money';
 
-const mockCreateManual             = vi.fn().mockResolvedValue('tx-new');
+// ─── Hoisted mocks ────────────────────────────────────────────────────────────
+const mockCallable                   = vi.fn().mockResolvedValue({ data: { id: 'tx-new' } });
+const mockHttpsCallable              = vi.fn().mockReturnValue(mockCallable);
 const mockUpdateRecurringWithHistory = vi.fn().mockResolvedValue(undefined);
 
-vi.mock('firebase/firestore', () => ({}));
-vi.mock('../shared/api/firebase/index', () => ({ db: {} }));
-vi.mock('../shared/services/FirestoreService', () => ({
-  FirestoreService: { createManualTransactionWithHistory: mockCreateManual },
+vi.mock('firebase/functions', () => ({
+  httpsCallable: mockHttpsCallable,
 }));
+
+vi.mock('../shared/api/firebase/index', () => ({
+  functions: { _isMock: true },
+}));
+
 vi.mock('../shared/lib/firebaseErrorHandling', () => ({
   logSanitizedFirebaseError: vi.fn(),
 }));
+
 vi.mock('./useRecurring', () => ({
   updateRecurringWithHistory: mockUpdateRecurringWithHistory,
 }));
@@ -42,6 +48,8 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
   vi.setSystemTime(new Date(`${TODAY}T12:00:00.000Z`));
+  mockHttpsCallable.mockReturnValue(mockCallable);
+  mockCallable.mockResolvedValue({ data: { id: 'tx-new' } });
 });
 
 afterEach(() => {
@@ -53,63 +61,66 @@ describe('useRecurringAutoExecute', () => {
     const tasks = [task({ dueDay: 1 })];
     renderHook(() => useRecurringAutoExecute('uid-1', tasks, true));
     await Promise.resolve();
-    expect(mockCreateManual).not.toHaveBeenCalled();
+    expect(mockCallable).not.toHaveBeenCalled();
   });
 
   it('nao executa sem uid', async () => {
     const tasks = [task({ dueDay: 1 })];
     renderHook(() => useRecurringAutoExecute('', tasks, false));
     await Promise.resolve();
-    expect(mockCreateManual).not.toHaveBeenCalled();
+    expect(mockCallable).not.toHaveBeenCalled();
   });
 
   it('nao executa com lista vazia', async () => {
     renderHook(() => useRecurringAutoExecute('uid-1', [], false));
     await Promise.resolve();
-    expect(mockCreateManual).not.toHaveBeenCalled();
+    expect(mockCallable).not.toHaveBeenCalled();
   });
 
   it('nao executa tarefa inativa', async () => {
     const tasks = [task({ dueDay: 1, active: false })];
     renderHook(() => useRecurringAutoExecute('uid-1', tasks, false));
     await Promise.resolve();
-    expect(mockCreateManual).not.toHaveBeenCalled();
+    expect(mockCallable).not.toHaveBeenCalled();
   });
 
-  it('nao executa tarefa anual', async () => {
-    const tasks = [task({ dueDay: 1, frequency: 'anual' })];
+  it('nao executa tarefa anual fora do mes', async () => {
+    const tasks = [task({ dueDay: 1, frequency: 'anual', dueMonth: 3 })];
     renderHook(() => useRecurringAutoExecute('uid-1', tasks, false));
     await Promise.resolve();
-    expect(mockCreateManual).not.toHaveBeenCalled();
+    expect(mockCallable).not.toHaveBeenCalled();
   });
 
   it('nao executa tarefa ja executada no mes atual', async () => {
     const tasks = [task({ dueDay: 1, lastExecutedMonth: YEARMONTH })];
     renderHook(() => useRecurringAutoExecute('uid-1', tasks, false));
     await Promise.resolve();
-    expect(mockCreateManual).not.toHaveBeenCalled();
+    expect(mockCallable).not.toHaveBeenCalled();
   });
 
   it('nao executa tarefa cujo dueDay ainda nao chegou', async () => {
-    // Hoje é dia 6 de junho; dueDay 20 ainda nao chegou
     const tasks = [task({ dueDay: 20 })];
     renderHook(() => useRecurringAutoExecute('uid-1', tasks, false));
     await Promise.resolve();
-    expect(mockCreateManual).not.toHaveBeenCalled();
+    expect(mockCallable).not.toHaveBeenCalled();
   });
 
-  it('executa tarefa pendente cujo dueDay ja passou', async () => {
-    const tasks = [task({ dueDay: 1 })]; // dia 1 <= dia 6 ✓
+  it('executa tarefa pendente via httpsCallable createTransaction', async () => {
+    const tasks = [task({ dueDay: 1 })];
     const { unmount } = renderHook(() => useRecurringAutoExecute('uid-1', tasks, false));
-    await vi.waitFor(() => expect(mockCreateManual).toHaveBeenCalledTimes(1));
-    expect(mockCreateManual).toHaveBeenCalledWith(
-      'uid-1',
+    await vi.waitFor(() => expect(mockCallable).toHaveBeenCalledTimes(1));
+    expect(mockHttpsCallable).toHaveBeenCalledWith(
+      expect.anything(),
+      'createTransaction',
+    );
+    expect(mockCallable).toHaveBeenCalledWith(
       expect.objectContaining({
         description:  'Aluguel',
         value_cents:  cents(150000),
         category:     'Moradia',
         date:         `${YEARMONTH}-01`,
         source:       'manual',
+        isRecurring:  true,
       }),
     );
     unmount();
@@ -133,15 +144,15 @@ describe('useRecurringAutoExecute', () => {
       task({ id: 'b', dueDay: 2, description: 'B', value_cents: cents(2000) }),
     ];
     const { unmount } = renderHook(() => useRecurringAutoExecute('uid-1', tasks, false));
-    await vi.waitFor(() => expect(mockCreateManual).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(mockCallable).toHaveBeenCalledTimes(2));
     unmount();
   });
 
   it('pula tarefa com value_cents zero e nao lanca excecao', async () => {
-    const tasks = [task({ dueDay: 1, value_cents: cents(0), value: 0 })];
+    const tasks = [task({ dueDay: 1, value_cents: cents(0) })];
     renderHook(() => useRecurringAutoExecute('uid-1', tasks, false));
     await Promise.resolve();
-    expect(mockCreateManual).not.toHaveBeenCalled();
+    expect(mockCallable).not.toHaveBeenCalled();
   });
 
   it('executa apenas uma vez por montagem mesmo com re-renders', async () => {
@@ -150,23 +161,52 @@ describe('useRecurringAutoExecute', () => {
       ({ t }) => useRecurringAutoExecute('uid-1', t, false),
       { initialProps: { t: tasks } },
     );
-    await vi.waitFor(() => expect(mockCreateManual).toHaveBeenCalledTimes(1));
-    rerender({ t: [...tasks] }); // novo array, mesmos dados
+    await vi.waitFor(() => expect(mockCallable).toHaveBeenCalledTimes(1));
+    rerender({ t: [...tasks] });
     await Promise.resolve();
-    expect(mockCreateManual).toHaveBeenCalledTimes(1); // sem nova chamada
+    expect(mockCallable).toHaveBeenCalledTimes(1);
     unmount();
   });
 
   it('usa dueDay truncado ao ultimo dia do mes em fevereiro', async () => {
     vi.setSystemTime(new Date('2026-02-28T12:00:00.000Z'));
-    const tasks = [task({ dueDay: 31 })]; // fev nao tem dia 31
+    const tasks = [task({ dueDay: 31 })];
     const { unmount } = renderHook(() => useRecurringAutoExecute('uid-1', tasks, false));
-    await vi.waitFor(() => expect(mockCreateManual).toHaveBeenCalledTimes(1));
-    expect(mockCreateManual).toHaveBeenCalledWith(
-      'uid-1',
+    await vi.waitFor(() => expect(mockCallable).toHaveBeenCalledTimes(1));
+    expect(mockCallable).toHaveBeenCalledWith(
       expect.objectContaining({ date: '2026-02-28' }),
     );
     unmount();
+  });
+
+  it('chama onExecuted com contagem de tarefas bem-sucedidas', async () => {
+    const onExecuted = vi.fn();
+    const tasks = [
+      task({ id: 'a', dueDay: 1, description: 'A', value_cents: cents(1000) }),
+      task({ id: 'b', dueDay: 2, description: 'B', value_cents: cents(2000) }),
+    ];
+    const { unmount } = renderHook(() =>
+      useRecurringAutoExecute('uid-1', tasks, false, onExecuted),
+    );
+    await vi.waitFor(() => expect(onExecuted).toHaveBeenCalledTimes(1));
+    expect(onExecuted).toHaveBeenCalledWith(2);
+    unmount();
+  });
+
+  it('nao chama onExecuted quando nenhuma tarefa e executada', async () => {
+    const onExecuted = vi.fn();
+    renderHook(() => useRecurringAutoExecute('uid-1', [], false, onExecuted));
+    await Promise.resolve();
+    expect(onExecuted).not.toHaveBeenCalled();
+  });
+
+  it('nao usa Math.round — value_cents ausente pula a tarefa', async () => {
+    // Garante que a heuristica float proibida nao existe: sem value_cents, pula
+    const t = task({ dueDay: 1 });
+    t.value_cents = undefined as unknown as Centavos;
+    renderHook(() => useRecurringAutoExecute('uid-1', [t], false));
+    await Promise.resolve();
+    expect(mockCallable).not.toHaveBeenCalled();
   });
 });
 
@@ -200,7 +240,6 @@ describe('pendingTasks — tarefas anuais', () => {
   });
 
   it('anual sem dueMonth usa mes 1 como fallback', () => {
-    // dueMonth ausente => fallback 1 (janeiro); mes atual e junho => nao executa
     const t = [task({ frequency: 'anual', dueDay: 5 })];
     expect(pendingTasks(t, YEARMONTH, TODAY)).toHaveLength(0);
   });

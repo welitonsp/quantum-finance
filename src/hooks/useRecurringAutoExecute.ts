@@ -1,13 +1,9 @@
-// src/hooks/useRecurringAutoExecute.ts
-// Scaffold client-side de materialização de recorrentes.
-// Executa uma vez por sessão, após o carregamento inicial.
-// Limitação Spark: sem Admin SDK; depende de Rules rigorosas para integridade.
 import { useEffect, useRef } from 'react';
-import { FirestoreService } from '../shared/services/FirestoreService';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../shared/api/firebase/index';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import { updateRecurringWithHistory } from './useRecurring';
 import type { RecurringTask } from '../shared/types/transaction';
-import type { Centavos } from '../shared/types/money';
 
 export function currentYearMonth(): string {
   const now = new Date();
@@ -27,7 +23,6 @@ export function dueDateForTask(task: RecurringTask, yearMonth: string): string {
 
 export function pendingTasks(tasks: RecurringTask[], yearMonth: string, today: string): RecurringTask[] {
   const [yearStr, monthStr] = yearMonth.split('-');
-  const currentYear  = Number(yearStr);
   const currentMonth = Number(monthStr);
 
   return tasks.filter(t => {
@@ -36,7 +31,6 @@ export function pendingTasks(tasks: RecurringTask[], yearMonth: string, today: s
     if (t.frequency === 'anual') {
       const targetMonth = t.dueMonth ?? 1;
       if (targetMonth !== currentMonth) return false;
-      // Já executou neste ano se lastExecutedMonth começa com o ano atual
       if (t.lastExecutedMonth?.startsWith(yearStr ?? '')) return false;
       const due = dueDateForTask(t, yearMonth);
       return due <= today;
@@ -47,16 +41,17 @@ export function pendingTasks(tasks: RecurringTask[], yearMonth: string, today: s
     const due = dueDateForTask(t, yearMonth);
     return due <= today;
   });
-
-  void currentYear; // usado implicitamente via yearStr
 }
 
 export function useRecurringAutoExecute(
   uid: string,
   tasks: RecurringTask[],
   loading: boolean,
+  onExecuted?: (count: number) => void,
 ): void {
-  const executedRef = useRef(false);
+  const executedRef   = useRef(false);
+  const onExecutedRef = useRef(onExecuted);
+  onExecutedRef.current = onExecuted;
 
   useEffect(() => {
     if (loading || !uid || executedRef.current || tasks.length === 0) return;
@@ -67,27 +62,38 @@ export function useRecurringAutoExecute(
     const pending   = pendingTasks(tasks, yearMonth, today);
     if (pending.length === 0) return;
 
+    const callCreate = httpsCallable<Record<string, unknown>, { id: string }>(
+      functions, 'createTransaction'
+    );
+
     void (async () => {
+      let successCount = 0;
       for (const task of pending) {
         try {
-          const valueCents = task.value_cents ?? (Math.round((task.value ?? 0) * 100) as Centavos);
+          // value_cents é o único caminho canônico; sem ele a tarefa é ignorada
+          const valueCents = task.value_cents;
           if (!valueCents) continue;
 
           const txDate = dueDateForTask(task, yearMonth);
-          await FirestoreService.createManualTransactionWithHistory(uid, {
+
+          await callCreate({
             description: task.description,
             value_cents:  valueCents,
             type:         task.type ?? 'saida',
             category:     task.category,
             date:         txDate,
             source:       'manual',
+            isRecurring:  true,
           });
 
-          // Use updateRecurringWithHistory to respect Modelo A (_lastOpId + history batch)
           await updateRecurringWithHistory(uid, task.id, { lastExecutedMonth: yearMonth });
+          successCount++;
         } catch (err) {
           logSanitizedFirebaseError('recurring_create', err);
         }
+      }
+      if (successCount > 0) {
+        onExecutedRef.current?.(successCount);
       }
     })();
   }, [uid, tasks, loading]);
