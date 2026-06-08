@@ -2,38 +2,36 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — FASES 11–17A — 2026-06-06
+## Estado Consolidado — FASES 11–19A — 2026-06-08
 
-> Bloco anterior (Pós-PRs #159/#160) foi substituído. Histórico preservado abaixo. Em caso de divergência, **este bloco é a referência**.
+> Blocos anteriores substituídos. Em caso de divergência, **este bloco é a referência**.
 
 ### 1. Status atual
 - Branch principal: `main`.
-- Último commit na main: `e3e62bc fix(cards): make invoice date window timezone-safe (#162)`
-- Working tree com alterações não comitadas das FASES 11–17A (pendente PR).
+- Último commit na main: `4b35871` — merge do PR #169 (FASES 17B–19A)
+- PRs mergeados nesta sessão: #163 (FASES 11–17A), #169 (FASES 17B–19A)
+- Working tree limpo. Branch `feat/fases-17b-17c` deletada após merge.
 - Stash legado preservado e intocado.
 
-### 2. Fases implementadas nesta sessão (não comitadas ainda)
+### 2. Fases implementadas e mergeadas (PRs #163 + #169)
 
-| Fase | Escopo |
-|---|---|
-| FASE 11C | Parcelamento: `createInstallmentGroupWithHistory`, `InstallmentGroupDTO`, `addMonthsToDate`, badge no `TransactionRow`, toggle no `TransactionForm` |
-| FASE 12A | Display visual de transferências (ícone azul `⇄`, badge "Transferência") em `TransactionRow` |
-| FASE 12B | Filtro "Transferências" como 4ª tab em `useTransactionFilters` + `TransactionsManager` |
-| FASE 12C | `firestore.indexes.json` com 4 índices compostos para `transactions` |
-| FASE 12D | `FinancialHealthScore.tsx` — score 0-100 com 4 pilares (poupança, dívida, reserva, comprometimento) |
-| FASE 13A | `InstallmentGroupDrawer.tsx` — gestão de parcelas (listar, cancelar futuras via `cancelRemainingInstallments`) |
-| FASE 13B | `computeMonthlyReport` + `generateMonthlyReportCSV` em `exportCSV.ts` + picker de mês/ano em `TransactionsManager` |
-| FASE 13C | `SavingsGoal` type + `useGoals` hook + `GoalsPanel.tsx` com barra de progresso animada |
-| FASE 14A | Edição inline de progresso das metas (`GoalCard`) |
-| FASE 14B | Picker de mês/ano para relatório em qualquer período |
-| FASE 14C | Edição inline de contas em `AccountsManager` (nome + saldo, Enter/Escape, pencil/save/cancel) |
-| FASE 14D | `AnomalyAlerts.tsx` — alertas de anomalia via `GeminiService.detectAnomalies`, integrado no Dashboard |
-| FASE 14E | `useRecurringAutoExecute` — scaffold client-side de materialização de recorrentes mensais |
-| FASE 15A | Testes unitários: `exportCSV.test.ts` (18 testes), `GeminiService.test.ts` (10), `useRecurringAutoExecute.test.ts` (13) |
-| FASE 15B | Recorrentes anuais: `dueMonth?` em `RecurringTask`, lógica anual em `useRecurringAutoExecute`, picker de mês em `RecurringManager` |
-| FASE 15C | UI de gestão de recorrentes: badge Executado/Pendente/Pausado, botão pause/resume, ordenação automática |
-| FASE 16 | Playwright E2E: config, Auth Emulator, 5 suítes (`smoke`, `transaction-create`, `filters`, `import-csv`, `goals-panel`) |
-| FASE 17A | Sincronização deste `CLAUDE.md` |
+| Fase | Escopo | PR |
+|---|---|---|
+| FASE 11C | Parcelamento: `createInstallmentGroupWithHistory`, badge no `TransactionRow`, toggle no `TransactionForm` | #163 |
+| FASE 12A–12D | Transferências (ícone `⇄`, filtro), 4 índices Firestore, `FinancialHealthScore.tsx` | #163 |
+| FASE 13A–13C | `InstallmentGroupDrawer`, relatório CSV mensal, `GoalsPanel` com metas animadas | #163 |
+| FASE 14A–14E | Edição inline de metas/contas, `AnomalyAlerts`, `useRecurringAutoExecute` scaffold | #163 |
+| FASE 15A–15C | Testes unitários (exportCSV, GeminiService, recurring), recorrentes anuais, badge pause/resume | #163 |
+| FASE 16 | Playwright E2E: config, Auth Emulator, 5 suítes | #163 |
+| FASE 17A | Sincronização CLAUDE.md | #163 |
+| FASE 17B | Busca server-side por `description` via `descriptionLower` prefix query + índice `descriptionLower ASC + date DESC` | #169 |
+| FASE 17C | `consumeAppCheckToken` replay protection nas 4 Cloud Functions | #169 |
+| FASE 17D | Sentry: `SentryService.ts` com PII scrubbing, init em produção, `captureError` no ErrorBoundary | #169 |
+| FASE 18A | `descriptionLower` adicionado na importação CSV/OFX/PDF | #169 |
+| FASE 18B | Filtro server-side por categoria (`onServerCategoryFilter` callback) em `useTransactions` | #169 |
+| FASE 18C | Cache de emuladores no CI (E2E job) | #169 |
+| FASE 18D | UI select "Servidor" para filtro de categoria em `TransactionsManager` | #169 |
+| FASE 19A | Fix 5 P0 Firestore Rules: `txAllowedKeys` + history `after` + goals collection + recurring `dueMonth`/`lastExecutedMonth` + Modelo A em `useRecurringAutoExecute` | #169 |
 
 ### 3. Contratos críticos vivos (inalterados)
 - `value_cents` é a fonte canônica. `value` legado **nunca** é usado em cálculo financeiro.
@@ -75,12 +73,10 @@ lastExecutedMonth?: string;        // formato YYYY-MM
 - Migração automática de float → `value_cents` continua **bloqueada**.
 
 ### 8. Próximas etapas recomendadas
-1. **PR das FASES 11–17A** — comitar e abrir PR com todo o trabalho desta sessão.
-2. **FASE 17B — Busca server-side**: filtro por `description` via Firestore query + índice.
-3. **FASE 17C — consumeAppCheckToken**: replay protection nas Cloud Functions.
-4. **FASE 17D — Sentry**: monitoramento de erros em produção (aproveita logging sanitizado).
-5. **Upgrade Blaze**: hard delete de `transactions`/`audit_logs` via Admin SDK.
-6. **CI para E2E**: adicionar `test:e2e` ao GitHub Actions com emuladores.
+1. **`firebase deploy --only firestore:indexes`** — deploy dos 2 novos índices (`descriptionLower ASC + date DESC`, `category ASC + date DESC`).
+2. **Fix E2E CI emulator startup** — porta 8080 do Firestore emulator não fica pronta em 60s no GitHub Actions; investigar `firebase.json` host binding ou usar `firebase emulators:exec`.
+3. **Upgrade Blaze**: hard delete de `transactions`/`audit_logs` via Admin SDK.
+4. **VITE_SENTRY_DSN**: configurar DSN real no ambiente de produção para ativar Sentry.
 
 ### 9. Comandos de validação padrão
 ```bash
