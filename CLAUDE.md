@@ -2,14 +2,14 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — FASES 11–20C — 2026-06-08
+## Estado Consolidado — FASES 11–23 — 2026-06-08
 
 > Blocos anteriores substituídos. Em caso de divergência, **este bloco é a referência**.
 
 ### 1. Status atual
 - Branch principal: `main`.
 - Último commit na main: `4879a2f` — sync CLAUDE.md pós PRs #163 + #169
-- Branch ativa: `feat/fases-20a-20c` — FASES 20A/20B/20C implementadas, PR pendente de merge
+- Último commit na main: `603c138` — merge PR #172 (FASES 21/22/23)
 - **Plano Firebase: BLAZE** (upgrade realizado em 2026-06-08)
 - 5 Cloud Functions deployadas em produção (`southamerica-east1`, Node.js 24, 2nd Gen)
 - Firestore Rules deployadas em produção
@@ -36,7 +36,10 @@
 | FASE 19A | Fix 5 P0 Firestore Rules: `txAllowedKeys` + history `after` + goals collection + recurring `dueMonth`/`lastExecutedMonth` + Modelo A em `useRecurringAutoExecute` | #169 |
 | FASE 20A | Migração `createTransaction`: Spark client-side → callable server-trusted Blaze (`httpsCallable`) | PR aberto |
 | FASE 20B | `deleteUserData` Cloud Function: `adminDb.recursiveDelete(users/{uid})` + `auth.deleteUser(uid)` (hard delete LGPD) | PR aberto |
-| FASE 20C | Deploy produção: Firestore Rules + Functions (5 callables, Node.js 24, 2nd Gen, `southamerica-east1`) | PR aberto |
+| FASE 20C | Deploy produção: Firestore Rules + Functions (5 callables, Node.js 24, 2nd Gen, `southamerica-east1`) | #171 |
+| FASE 21 | `useRecurringAutoExecute` migrado para `httpsCallable('createTransaction')` Blaze; remove `Math.round` proibido | #172 |
+| FASE 22 | Toast de notificação ao auto-executar recorrentes: `onExecuted` callback + `toast.success` em `DashboardContent` | #172 |
+| FASE 23 | Fix E2E CI: `emulators:exec` substitui `emulators:start &` + `wait-on`; job blocking novamente (16/19 pass) | #172 |
 
 ### 3. Contratos críticos vivos (inalterados)
 - `value_cents` é a fonte canônica. `value` legado **nunca** é usado em cálculo financeiro.
@@ -80,10 +83,10 @@ lastExecutedMonth?: string;        // formato YYYY-MM
 - Migração automática de float → `value_cents` continua **bloqueada**.
 
 ### 8. Próximas etapas recomendadas
-1. **`firebase deploy --only firestore:indexes`** — confirmar deploy dos índices (`descriptionLower ASC + date DESC`, `category ASC + date DESC`) após propagação.
-2. **Fix E2E CI emulator startup** — porta 8080 do Firestore emulator não fica pronta em 60s no GitHub Actions; investigar `firebase.json` host binding ou usar `firebase emulators:exec`.
-3. **VITE_SENTRY_DSN**: configurar DSN real no ambiente de produção para ativar Sentry.
-4. **QA funcional em produção**: testar criação de transação via callable, exclusão de conta via `deleteUserData`, busca server-side e filtro por categoria.
+1. **QA funcional em produção**: testar criação de transação via callable, auto-execução de recorrentes, exclusão de conta via `deleteUserData`, busca server-side e filtro por categoria.
+2. **E2E `fixme` pendentes**: 3 testes marcados `fixme` — `04-import-csv` (2 testes de upload headless) e `05-goals-panel` (barra de progresso sem dados).
+3. **`firebase deploy --only firestore:indexes`** — confirmar propagação dos índices (`descriptionLower ASC + date DESC`, `category ASC + date DESC`).
+4. **VITE_SENTRY_DSN**: descartado por ora; reativar quando houver conta Sentry.
 
 ### 9. Comandos de validação padrão
 ```bash
