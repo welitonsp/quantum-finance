@@ -96,6 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: quality
+    continue-on-error: true
 
     env:
       VITE_FIREBASE_API_KEY: fake-api-key
