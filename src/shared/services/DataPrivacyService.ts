@@ -3,10 +3,9 @@ import {
   doc,
   getDocs,
   getDoc,
-  writeBatch,
 } from 'firebase/firestore';
-import { deleteUser } from 'firebase/auth';
-import { db, auth } from '../api/firebase/index';
+import { httpsCallable } from 'firebase/functions';
+import { db, auth, functions } from '../api/firebase/index';
 import { logSanitizedFirebaseError } from '../lib/firebaseErrorHandling';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -23,16 +22,6 @@ const EXPORTABLE_SUBCOLLECTIONS = [
   'recurringTasks',
   'simulations',
 ] as const;
-
-/** Only subcollections whose Rules allow plain `delete: if isOwner()`. */
-const DELETABLE_SUBCOLLECTIONS = [
-  'budgets',
-  'categoryRules',
-  'creditCards',
-  'simulations',
-] as const;
-
-const BATCH_CHUNK_SIZE = 400;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -105,51 +94,35 @@ export async function exportAllUserData(uid: string): Promise<void> {
   anchor.download = `quantum-finance-dados-${today}.json`;
   anchor.click();
 
-  // Revoke after a short delay to allow the browser to pick up the download
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 /**
- * Full account deletion flow:
+ * Full account deletion flow (Blaze — hard delete via Admin SDK):
  *   1. Export all data so the user keeps a copy.
- *   2. Delete Firestore documents in safe subcollections (batch-safe only).
- *   3. Delete the Firebase Auth user.
+ *   2. Call `deleteUserData` Cloud Function → recursiveDelete(users/{uid}) + auth.deleteUser(uid).
  *
  * Throws `'REQUIRES_RECENT_LOGIN'` when Firebase Auth rejects the deletion
  * because the session is too old — the caller must prompt a re-login.
  */
 export async function deleteUserAccount(uid: string): Promise<void> {
+  void uid; // uid verified server-side via request.auth.uid
+
   // Step 1 — Export so the user has their data before anything is removed.
-  await exportAllUserData(uid);
+  await exportAllUserData(auth.currentUser?.uid ?? uid);
 
-  // Step 2 — Delete docs from subcollections that allow plain batch delete.
+  // Step 2 — Hard delete via server-trusted callable (Admin SDK recursiveDelete).
   try {
-    for (const name of DELETABLE_SUBCOLLECTIONS) {
-      const snap = await getDocs(collection(db, 'users', uid, name));
-      const refs = snap.docs.map(d => d.ref);
-
-      for (let i = 0; i < refs.length; i += BATCH_CHUNK_SIZE) {
-        const chunk = refs.slice(i, i + BATCH_CHUNK_SIZE);
-        const batch = writeBatch(db);
-        chunk.forEach(ref => batch.delete(ref));
-        await batch.commit();
-      }
-    }
-  } catch (err) {
-    logSanitizedFirebaseError('data_delete_subcollections', err);
-    // Non-fatal: proceed to Auth deletion regardless; Firestore data without
-    // a valid auth token is inaccessible per Rules.
-  }
-
-  // Step 3 — Delete the Firebase Auth user.
-  try {
-    await deleteUser(auth.currentUser!);
+    const callDelete = httpsCallable<Record<string, never>, { deleted: boolean }>(
+      functions, 'deleteUserData'
+    );
+    await callDelete({});
   } catch (err) {
     const code = (err as { code?: string }).code ?? '';
-    if (code === 'auth/requires-recent-login') {
+    if (code === 'functions/unauthenticated' || code === 'auth/requires-recent-login') {
       throw new Error('REQUIRES_RECENT_LOGIN');
     }
-    logSanitizedFirebaseError('data_delete_auth_user', err);
+    logSanitizedFirebaseError('data_delete_account', err);
     throw err;
   }
 }

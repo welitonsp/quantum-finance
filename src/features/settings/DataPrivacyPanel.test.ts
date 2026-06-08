@@ -4,49 +4,44 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   mockGetDocs,
   mockGetDoc,
-  mockWriteBatch,
-  mockBatchDelete,
-  mockBatchCommit,
   mockCollection,
   mockDoc,
-  mockDeleteUser,
+  mockCallableDeleteUserData,
+  mockHttpsCallable,
 } = vi.hoisted(() => {
-  const mockBatchDelete  = vi.fn();
-  const mockBatchCommit  = vi.fn().mockResolvedValue(undefined);
-  const mockWriteBatch   = vi.fn(() => ({ delete: mockBatchDelete, commit: mockBatchCommit }));
-  const mockGetDocs      = vi.fn().mockResolvedValue({ docs: [] });
-  const mockGetDoc       = vi.fn().mockResolvedValue({ exists: () => false, data: () => ({}) });
-  const mockCollection   = vi.fn((_db: unknown, ...segs: string[]) => ({ path: segs.join('/') }));
-  const mockDoc          = vi.fn((_db: unknown, ...segs: string[]) => ({ path: segs.join('/') }));
-  const mockDeleteUser   = vi.fn().mockResolvedValue(undefined);
+  const mockGetDocs    = vi.fn().mockResolvedValue({ docs: [] });
+  const mockGetDoc     = vi.fn().mockResolvedValue({ exists: () => false, data: () => ({}) });
+  const mockCollection = vi.fn((_db: unknown, ...segs: string[]) => ({ path: segs.join('/') }));
+  const mockDoc        = vi.fn((_db: unknown, ...segs: string[]) => ({ path: segs.join('/') }));
+
+  const mockCallableDeleteUserData = vi.fn().mockResolvedValue({ data: { deleted: true } });
+  const mockHttpsCallable = vi.fn().mockReturnValue(mockCallableDeleteUserData);
 
   return {
     mockGetDocs,
     mockGetDoc,
-    mockWriteBatch,
-    mockBatchDelete,
-    mockBatchCommit,
     mockCollection,
     mockDoc,
-    mockDeleteUser,
+    mockCallableDeleteUserData,
+    mockHttpsCallable,
   };
 });
 
 vi.mock('firebase/firestore', () => ({
-  collection:  mockCollection,
-  doc:         mockDoc,
-  getDocs:     mockGetDocs,
-  getDoc:      mockGetDoc,
-  writeBatch:  mockWriteBatch,
+  collection: mockCollection,
+  doc:        mockDoc,
+  getDocs:    mockGetDocs,
+  getDoc:     mockGetDoc,
 }));
 
-vi.mock('firebase/auth', () => ({
-  deleteUser: mockDeleteUser,
+vi.mock('firebase/functions', () => ({
+  httpsCallable: mockHttpsCallable,
 }));
 
 vi.mock('../../shared/api/firebase/index', () => ({
-  db:   { _isMock: true },
-  auth: { currentUser: { uid: 'test-uid-123' } },
+  db:        { _isMock: true },
+  auth:      { currentUser: { uid: 'test-uid-123' } },
+  functions: { _isMock: true },
 }));
 
 // ─── Browser API stubs ─────────────────────────────────────────────────────────
@@ -62,7 +57,6 @@ Object.defineProperty(globalThis, 'URL', {
   writable: true,
 });
 
-// crypto.subtle.digest stub — returns a fixed 32-byte buffer
 Object.defineProperty(globalThis, 'crypto', {
   value: {
     subtle: {
@@ -94,8 +88,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockGetDocs.mockResolvedValue({ docs: [] });
   mockGetDoc.mockResolvedValue({ exists: () => false, data: () => ({}) });
-  mockBatchCommit.mockResolvedValue(undefined);
-  mockDeleteUser.mockResolvedValue(undefined);
+  mockCallableDeleteUserData.mockResolvedValue({ data: { deleted: true } });
+  mockHttpsCallable.mockReturnValue(mockCallableDeleteUserData);
   mockCreateObjectURL.mockReturnValue('blob:mock-url');
   mockClick.mockReset();
 });
@@ -146,7 +140,6 @@ describe('exportAllUserData', () => {
 
     const text = await capturedBlob!.text();
     expect(text).not.toContain('my-real-uid-value');
-    // uid_hash deve estar presente e ser uma string curta de hex
     const parsed = JSON.parse(text) as { uid_hash: string };
     expect(parsed.uid_hash).toMatch(/^[0-9a-f]{8}$/);
   });
@@ -176,60 +169,46 @@ describe('deleteUserAccount', () => {
       calls.push('export');
       return 'blob:mock-url';
     });
-    mockDeleteUser.mockImplementation(async () => {
-      calls.push('deleteUser');
+    mockCallableDeleteUserData.mockImplementation(async () => {
+      calls.push('deleteCallable');
+      return { data: { deleted: true } };
     });
 
     await deleteUserAccount('uid-abc');
 
     expect(calls[0]).toBe('export');
-    expect(calls[1]).toBe('deleteUser');
+    expect(calls[1]).toBe('deleteCallable');
   });
 
-  it('deleta documentos das 4 subcoleções seguras', async () => {
-    // Simulate one doc in each deletable subcollection
-    const docStub = (name: string) => ({
-      id:  `${name}-doc`,
-      ref: { path: `users/uid-abc/${name}/${name}-doc` },
-      data: () => ({}),
-    });
-
-    mockGetDocs.mockImplementation((colRef: { path: string }) => {
-      const path = typeof colRef === 'object' && 'path' in colRef
-        ? (colRef as { path: string }).path
-        : '';
-      const name = path.split('/').pop() ?? '';
-      if (['budgets', 'categoryRules', 'creditCards', 'simulations'].includes(name)) {
-        return Promise.resolve({ docs: [docStub(name)] });
-      }
-      return Promise.resolve({ docs: [] });
-    });
-
+  it('chama o callable deleteUserData via httpsCallable', async () => {
     await deleteUserAccount('uid-abc');
 
-    // 4 subcollections × 1 batch each = 4 commits
-    expect(mockBatchCommit).toHaveBeenCalledTimes(4);
-    // Each doc was scheduled for deletion
-    expect(mockBatchDelete).toHaveBeenCalledTimes(4);
+    expect(mockHttpsCallable).toHaveBeenCalledWith(
+      expect.anything(),
+      'deleteUserData',
+    );
+    expect(mockCallableDeleteUserData).toHaveBeenCalledOnce();
   });
 
-  it('chama deleteUser no passo final', async () => {
-    await deleteUserAccount('uid-abc');
+  it('propaga REQUIRES_RECENT_LOGIN quando callable retorna unauthenticated', async () => {
+    mockCallableDeleteUserData.mockRejectedValueOnce(
+      Object.assign(new Error('unauthenticated'), { code: 'functions/unauthenticated' }),
+    );
 
-    expect(mockDeleteUser).toHaveBeenCalledOnce();
+    await expect(deleteUserAccount('uid-abc')).rejects.toThrow('REQUIRES_RECENT_LOGIN');
   });
 
-  it('propaga REQUIRES_RECENT_LOGIN quando Firebase retorna auth/requires-recent-login', async () => {
-    mockDeleteUser.mockRejectedValueOnce(
+  it('propaga REQUIRES_RECENT_LOGIN quando auth/requires-recent-login', async () => {
+    mockCallableDeleteUserData.mockRejectedValueOnce(
       Object.assign(new Error('requires-recent-login'), { code: 'auth/requires-recent-login' }),
     );
 
     await expect(deleteUserAccount('uid-abc')).rejects.toThrow('REQUIRES_RECENT_LOGIN');
   });
 
-  it('relança outros erros do deleteUser sem transformação', async () => {
-    const genericErr = Object.assign(new Error('network-error'), { code: 'auth/network-request-failed' });
-    mockDeleteUser.mockRejectedValueOnce(genericErr);
+  it('relança outros erros sem transformação', async () => {
+    const genericErr = Object.assign(new Error('network-error'), { code: 'functions/unavailable' });
+    mockCallableDeleteUserData.mockRejectedValueOnce(genericErr);
 
     await expect(deleteUserAccount('uid-abc')).rejects.toThrow('network-error');
   });

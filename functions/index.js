@@ -75,21 +75,25 @@ exports.createTransaction = onCall(
       throw error;
     }
 
+    // ── descriptionLower derivado server-side (busca por prefixo) ────────────
+    const descriptionLower = data.description.trim().toLowerCase();
+
     // ── Payload canônico da transação ────────────────────────────────────────
     const txRef  = adminDb.collection(`users/${uid}/transactions`).doc();
     const txPayload = {
-      description:   data.description,
-      value_cents:   data.value_cents,
-      type:          data.type,
-      category:      data.category,
-      date:          data.date,
-      source:        data.source,
-      schemaVersion: 2,
-      fitId:         data.fitId,
-      tags:          data.tags,
-      isRecurring:   data.isRecurring,
-      createdAt:     admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt:     admin.firestore.FieldValue.serverTimestamp(),
+      description:      data.description,
+      descriptionLower,
+      value_cents:      data.value_cents,
+      type:             data.type,
+      category:         data.category,
+      date:             data.date,
+      source:           data.source,
+      schemaVersion:    2,
+      fitId:            data.fitId,
+      tags:             data.tags,
+      isRecurring:      data.isRecurring,
+      createdAt:        admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt:        admin.firestore.FieldValue.serverTimestamp(),
       ...(data.account   !== undefined ? { account:   data.account   } : {}),
       ...(data.accountId !== undefined ? { accountId: data.accountId } : {}),
       ...(data.cardId    !== undefined ? { cardId:    data.cardId    } : {}),
@@ -103,14 +107,15 @@ exports.createTransaction = onCall(
       .doc();
 
     const afterSnapshot = {
-      description:   data.description,
-      value_cents:   data.value_cents,
-      schemaVersion: 2,
-      type:          data.type,
-      category:      data.category,
-      date:          data.date,
-      source:        data.source,
-      isRecurring:   data.isRecurring,
+      description:      data.description,
+      descriptionLower,
+      value_cents:      data.value_cents,
+      schemaVersion:    2,
+      type:             data.type,
+      category:         data.category,
+      date:             data.date,
+      source:           data.source,
+      isRecurring:      data.isRecurring,
       ...(data.fitId     !== null      ? { fitId:     data.fitId     } : {}),
       ...(data.tags.length > 0         ? { tags:      data.tags      } : {}),
       ...(data.account   !== undefined ? { account:   data.account   } : {}),
@@ -119,7 +124,8 @@ exports.createTransaction = onCall(
     };
 
     const changedFields = [
-      'description', 'value_cents', 'schemaVersion', 'type', 'category', 'date', 'source', 'isRecurring',
+      'description', 'descriptionLower', 'value_cents', 'schemaVersion',
+      'type', 'category', 'date', 'source', 'isRecurring',
       ...(afterSnapshot.fitId     !== undefined ? ['fitId']     : []),
       ...(afterSnapshot.tags      !== undefined ? ['tags']      : []),
       ...(afterSnapshot.account   !== undefined ? ['account']   : []),
@@ -146,6 +152,45 @@ exports.createTransaction = onCall(
     });
 
     return { id: txRef.id };
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNÇÃO 1 — deleteUserData (LGPD — hard delete via Admin SDK recursiveDelete)
+// ═══════════════════════════════════════════════════════════════════════════════
+exports.deleteUserData = onCall(
+  {
+    region: 'southamerica-east1',
+    timeoutSeconds: 120,
+    enforceAppCheck: true,
+    consumeAppCheckToken: true,
+    cors: [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'https://quantum-finance-39235.web.app',
+      'https://quantum-finance-39235.firebaseapp.com',
+      /https:\/\/quantum-finance[^.]*\.vercel\.app$/,
+    ],
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Acesso negado.');
+    }
+    if (request.app?.alreadyConsumed) {
+      throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
+    }
+
+    // uid SEMPRE do servidor — nunca do payload
+    const uid = request.auth.uid;
+
+    // Hard delete recursivo de toda a árvore do usuário (transações + históricos + auditoria)
+    const userRef = adminDb.collection('users').doc(uid);
+    await adminDb.recursiveDelete(userRef);
+
+    // Soft-delete do Auth user via Admin SDK (o cliente pode estar deslogado após isso)
+    await admin.auth().deleteUser(uid);
+
+    return { deleted: true };
   }
 );
 

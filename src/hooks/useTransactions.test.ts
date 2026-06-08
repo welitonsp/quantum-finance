@@ -99,7 +99,7 @@ vi.mock('react-hot-toast', () => ({
 
 import { sanitizeForHistory, useTransactions } from './useTransactions';
 
-describe('useTransactions - criação manual Spark via batch', () => {
+describe('useTransactions - criação manual Blaze via callable', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     let generatedTxId = 0;
@@ -108,9 +108,6 @@ describe('useTransactions - criação manual Spark via batch', () => {
       id: explicitId ?? `tx-reserved-${++generatedTxId}`,
     }));
     mockCallable.mockResolvedValue({ data: { id: 'tx-created-1' } });
-    mockCreateManualTransactionWithHistory.mockImplementation(
-      async (_uid: string, _data: Record<string, unknown>, txId?: string) => txId ?? 'tx-created-1',
-    );
     mockLogAction.mockResolvedValue(undefined);
     mockLogTransactionHistory.mockResolvedValue(undefined);
     mockOnSnapshot.mockImplementation((_queryArg: unknown, onNext: (snap: { docs: never[] }) => void) => {
@@ -119,7 +116,7 @@ describe('useTransactions - criação manual Spark via batch', () => {
     });
   });
 
-  it('chama FirestoreService.createManualTransactionWithHistory e não chama callable', async () => {
+  it('chama o callable createTransaction e não chama createManualTransactionWithHistory', async () => {
     const { result, unmount } = renderHook(() => useTransactions('uid-1'));
 
     let createdId = '';
@@ -139,10 +136,13 @@ describe('useTransactions - criação manual Spark via batch', () => {
       });
     });
 
-    expect(createdId).toBe('tx-reserved-1');
+    expect(createdId).toBe('tx-created-1');
 
-    expect(mockCreateManualTransactionWithHistory).toHaveBeenCalledWith(
-      'uid-1',
+    expect(mockHttpsCallable).toHaveBeenCalledWith(
+      expect.anything(),
+      'createTransaction',
+    );
+    expect(mockCallable).toHaveBeenCalledWith(
       expect.objectContaining({
         description: 'Café manual',
         value_cents: 1234,
@@ -151,25 +151,24 @@ describe('useTransactions - criação manual Spark via batch', () => {
         date:        '2026-05-05',
         source:      'manual',
       }),
-      'tx-reserved-1',
     );
-    expect(mockHttpsCallable).not.toHaveBeenCalled();
-    expect(mockCallable).not.toHaveBeenCalled();
+    expect(mockCreateManualTransactionWithHistory).not.toHaveBeenCalled();
 
-    const [, payload] = mockCreateManualTransactionWithHistory.mock.calls[0] as [string, Record<string, unknown>, string];
-    expect(payload).not.toHaveProperty('id');
-    expect(payload).not.toHaveProperty('uid');
-    expect(payload).not.toHaveProperty('importHash');
-    expect(payload).not.toHaveProperty('value');
+    const [callPayload] = mockCallable.mock.calls[0] as [Record<string, unknown>];
+    expect(callPayload).not.toHaveProperty('id');
+    expect(callPayload).not.toHaveProperty('uid');
+    expect(callPayload).not.toHaveProperty('importHash');
+    expect(callPayload).not.toHaveProperty('value');
 
     unmount();
   });
 
-  it('reutiliza o mesmo txId reservado quando a mesma operação manual é reprocessada', async () => {
+  it('reusa o mesmo txId otimista e chama callable novamente no retry', async () => {
     const transientError = Object.assign(new Error('network timeout'), {
       code: 'unavailable',
     });
-    mockCreateManualTransactionWithHistory.mockRejectedValueOnce(transientError);
+    mockCallable.mockRejectedValueOnce(transientError);
+    mockCallable.mockResolvedValueOnce({ data: { id: 'tx-created-1' } });
     const { result, unmount } = renderHook(() => useTransactions('uid-1'));
 
     let addPromise!: Promise<string>;
@@ -185,26 +184,23 @@ describe('useTransactions - criação manual Spark via batch', () => {
       await Promise.resolve();
     });
 
-    await waitFor(() => expect(mockCreateManualTransactionWithHistory).toHaveBeenCalledTimes(1));
-    const firstTxId = mockCreateManualTransactionWithHistory.mock.calls[0]?.[2];
-    expect(firstTxId).toBe('tx-reserved-1');
+    await waitFor(() => expect(mockCallable).toHaveBeenCalledTimes(1));
+    // O item otimista reservado uma única vez
+    expect(mockDoc).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       window.dispatchEvent(new Event('online'));
       await Promise.resolve();
     });
 
-    await expect(addPromise).resolves.toBe('tx-reserved-1');
-    await waitFor(() => expect(mockCreateManualTransactionWithHistory).toHaveBeenCalledTimes(2));
-    expect(mockCreateManualTransactionWithHistory.mock.calls[1]?.[2]).toBe(firstTxId);
-    expect(mockDoc).toHaveBeenCalledTimes(1);
-    expect(mockHttpsCallable).not.toHaveBeenCalled();
-    expect(mockCallable).not.toHaveBeenCalled();
+    await expect(addPromise).resolves.toBe('tx-created-1');
+    await waitFor(() => expect(mockCallable).toHaveBeenCalledTimes(2));
+    expect(mockCreateManualTransactionWithHistory).not.toHaveBeenCalled();
 
     unmount();
   });
 
-  it('não chama logTransactionHistory para CREATE — o batch escreve history junto', async () => {
+  it('não chama logTransactionHistory para CREATE — callable escreve history server-side', async () => {
     const { result, unmount } = renderHook(() => useTransactions('uid-1'));
 
     await act(async () => {
@@ -218,7 +214,6 @@ describe('useTransactions - criação manual Spark via batch', () => {
       });
     });
 
-    // Nenhum log de CREATE separado — o helper escreve transaction + history no mesmo batch.
     const createCalls = mockLogTransactionHistory.mock.calls.filter(
       (c) => (c[2] as { action: string }).action === 'CREATE',
     );
@@ -227,11 +222,11 @@ describe('useTransactions - criação manual Spark via batch', () => {
     unmount();
   });
 
-  it('remove o item otimista quando a criação manual falha', async () => {
+  it('remove o item otimista quando o callable falha permanentemente', async () => {
     const permissionError = Object.assign(new Error('permission denied'), {
       code: 'permission-denied',
     });
-    mockCreateManualTransactionWithHistory.mockRejectedValueOnce(permissionError);
+    mockCallable.mockRejectedValueOnce(permissionError);
     const { result, unmount } = renderHook(() => useTransactions('uid-1'));
 
     await act(async () => {
@@ -246,7 +241,7 @@ describe('useTransactions - criação manual Spark via batch', () => {
     });
 
     await waitFor(() => expect(result.current.transactions).toHaveLength(0));
-    expect(mockCreateManualTransactionWithHistory).toHaveBeenCalledTimes(1);
+    expect(mockCallable).toHaveBeenCalledTimes(1);
 
     unmount();
   });
@@ -309,7 +304,7 @@ describe('useTransactions - criação manual Spark via batch', () => {
     await waitFor(() =>
       expect(mockUpdateTransactionWithHistory).toHaveBeenCalledWith(
         'uid-1',
-        'tx-reserved-1',
+        'tx-created-1',
         expect.objectContaining({ category: 'Transporte' }),
         expect.objectContaining({
           origin:        'ai',
