@@ -44,10 +44,16 @@ describe('financialSchemas - transações', () => {
   });
 
   it('rejeita tipo inválido', () => {
+    expect(transactionCreateSchema.safeParse({ ...baseTransaction, type: 'credito' }).success).toBe(false);
+    expect(transactionCreateSchema.safeParse({ ...baseTransaction, type: '' }).success).toBe(false);
+    expect(transactionCreateSchema.safeParse({ ...baseTransaction, type: 'ENTRADA' }).success).toBe(false);
+  });
+
+  it('aceita tipo transferencia', () => {
     expect(transactionCreateSchema.safeParse({
       ...baseTransaction,
       type: 'transferencia',
-    }).success).toBe(false);
+    }).success).toBe(true);
   });
 
   it('rejeita data inválida', () => {

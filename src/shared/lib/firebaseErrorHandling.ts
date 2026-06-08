@@ -46,6 +46,11 @@ export const FIREBASE_ERROR_OPERATIONS = [
   'data_delete_subcollections',
   'data_delete_auth_user',
   'unknown_operation',
+  'goals_load',
+  'goal_create',
+  'goal_delete',
+  'installment_group_load',
+  'installment_group_cancel',
 ] as const;
 
 export type FirebaseErrorOperation = typeof FIREBASE_ERROR_OPERATIONS[number];

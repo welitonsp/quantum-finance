@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Save, AlertCircle, TrendingDown, TrendingUp,
-  Calendar, DollarSign, Tag, FileText, CheckCircle, Plus,
+  Calendar, DollarSign, Tag, FileText, CheckCircle, Plus, CreditCard,
 } from 'lucide-react';
 import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
 import type { Transaction } from '../../shared/types/transaction';
@@ -11,6 +11,7 @@ import { isIncome } from '../../utils/transactionUtils';
 import { useCategories } from '../../hooks/useCategories';
 import { normalizeCategoryName, type UserCategory } from '../../shared/schemas/categorySchemas';
 import { getCategoryMeta } from '../../shared/lib/categoryStyles';
+import { FirestoreService } from '../../shared/services/FirestoreService';
 
 function formatCurrencyDisplay(raw: string): string | null {
   if (!raw.trim()) return null;
@@ -161,9 +162,11 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
   const [categorySearch, setCategorySearch] = useState('');
   const newCatRef = useRef<HTMLInputElement>(null);
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error,        setError]        = useState('');
-  const [saved,        setSaved]        = useState(false);
+  const [isSubmitting,     setIsSubmitting]     = useState(false);
+  const [error,            setError]            = useState('');
+  const [saved,            setSaved]            = useState(false);
+  const [installmentMode,  setInstallmentMode]  = useState(false);
+  const [installmentCount, setInstallmentCount] = useState(2);
   const descRef = useRef<HTMLInputElement>(null);
 
   const filteredCategories = useMemo(() => {
@@ -290,11 +293,20 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
       return;
     }
 
-    const value = fromCentavos(valueCents);
-
     setIsSubmitting(true); setError('');
     try {
-      await onSave({ ...formData, value, value_cents: valueCents });
+      if (installmentMode && !isEditing && formData.type === 'saida') {
+        await FirestoreService.createInstallmentGroupWithHistory(uid, {
+          description:      formData.description.trim(),
+          totalValueCents:  valueCents,
+          installmentCount: Math.max(2, Math.min(999, installmentCount)),
+          date:             formData.date,
+          category:         formData.category,
+        });
+      } else {
+        const value = fromCentavos(valueCents);
+        await onSave({ ...formData, value, value_cents: valueCents });
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 1200);
     } catch (err) {
@@ -395,6 +407,61 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
               <input type="date" name="date" value={formData.date} onChange={handleChange} className="input-quantum w-full" />
             </div>
           </div>
+
+          {/* ── Toggle parcelamento (apenas para despesas novas) ──────── */}
+          {formData.type === 'saida' && !isEditing && (
+            <div>
+              <button
+                type="button"
+                onClick={() => { setInstallmentMode(prev => !prev); setError(''); }}
+                className={`flex items-center gap-2 text-[11px] font-semibold rounded-lg px-3 py-2 border transition-colors w-full ${installmentMode ? 'bg-blue-500/15 border-blue-500/40 text-blue-300' : 'border-quantum-border text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/5'}`}
+              >
+                <CreditCard className="w-3.5 h-3.5 shrink-0" />
+                Parcelado?
+                <span className={`ml-auto text-[10px] font-bold uppercase tracking-wide ${installmentMode ? 'text-blue-300' : 'text-slate-600'}`}>
+                  {installmentMode ? 'Ativo' : 'Não'}
+                </span>
+              </button>
+
+              <AnimatePresence initial={false}>
+                {installmentMode && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-2 flex items-center gap-3">
+                      <label className="text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest whitespace-nowrap">
+                        Nº de parcelas
+                      </label>
+                      <input
+                        type="number"
+                        min={2}
+                        max={999}
+                        value={installmentCount}
+                        onChange={e => setInstallmentCount(Math.max(2, Math.min(999, parseInt(e.target.value, 10) || 2)))}
+                        className="input-quantum w-24 text-center"
+                      />
+                      {(() => {
+                        try {
+                          const cents = toCentavos(formData.value);
+                          if (cents > 0 && installmentCount >= 2) {
+                            return (
+                              <span className="text-[11px] text-quantum-fgMuted">
+                                ≈ {formatBRL(Math.floor(cents / installmentCount))} / parcela
+                              </span>
+                            );
+                          }
+                        } catch { /* valor ainda não preenchido */ }
+                        return null;
+                      })()}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
 
           <div>
             <label className="flex items-center gap-1.5 text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">

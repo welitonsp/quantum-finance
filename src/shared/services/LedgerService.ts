@@ -34,7 +34,7 @@ export interface LedgerImportInput {
 export interface NormalizedLedgerTransaction {
   description: string;
   value_cents: Centavos;
-  type: 'entrada' | 'saida';
+  type: 'entrada' | 'saida' | 'transferencia';
   category: string;
   date: string;
   source: FinancialSource;

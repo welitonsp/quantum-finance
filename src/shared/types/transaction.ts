@@ -4,7 +4,7 @@ import type { AllowedCategory } from '../schemas/financialSchemas';
 
 export type { AllowedCategory } from '../schemas/financialSchemas';
 
-export type CanonicalTransactionType = 'entrada' | 'saida';
+export type CanonicalTransactionType = 'entrada' | 'saida' | 'transferencia';
 export type LegacyTransactionType = 'receita' | 'despesa';
 export type TransactionType = CanonicalTransactionType | LegacyTransactionType;
 export type ReconciliationStatus = 'reconciled';
@@ -24,6 +24,18 @@ export interface Transaction {
   account?: string;
   accountId?: string;
   cardId?: string;
+  /** Conta de origem em transferências. Ausente em transações normais. */
+  fromAccountId?: string;
+  /** Conta de destino em transferências (accountId de conta ou id de cartão). */
+  toAccountId?: string;
+  /** ID do grupo de parcelamento — presente em todas as parcelas do mesmo grupo. */
+  installmentGroupId?: string;
+  /** Índice da parcela dentro do grupo (1-based). */
+  installmentIndex?: number;
+  /** Número total de parcelas do grupo. */
+  installmentCount?: number;
+  /** Valor total original do grupo em centavos (para display). */
+  installmentTotalCents?: Centavos;
   isRecurring?: boolean;
   tags?: string[];
   source?: 'csv' | 'ofx' | 'pdf' | 'manual';
@@ -57,6 +69,10 @@ export interface RecurringTask {
   active: boolean;
   type?: TransactionType;
   frequency?: 'mensal' | 'anual';
+  /** Mês de vencimento para tarefas anuais (1–12). Ignorado em tarefas mensais. */
+  dueMonth?: number;
+  /** Formato YYYY-MM — último mês em que esta tarefa foi materializada automaticamente. */
+  lastExecutedMonth?: string;
 }
 
 export interface Account {
@@ -94,6 +110,8 @@ export interface CreditCard {
 export interface CardMetrics {
   limitVal: number;
   faturaAtual: number;
+  /** Fatura atual em centavos inteiros (fonte canônica para cálculos financeiros). */
+  faturaCents: Centavos;
   disponivel: number;
   compromisso: number;
   daysUntilDue: number;
@@ -149,4 +167,18 @@ export interface UserCategory {
   keywords: string[];
   category: AllowedCategory | string;
   createdAt?: Timestamp | number | null;
+}
+
+export interface SavingsGoal {
+  id:           string;
+  name:         string;
+  /** Valor alvo em centavos inteiros. */
+  targetCents:  Centavos;
+  /** Valor acumulado atual em centavos inteiros (atualizado manualmente ou por cálculo). */
+  currentCents: Centavos;
+  /** Data limite ISO (YYYY-MM-DD), opcional. */
+  deadline?:    string | null;
+  emoji?:       string;
+  createdAt?:   Timestamp | number | null;
+  updatedAt?:   Timestamp | number | null;
 }

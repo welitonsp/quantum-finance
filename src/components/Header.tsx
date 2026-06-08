@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import {
   Menu, ChevronLeft, ChevronRight, Sun, Moon, Plus, Eye, EyeOff,
-  Flame, CalendarClock, Wind, Command,
+  Flame, CalendarClock, Wind, Command, ArrowRightLeft,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import ImportButton from '../features/transactions/ImportButton';
@@ -218,6 +218,7 @@ interface HeaderProps {
   setIsMobileMenuOpen: (v: boolean) => void;
   isFormOpen: boolean;
   setIsFormOpen: (v: boolean) => void;
+  onOpenTransferForm?: () => void;
   user: { uid?: string } | null;
   transactions: Transaction[];
   handleImport: (txs: Partial<Transaction>[]) => Promise<unknown> | void;
@@ -240,6 +241,7 @@ export default function Header({
   setIsMobileMenuOpen,
   isFormOpen,
   setIsFormOpen,
+  onOpenTransferForm,
   user,
   transactions,
   handleImport,
@@ -337,6 +339,17 @@ export default function Header({
             <div className="hidden xl:block">
               <ImportButton onImportTransactions={async (txs) => { await handleImport(txs as Partial<Transaction>[]); }} uid={user?.uid} existingTransactions={transactions} userRules={userRules} />
             </div>
+            {onOpenTransferForm && (
+              <button
+                onClick={onOpenTransferForm}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold border border-blue-500/40 text-blue-300 hover:bg-blue-500/10 transition-colors"
+                title="Nova Transferência"
+                aria-label="Registrar transferência entre contas"
+              >
+                <ArrowRightLeft className="w-4 h-4" />
+                <span className="hidden md:inline">Transferência</span>
+              </button>
+            )}
             <button
               onClick={() => setIsFormOpen(!isFormOpen)}
               className="btn-quantum-primary flex items-center gap-2"

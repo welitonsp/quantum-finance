@@ -49,8 +49,8 @@ export const categorySchema = z.string()
   .trim()
   .min(1, 'Categoria obrigatória.')
   .max(80, 'Categoria deve ter no máximo 80 caracteres.');
-export const transactionTypeSchema = z.enum(['entrada', 'saida'], {
-  message: "O tipo deve ser 'entrada' ou 'saida'.",
+export const transactionTypeSchema = z.enum(['entrada', 'saida', 'transferencia'], {
+  message: "O tipo deve ser 'entrada', 'saida' ou 'transferencia'.",
 });
 export const sourceSchema = z.enum(SOURCE_VALUES, { message: 'Fonte inválida.' });
 export const reconciliationStatusSchema = z.literal('reconciled');

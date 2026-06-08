@@ -4,10 +4,14 @@ import type { Transaction } from '../shared/types/transaction';
 import type { Centavos } from '../shared/types/money';
 import {
   calculateRunningBalances,
+  canonicalizeTransactionType,
   getTransactionOriginLabel,
+  isExpense,
   isImportedTransaction,
-  isReconciledTransaction,
+  isIncome,
   isImportedUnreconciledTransaction,
+  isReconciledTransaction,
+  isTransfer,
 } from './transactionUtils';
 
 const cents = (value: number): Centavos => value as Centavos;
@@ -196,5 +200,92 @@ describe('calculateRunningBalances', () => {
     // 'aaa' < 'zzz' lexicograficamente → aaa primeiro
     expect(balances['aaa']).toBe(500);
     expect(balances['zzz']).toBe(1500);
+  });
+});
+
+// ── FASE 11A-1: Primitivo de transferência ───────────────────────────────────
+
+describe('isTransfer', () => {
+  it('retorna true apenas para "transferencia"', () => {
+    expect(isTransfer('transferencia')).toBe(true);
+  });
+
+  it('retorna false para tipos de receita e despesa', () => {
+    expect(isTransfer('entrada')).toBe(false);
+    expect(isTransfer('saida')).toBe(false);
+    expect(isTransfer('receita')).toBe(false);
+    expect(isTransfer('despesa')).toBe(false);
+  });
+
+  it('retorna false para strings vazias e desconhecidas', () => {
+    expect(isTransfer('')).toBe(false);
+    expect(isTransfer('outro')).toBe(false);
+  });
+});
+
+describe('isIncome — exclui transferencia', () => {
+  it('retorna true para entrada e receita', () => {
+    expect(isIncome('entrada')).toBe(true);
+    expect(isIncome('receita')).toBe(true);
+  });
+
+  it('retorna false para transferencia', () => {
+    expect(isIncome('transferencia')).toBe(false);
+  });
+
+  it('retorna false para saida e despesa', () => {
+    expect(isIncome('saida')).toBe(false);
+    expect(isIncome('despesa')).toBe(false);
+  });
+});
+
+describe('isExpense — exclui transferencia', () => {
+  it('retorna true para saida e despesa', () => {
+    expect(isExpense('saida')).toBe(true);
+    expect(isExpense('despesa')).toBe(true);
+  });
+
+  it('retorna false para transferencia', () => {
+    expect(isExpense('transferencia')).toBe(false);
+  });
+
+  it('retorna false para entrada e receita', () => {
+    expect(isExpense('entrada')).toBe(false);
+    expect(isExpense('receita')).toBe(false);
+  });
+});
+
+describe('canonicalizeTransactionType — transferencia', () => {
+  it('preserva transferencia sem alterar para entrada ou saida', () => {
+    expect(canonicalizeTransactionType('transferencia')).toBe('transferencia');
+  });
+
+  it('continua mapeando entrada/receita para entrada', () => {
+    expect(canonicalizeTransactionType('entrada')).toBe('entrada');
+    expect(canonicalizeTransactionType('receita')).toBe('entrada');
+  });
+
+  it('continua mapeando saida/despesa/desconhecido para saida', () => {
+    expect(canonicalizeTransactionType('saida')).toBe('saida');
+    expect(canonicalizeTransactionType('despesa')).toBe('saida');
+    expect(canonicalizeTransactionType('outro')).toBe('saida');
+    expect(canonicalizeTransactionType(undefined)).toBe('saida');
+  });
+});
+
+describe('calculateRunningBalances — transferencia neutra', () => {
+  it('nao soma nem subtrai transferencia do saldo acumulado', () => {
+    const balances = calculateRunningBalances([
+      tx({ id: 'income',    type: 'entrada',      value_cents: cents(10000), date: '2026-05-01' }),
+      tx({ id: 'transfer',  type: 'transferencia', value_cents: cents(5000),  date: '2026-05-02' }),
+      tx({ id: 'expense',   type: 'saida',         value_cents: cents(2000),  date: '2026-05-03' }),
+    ]);
+
+    // income: +10000 → 10000
+    // transfer: neutro → 10000
+    // expense: -2000 → 8000
+    expect(balances['income']).toBe(10000);
+    expect(balances['transfer']).toBe(10000);
+    expect(balances['expense']).toBe(8000);
   });
 });

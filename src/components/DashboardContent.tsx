@@ -29,7 +29,12 @@ import { IntelStrip } from './IntelStrip';
 import KPICards from './KPICards';
 import type { Transaction, ModuleBalances, CategoryDataPoint, Account, RecurringTask } from '../shared/types/transaction';
 import { useFinancialMetrics } from '../hooks/useFinancialMetrics';
+import { useCreditCards } from '../hooks/useCreditCards';
 import QuantumInsights from './QuantumInsights';
+import FinancialHealthScore from './FinancialHealthScore';
+import GoalsPanel from './GoalsPanel';
+import AnomalyAlerts from './AnomalyAlerts';
+import { useRecurringAutoExecute } from '../hooks/useRecurringAutoExecute';
 import type { TimeRange } from '../hooks/useFinancialData';
 import type { UserCategory } from '../shared/schemas/categorySchemas';
 
@@ -197,7 +202,7 @@ export default function DashboardContent({
   categories = [],
 }: Props) {
   const { currentMonth, currentYear } = useNavigation();
-  void recurringTasks;
+  useRecurringAutoExecute(user?.uid ?? '', recurringTasks, loading);
 
   // ── Hero metrics from existing moduleBalances prop ────────────────────────
   const saldo    = moduleBalances?.geral?.saldo    ?? 0;
@@ -228,12 +233,15 @@ export default function DashboardContent({
 
   const { status, color, rec, score, savingsRate, debtRatio, goalProgress } = st;
 
+  const { totalFaturaCents } = useCreditCards(user?.uid ?? '', allTransactions);
+
   const { metrics, loadingMetrics } = useFinancialMetrics(
     user?.uid ?? '',
     allTransactions,
     accounts,
     currentMonth,
     currentYear,
+    totalFaturaCents,
   );
 
   const StatusIcon  = status === 'CRÍTICO' ? AlertTriangle : status === 'ATENÇÃO' ? Activity : CheckCircle2;
@@ -361,6 +369,21 @@ export default function DashboardContent({
       </motion.div>
 
       <QuantumInsights metrics={metrics} loading={loadingMetrics} />
+
+      <motion.div variants={itemVariants}>
+        <FinancialHealthScore metrics={metrics} loading={loadingMetrics} />
+      </motion.div>
+
+      <motion.div variants={itemVariants}>
+        <GoalsPanel
+          uid={user?.uid ?? ''}
+          {...(metrics ? { ativosCents: Math.round(metrics.ativos * 100) } : {})}
+        />
+      </motion.div>
+
+      <motion.div variants={itemVariants}>
+        <AnomalyAlerts transactions={allTransactions} />
+      </motion.div>
 
       {/* ── ALERTAS DE ORÇAMENTO — read-only ─────────────────── */}
       <motion.div variants={itemVariants}>

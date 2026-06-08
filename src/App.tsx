@@ -1,6 +1,6 @@
 import React, { useEffect, useState, lazy, Suspense, useCallback } from 'react';
 import { auth } from './shared/api/firebase/index';
-import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { BrainCircuit, AlertTriangle, Loader2 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
@@ -23,6 +23,7 @@ import LoginScreen from './components/LoginScreen';
 import QuantumBackground from './components/QuantumBackground';
 import DashboardContent from './components/DashboardContent';
 import TransactionForm from './features/transactions/TransactionForm';
+import TransferForm from './features/transactions/TransferForm';
 import CategorySettings from './components/CategorySettings';
 import type { Transaction } from './shared/types/transaction';
 
@@ -158,6 +159,8 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
     useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts, categories);
 
+  const [isTransferFormOpen, setIsTransferFormOpen] = useState(false);
+
   const {
     isAIChatOpen, setIsAIChatOpen, isFormOpen, setIsFormOpen, isSettingsOpen, setIsSettingsOpen,
     transactionToEdit, setTransactionToEdit, transactionToDelete, setTransactionToDelete,
@@ -246,6 +249,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
             setIsMobileMenuOpen={setIsMobileMenuOpen}
             isFormOpen={isFormOpen}
             setIsFormOpen={setIsFormOpen}
+            onOpenTransferForm={() => setIsTransferFormOpen(true)}
             user={user}
             transactions={transactions}
             handleImport={handleImport}
@@ -373,6 +377,13 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
           onCancelEdit={handleCloseForm}
         />
       )}
+      {isTransferFormOpen && (
+        <TransferForm
+          uid={safeUID}
+          accounts={accounts}
+          onClose={() => setIsTransferFormOpen(false)}
+        />
+      )}
     </div>
   );
 };
@@ -392,7 +403,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    return onAuthStateChanged(auth, (u) => { setUser(u); setAuthReady(true); });
+    return onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setAuthReady(true);
+      // Em modo emulador (E2E), faz login anônimo automático para não bloquear nos testes
+      if (!u && import.meta.env.VITE_USE_EMULATOR === 'true') {
+        void signInAnonymously(auth);
+      }
+    });
   }, []);
 
   const handleLogin = async () => {
