@@ -2,7 +2,7 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — FASES 11–23 — 2026-06-08
+## Estado Consolidado — FASES 11–24 — 2026-06-08
 
 > Blocos anteriores substituídos. Em caso de divergência, **este bloco é a referência**.
 
@@ -10,12 +10,13 @@
 - Branch principal: `main`.
 - Último commit na main: `4879a2f` — sync CLAUDE.md pós PRs #163 + #169
 - Último commit na main: `603c138` — merge PR #172 (FASES 21/22/23)
+- Último commit na main: merge PR #174 (FASE 24 — E2E 19/19 passing)
 - **Plano Firebase: BLAZE** (upgrade realizado em 2026-06-08)
 - 5 Cloud Functions deployadas em produção (`southamerica-east1`, Node.js 24, 2nd Gen)
 - Firestore Rules deployadas em produção
 - Stash legado preservado e intocado.
 
-### 2. Fases implementadas e mergeadas (PRs #163 + #169) + em PR aberto
+### 2. Fases implementadas e mergeadas
 
 | Fase | Escopo | PR |
 |---|---|---|
@@ -39,7 +40,8 @@
 | FASE 20C | Deploy produção: Firestore Rules + Functions (5 callables, Node.js 24, 2nd Gen, `southamerica-east1`) | #171 |
 | FASE 21 | `useRecurringAutoExecute` migrado para `httpsCallable('createTransaction')` Blaze; remove `Math.round` proibido | #172 |
 | FASE 22 | Toast de notificação ao auto-executar recorrentes: `onExecuted` callback + `toast.success` em `DashboardContent` | #172 |
-| FASE 23 | Fix E2E CI: `emulators:exec` substitui `emulators:start &` + `wait-on`; job blocking novamente (16/19 pass) | #172 |
+| FASE 23 | Fix E2E CI: `emulators:exec` substitui `emulators:start &` + `wait-on`; job blocking novamente | #172 |
+| FASE 24 | Fix 3 E2E `fixme`: import CSV (Dashboard + `aria-label` selector), goals progress bar (container `.h-2` selector) — 19/19 passing | #174 |
 
 ### 3. Contratos críticos vivos (inalterados)
 - `value_cents` é a fonte canônica. `value` legado **nunca** é usado em cálculo financeiro.
@@ -83,10 +85,9 @@ lastExecutedMonth?: string;        // formato YYYY-MM
 - Migração automática de float → `value_cents` continua **bloqueada**.
 
 ### 8. Próximas etapas recomendadas
-1. **QA funcional em produção**: testar criação de transação via callable, auto-execução de recorrentes, exclusão de conta via `deleteUserData`, busca server-side e filtro por categoria.
-2. **E2E `fixme` pendentes**: 3 testes marcados `fixme` — `04-import-csv` (2 testes de upload headless) e `05-goals-panel` (barra de progresso sem dados).
-3. **`firebase deploy --only firestore:indexes`** — confirmar propagação dos índices (`descriptionLower ASC + date DESC`, `category ASC + date DESC`).
-4. **VITE_SENTRY_DSN**: descartado por ora; reativar quando houver conta Sentry.
+1. **QA funcional em produção**: testar criação de transação via callable, auto-execução de recorrentes com toast, exclusão de conta via `deleteUserData`, busca server-side e filtro por categoria.
+2. **`firebase deploy --only firestore:indexes`** — confirmar propagação dos índices (`descriptionLower ASC + date DESC`, `category ASC + date DESC`).
+3. **VITE_SENTRY_DSN**: configurar DSN real no ambiente de produção para ativar Sentry.
 
 ### 9. Comandos de validação padrão
 ```bash
