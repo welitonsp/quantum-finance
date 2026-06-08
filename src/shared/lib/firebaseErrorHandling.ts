@@ -45,6 +45,7 @@ export const FIREBASE_ERROR_OPERATIONS = [
   'data_export',
   'data_delete_subcollections',
   'data_delete_auth_user',
+  'data_delete_account',
   'unknown_operation',
   'goals_load',
   'goal_create',

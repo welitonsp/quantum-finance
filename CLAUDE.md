@@ -2,18 +2,20 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — FASES 11–19A — 2026-06-08
+## Estado Consolidado — FASES 11–20C — 2026-06-08
 
 > Blocos anteriores substituídos. Em caso de divergência, **este bloco é a referência**.
 
 ### 1. Status atual
 - Branch principal: `main`.
-- Último commit na main: `4b35871` — merge do PR #169 (FASES 17B–19A)
-- PRs mergeados nesta sessão: #163 (FASES 11–17A), #169 (FASES 17B–19A)
-- Working tree limpo. Branch `feat/fases-17b-17c` deletada após merge.
+- Último commit na main: `4879a2f` — sync CLAUDE.md pós PRs #163 + #169
+- Branch ativa: `feat/fases-20a-20c` — FASES 20A/20B/20C implementadas, PR pendente de merge
+- **Plano Firebase: BLAZE** (upgrade realizado em 2026-06-08)
+- 5 Cloud Functions deployadas em produção (`southamerica-east1`, Node.js 24, 2nd Gen)
+- Firestore Rules deployadas em produção
 - Stash legado preservado e intocado.
 
-### 2. Fases implementadas e mergeadas (PRs #163 + #169)
+### 2. Fases implementadas e mergeadas (PRs #163 + #169) + em PR aberto
 
 | Fase | Escopo | PR |
 |---|---|---|
@@ -32,6 +34,9 @@
 | FASE 18C | Cache de emuladores no CI (E2E job) | #169 |
 | FASE 18D | UI select "Servidor" para filtro de categoria em `TransactionsManager` | #169 |
 | FASE 19A | Fix 5 P0 Firestore Rules: `txAllowedKeys` + history `after` + goals collection + recurring `dueMonth`/`lastExecutedMonth` + Modelo A em `useRecurringAutoExecute` | #169 |
+| FASE 20A | Migração `createTransaction`: Spark client-side → callable server-trusted Blaze (`httpsCallable`) | PR aberto |
+| FASE 20B | `deleteUserData` Cloud Function: `adminDb.recursiveDelete(users/{uid})` + `auth.deleteUser(uid)` (hard delete LGPD) | PR aberto |
+| FASE 20C | Deploy produção: Firestore Rules + Functions (5 callables, Node.js 24, 2nd Gen, `southamerica-east1`) | PR aberto |
 
 ### 3. Contratos críticos vivos (inalterados)
 - `value_cents` é a fonte canônica. `value` legado **nunca** é usado em cálculo financeiro.
@@ -43,17 +48,19 @@
 - Stash legado não deve ser tocado sem ordem explícita.
 
 ### 4. App Check — estado real
-- **`enforceAppCheck: true`** em **todas** as 4 Cloud Functions:
-  - `createTransaction` (linha 44 de `functions/index.js`)
-  - `categorizeTransactionsBatch` (linha 321)
-  - `chatWithQuantumAI` (linha 394)
-  - `generateAuditReport` (linha 434)
-- `consumeAppCheckToken` (replay protection) — **pendente**.
+- **`enforceAppCheck: true`** + **`consumeAppCheckToken: true`** em **todas as 5 Cloud Functions**:
+  - `createTransaction`
+  - `deleteUserData` (nova — FASE 20B)
+  - `categorizeTransactionsBatch`
+  - `chatWithQuantumAI`
+  - `generateAuditReport`
+- Replay protection (`consumeAppCheckToken`) **ativo** em todas as functions.
 
-### 5. LGPD — estado real (pós-PR #159, inalterado)
+### 5. LGPD — estado real (Blaze — FASE 20B)
 - `DataPrivacyService.ts`: `exportAllUserData()` + `deleteUserAccount()`.
 - `DataPrivacyPanel.tsx`: acessível via Settings na sidebar.
-- Hard delete via Admin SDK (Blaze) — **pendente**.
+- **Hard delete implementado**: `deleteUserData` callable usa `adminDb.recursiveDelete(users/{uid})` + `admin.auth().deleteUser(uid)`.
+- Hard delete via Admin SDK: **ATIVO** (requer Blaze — upgrade realizado).
 
 ### 6. Novos tipos em `Transaction` (FASES 11–15)
 ```ts
@@ -73,10 +80,10 @@ lastExecutedMonth?: string;        // formato YYYY-MM
 - Migração automática de float → `value_cents` continua **bloqueada**.
 
 ### 8. Próximas etapas recomendadas
-1. **`firebase deploy --only firestore:indexes`** — deploy dos 2 novos índices (`descriptionLower ASC + date DESC`, `category ASC + date DESC`).
+1. **`firebase deploy --only firestore:indexes`** — confirmar deploy dos índices (`descriptionLower ASC + date DESC`, `category ASC + date DESC`) após propagação.
 2. **Fix E2E CI emulator startup** — porta 8080 do Firestore emulator não fica pronta em 60s no GitHub Actions; investigar `firebase.json` host binding ou usar `firebase emulators:exec`.
-3. **Upgrade Blaze**: hard delete de `transactions`/`audit_logs` via Admin SDK.
-4. **VITE_SENTRY_DSN**: configurar DSN real no ambiente de produção para ativar Sentry.
+3. **VITE_SENTRY_DSN**: configurar DSN real no ambiente de produção para ativar Sentry.
+4. **QA funcional em produção**: testar criação de transação via callable, exclusão de conta via `deleteUserData`, busca server-side e filtro por categoria.
 
 ### 9. Comandos de validação padrão
 ```bash

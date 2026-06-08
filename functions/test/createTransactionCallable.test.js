@@ -142,6 +142,7 @@ describe('createTransaction callable', () => {
 
     assert.deepEqual(transactionWrite.payload, {
       description: 'Compra mercado',
+      descriptionLower: 'compra mercado',
       value_cents: 12345,
       type: 'saida',
       category: 'Alimentacao',
@@ -167,6 +168,7 @@ describe('createTransaction callable', () => {
     assert.deepEqual(historyWrite.payload.createdAt, { __op: 'serverTimestamp' });
     assert.deepEqual(historyWrite.payload.after, {
       description: 'Compra mercado',
+      descriptionLower: 'compra mercado',
       value_cents: 12345,
       schemaVersion: 2,
       type: 'saida',
@@ -181,6 +183,7 @@ describe('createTransaction callable', () => {
     });
     assert.deepEqual(historyWrite.payload.changedFields, [
       'description',
+      'descriptionLower',
       'value_cents',
       'schemaVersion',
       'type',

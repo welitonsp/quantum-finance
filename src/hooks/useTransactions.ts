@@ -3,8 +3,9 @@ import {
   collection, query, orderBy, onSnapshot, limit, where,
   doc, getDoc,
 } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { useTransactionsPagination } from './useTransactionsPagination';
-import { db } from '../shared/api/firebase/index';
+import { db, functions } from '../shared/api/firebase/index';
 import { FirestoreService } from '../shared/services/FirestoreService';
 import { AuditService } from '../shared/services/AuditService';
 import type { Transaction } from '../shared/types/transaction';
@@ -438,10 +439,28 @@ export function useTransactions(
       try {
         switch (op.type) {
           case 'add': {
-            // Modo Spark: transação + history gravados atomicamente por writeBatch validado em Rules.
-            debugSync('iniciando criação manual via batch Firestore', 'transaction_add');
-            const realId = await FirestoreService.createManualTransactionWithHistory(uid, op.data, op.txId);
-            debugSync('batch Firestore confirmado', 'transaction_add');
+            // Modo Blaze: callable server-trusted com App Check + audit atômico via Admin SDK.
+            debugSync('iniciando criação via callable server-trusted', 'transaction_add');
+            const callCreateTransaction = httpsCallable<Record<string, unknown>, { id: string }>(
+              functions, 'createTransaction'
+            );
+            const callPayload: Record<string, unknown> = {
+              description: op.data.description ?? '',
+              value_cents:  op.data.value_cents,
+              type:         op.data.type ?? 'saida',
+              category:     op.data.category ?? 'Outros',
+              date:         op.data.date ?? new Date().toISOString().slice(0, 10),
+              source:       'manual',
+              isRecurring:  op.data.isRecurring ?? false,
+            };
+            if (op.data.account   !== undefined) callPayload['account']   = op.data.account;
+            if (op.data.accountId !== undefined) callPayload['accountId'] = op.data.accountId;
+            if (op.data.cardId    !== undefined) callPayload['cardId']    = op.data.cardId;
+            if (op.data.fitId     !== undefined) callPayload['fitId']     = op.data.fitId;
+            if (Array.isArray(op.data.tags) && op.data.tags.length > 0) callPayload['tags'] = op.data.tags;
+            const result = await callCreateTransaction(callPayload);
+            const realId = result.data.id;
+            debugSync('callable confirmado', 'transaction_add');
             // O batch já escreveu transação + history de forma atômica — sem log CREATE separado
             const aiCb = postAddCallbacks.current.get(op.tempId);
             if (aiCb) {
