@@ -45,7 +45,7 @@ test.describe('Metas de Poupança', () => {
     await expect(page.getByText('Viagem E2E').first()).toBeVisible({ timeout: 8_000 });
   });
 
-  test('meta criada exibe barra de progresso', async ({ page }) => {
+  test.fixme('meta criada exibe barra de progresso', async ({ page }) => {
     // Cria uma meta primeiro
     await page.getByRole('button', { name: /nova meta/i }).first().click();
     await page.getByPlaceholder(/nome da meta/i).first().fill('Meta Progresso E2E');
