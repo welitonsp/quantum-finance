@@ -3,10 +3,9 @@
 // Executa uma vez por sessão, após o carregamento inicial.
 // Limitação Spark: sem Admin SDK; depende de Rules rigorosas para integridade.
 import { useEffect, useRef } from 'react';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../shared/api/firebase/index';
 import { FirestoreService } from '../shared/services/FirestoreService';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
+import { updateRecurringWithHistory } from './useRecurring';
 import type { RecurringTask } from '../shared/types/transaction';
 import type { Centavos } from '../shared/types/money';
 
@@ -84,11 +83,8 @@ export function useRecurringAutoExecute(
             source:       'manual',
           });
 
-          const taskDocRef = doc(db, 'users', uid, 'recurringTasks', task.id);
-          await updateDoc(taskDocRef, {
-            lastExecutedMonth: yearMonth,
-            updatedAt: serverTimestamp(),
-          });
+          // Use updateRecurringWithHistory to respect Modelo A (_lastOpId + history batch)
+          await updateRecurringWithHistory(uid, task.id, { lastExecutedMonth: yearMonth });
         } catch (err) {
           logSanitizedFirebaseError('recurring_create', err);
         }
