@@ -60,7 +60,9 @@ service cloud.firestore {
             'date', 'source', 'account', 'accountId', 'cardId', 'fitId',
             'tags', 'isRecurring', 'createdAt', 'updatedAt', 'isDeleted',
             'deletedAt', 'reconciliationStatus', 'reconciliationSource',
-            'reconciledAt', 'reconciledBy'
+            'reconciledAt', 'reconciledBy',
+            'installmentGroupId', 'installmentIndex', 'installmentCount', 'installmentTotalCents',
+            'descriptionLower'
           ]);
     }
 
@@ -108,7 +110,9 @@ service cloud.firestore {
         'isRecurring', 'importHash', 'createdAt', 'updatedAt', 'isDeleted',
         'deletedAt', 'reconciliationStatus', 'reconciliationSource',
         'reconciledAt', 'reconciledBy', '_lastOpId',
-        'fromAccountId', 'toAccountId'
+        'fromAccountId', 'toAccountId',
+        'installmentGroupId', 'installmentIndex', 'installmentCount', 'installmentTotalCents',
+        'descriptionLower'
       ];
     }
 
@@ -489,7 +493,7 @@ service cloud.firestore {
           && data.after.keys().hasOnly([
             'description', 'value_cents', 'schemaVersion', 'type', 'category',
             'date', 'source', 'account', 'accountId', 'cardId', 'fitId',
-            'tags', 'isRecurring'
+            'tags', 'isRecurring', 'descriptionLower'
           ])
           && data.after.description == tx.description
           && data.after.value_cents == tx.value_cents
@@ -527,7 +531,8 @@ service cloud.firestore {
           && data.after.keys().hasOnly([
             'description', 'value_cents', 'schemaVersion', 'type', 'category',
             'date', 'source', 'account', 'accountId', 'cardId', 'fitId',
-            'tags', 'isRecurring'
+            'tags', 'isRecurring', 'descriptionLower',
+            'installmentGroupId', 'installmentIndex', 'installmentCount', 'installmentTotalCents'
           ])
           && data.after.description == tx.description
           && data.after.value_cents == tx.value_cents
@@ -694,7 +699,8 @@ service cloud.firestore {
           && data.keys().hasOnly([
             'description', 'value', 'value_cents', 'type', 'category',
             'dueDay', 'active', 'frequency', 'schemaVersion',
-            'createdAt', 'updatedAt', 'uid', '_lastOpId'
+            'createdAt', 'updatedAt', 'uid', '_lastOpId',
+            'dueMonth', 'lastExecutedMonth'
           ])
           && (('value' in data) || ('value_cents' in data))
           && isStringSized(data.description, 2, 160)
@@ -751,14 +757,15 @@ service cloud.firestore {
     function recurringTaskSnapshotKeys() {
       return [
         'description', 'value_cents', 'type', 'category', 'dueDay', 'active',
-        'frequency', 'schemaVersion', 'createdAt', 'updatedAt'
+        'frequency', 'schemaVersion', 'createdAt', 'updatedAt',
+        'dueMonth', 'lastExecutedMonth'
       ];
     }
 
     function recurringTaskChangedFieldKeys() {
       return [
         'description', 'value_cents', 'type', 'category', 'dueDay', 'active',
-        'frequency', 'schemaVersion'
+        'frequency', 'schemaVersion', 'dueMonth', 'lastExecutedMonth'
       ];
     }
 
@@ -889,6 +896,32 @@ service cloud.firestore {
               || request.resource.data.updatedAt == request.time);
     }
 
+    function isValidGoal(data) {
+      return data.keys().hasAll(['name', 'targetCents', 'currentCents', 'createdAt', 'updatedAt'])
+          && data.keys().hasOnly([
+            'name', 'targetCents', 'currentCents', 'deadline', 'emoji', 'createdAt', 'updatedAt'
+          ])
+          && isStringSized(data.name, 1, 160)
+          && isPositiveSafeInt(data.targetCents)
+          && isSafeInt(data.currentCents)
+          && (!('deadline' in data) || data.deadline == null || isStringSized(data.deadline, 10, 10))
+          && (!('emoji' in data) || isStringSized(data.emoji, 1, 8));
+    }
+
+    function isValidGoalCreate(userId) {
+      let data = request.resource.data;
+      return isValidGoal(data)
+          && data.createdAt == request.time
+          && data.updatedAt == request.time;
+    }
+
+    function isValidGoalUpdate(userId) {
+      let data = request.resource.data;
+      return isValidGoal(data)
+          && data.createdAt == resource.data.createdAt
+          && data.updatedAt == request.time;
+    }
+
     match /users/{userId} {
       allow read, write: if isOwner(userId);
 
@@ -1009,6 +1042,13 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow create: if isOwner(userId) && isValidSimulationCreate(userId);
         allow update: if isOwner(userId) && isValidSimulationUpdate(userId);
+        allow delete: if isOwner(userId);
+      }
+
+      match /goals/{goalId} {
+        allow read:   if isOwner(userId);
+        allow create: if isOwner(userId) && isValidGoalCreate(userId);
+        allow update: if isOwner(userId) && isValidGoalUpdate(userId);
         allow delete: if isOwner(userId);
       }
     }

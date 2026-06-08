@@ -220,3 +220,38 @@ export function computeRecurringChangedFields(
     return JSON.stringify(beforeValue) !== JSON.stringify(afterValue);
   });
 }
+
+/**
+ * Standalone helper para atualizar uma recurringTask respeitando o Modelo A
+ * (_lastOpId + history no mesmo writeBatch). Usado por useRecurringAutoExecute.
+ */
+export async function updateRecurringWithHistory(
+  uid: string,
+  id: string,
+  data: Partial<RecurringTask>,
+): Promise<void> {
+  if (!uid || !id) return;
+  const finalData: Record<string, unknown> = { ...data };
+  if (data.value !== undefined) finalData['value'] = toCentavos(data.value);
+  finalData['updatedAt'] = serverTimestamp();
+  const correlationId = generateSafeOperationId('op');
+  finalData['_lastOpId'] = correlationId;
+  delete finalData['id'];
+  delete finalData['uid'];
+
+  const taskRef = doc(db, 'users', uid, 'recurringTasks', id);
+  const snap = await getDoc(taskRef);
+  if (!snap.exists()) return;
+  const before = sanitizeRecurringForHistory(snap.data());
+  const after = sanitizeRecurringForHistory({ ...snap.data(), ...finalData });
+  const batch = writeBatch(db);
+
+  batch.update(taskRef, finalData);
+  batch.set(doc(db, 'users', uid, 'recurringTasks', id, 'history', correlationId), {
+    ...buildRecurringHistory('UPDATE', id, correlationId),
+    before,
+    after,
+    changedFields: computeRecurringChangedFields(before, after),
+  });
+  await batch.commit();
+}

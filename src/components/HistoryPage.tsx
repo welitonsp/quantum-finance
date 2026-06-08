@@ -55,6 +55,11 @@ interface Props {
   isLoadingMore?: boolean;
   loadedCount?: number;
   loadMoreTransactions?: () => Promise<void>;
+  // ── Busca server-side ────────────────────────────────────────────────────
+  serverSearchTerm?: string;
+  onServerSearch?: (term: string) => void;
+  serverCategoryFilter?: string;
+  onServerCategoryFilter?: (cat: string) => void;
 }
 
 export default function HistoryPage({
@@ -75,6 +80,10 @@ export default function HistoryPage({
   isLoadingMore,
   loadedCount,
   loadMoreTransactions,
+  serverSearchTerm,
+  onServerSearch,
+  serverCategoryFilter,
+  onServerCategoryFilter,
 }: Props) {
   const stats = useMemo(() => {
     let totalIn = 0, totalOut = 0;
@@ -149,6 +158,10 @@ export default function HistoryPage({
           {...(isLoadingMore !== undefined ? { isLoadingMore } : {})}
           {...(loadedCount !== undefined ? { loadedCount } : {})}
           {...(loadMoreTransactions ? { loadMoreTransactions } : {})}
+          {...(onServerSearch ? { onServerSearch } : {})}
+          {...(serverSearchTerm !== undefined ? { serverSearchTerm } : {})}
+          {...(onServerCategoryFilter ? { onServerCategoryFilter } : {})}
+          {...(serverCategoryFilter !== undefined ? { serverCategoryFilter } : {})}
         />
       </motion.div>
     </div>

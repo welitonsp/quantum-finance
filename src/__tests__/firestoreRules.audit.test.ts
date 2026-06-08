@@ -2483,4 +2483,251 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       await assertFails(batch.commit());
     });
   });
+
+  // ── K. Parcelamentos e descriptionLower — FASE 19A ───────────────────────────
+
+  describe('K. installment fields + descriptionLower (FASE 19A)', () => {
+    const TX_INSTALLMENT = 'tx-installment-001';
+    const GROUP_ID = 'group-abc-001';
+
+    it('K1 — criação manual com installmentGroupId deve passar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'users', UID_A, 'transactions', TX_INSTALLMENT), {
+        description: 'Parcela 1/3',
+        descriptionLower: 'parcela 1/3',
+        value_cents: 10000,
+        schemaVersion: 2,
+        type: 'saida',
+        category: 'Outros',
+        date: '2026-06-01',
+        source: 'manual',
+        isRecurring: false,
+        installmentGroupId: GROUP_ID,
+        installmentIndex: 1,
+        installmentCount: 3,
+        installmentTotalCents: 30000,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      batch.set(doc(db, 'users', UID_A, 'transactions', TX_INSTALLMENT, 'history', 'create'), {
+        action: 'CREATE',
+        txId: TX_INSTALLMENT,
+        createdAt: serverTimestamp(),
+        schemaVersion: 1,
+        origin: 'manual',
+        amount_cents: 10000,
+        category: 'Outros',
+        changedFields: [
+          'description', 'descriptionLower', 'value_cents', 'schemaVersion', 'type',
+          'category', 'date', 'source', 'isRecurring',
+          'installmentGroupId', 'installmentIndex', 'installmentCount', 'installmentTotalCents',
+        ],
+        after: {
+          description: 'Parcela 1/3',
+          descriptionLower: 'parcela 1/3',
+          value_cents: 10000,
+          schemaVersion: 2,
+          type: 'saida',
+          category: 'Outros',
+          date: '2026-06-01',
+          source: 'manual',
+          isRecurring: false,
+          installmentGroupId: GROUP_ID,
+          installmentIndex: 1,
+          installmentCount: 3,
+          installmentTotalCents: 30000,
+        },
+      });
+      await assertSucceeds(batch.commit());
+    });
+
+    it('K2 — criação manual com descriptionLower sem parcelamento deve passar', async () => {
+      const TX_DESC = 'tx-desc-lower-001';
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'users', UID_A, 'transactions', TX_DESC), {
+        description: 'Supermercado ABC',
+        descriptionLower: 'supermercado abc',
+        value_cents: 5000,
+        schemaVersion: 2,
+        type: 'saida',
+        category: 'Alimentação',
+        date: '2026-06-01',
+        source: 'manual',
+        isRecurring: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      batch.set(doc(db, 'users', UID_A, 'transactions', TX_DESC, 'history', 'create'), {
+        action: 'CREATE',
+        txId: TX_DESC,
+        createdAt: serverTimestamp(),
+        schemaVersion: 1,
+        origin: 'manual',
+        amount_cents: 5000,
+        category: 'Alimentação',
+        changedFields: [
+          'description', 'descriptionLower', 'value_cents', 'schemaVersion',
+          'type', 'category', 'date', 'source', 'isRecurring',
+        ],
+        after: {
+          description: 'Supermercado ABC',
+          descriptionLower: 'supermercado abc',
+          value_cents: 5000,
+          schemaVersion: 2,
+          type: 'saida',
+          category: 'Alimentação',
+          date: '2026-06-01',
+          source: 'manual',
+          isRecurring: false,
+        },
+      });
+      await assertSucceeds(batch.commit());
+    });
+
+    it('K3 — changedFields com installmentGroupId deve passar na validação', async () => {
+      const TX_K3 = 'tx-cf-installment-001';
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'users', UID_A, 'transactions', TX_K3), {
+        description: 'Parcela 2/3',
+        descriptionLower: 'parcela 2/3',
+        value_cents: 10000,
+        schemaVersion: 2,
+        type: 'saida',
+        category: 'Outros',
+        date: '2026-07-01',
+        source: 'manual',
+        isRecurring: false,
+        installmentGroupId: GROUP_ID,
+        installmentIndex: 2,
+        installmentCount: 3,
+        installmentTotalCents: 30000,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      batch.set(doc(db, 'users', UID_A, 'transactions', TX_K3, 'history', 'create'), {
+        action: 'CREATE',
+        txId: TX_K3,
+        createdAt: serverTimestamp(),
+        schemaVersion: 1,
+        origin: 'manual',
+        amount_cents: 10000,
+        category: 'Outros',
+        changedFields: ['description', 'value_cents', 'schemaVersion', 'type', 'category', 'date', 'source', 'isRecurring', 'installmentGroupId', 'installmentIndex', 'installmentCount', 'installmentTotalCents', 'descriptionLower'],
+        after: {
+          description: 'Parcela 2/3',
+          value_cents: 10000,
+          schemaVersion: 2,
+          type: 'saida',
+          category: 'Outros',
+          date: '2026-07-01',
+          source: 'manual',
+          isRecurring: false,
+        },
+      });
+      await assertSucceeds(batch.commit());
+    });
+
+    it('K4 — campo extra proibido (privateField) ainda deve falhar', async () => {
+      const TX_K4 = 'tx-bad-field-001';
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'users', UID_A, 'transactions', TX_K4), {
+        description: 'Transação com campo proibido',
+        value_cents: 5000,
+        schemaVersion: 2,
+        type: 'saida',
+        category: 'Outros',
+        date: '2026-06-01',
+        source: 'manual',
+        isRecurring: false,
+        privateField: 'should-not-be-here',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      batch.set(doc(db, 'users', UID_A, 'transactions', TX_K4, 'history', 'create'), {
+        action: 'CREATE', txId: TX_K4, createdAt: serverTimestamp(), schemaVersion: 1,
+        origin: 'manual', amount_cents: 5000, category: 'Outros',
+        after: { type: 'saida', value_cents: 5000, date: '2026-06-01', source: 'manual', isRecurring: false },
+        changedFields: ['type', 'value_cents', 'date'],
+      });
+      await assertFails(batch.commit());
+    });
+  });
+
+  // ── L. Goals — FASE 19A ──────────────────────────────────────────────────────
+
+  describe('L. goals collection (FASE 19A)', () => {
+    it('L1 — criar meta pelo owner deve passar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'goals');
+      await assertSucceeds(addDoc(ref, {
+        name: 'Reserva de Emergência',
+        targetCents: 1000000,
+        currentCents: 0,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }));
+    });
+
+    it('L2 — criar meta com deadline e emoji deve passar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'goals');
+      await assertSucceeds(addDoc(ref, {
+        name: 'Viagem',
+        targetCents: 500000,
+        currentCents: 50000,
+        deadline: '2026-12-31',
+        emoji: '✈️',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }));
+    });
+
+    it('L3 — criar meta com campo extra proibido deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'goals');
+      await assertFails(addDoc(ref, {
+        name: 'Meta com campo extra',
+        targetCents: 100000,
+        currentCents: 0,
+        secretField: 'should-fail',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }));
+    });
+
+    it('L4 — usuário B não pode criar meta no path do usuário A', async () => {
+      const bob = testEnv.authenticatedContext(UID_B);
+      const ref = collection(bob.firestore(), 'users', UID_A, 'goals');
+      await assertFails(addDoc(ref, {
+        name: 'Meta invasora',
+        targetCents: 100000,
+        currentCents: 0,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }));
+    });
+
+    it('L5 — deletar meta pelo owner deve passar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const ref = collection(db, 'users', UID_A, 'goals');
+      const docRef = await addDoc(ref, {
+        name: 'Meta para deletar',
+        targetCents: 100000,
+        currentCents: 0,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      await assertSucceeds(deleteDoc(docRef));
+    });
+  });
 });
+

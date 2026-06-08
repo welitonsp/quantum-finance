@@ -44,6 +44,14 @@ export type SnapshotWindow = {
   dateTo: string;
 };
 
+// ─── ServerSearchParams — busca server-side por prefixo de descrição ou categoria ─
+export type ServerSearchParams = {
+  /** Minimum 2 characters. Triggers prefix search on descriptionLower field. */
+  term?: string;
+  /** Exact category filter. Applied server-side when term is absent. */
+  category?: string;
+};
+
 // ─── addBatchStreamed result ───────────────────────────────────────────────────
 export type StreamedBatchResult = {
   succeeded: string[];
@@ -225,6 +233,7 @@ export function useTransactions(
   uid: string,
   userRules: import('./useCategoryRules').UserCategoryRule[] = [],
   snapshotWindow?: SnapshotWindow,
+  serverSearch?: ServerSearchParams,
 ): UseTransactionsReturn {
   const [transactions,      setTransactions]      = useState<Transaction[]>([]);
   const [loading,           setLoading]           = useState(true);
@@ -297,19 +306,39 @@ export function useTransactions(
     setLoading(true);
     setError(null);
 
-    const q = snapshotWindow
+    const searchTerm = (serverSearch?.term ?? '').trim().toLowerCase();
+    const isTermSearch = searchTerm.length >= 2;
+    const categoryFilter = serverSearch?.category?.trim() ?? '';
+    const isCategorySearch = !isTermSearch && categoryFilter.length > 0;
+
+    const q = isTermSearch
       ? query(
           collection(db, 'users', uid, 'transactions'),
-          where('date', '>=', snapshotWindow.dateFrom),
-          where('date', '<=', snapshotWindow.dateTo),
-          orderBy('date', 'desc'),
+          where('descriptionLower', '>=', searchTerm),
+          where('descriptionLower', '<=', searchTerm + ''),
+          orderBy('descriptionLower', 'asc'),
           limit(PAGE_SIZE),
         )
-      : query(
-          collection(db, 'users', uid, 'transactions'),
-          orderBy('createdAt', 'desc'),
-          limit(PAGE_SIZE),
-        );
+      : isCategorySearch
+        ? query(
+            collection(db, 'users', uid, 'transactions'),
+            where('category', '==', categoryFilter),
+            orderBy('date', 'desc'),
+            limit(PAGE_SIZE),
+          )
+        : snapshotWindow
+          ? query(
+              collection(db, 'users', uid, 'transactions'),
+              where('date', '>=', snapshotWindow.dateFrom),
+              where('date', '<=', snapshotWindow.dateTo),
+              orderBy('date', 'desc'),
+              limit(PAGE_SIZE),
+            )
+          : query(
+              collection(db, 'users', uid, 'transactions'),
+              orderBy('createdAt', 'desc'),
+              limit(PAGE_SIZE),
+            );
 
     const unsub = onSnapshot(
       q,

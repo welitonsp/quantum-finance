@@ -16,6 +16,7 @@ import { useCategoryRules } from './hooks/useCategoryRules';
 import { useCategories } from './hooks/useCategories';
 import { useAppLogic } from './hooks/useAppLogic';
 import { logSanitizedFirebaseError } from './shared/lib/firebaseErrorHandling';
+import { captureError } from './shared/services/SentryService';
 
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -100,7 +101,10 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren, ErrorBounda
     this.state = { hasError: false };
   }
   static getDerivedStateFromError(): ErrorBoundaryState { return { hasError: true }; }
-  componentDidCatch(error: Error) { logSanitizedFirebaseError('app_error_boundary', error); }
+  componentDidCatch(error: Error) {
+    logSanitizedFirebaseError('app_error_boundary', error);
+    captureError('app_error_boundary', error);
+  }
   render() {
     if (this.state.hasError) {
       return (
@@ -148,12 +152,19 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   // Regras do usuário aplicadas em writes manuais; importação passa pelo LedgerService.
   const { asUserRules: userCategoryRules } = useCategoryRules(safeUID);
   const { categories } = useCategories(safeUID);
+  const [serverSearchTerm, setServerSearchTerm] = useState('');
+  const [serverCategoryFilter, setServerCategoryFilter] = useState('');
+  const serverSearch = serverSearchTerm.trim().length >= 2
+    ? { term: serverSearchTerm }
+    : serverCategoryFilter.trim().length > 0
+      ? { category: serverCategoryFilter }
+      : undefined;
   const {
     transactions, loading, add, remove, removeBatch, update,
     bulkUpdateTransactions, isBulkUpdating,
     undoLastBulkUpdate, isUndoing, hasUndoSnapshot, clearBulkSnapshot,
     hasMoreTransactions, isLoadingMore, loadedCount, loadMoreTransactions,
-  } = useTransactions(safeUID, userCategoryRules);
+  } = useTransactions(safeUID, userCategoryRules, undefined, serverSearch);
   const { accounts } = useAccounts(safeUID);
   const { recurringTasks } = useRecurring(safeUID);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
@@ -317,6 +328,10 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     isLoadingMore={isLoadingMore}
                     loadedCount={loadedCount}
                     loadMoreTransactions={loadMoreTransactions}
+                    serverSearchTerm={serverSearchTerm}
+                    onServerSearch={setServerSearchTerm}
+                    serverCategoryFilter={serverCategoryFilter}
+                    onServerCategoryFilter={setServerCategoryFilter}
                   />
                 )}
                 {currentPage === 'reports' && (

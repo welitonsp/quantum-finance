@@ -31,7 +31,20 @@ describe('App Check guardrails — full enforcement', () => {
     }
   });
 
-  it('does not enable App Check token consumption in any callable', () => {
-    assert.equal(source.includes('consumeAppCheckToken'), false);
+  it('enables App Check token consumption (replay protection) on all callables', () => {
+    for (const callableName of ALL_CALLABLES_WITH_APP_CHECK_ENFORCEMENT) {
+      assert.match(
+        callableOptions(callableName),
+        /\bconsumeAppCheckToken\s*:\s*true\b/,
+        `${callableName} must consume App Check token for replay protection`,
+      );
+    }
+  });
+
+  it('rejects already-consumed tokens in all callable handlers', () => {
+    assert.ok(
+      source.includes('alreadyConsumed'),
+      'handlers must check request.app?.alreadyConsumed',
+    );
   });
 });

@@ -3,22 +3,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RecurringTask } from '../shared/types/transaction';
 import type { Centavos } from '../shared/types/money';
 
-const mockCreateManual = vi.fn().mockResolvedValue('tx-new');
-const mockUpdateDoc    = vi.fn().mockResolvedValue(undefined);
-const mockServerTs     = vi.fn().mockReturnValue({ _type: 'serverTimestamp' });
-const mockDoc          = vi.fn().mockReturnValue({ id: 'task-doc-ref' });
+const mockCreateManual             = vi.fn().mockResolvedValue('tx-new');
+const mockUpdateRecurringWithHistory = vi.fn().mockResolvedValue(undefined);
 
-vi.mock('firebase/firestore', () => ({
-  doc:             mockDoc,
-  updateDoc:       mockUpdateDoc,
-  serverTimestamp: mockServerTs,
-}));
+vi.mock('firebase/firestore', () => ({}));
 vi.mock('../shared/api/firebase/index', () => ({ db: {} }));
 vi.mock('../shared/services/FirestoreService', () => ({
   FirestoreService: { createManualTransactionWithHistory: mockCreateManual },
 }));
 vi.mock('../shared/lib/firebaseErrorHandling', () => ({
   logSanitizedFirebaseError: vi.fn(),
+}));
+vi.mock('./useRecurring', () => ({
+  updateRecurringWithHistory: mockUpdateRecurringWithHistory,
 }));
 
 const { useRecurringAutoExecute, pendingTasks, dueDateForTask } = await import('./useRecurringAutoExecute');
@@ -118,12 +115,13 @@ describe('useRecurringAutoExecute', () => {
     unmount();
   });
 
-  it('atualiza lastExecutedMonth no documento da tarefa apos execucao', async () => {
+  it('atualiza lastExecutedMonth via updateRecurringWithHistory apos execucao', async () => {
     const tasks = [task({ dueDay: 1 })];
     const { unmount } = renderHook(() => useRecurringAutoExecute('uid-1', tasks, false));
-    await vi.waitFor(() => expect(mockUpdateDoc).toHaveBeenCalledTimes(1));
-    expect(mockUpdateDoc).toHaveBeenCalledWith(
-      expect.anything(),
+    await vi.waitFor(() => expect(mockUpdateRecurringWithHistory).toHaveBeenCalledTimes(1));
+    expect(mockUpdateRecurringWithHistory).toHaveBeenCalledWith(
+      'uid-1',
+      'task-1',
       expect.objectContaining({ lastExecutedMonth: YEARMONTH }),
     );
     unmount();

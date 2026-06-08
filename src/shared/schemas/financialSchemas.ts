@@ -69,6 +69,7 @@ const firestoreTimestampSchema = z.custom<unknown>(
 const transactionBaseSchema = z.object({
   ...forbiddenClientFields,
   description: z.string().trim().min(2, 'A descrição deve ter pelo menos 2 caracteres.').max(160),
+  descriptionLower: z.string().trim().max(160).optional(),
   value_cents: centavosSchema,
   type: transactionTypeSchema,
   category: categorySchema,
