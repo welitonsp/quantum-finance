@@ -45,7 +45,7 @@ test.describe('Metas de Poupança', () => {
     await expect(page.getByText('Viagem E2E').first()).toBeVisible({ timeout: 8_000 });
   });
 
-  test.fixme('meta criada exibe barra de progresso', async ({ page }) => {
+  test('meta criada exibe barra de progresso', async ({ page }) => {
     // Cria uma meta primeiro
     await page.getByRole('button', { name: /nova meta/i }).first().click();
     await page.getByPlaceholder(/nome da meta/i).first().fill('Meta Progresso E2E');
@@ -55,8 +55,9 @@ test.describe('Metas de Poupança', () => {
     // Aguarda a meta aparecer
     await expect(page.getByText('Meta Progresso E2E').first()).toBeVisible({ timeout: 8_000 });
 
-    // Barra de progresso deve existir (div com width style)
-    const progressBar = page.locator('[class*="rounded-full"][class*="h-full"]').first();
-    await expect(progressBar).toBeVisible({ timeout: 5_000 });
+    // Verifica o container da barra de progresso (sempre renderizado, independente do pct)
+    // O inner bar tem width: 0 quando não há progresso — verificamos o container h-2
+    const progressContainer = page.locator('.h-2.rounded-full').first();
+    await expect(progressContainer).toBeVisible({ timeout: 5_000 });
   });
 });
