@@ -4,7 +4,7 @@ const path = require('node:path');
 const { describe, it } = require('node:test');
 const { safeSystemLogDetail, sanitizeFunctionError } = require('../lib/lib/logger');
 
-const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.ts'), 'utf8');
 
 function evaluateSanitizer(context, error) {
   return {

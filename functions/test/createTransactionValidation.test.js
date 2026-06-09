@@ -4,7 +4,7 @@ const { describe, it } = require('node:test');
 const {
   CreateTransactionValidationError,
   validateCreateTransactionPayload,
-} = require('../createTransactionValidation');
+} = require('../lib/createTransactionValidation');
 
 function canonicalPayload(overrides = {}) {
   return {

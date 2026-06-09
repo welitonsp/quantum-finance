@@ -92,7 +92,7 @@ require.cache[adminModulePath] = {
   exports: mockAdmin,
 };
 
-const { createTransaction } = require('../index');
+const { createTransaction } = require('../lib/index');
 const wrappedCreateTransaction = testEnv.wrap(createTransaction);
 
 after(() => {
