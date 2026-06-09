@@ -1045,6 +1045,12 @@ service cloud.firestore {
         allow delete: if isOwner(userId);
       }
 
+      // Idempotency keys — escrito exclusivamente pelo Admin SDK (server-side).
+      // Clients nunca lêem nem escrevem nesta coleção.
+      match /idempotency/{keyId} {
+        allow read, write: if false;
+      }
+
       match /goals/{goalId} {
         allow read:   if isOwner(userId);
         allow create: if isOwner(userId) && isValidGoalCreate(userId);
