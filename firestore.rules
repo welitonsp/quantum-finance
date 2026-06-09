@@ -922,6 +922,17 @@ service cloud.firestore {
           && data.updatedAt == request.time;
     }
 
+    function isValidScoreHistoryWrite(monthId) {
+      let data = request.resource.data;
+      // monthId must be YYYY-MM format
+      return monthId.matches('^[0-9]{4}-[0-9]{2}$')
+          && data.keys().hasAll(['score', 'schemaVersion'])
+          && data.score is number
+          && data.score >= 0 && data.score <= 100
+          && data.schemaVersion == 1
+          && !data.keys().hasAny(['uid', 'id', 'importHash']);
+    }
+
     match /users/{userId} {
       allow read, write: if isOwner(userId);
 
@@ -1056,6 +1067,15 @@ service cloud.firestore {
         allow create: if isOwner(userId) && isValidGoalCreate(userId);
         allow update: if isOwner(userId) && isValidGoalUpdate(userId);
         allow delete: if isOwner(userId);
+      }
+
+      // Score history — persisted monthly by client; read-only after write.
+      // Document ID is YYYY-MM; schema is versioned.
+      match /scoreHistory/{monthId} {
+        allow read:   if isOwner(userId);
+        allow create: if isOwner(userId) && isValidScoreHistoryWrite(monthId);
+        allow update: if isOwner(userId) && isValidScoreHistoryWrite(monthId);
+        allow delete: if false;
       }
     }
 
