@@ -6,6 +6,7 @@ import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandlin
 import Decimal from 'decimal.js';
 import { formatCurrency } from '../../utils/formatters';
 import { fromCentavos } from '../../shared/schemas/financialSchemas';
+import { toCentavos } from '../../shared/types/money';
 import type { Account } from '../../shared/types/transaction';
 
 type AccountType = 'corrente' | 'poupanca' | 'investimento' | 'cartao' | 'divida';
@@ -33,10 +34,16 @@ export default function AccountsManager({ uid }: Props) {
   };
 
   const saveEdit = async (acc: Account) => {
-    const newBalance = parseFloat(editBalance.replace(',', '.'));
-    if (!editName.trim() || isNaN(newBalance)) { setEditingId(null); return; }
+    if (!editName.trim()) { setEditingId(null); return; }
+    let parsedBalance: number;
     try {
-      await updateAccount(acc.id, { name: editName.trim(), balance: newBalance });
+      parsedBalance = fromCentavos(toCentavos(editBalance.replace(/\./g, '').replace(',', '.')));
+    } catch {
+      setEditingId(null);
+      return;
+    }
+    try {
+      await updateAccount(acc.id, { name: editName.trim(), balance: parsedBalance });
     } catch (err) {
       logSanitizedFirebaseError('credit_card_update', err);
     } finally {
