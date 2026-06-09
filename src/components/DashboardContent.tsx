@@ -31,6 +31,8 @@ import type { Transaction, ModuleBalances, CategoryDataPoint, Account, Recurring
 import { useFinancialMetrics } from '../hooks/useFinancialMetrics';
 import { useCreditCards } from '../hooks/useCreditCards';
 import QuantumInsights from './QuantumInsights';
+import QuantumCopilotCards from './QuantumCopilotCards';
+import { useQuantumCopilot } from '../hooks/useQuantumCopilot';
 import FinancialHealthScore from './FinancialHealthScore';
 import GoalsPanel from './GoalsPanel';
 import AnomalyAlerts from './AnomalyAlerts';
@@ -284,6 +286,15 @@ export default function DashboardContent({
   // FIX: single source of truth for transactions
   } = useDashboardData(allTransactions, loading, categories);
 
+  const { insights: copilotInsights } = useQuantumCopilot({
+    uid:            user?.uid ?? '',
+    transactions:   allTransactions,
+    recurringTasks,
+    balance:        saldo,
+    timeRange,
+    loading,
+  });
+
   return (
     <motion.div
       variants={containerVariants}
@@ -384,6 +395,13 @@ export default function DashboardContent({
           {...(metrics ? { ativosCents: metrics.ativosCents } : {})}
         />
       </motion.div>
+
+      {/* ── QUANTUM COPILOT — insights proativos ─────────────── */}
+      {copilotInsights.length > 0 && (
+        <motion.div variants={itemVariants}>
+          <QuantumCopilotCards insights={copilotInsights} loading={loading} />
+        </motion.div>
+      )}
 
       <motion.div variants={itemVariants}>
         <AnomalyAlerts transactions={allTransactions} />
