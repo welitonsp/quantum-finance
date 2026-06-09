@@ -370,7 +370,11 @@ function debugRejectedUpdatePayload(err: unknown): void {
 function normalizeUpdatePayload(data: TransactionUpdateDTO): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
 
-  if (data.description !== undefined) payload['description'] = data.description.trim();
+  if (data.description !== undefined) {
+    const trimmed = data.description.trim();
+    payload['description'] = trimmed;
+    payload['descriptionLower'] = trimmed.toLowerCase();
+  }
   if (data.value_cents !== undefined || data.value !== undefined) {
     payload['value_cents'] = resolveCentavos(data);
     payload['schemaVersion'] = 2;
