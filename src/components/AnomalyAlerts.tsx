@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, TrendingDown, TrendingUp } from 'lucide-react';
 import { GeminiService } from '../features/ai-chat/GeminiService';
 import type { Transaction } from '../shared/types/transaction';
-import { formatBRL, fromCentavos } from '../shared/types/money';
+import { formatBRL } from '../shared/types/money';
 
 interface Props {
   transactions: Transaction[];
@@ -83,11 +83,11 @@ export default function AnomalyAlerts({ transactions }: Props) {
                 <div className="flex items-center gap-4 shrink-0 ml-3">
                   <div className="text-right hidden sm:block">
                     <p className="text-[10px] text-quantum-fgMuted">Média</p>
-                    <p className="text-xs font-bold text-quantum-fg">{formatBRL(fromCentavos(Math.round(a.avg * 100)))}</p>
+                    <p className="text-xs font-bold text-quantum-fg">{formatBRL(a.avg)}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] text-quantum-fgMuted">Este mês</p>
-                    <p className="text-xs font-bold text-quantum-fg">{formatBRL(fromCentavos(Math.round(a.current * 100)))}</p>
+                    <p className="text-xs font-bold text-quantum-fg">{formatBRL(a.current)}</p>
                   </div>
                   <span className={`text-sm font-black w-16 text-right ${color}`}>
                     {isUp ? '+' : ''}{a.delta}%
