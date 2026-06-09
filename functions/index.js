@@ -65,14 +65,34 @@ exports.createTransaction = onCall(
     if (!rawPayload || typeof rawPayload !== 'object' || Array.isArray(rawPayload)) {
       throw new HttpsError('invalid-argument', 'Payload deve ser um objeto JSON.');
     }
+
+    // ── Idempotência: extraída antes da validação (não é campo financeiro) ────
+    const IDEM_KEY_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const idempotencyKey = typeof rawPayload.idempotencyKey === 'string'
+      && IDEM_KEY_RE.test(rawPayload.idempotencyKey)
+      ? rawPayload.idempotencyKey
+      : null;
+
+    // Strip idempotencyKey before schema validation so it doesn't fail unknown-field check
+    const { idempotencyKey: _stripped, ...financialPayload } = rawPayload;
+    void _stripped;
+
     let data;
     try {
-      data = validateCreateTransactionPayload(rawPayload);
+      data = validateCreateTransactionPayload(financialPayload);
     } catch (error) {
       if (error instanceof CreateTransactionValidationError) {
         throw new HttpsError('invalid-argument', error.message);
       }
       throw error;
+    }
+
+    if (idempotencyKey) {
+      const idemRef = adminDb.doc(`users/${uid}/idempotency/${idempotencyKey}`);
+      const idemSnap = await idemRef.get();
+      if (idemSnap.exists) {
+        return { id: idemSnap.data().txId };
+      }
     }
 
     // ── descriptionLower derivado server-side (busca por prefixo) ────────────
@@ -146,12 +166,24 @@ exports.createTransaction = onCall(
     };
 
     // ── Escrita atômica via runTransaction ───────────────────────────────────
-    await adminDb.runTransaction(async (t) => {
+    const opResult = await adminDb.runTransaction(async (t) => {
+      if (idempotencyKey) {
+        const idemRef  = adminDb.doc(`users/${uid}/idempotency/${idempotencyKey}`);
+        const idemSnap = await t.get(idemRef);
+        if (idemSnap.exists) {
+          return { id: idemSnap.data().txId };
+        }
+        t.set(idemRef, {
+          txId:      txRef.id,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
       t.set(txRef,   txPayload);
       t.set(histRef, histPayload);
+      return { id: txRef.id };
     });
 
-    return { id: txRef.id };
+    return { id: opResult.id };
   }
 );
 
