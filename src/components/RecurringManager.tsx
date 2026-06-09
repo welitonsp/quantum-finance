@@ -219,7 +219,7 @@ export default function RecurringManager({ uid }: Props) {
                       </div>
                     </div>
                     <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                      <span className="font-mono text-base font-bold text-quantum-fg">{formatCurrency(Number(item.value))}</span>
+                      <span className="font-mono text-base font-bold text-quantum-fg">{formatCurrency(item.value_cents !== undefined ? fromCentavos(item.value_cents) : item.value)}</span>
                       <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
                         <button
                           onClick={() => void handleToggleActive(item)}
@@ -334,7 +334,7 @@ export default function RecurringManager({ uid }: Props) {
 
             <div className="bg-quantum-bg p-4 rounded-xl mb-6 border border-quantum-border">
               <p className="text-sm font-bold truncate text-quantum-fg">"{itemToDelete.description}"</p>
-              <p className="text-xs font-mono text-red-400 mt-1">{formatCurrency(Number(itemToDelete.value))}</p>
+              <p className="text-xs font-mono text-red-400 mt-1">{formatCurrency(itemToDelete.value_cents !== undefined ? fromCentavos(itemToDelete.value_cents) : itemToDelete.value)}</p>
             </div>
 
             <div className="flex gap-3">

@@ -381,7 +381,7 @@ export default function DashboardContent({
       <motion.div variants={itemVariants}>
         <GoalsPanel
           uid={user?.uid ?? ''}
-          {...(metrics ? { ativosCents: Math.round(metrics.ativos * 100) } : {})}
+          {...(metrics ? { ativosCents: metrics.ativosCents } : {})}
         />
       </motion.div>
 

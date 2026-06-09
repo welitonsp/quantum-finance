@@ -16,8 +16,10 @@ import { getTransactionCentavos } from '../utils/transactionUtils';
 export interface FinancialMetrics {
   receita:           number;
   despesa:           number;
-  /** Saldo líquido das contas de ativos (corrente + poupança + investimento) */
+  /** Saldo líquido das contas de ativos (corrente + poupança + investimento) em reais */
   ativos:            number;
+  /** Saldo líquido das contas de ativos em centavos inteiros — fonte canônica para GoalsPanel */
+  ativosCents:       number;
   /** Soma absoluta das contas de passivos (cartão + dívida) */
   passivos:          number;
   patrimonioLiquido: number;
@@ -172,6 +174,7 @@ export function computeFinancialMetrics(
     receita:           fromCentavos(receita.toNumber()),
     despesa:           fromCentavos(despesa.toNumber()),
     ativos:            fromCentavos(ativos.toNumber()),
+    ativosCents:       ativos.toDecimalPlaces(0, Decimal.ROUND_FLOOR).toNumber(),
     passivos:          fromCentavos(passivos.toNumber()),
     patrimonioLiquido: fromCentavos(patrimonioLiquido.toNumber()),
     custoFixoMensal:   fromCentavos(custoFixoMensal.toNumber()),
