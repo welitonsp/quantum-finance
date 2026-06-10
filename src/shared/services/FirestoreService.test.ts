@@ -1749,6 +1749,18 @@ describe('FirestoreService.createInstallmentGroupWithHistory', () => {
     ).rejects.toThrow();
   });
 
+  it('lança erro quando installmentCount > 120', async () => {
+    await expect(
+      FirestoreService.createInstallmentGroupWithHistory('uid1', {
+        description:      'X',
+        totalValueCents:  10000 as never,
+        installmentCount: 121,
+        date:             '2026-06-01',
+        category:         'Outros',
+      }),
+    ).rejects.toThrow('installmentCount deve ser entre 2 e 120');
+  });
+
   it('retorna o groupId (string não vazia)', async () => {
     const id = await FirestoreService.createInstallmentGroupWithHistory('uid1', {
       description:      'Ar-condicionado',
