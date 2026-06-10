@@ -37,6 +37,7 @@ import { useScoreHistory } from '../hooks/useScoreHistory';
 import FinancialHealthScore from './FinancialHealthScore';
 import WeeklyCashflowWidget from './WeeklyCashflowWidget';
 import { useWeeklyCashflow } from '../hooks/useWeeklyCashflow';
+import EconomyChallengeWidget from './EconomyChallengeWidget';
 import GoalsPanel from './GoalsPanel';
 import AnomalyAlerts from './AnomalyAlerts';
 import toast from 'react-hot-toast';
@@ -408,6 +409,14 @@ export default function DashboardContent({
         <GoalsPanel
           uid={user?.uid ?? ''}
           {...(metrics ? { ativosCents: metrics.ativosCents } : {})}
+        />
+      </motion.div>
+
+      <motion.div variants={itemVariants}>
+        <EconomyChallengeWidget
+          uid={user?.uid ?? ''}
+          transactions={allTransactions}
+          loading={loading}
         />
       </motion.div>
 
