@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import { useCreditCards } from '../../hooks/useCreditCards';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 import { fromCentavos } from '../../shared/schemas/financialSchemas';
+import { formatCurrency } from '../../utils/formatters';
 import type { CreditCard as CreditCardType, CreditCardWithMetrics, Transaction } from '../../shared/types/transaction';
 import type { MoneyInput } from '../../shared/types/money';
 
@@ -98,13 +99,13 @@ function CardVisual({ card }: { card: CreditCardWithMetrics }) {
             <div>
               <p className="text-[9px] uppercase tracking-widest text-white/30 mb-0.5">Disponível</p>
               <p className="text-sm font-black font-mono text-quantum-fg">
-                R$ {metrics.disponivel.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                {formatCurrency(fromCentavos(metrics.disponivelCents))}
               </p>
             </div>
             <div className="text-right">
               <p className="text-[9px] uppercase tracking-widest text-white/30 mb-0.5">Limite Total</p>
               <p className="text-sm font-bold font-mono" style={{ color: `${color}CC` }}>
-                R$ {metrics.limitVal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                {formatCurrency(fromCentavos(metrics.limitCents))}
               </p>
             </div>
           </div>
@@ -348,11 +349,11 @@ export default function CreditCardManager({ uid, transactions = [] }: Props) {
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div className="bg-quantum-bgSecondary rounded-xl p-2.5">
                       <p className="text-[9px] text-quantum-fgMuted uppercase tracking-wider mb-1">Fatura</p>
-                      <p className="text-xs font-bold text-quantum-red font-mono">R$ {card.metrics.faturaAtual.toFixed(0)}</p>
+                      <p className="text-xs font-bold text-quantum-red font-mono">{formatCurrency(fromCentavos(card.metrics.faturaCents))}</p>
                     </div>
                     <div className="bg-quantum-bgSecondary rounded-xl p-2.5">
                       <p className="text-[9px] text-quantum-fgMuted uppercase tracking-wider mb-1">Livre</p>
-                      <p className="text-xs font-bold text-quantum-accent font-mono">R$ {card.metrics.disponivel.toFixed(0)}</p>
+                      <p className="text-xs font-bold text-quantum-accent font-mono">{formatCurrency(fromCentavos(card.metrics.disponivelCents))}</p>
                     </div>
                     <div className="bg-quantum-bgSecondary rounded-xl p-2.5">
                       <p className="text-[9px] text-quantum-fgMuted uppercase tracking-wider mb-1">Fecho</p>
