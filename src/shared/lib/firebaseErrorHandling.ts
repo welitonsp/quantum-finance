@@ -58,6 +58,7 @@ export const FIREBASE_ERROR_OPERATIONS = [
   'user_consents_save',
   'score_history_persist',
   'score_history_load',
+  'challenges_load',
 ] as const;
 
 export type FirebaseErrorOperation = typeof FIREBASE_ERROR_OPERATIONS[number];

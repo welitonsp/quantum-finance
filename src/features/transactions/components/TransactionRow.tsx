@@ -149,6 +149,23 @@ export const TransactionRow = React.memo(function TransactionRow({
                 : <History className="w-2.5 h-2.5" />}
               {getTransactionOriginLabel(tx)}
             </span>
+
+            {tx.riskScore === 'anomalous' && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-red-500/10 border border-red-500/25 text-red-400 text-[9px] font-black uppercase tracking-wider"
+                title="Valor muito acima da média desta categoria"
+              >
+                🔴 Anômala
+              </span>
+            )}
+            {tx.riskScore === 'elevated' && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-400 text-[9px] font-black uppercase tracking-wider"
+                title="Valor acima da média desta categoria"
+              >
+                🟡 Elevada
+              </span>
+            )}
           </div>
 
           <span className="text-[10px] text-quantum-fgMuted font-mono border-l border-quantum-border pl-2">
