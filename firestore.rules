@@ -933,6 +933,36 @@ service cloud.firestore {
           && !data.keys().hasAny(['uid', 'id', 'importHash']);
     }
 
+    function isValidChallengeWrite() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['category', 'targetPct', 'baselineCents', 'deadlineDays',
+                                  'startDate', 'endDate', 'xp', 'status', 'schemaVersion'])
+          && data.keys().hasOnly(['category', 'targetPct', 'baselineCents', 'deadlineDays',
+                                   'startDate', 'endDate', 'xp', 'status', 'schemaVersion', 'createdAt'])
+          && data.category is string && data.category.size() > 0
+          && data.targetPct is number && data.targetPct >= 1 && data.targetPct <= 100
+          && data.baselineCents is int && data.baselineCents >= 0
+          && data.deadlineDays is int && data.deadlineDays >= 1
+          && data.startDate is string
+          && data.endDate is string
+          && data.xp is int && data.xp >= 0
+          && data.status in ['active', 'won', 'lost']
+          && data.schemaVersion == 1
+          && !data.keys().hasAny(['uid', 'id', 'importHash']);
+    }
+
+    function isValidChallengeUpdate() {
+      let data = request.resource.data;
+      return data.keys().hasOnly(['category', 'targetPct', 'baselineCents', 'deadlineDays',
+                                   'startDate', 'endDate', 'xp', 'status', 'schemaVersion', 'createdAt'])
+          && data.xp is int && data.xp >= 0
+          && data.status in ['active', 'won', 'lost']
+          && data.schemaVersion == 1
+          && data.category == resource.data.category
+          && !data.keys().hasAny(['uid', 'id', 'importHash']);
+    }
+
+
     match /users/{userId} {
       allow read, write: if isOwner(userId);
 
@@ -1076,6 +1106,13 @@ service cloud.firestore {
         allow create: if isOwner(userId) && isValidScoreHistoryWrite(monthId);
         allow update: if isOwner(userId) && isValidScoreHistoryWrite(monthId);
         allow delete: if false;
+      }
+
+      match /challenges/{challengeId} {
+        allow read:   if isOwner(userId);
+        allow create: if isOwner(userId) && isValidChallengeWrite();
+        allow update: if isOwner(userId) && isValidChallengeUpdate();
+        allow delete: if isOwner(userId);
       }
     }
 
