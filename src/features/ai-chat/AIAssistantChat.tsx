@@ -1,9 +1,48 @@
-import { useState, useEffect, useRef } from 'react';
-import { X, Send, BrainCircuit, User } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { X, Send, BrainCircuit, User, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GeminiService } from './GeminiService';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 import type { Transaction, ModuleBalances } from '../../shared/types/transaction';
+
+// ─── Rate-limit helpers (localStorage, no PII stored) ─────────────────────────
+
+const RATE_LIMIT_KEY  = 'qf_ai_calls';
+const RATE_LIMIT_MAX  = 20;
+const RATE_LIMIT_WARN = 18;
+const RATE_WINDOW_MS  = 60 * 60 * 1000; // 1 hour rolling window
+
+function loadCallTimestamps(): number[] {
+  try {
+    const raw = localStorage.getItem(RATE_LIMIT_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return (parsed as unknown[]).filter((v): v is number => typeof v === 'number');
+  } catch {
+    return [];
+  }
+}
+
+function saveCallTimestamps(ts: number[]): void {
+  try {
+    localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(ts));
+  } catch {
+    // storage unavailable — fail silently
+  }
+}
+
+function getActiveCalls(): number[] {
+  const now = Date.now();
+  return loadCallTimestamps().filter(t => now - t < RATE_WINDOW_MS);
+}
+
+function recordCall(): void {
+  const active = getActiveCalls();
+  saveCallTimestamps([...active, Date.now()]);
+}
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface Message {
   role: 'ai' | 'user';
@@ -17,27 +56,44 @@ interface Props {
   onClose: () => void;
 }
 
+// ─── Component ─────────────────────────────────────────────────────────────────
+
 export const AIAssistantChat = ({ transactions, balances, isOpen, onClose }: Props) => {
   const [messages, setMessages] = useState<Message[]>([
     { role: 'ai', text: 'Olá, Comandante! Sou a Quantum AI — Auditora Financeira de Elite. Posso cruzar os seus dados, detetar anomalias e calcular o seu Burn Rate. Como posso ajudar?' },
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading,    setIsLoading]    = useState(false);
+  const [callCount,    setCallCount]    = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Sync callCount from localStorage whenever the chat opens or after a call.
+  const refreshCount = useCallback(() => {
+    setCallCount(getActiveCalls().length);
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) refreshCount();
+  }, [isOpen, refreshCount]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const rateLimitReached = callCount >= RATE_LIMIT_MAX;
+  const rateLimitWarning = callCount >= RATE_LIMIT_WARN && !rateLimitReached;
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputMessage.trim()) return;
+    if (!inputMessage.trim() || rateLimitReached) return;
 
-    const userText   = inputMessage.trim();
+    const userText = inputMessage.trim();
     setInputMessage('');
-    const newMessages: Message[] = [...messages, { role: 'user', text: userText }];
-    setMessages(newMessages);
+    setMessages(prev => [...prev, { role: 'user', text: userText }]);
     setIsLoading(true);
+
+    recordCall();
+    refreshCount();
 
     try {
       const aiResponse = await GeminiService.getFinancialAdvice(userText, {
@@ -71,6 +127,7 @@ export const AIAssistantChat = ({ transactions, balances, isOpen, onClose }: Pro
             <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-quantum-accent/8 rounded-full blur-3xl" />
           </div>
 
+          {/* Header */}
           <div className="p-4 bg-quantum-bg/80 border-b border-quantum-border flex items-center justify-between relative z-10">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-quantum-accent/15 rounded-xl border border-quantum-accent/20 shadow-[0_0_12px_rgba(0,230,138,0.2)]">
@@ -89,6 +146,7 @@ export const AIAssistantChat = ({ transactions, balances, isOpen, onClose }: Pro
             </button>
           </div>
 
+          {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar relative z-10">
             <AnimatePresence initial={false}>
               {messages.map((msg, idx) => (
@@ -125,16 +183,35 @@ export const AIAssistantChat = ({ transactions, balances, isOpen, onClose }: Pro
             <div ref={messagesEndRef} />
           </div>
 
-          <form onSubmit={(e) => void handleSendMessage(e)} className="p-4 bg-quantum-bg/80 border-t border-quantum-border flex gap-2 relative z-10">
-            <input
-              type="text" value={inputMessage} onChange={e => setInputMessage(e.target.value)}
-              placeholder="Analise os meus gastos, Comandante..." disabled={isLoading}
-              className="flex-1 bg-quantum-bgSecondary border border-quantum-border rounded-xl px-4 py-2.5 text-sm text-quantum-fg placeholder:text-quantum-fgMuted focus:outline-none focus:border-quantum-accent/50 focus:shadow-[0_0_0_2px_rgba(0,230,138,0.1)] transition-all disabled:opacity-50"
-            />
-            <button type="submit" disabled={isLoading || !inputMessage.trim()}
-              className="p-2.5 bg-quantum-accent/90 hover:bg-quantum-accent text-quantum-bg rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(0,230,138,0.25)] hover:shadow-[0_0_20px_rgba(0,230,138,0.4)] active:scale-95">
-              <Send className="w-5 h-5" />
-            </button>
+          {/* Input */}
+          <form onSubmit={(e) => void handleSendMessage(e)} className="p-4 bg-quantum-bg/80 border-t border-quantum-border flex flex-col gap-2 relative z-10">
+            {/* Rate limit indicator */}
+            <div className="flex items-center justify-between text-xs px-0.5">
+              <span className={`${rateLimitWarning ? 'text-amber-400' : rateLimitReached ? 'text-red-400 font-medium' : 'text-quantum-fgMuted'}`}>
+                {callCount}/{RATE_LIMIT_MAX} chamadas usadas neste período
+              </span>
+              {(rateLimitWarning || rateLimitReached) && (
+                <AlertTriangle className={`w-3.5 h-3.5 ${rateLimitReached ? 'text-red-400' : 'text-amber-400'}`} />
+              )}
+            </div>
+
+            {rateLimitReached ? (
+              <p className="text-xs text-red-400 text-center py-1">
+                Limite atingido. Tente novamente em breve.
+              </p>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="text" value={inputMessage} onChange={e => setInputMessage(e.target.value)}
+                  placeholder="Analise os meus gastos, Comandante..." disabled={isLoading}
+                  className="flex-1 bg-quantum-bgSecondary border border-quantum-border rounded-xl px-4 py-2.5 text-sm text-quantum-fg placeholder:text-quantum-fgMuted focus:outline-none focus:border-quantum-accent/50 focus:shadow-[0_0_0_2px_rgba(0,230,138,0.1)] transition-all disabled:opacity-50"
+                />
+                <button type="submit" disabled={isLoading || !inputMessage.trim()}
+                  className="p-2.5 bg-quantum-accent/90 hover:bg-quantum-accent text-quantum-bg rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(0,230,138,0.25)] hover:shadow-[0_0_20px_rgba(0,230,138,0.4)] active:scale-95">
+                  <Send className="w-5 h-5" />
+                </button>
+              </div>
+            )}
           </form>
         </motion.div>
       )}
