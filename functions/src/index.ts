@@ -10,6 +10,7 @@
  */
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as admin from 'firebase-admin';
@@ -565,5 +566,159 @@ export const generateAuditReport = onCall(
       void writeStructuredLog(uid, 'ERROR', safeSystemLogDetail('ai_audit_report'));
       throw new HttpsError('internal', 'Falha no motor de auditoria.');
     }
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNÇÃO 5 — executeScheduledRecurrents (agendada — 1×/dia às 04:00 UTC)
+// Itera todas as recurringTasks ativas via collectionGroup, materializa as
+// pendentes no mês corrente e atualiza lastExecutedMonth atomicamente.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function serverYearMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function serverTodayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function serverDueDateForTask(dueDay: number, yearMonth: string): string {
+  const [y, m] = yearMonth.split('-').map(Number);
+  const lastDay = new Date((y ?? 2000), (m ?? 1), 0).getDate();
+  const day = Math.min(dueDay, lastDay);
+  return `${yearMonth}-${String(day).padStart(2, '0')}`;
+}
+
+/**
+ * Pure helper: returns true if the task should execute on the given day.
+ * Exported for unit testing in functions/test/.
+ *
+ * @param task         Recurring task data snapshot
+ * @param dayOfMonth   Current day of month (1–31)
+ * @param currentMonth Current month (1–12)
+ * @param monthKey     YYYY-MM string for the current month
+ */
+export function isTaskDueToday(
+  task: Record<string, unknown>,
+  dayOfMonth: number,
+  currentMonth: number,
+  monthKey: string,
+): boolean {
+  if (task['active'] !== true) return false;
+
+  const dueDay: number = typeof task['dueDay'] === 'number' ? task['dueDay'] : 1;
+
+  if (task['frequency'] === 'anual') {
+    const dueMonth: number = typeof task['dueMonth'] === 'number' ? task['dueMonth'] : 1;
+    if (dueMonth !== currentMonth) return false;
+    if (task['lastExecutedMonth'] === monthKey) return false;
+    return dayOfMonth === dueDay;
+  }
+
+  // Mensal
+  if (task['lastExecutedMonth'] === monthKey) return false;
+  return dayOfMonth === dueDay;
+}
+
+function shouldExecuteTask(task: admin.firestore.DocumentData, yearMonth: string, today: string): boolean {
+  if (!task['value_cents'] || typeof task['value_cents'] !== 'number') return false;
+  const [, monthStr] = yearMonth.split('-');
+  const currentMonth = Number(monthStr);
+  const dayOfMonth = Number(today.split('-')[2]);
+  return isTaskDueToday(task as Record<string, unknown>, dayOfMonth, currentMonth, yearMonth);
+}
+
+export const executeScheduledRecurrents = onSchedule(
+  {
+    schedule: '0 4 * * *', // 04:00 UTC = 01:00 BRT
+    region: REGION,
+    timeoutSeconds: 540,
+    memory: '256MiB',
+  },
+  async () => {
+    const yearMonth = serverYearMonth();
+    const today     = serverTodayISO();
+
+    let executed = 0;
+    let skipped  = 0;
+    let errors   = 0;
+
+    const tasksSnap = await adminDb
+      .collectionGroup('recurringTasks')
+      .where('active', '==', true)
+      .get();
+
+    for (const taskDoc of tasksSnap.docs) {
+      const task    = taskDoc.data();
+      const pathParts = taskDoc.ref.path.split('/');
+      const uid = pathParts[1]; // users/{uid}/recurringTasks/{id}
+      if (!uid) { errors++; continue; }
+
+      if (!shouldExecuteTask(task, yearMonth, today)) { skipped++; continue; }
+
+      try {
+        await adminDb.runTransaction(async (txn) => {
+          // Re-read inside transaction to prevent race conditions
+          const freshTask = await txn.get(taskDoc.ref);
+          if (!freshTask.exists) return;
+          if (!shouldExecuteTask(freshTask.data()!, yearMonth, today)) return;
+
+          const descriptionLower = String(task['description'] ?? '').trim().toLowerCase();
+          const txRef   = adminDb.collection(`users/${uid}/transactions`).doc();
+          const histRef = txRef.collection('history').doc('create');
+
+          const txPayload = {
+            description:      String(task['description'] ?? ''),
+            descriptionLower,
+            value_cents:      task['value_cents'] as number,
+            type:             String(task['type'] ?? 'saida'),
+            category:         String(task['category'] ?? 'Outros'),
+            date:             serverDueDateForTask(task['dueDay'] as number, yearMonth),
+            source:           'manual',
+            schemaVersion:    2,
+            isRecurring:      true,
+            createdAt:        admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt:        admin.firestore.FieldValue.serverTimestamp(),
+          };
+
+          const histPayload = {
+            action:        'CREATE',
+            txId:          txRef.id,
+            createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+            schemaVersion: 1,
+            origin:        'recurring',
+            amount_cents:  task['value_cents'] as number,
+            category:      String(task['category'] ?? 'Outros'),
+            after:         {
+              description:   txPayload.description,
+              descriptionLower,
+              value_cents:   txPayload.value_cents,
+              schemaVersion: 2,
+              type:          txPayload.type,
+              category:      txPayload.category,
+              date:          txPayload.date,
+              source:        'manual',
+              isRecurring:   true,
+            },
+            changedFields: ['description', 'descriptionLower', 'value_cents', 'schemaVersion', 'type', 'category', 'date', 'source', 'isRecurring'],
+          };
+
+          txn.set(txRef, txPayload);
+          txn.set(histRef, histPayload);
+          txn.update(taskDoc.ref, {
+            lastExecutedMonth: yearMonth,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        });
+        executed++;
+      } catch (e) {
+        errors++;
+        console.warn('[FunctionWarning]', sanitizeFunctionError('recurring_schedule', e));
+      }
+    }
+
+    console.info('[executeScheduledRecurrents]', { yearMonth, executed, skipped, errors });
   },
 );
