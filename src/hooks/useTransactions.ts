@@ -21,6 +21,7 @@ import {
 } from '../shared/lib/firebaseErrorHandling';
 import { generateSafeOperationId } from '../shared/lib/operationTrace';
 import toast from 'react-hot-toast';
+import { enqueue as offlineEnqueue } from '../lib/offlineQueue';
 import {
   normalizeTransaction,
   normalizeWriteData,
@@ -193,6 +194,11 @@ async function fetchTransactionForHistory(uid: string, id: string): Promise<Tran
 
 function getErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+function isNetworkUnavailableError(err: unknown): boolean {
+  const code = getFirebaseErrorCode(err);
+  return code === 'unavailable' || code === 'network-request-failed';
 }
 
 function shouldRetrySyncError(err: unknown): boolean {
@@ -559,6 +565,31 @@ export function useTransactions(
         op.retries++;
         const operation = operationFromQueueOp(op.type);
         logSanitizedFirebaseError(operation, err);
+
+        // Network unavailable on an add op — persist to offline queue for later sync
+        if (op.type === 'add' && isNetworkUnavailableError(err)) {
+          offlineEnqueue({
+            type: 'createTransaction',
+            payload: {
+              value_cents: typeof op.data.value_cents === 'number' ? op.data.value_cents : 0,
+              category:    op.data.category ?? 'Outros',
+              type:        op.data.type ?? 'saida',
+              date:        op.data.date ?? new Date().toISOString().slice(0, 10),
+              description: op.data.description ?? '',
+              ...(op.data.account !== undefined ? { account: op.data.account } : {}),
+              tempId:      op.tempId,
+              idempotencyKey: op.idempotencyKey,
+            },
+          });
+          toast('Operação salva localmente. Será sincronizada quando a conexão retornar.', { icon: '📶', duration: 4000 });
+          // Resolve with tempId so the UI doesn't hang; real ID will come on sync
+          pendingAddResolvers.current.get(op.tempId)?.resolve(op.tempId);
+          pendingAddResolvers.current.delete(op.tempId);
+          postAddCallbacks.current.delete(op.tempId);
+          pendingAdds.current.delete(op.tempId);
+          queueRef.current.shift();
+          continue;
+        }
 
         if (op.retries >= MAX_RETRIES || !shouldRetrySyncError(err)) {
           console.warn('[SyncQueue] operação descartada após tentativas', { operation });

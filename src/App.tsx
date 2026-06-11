@@ -17,6 +17,7 @@ import { useCategories } from './hooks/useCategories';
 import { useAppLogic } from './hooks/useAppLogic';
 import { useCreditCards } from './hooks/useCreditCards';
 import { logSanitizedFirebaseError } from './shared/lib/firebaseErrorHandling';
+import { getQueue, dequeue } from './lib/offlineQueue';
 
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -26,6 +27,7 @@ import DashboardContent from './components/DashboardContent';
 import TransactionForm from './features/transactions/TransactionForm';
 import TransferForm from './features/transactions/TransferForm';
 import CategorySettings from './components/CategorySettings';
+import { ConnectionStatusBadge } from './components/ConnectionStatusBadge';
 import type { Transaction } from './shared/types/transaction';
 
 // ─── Lazy-loaded pages ───────────────────────────────────────────────────────
@@ -166,6 +168,28 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
     undoLastBulkUpdate, isUndoing, hasUndoSnapshot, clearBulkSnapshot,
     hasMoreTransactions, isLoadingMore, loadedCount, loadMoreTransactions,
   } = useTransactions(safeUID, userCategoryRules, undefined, serverSearch);
+  // ── Sync offline queue when coming back online ────────────────────────────
+  const syncPendingOps = useCallback(async () => {
+    const pending = getQueue();
+    if (pending.length === 0) return;
+    for (const entry of pending) {
+      try {
+        if (entry.type === 'createTransaction') {
+          await add(entry.payload as Parameters<typeof add>[0]);
+          dequeue(entry.id);
+        }
+      } catch (err) {
+        logSanitizedFirebaseError('transaction_add', err);
+      }
+    }
+  }, [add]);
+
+  useEffect(() => {
+    const onSync = () => { void syncPendingOps(); };
+    window.addEventListener('qf:sync-pending', onSync);
+    return () => window.removeEventListener('qf:sync-pending', onSync);
+  }, [syncPendingOps]);
+
   const { accounts } = useAccounts(safeUID);
   const { recurringTasks } = useRecurring(safeUID);
   // totalFaturaCents: faturas abertas de cartões — passivo corrente para o net worth
@@ -229,6 +253,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   return (
     <div className="flex h-screen overflow-hidden font-sans transition-colors duration-500 relative">
       <Toaster position="bottom-right" />
+      <ConnectionStatusBadge />
       <ConfirmDeleteModal
         transaction={transactionToDelete}
         onCancel={() => setTransactionToDelete(null)}
