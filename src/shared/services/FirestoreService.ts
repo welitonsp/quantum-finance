@@ -113,13 +113,18 @@ const HISTORY_SNAPSHOT_ALLOWED_KEYS = new Set(
 );
 const LEGACY_REPAIR_DELETE_SENTINELS = new WeakSet<object>();
 
-export interface TransferCreateDTO {
-  fromAccountId: string;
-  toAccountId:   string;
-  value_cents:   Centavos;
-  date:          string;
-  description?:  string;
-}
+export const TransferCreateDTOSchema = z.object({
+  fromAccountId: z.string().min(1),
+  toAccountId:   z.string().min(1),
+  value_cents:   z.number().int().positive(),
+  date:          z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  description:   z.string().max(160).optional(),
+}).strict().refine(
+  d => d.fromAccountId !== d.toAccountId,
+  { message: 'Origem e destino não podem ser iguais.', path: ['toAccountId'] },
+);
+
+export type TransferCreateDTO = z.infer<typeof TransferCreateDTOSchema>;
 
 export interface InstallmentGroupCreateDTO {
   description:      string;
@@ -952,11 +957,9 @@ export const FirestoreService = {
     txId?: string,
   ): Promise<string> {
     if (!uid) throw new Error('[Firestore][createTransferWithHistory] UID ausente.');
-    if (!data.fromAccountId || !data.toAccountId) {
-      throw new Error('[Firestore][createTransferWithHistory] fromAccountId e toAccountId obrigatórios.');
-    }
-    if (data.fromAccountId === data.toAccountId) {
-      throw new Error('[Firestore][createTransferWithHistory] Origem e destino não podem ser iguais.');
+    const parsed = TransferCreateDTOSchema.safeParse(data);
+    if (!parsed.success) {
+      throw new Error(`[Firestore][createTransferWithHistory] ${parsed.error.issues[0]?.message ?? 'Payload inválido.'}`);
     }
     if (txId !== undefined) assertValidManualTxId(txId);
 
@@ -966,18 +969,19 @@ export const FirestoreService = {
       'create',
     );
     const timestamp = serverTimestamp();
-    const valueCents = Math.abs(data.value_cents) as Centavos;
+    const valueCents = Math.abs(parsed.data.value_cents) as Centavos;
 
+    const { fromAccountId, toAccountId, date, description } = parsed.data;
     const txPayload = {
-      description:   data.description?.trim() ?? 'Transferência',
+      description:   description?.trim() ?? 'Transferência',
       value_cents:   valueCents,
       schemaVersion: 2 as const,
       type:          'transferencia' as const,
       category:      'Transferência',
-      date:          data.date,
+      date,
       source:        'manual' as const,
-      fromAccountId: data.fromAccountId,
-      toAccountId:   data.toAccountId,
+      fromAccountId,
+      toAccountId,
       isRecurring:   false,
       createdAt:     timestamp,
       updatedAt:     timestamp,
@@ -986,10 +990,10 @@ export const FirestoreService = {
     const afterSnapshot = {
       type:          'transferencia',
       value_cents:   valueCents,
-      date:          data.date,
+      date,
       source:        'manual',
-      fromAccountId: data.fromAccountId,
-      toAccountId:   data.toAccountId,
+      fromAccountId,
+      toAccountId,
     };
 
     const historyPayload = {

@@ -84,7 +84,7 @@ export default function TransferForm({ uid, accounts, onClose, initialValues }: 
     const dto: TransferCreateDTO = {
       fromAccountId,
       toAccountId,
-      value_cents: cents as never,
+      value_cents: cents as Centavos,
       date,
       ...(description.trim() ? { description: description.trim() } : {}),
     };
