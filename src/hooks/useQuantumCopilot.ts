@@ -23,6 +23,8 @@ interface Params {
   balance:        number;
   timeRange:      TimeRange;
   loading:        boolean;
+  /** Financial health score 0–100 from useFinancialMetrics (optional). */
+  healthScore?:   number;
 }
 
 const SEC = { 'Assinaturas': true, 'assinaturas': true };
@@ -61,6 +63,7 @@ export function computeCopilotInsights(
   transactions: Transaction[],
   recurringTasks: RecurringTask[],
   balance: number,
+  healthScore?: number,
 ): CopilotInsight[] {
   const insights: CopilotInsight[] = [];
   const now = new Date();
@@ -224,6 +227,39 @@ export function computeCopilotInsights(
     }
   }
 
+  // ── 6. Financial health score ───────────────────────────────────────────────
+  if (typeof healthScore === 'number' && Number.isFinite(healthScore)) {
+    const score = Math.round(Math.max(0, Math.min(100, healthScore)));
+    let severity: InsightSeverity;
+    let emoji: string;
+    let title: string;
+    let body: string;
+
+    if (score >= 80) {
+      severity = 'positive';
+      emoji    = '🏅';
+      title    = `Saúde Financeira: ${score}/100`;
+      body     = `Sua pontuação de saúde financeira está excelente. Continue mantendo bons hábitos de poupança e controle de dívidas.`;
+    } else if (score >= 60) {
+      severity = 'info';
+      emoji    = '💡';
+      title    = `Saúde Financeira: ${score}/100`;
+      body     = `Sua saúde financeira está boa, mas há espaço para melhorar. Avalie reduzir o comprometimento de renda em despesas fixas.`;
+    } else if (score >= 40) {
+      severity = 'warning';
+      emoji    = '⚠️';
+      title    = `Saúde Financeira: ${score}/100`;
+      body     = `Atenção: sua pontuação financeira indica vulnerabilidade. Foque em reduzir passivos e aumentar a reserva de emergência.`;
+    } else {
+      severity = 'critical';
+      emoji    = '🚨';
+      title    = `Saúde Financeira Crítica: ${score}/100`;
+      body     = `Situação financeira requer ação imediata. Reduza gastos discricionários e priorize quitar as dívidas de maior custo.`;
+    }
+
+    insights.push({ id: 'health-score', severity, emoji, title, body, metric: `${score}/100` });
+  }
+
   // Limit to 5 most relevant, prioritizing critical/warning
   const priority: Record<InsightSeverity, number> = { critical: 0, warning: 1, info: 2, positive: 3 };
   return insights
@@ -238,11 +274,12 @@ export function useQuantumCopilot({
   balance,
   timeRange,
   loading,
+  healthScore,
 }: Params): { insights: CopilotInsight[]; hasInsights: boolean } {
   const insights = useMemo(() => {
     if (!uid || loading || transactions.length === 0) return [];
-    return computeCopilotInsights(transactions, recurringTasks, balance);
-  }, [uid, loading, transactions, recurringTasks, balance, timeRange]); // timeRange triggers refresh
+    return computeCopilotInsights(transactions, recurringTasks, balance, healthScore);
+  }, [uid, loading, transactions, recurringTasks, balance, timeRange, healthScore]); // timeRange triggers refresh
 
   return { insights, hasInsights: insights.length > 0 };
 }
