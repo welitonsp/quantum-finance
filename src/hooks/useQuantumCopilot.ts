@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { Transaction, RecurringTask } from '../shared/types/transaction';
-import { fromCentavos } from '../shared/types/money';
+import { formatBRL } from '../shared/types/money';
+import type { Centavos } from '../shared/types/money';
 import { getTransactionCentavos } from '../utils/transactionUtils';
 import type { TimeRange } from './useFinancialData';
 
@@ -87,7 +88,7 @@ export function computeCopilotInsights(
         severity: daysLeft <= 15 ? 'critical' : daysLeft <= 30 ? 'warning' : 'info',
         emoji:    '🔥',
         title:    'Burn Rate da Reserva',
-        body:     `Ao ritmo atual de R$ ${fromCentavos(Math.round(dailyBurnCents)).toFixed(0)}/dia, sua reserva esgota em ${daysLeft} dias.`,
+        body:     `Ao ritmo atual de ${formatBRL(Math.round(dailyBurnCents) as Centavos)}/dia, sua reserva esgota em ${daysLeft} dias.`,
         metric:   `${daysLeft}d restantes`,
       });
     } else if (projectedEnd > 0) {
@@ -100,7 +101,7 @@ export function computeCopilotInsights(
             severity: pct >= 100 ? 'critical' : 'warning',
             emoji:    '🔥',
             title:    'Projeção de Gastos',
-            body:     `Projeção: R$ ${fromCentavos(Math.round(projectedEnd)).toFixed(0)} até fim do mês — ${pct}% da receita.`,
+            body:     `Projeção: ${formatBRL(Math.round(projectedEnd) as Centavos)} até fim do mês — ${pct}% da receita.`,
             metric:   `${pct}% da receita`,
           });
         }
@@ -164,8 +165,8 @@ export function computeCopilotInsights(
       severity: subTasks.length >= 5 ? 'warning' : 'info',
       emoji:    '📦',
       title:    `${subTasks.length} Assinaturas Ativas`,
-      body:     `Você tem ${subTasks.length} assinaturas recorrentes totalizando R$ ${fromCentavos(totalSubCents).toFixed(0)}/mês.`,
-      metric:   `R$ ${fromCentavos(totalSubCents).toFixed(0)}/mês`,
+      body:     `Você tem ${subTasks.length} assinaturas recorrentes totalizando ${formatBRL(totalSubCents as Centavos)}/mês.`,
+      metric:   `${formatBRL(totalSubCents as Centavos)}/mês`,
     });
   }
 
@@ -190,7 +191,7 @@ export function computeCopilotInsights(
         emoji:    isUp ? '📊' : '✅',
         title:    isUp ? 'Gastos Semanais Acima' : 'Ótima Semana!',
         body:     isUp
-          ? `Esta semana você gastou ${Math.round(weekDelta)}% mais que na semana passada (R$ ${fromCentavos(curWeekCents).toFixed(0)} vs R$ ${fromCentavos(prevWeekCents).toFixed(0)}).`
+          ? `Esta semana você gastou ${Math.round(weekDelta)}% mais que na semana passada (${formatBRL(curWeekCents as Centavos)} vs ${formatBRL(prevWeekCents as Centavos)}).`
           : `Esta semana você gastou ${Math.round(Math.abs(weekDelta))}% menos que na semana passada — boa contenção!`,
         metric:   `${isUp ? '+' : '-'}${Math.round(Math.abs(weekDelta))}% semana`,
       });
@@ -217,8 +218,8 @@ export function computeCopilotInsights(
         severity: 'critical',
         emoji:    '🚨',
         title:    'Despesas Superam Receitas',
-        body:     `Seus gastos já superam a renda em R$ ${fromCentavos(Math.abs(savedCents)).toFixed(0)} este mês.`,
-        metric:   `−R$ ${fromCentavos(Math.abs(savedCents)).toFixed(0)}`,
+        body:     `Seus gastos já superam a renda em ${formatBRL(Math.abs(savedCents) as Centavos)} este mês.`,
+        metric:   `−${formatBRL(Math.abs(savedCents) as Centavos)}`,
       });
     }
   }

@@ -110,10 +110,17 @@ export interface CreditCard {
 }
 
 export interface CardMetrics {
+  /** @deprecated use limitCents + formatBRL for display */
   limitVal: number;
+  /** @deprecated use faturaCents + formatBRL for display */
   faturaAtual: number;
-  /** Fatura atual em centavos inteiros (fonte canônica para cálculos financeiros). */
+  /** Fatura atual em centavos inteiros (fonte canônica). */
   faturaCents: Centavos;
+  /** Limite do cartão em centavos inteiros (fonte canônica). */
+  limitCents: Centavos;
+  /** Limite disponível em centavos inteiros (fonte canônica). */
+  disponivelCents: Centavos;
+  /** @deprecated use disponivelCents + formatBRL for display */
   disponivel: number;
   compromisso: number;
   daysUntilDue: number;

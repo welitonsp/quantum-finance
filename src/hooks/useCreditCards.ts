@@ -6,7 +6,7 @@ import { db } from '../shared/api/firebase/index';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import { toCentavos, fromCentavos } from '../shared/schemas/financialSchemas';
 import type { CreditCard, CreditCardWithMetrics, CardMetrics, Transaction } from '../shared/types/transaction';
-import type { MoneyInput } from '../shared/types/money';
+import type { MoneyInput, Centavos } from '../shared/types/money';
 import { getTransactionAbsCentavos, isExpense } from '../utils/transactionUtils';
 
 function calcCardMetrics(card: CreditCard, transactions: Transaction[]): CardMetrics {
@@ -40,9 +40,11 @@ function calcCardMetrics(card: CreditCard, transactions: Transaction[]): CardMet
   );
   const faturaAtual = fromCentavos(faturaCents);
 
-  const limitVal    = fromCentavos(card.limit);
-  const disponivel  = Math.max(limitVal - faturaAtual, 0);
-  const compromisso = limitVal > 0 ? Math.min((faturaAtual / limitVal) * 100, 100) : 0;
+  const limitCents     = (card.limit ?? 0) as Centavos;
+  const limitVal       = fromCentavos(limitCents);
+  const disponivelCents = Math.max(limitCents - faturaCents, 0) as Centavos;
+  const disponivel     = fromCentavos(disponivelCents);
+  const compromisso    = limitCents > 0 ? Math.min((faturaCents / limitCents) * 100, 100) : 0;
 
   let daysUntilDue = card.dueDay - diaHoje;
   if (daysUntilDue <= 0) {
@@ -54,6 +56,8 @@ function calcCardMetrics(card: CreditCard, transactions: Transaction[]): CardMet
     limitVal,
     faturaAtual,
     faturaCents,
+    limitCents,
+    disponivelCents,
     disponivel,
     compromisso,
     daysUntilDue,
