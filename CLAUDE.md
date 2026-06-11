@@ -2,18 +2,18 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — FASES 11–24 — 2026-06-08
+## Estado Consolidado — FASES 11–26 — 2026-06-09
 
 > Blocos anteriores substituídos. Em caso de divergência, **este bloco é a referência**.
 
 ### 1. Status atual
 - Branch principal: `main`.
-- Último commit na main: `4879a2f` — sync CLAUDE.md pós PRs #163 + #169
-- Último commit na main: `603c138` — merge PR #172 (FASES 21/22/23)
-- Último commit na main: merge PR #174 (FASE 24 — E2E 19/19 passing)
+- Último commit na main: merge PR #176 (FASE 25 — Estabilidade Core)
+- Último commit na main: merge PR #177 (FASE 26 — Idempotência server-side)
 - **Plano Firebase: BLAZE** (upgrade realizado em 2026-06-08)
 - 5 Cloud Functions deployadas em produção (`southamerica-east1`, Node.js 24, 2nd Gen)
 - Firestore Rules deployadas em produção
+- **Sentry: REMOVIDO** (decisão do owner — fora do projeto)
 - Stash legado preservado e intocado.
 
 ### 2. Fases implementadas e mergeadas
@@ -42,6 +42,8 @@
 | FASE 22 | Toast de notificação ao auto-executar recorrentes: `onExecuted` callback + `toast.success` em `DashboardContent` | #172 |
 | FASE 23 | Fix E2E CI: `emulators:exec` substitui `emulators:start &` + `wait-on`; job blocking novamente | #172 |
 | FASE 24 | Fix 3 E2E `fixme`: import CSV (Dashboard + `aria-label` selector), goals progress bar (container `.h-2` selector) — 19/19 passing | #174 |
+| FASE 25 | Fix P0 `descriptionLower` stale on edit (`normalizeUpdatePayload`); Fix P1 `parseFloat`→`toCentavos` em `AccountsManager`; Remove Sentry completamente | #176 |
+| FASE 26 | Idempotência server-side em `createTransaction`: `idempotencyKey` UUID v4 do cliente; pre-check + escrita atômica em `users/{uid}/idempotency/{key}`; Firestore Rules deny-all clients; 4 novos testes | #177 |
 
 ### 3. Contratos críticos vivos (inalterados)
 - `value_cents` é a fonte canônica. `value` legado **nunca** é usado em cálculo financeiro.
@@ -86,8 +88,8 @@ lastExecutedMonth?: string;        // formato YYYY-MM
 
 ### 8. Próximas etapas recomendadas
 1. **QA funcional em produção**: testar criação de transação via callable, auto-execução de recorrentes com toast, exclusão de conta via `deleteUserData`, busca server-side e filtro por categoria.
-2. **`firebase deploy --only firestore:indexes`** — confirmar propagação dos índices (`descriptionLower ASC + date DESC`, `category ASC + date DESC`).
-3. **VITE_SENTRY_DSN**: configurar DSN real no ambiente de produção para ativar Sentry.
+2. **`firebase deploy --only firestore:indexes,firestore:rules,functions`** — propagar idempotency (nova coleção nas Rules) + demais índices.
+3. **TTL automático para `idempotency/{key}`**: criar Cloud Function schedulada ou habilitar TTL policy no Firestore para expirar keys após 24h (evitar crescimento ilimitado da coleção).
 
 ### 9. Comandos de validação padrão
 ```bash

@@ -28,10 +28,19 @@ import { SparkLine } from './SparkLine';
 import { IntelStrip } from './IntelStrip';
 import KPICards from './KPICards';
 import type { Transaction, ModuleBalances, CategoryDataPoint, Account, RecurringTask } from '../shared/types/transaction';
+import { toCentavos, type Centavos } from '../shared/types/money';
 import { useFinancialMetrics } from '../hooks/useFinancialMetrics';
 import { useCreditCards } from '../hooks/useCreditCards';
 import QuantumInsights from './QuantumInsights';
+import QuantumCopilotCards from './QuantumCopilotCards';
+import { useQuantumCopilot } from '../hooks/useQuantumCopilot';
+import { useScoreHistory } from '../hooks/useScoreHistory';
 import FinancialHealthScore from './FinancialHealthScore';
+import WeeklyCashflowWidget from './WeeklyCashflowWidget';
+import { useWeeklyCashflow } from '../hooks/useWeeklyCashflow';
+import TimelineWidget from './TimelineWidget';
+import { toCentavos as toBalanceCents } from '../shared/schemas/financialSchemas';
+import EconomyChallengeWidget from './EconomyChallengeWidget';
 import GoalsPanel from './GoalsPanel';
 import AnomalyAlerts from './AnomalyAlerts';
 import toast from 'react-hot-toast';
@@ -284,6 +293,19 @@ export default function DashboardContent({
   // FIX: single source of truth for transactions
   } = useDashboardData(allTransactions, loading, categories);
 
+  const { history: scoreHistory } = useScoreHistory(user?.uid ?? '', metrics);
+
+  const { insights: copilotInsights } = useQuantumCopilot({
+    uid:            user?.uid ?? '',
+    transactions:   allTransactions,
+    recurringTasks,
+    balance:        saldo,
+    timeRange,
+    loading,
+  });
+
+  const { weeks: cashflowWeeks, futureEvents } = useWeeklyCashflow(allTransactions, recurringTasks);
+
   return (
     <motion.div
       variants={containerVariants}
@@ -375,15 +397,41 @@ export default function DashboardContent({
       <QuantumInsights metrics={metrics} loading={loadingMetrics} />
 
       <motion.div variants={itemVariants}>
-        <FinancialHealthScore metrics={metrics} loading={loadingMetrics} />
+        <FinancialHealthScore metrics={metrics} loading={loadingMetrics} history={scoreHistory} />
+      </motion.div>
+
+      <motion.div variants={itemVariants}>
+        <WeeklyCashflowWidget
+          weeks={cashflowWeeks}
+          futureEvents={futureEvents}
+          loading={loading}
+        />
       </motion.div>
 
       <motion.div variants={itemVariants}>
         <GoalsPanel
           uid={user?.uid ?? ''}
-          {...(metrics ? { ativosCents: Math.round(metrics.ativos * 100) } : {})}
+          {...(metrics ? { ativosCents: metrics.ativosCents } : {})}
+          {...(metrics && metrics.despesa > 0
+            ? { monthlyExpensesCents: toCentavos(metrics.despesa) as Centavos }
+            : {})}
         />
       </motion.div>
+
+      <motion.div variants={itemVariants}>
+        <EconomyChallengeWidget
+          uid={user?.uid ?? ''}
+          transactions={allTransactions}
+          loading={loading}
+        />
+      </motion.div>
+
+      {/* ── QUANTUM COPILOT — insights proativos ─────────────── */}
+      {copilotInsights.length > 0 && (
+        <motion.div variants={itemVariants}>
+          <QuantumCopilotCards insights={copilotInsights} loading={loading} />
+        </motion.div>
+      )}
 
       <motion.div variants={itemVariants}>
         <AnomalyAlerts transactions={allTransactions} />
@@ -474,6 +522,15 @@ export default function DashboardContent({
             />
           </div>
         </div>
+      </motion.div>
+
+      {/* ── TIMELINE 90 DIAS ──────────────────────────────────── */}
+      <motion.div variants={itemVariants}>
+        <TimelineWidget
+          transactions={txSet}
+          recurringTasks={recurringTasks}
+          currentBalanceCents={toBalanceCents(saldo)}
+        />
       </motion.div>
 
       {/* ── FAB MOBILE ────────────────────────────────────────── */}

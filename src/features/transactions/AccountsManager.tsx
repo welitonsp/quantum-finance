@@ -76,11 +76,17 @@ export default function AccountsManager({ uid }: Props) {
     e.preventDefault();
     if (!name.trim() || !balance) return;
 
+    let parsedBalance: number;
     try {
-      let finalBalance = Number(balance);
-      if (['cartao', 'divida'].includes(type) && finalBalance > 0) {
-        finalBalance = -finalBalance;
-      }
+      parsedBalance = fromCentavos(toCentavos(balance.replace(/\./g, '').replace(',', '.')));
+    } catch {
+      return;
+    }
+
+    try {
+      const finalBalance = ['cartao', 'divida'].includes(type) && parsedBalance > 0
+        ? -parsedBalance
+        : parsedBalance;
       await addAccount({ name: name.trim(), type, balance: finalBalance });
       setIsModalOpen(false);
       setName('');

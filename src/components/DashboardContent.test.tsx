@@ -55,6 +55,7 @@ vi.mock('./SparkLine', () => ({ SparkLine: () => <div data-testid="spark-line" /
 vi.mock('./IntelStrip', () => ({ IntelStrip: () => <div data-testid="intel-strip" /> }));
 vi.mock('./KPICards', () => ({ default: () => <div data-testid="kpi-cards" /> }));
 vi.mock('./QuantumInsights', () => ({ default: () => <div data-testid="quantum-insights" /> }));
+vi.mock('./TimelineWidget', () => ({ default: () => <div data-testid="timeline-widget" /> }));
 
 import DashboardContent from './DashboardContent';
 

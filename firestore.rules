@@ -896,6 +896,70 @@ service cloud.firestore {
               || request.resource.data.updatedAt == request.time);
     }
 
+    function isValidDebt(data) {
+      return data.keys().hasAll([
+            'uid', 'name', 'creditor', 'totalCents', 'remainingCents',
+            'interestRate', 'installments', 'paidInstallments',
+            'dueDayOfMonth', 'startDate', 'category', 'active',
+            'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'uid', 'name', 'creditor', 'totalCents', 'remainingCents',
+            'interestRate', 'installments', 'paidInstallments',
+            'dueDayOfMonth', 'startDate', 'category', 'active',
+            'createdAt', 'updatedAt'
+          ])
+          && isStringSized(data.name, 1, 200)
+          && isStringSized(data.creditor, 1, 200)
+          && isPositiveSafeInt(data.totalCents)
+          && isPositiveSafeInt(data.remainingCents)
+          && data.interestRate is number
+          && data.interestRate >= 0
+          && isSafeInt(data.installments)
+          && data.installments >= 1
+          && isSafeInt(data.paidInstallments)
+          && data.paidInstallments >= 0
+          && isSafeInt(data.dueDayOfMonth)
+          && data.dueDayOfMonth >= 1
+          && data.dueDayOfMonth <= 31
+          && isStringSized(data.startDate, 10, 10)
+          && data.category in ['emprestimo', 'financiamento', 'cartao', 'cheque_especial', 'outro']
+          && data.active is bool;
+    }
+
+    function isValidDebtCreate(data) {
+      return isValidDebt(data)
+          && data.createdAt == request.time
+          && data.updatedAt == request.time;
+    }
+
+    function isValidDebtUpdate(data) {
+      return data.keys().hasAll([
+            'uid', 'name', 'creditor', 'totalCents', 'remainingCents',
+            'interestRate', 'installments', 'paidInstallments',
+            'dueDayOfMonth', 'startDate', 'category', 'active',
+            'createdAt', 'updatedAt'
+          ])
+          && isStringSized(data.name, 1, 200)
+          && isStringSized(data.creditor, 1, 200)
+          && isPositiveSafeInt(data.totalCents)
+          && data.remainingCents is int
+          && data.remainingCents >= 0
+          && data.interestRate is number
+          && data.interestRate >= 0
+          && isSafeInt(data.installments)
+          && data.installments >= 1
+          && isSafeInt(data.paidInstallments)
+          && data.paidInstallments >= 0
+          && isSafeInt(data.dueDayOfMonth)
+          && data.dueDayOfMonth >= 1
+          && data.dueDayOfMonth <= 31
+          && isStringSized(data.startDate, 10, 10)
+          && data.category in ['emprestimo', 'financiamento', 'cartao', 'cheque_especial', 'outro']
+          && data.active is bool
+          && data.createdAt == resource.data.createdAt;
+    }
+
     function isValidGoal(data) {
       return data.keys().hasAll(['name', 'targetCents', 'currentCents', 'createdAt', 'updatedAt'])
           && data.keys().hasOnly([
@@ -921,6 +985,47 @@ service cloud.firestore {
           && data.createdAt == resource.data.createdAt
           && data.updatedAt == request.time;
     }
+
+    function isValidScoreHistoryWrite(monthId) {
+      let data = request.resource.data;
+      // monthId must be YYYY-MM format
+      return monthId.matches('^[0-9]{4}-[0-9]{2}$')
+          && data.keys().hasAll(['score', 'schemaVersion'])
+          && data.score is number
+          && data.score >= 0 && data.score <= 100
+          && data.schemaVersion == 1
+          && !data.keys().hasAny(['uid', 'id', 'importHash']);
+    }
+
+    function isValidChallengeWrite() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['category', 'targetPct', 'baselineCents', 'deadlineDays',
+                                  'startDate', 'endDate', 'xp', 'status', 'schemaVersion'])
+          && data.keys().hasOnly(['category', 'targetPct', 'baselineCents', 'deadlineDays',
+                                   'startDate', 'endDate', 'xp', 'status', 'schemaVersion', 'createdAt'])
+          && data.category is string && data.category.size() > 0
+          && data.targetPct is number && data.targetPct >= 1 && data.targetPct <= 100
+          && data.baselineCents is int && data.baselineCents >= 0
+          && data.deadlineDays is int && data.deadlineDays >= 1
+          && data.startDate is string
+          && data.endDate is string
+          && data.xp is int && data.xp >= 0
+          && data.status in ['active', 'won', 'lost']
+          && data.schemaVersion == 1
+          && !data.keys().hasAny(['uid', 'id', 'importHash']);
+    }
+
+    function isValidChallengeUpdate() {
+      let data = request.resource.data;
+      return data.keys().hasOnly(['category', 'targetPct', 'baselineCents', 'deadlineDays',
+                                   'startDate', 'endDate', 'xp', 'status', 'schemaVersion', 'createdAt'])
+          && data.xp is int && data.xp >= 0
+          && data.status in ['active', 'won', 'lost']
+          && data.schemaVersion == 1
+          && data.category == resource.data.category
+          && !data.keys().hasAny(['uid', 'id', 'importHash']);
+    }
+
 
     match /users/{userId} {
       allow read, write: if isOwner(userId);
@@ -1045,10 +1150,63 @@ service cloud.firestore {
         allow delete: if isOwner(userId);
       }
 
+      match /debts/{debtId} {
+        allow read:   if isOwner(userId);
+        allow create: if isOwner(userId) && isValidDebtCreate(request.resource.data);
+        allow update: if isOwner(userId) && isValidDebtUpdate(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      // Idempotency keys — escrito exclusivamente pelo Admin SDK (server-side).
+      // Clients nunca lêem nem escrevem nesta coleção.
+      match /idempotency/{keyId} {
+        allow read, write: if false;
+      }
+
+      // LGPD — consentimentos do usuário (leitura e escrita pelo próprio owner).
+      match /consents/{consentId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasAll(['type', 'granted', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['type', 'granted', 'updatedAt'])
+          && request.resource.data.type is string
+          && request.resource.data.granted is bool
+          && request.resource.data.updatedAt == request.time;
+        allow update: if isOwner(userId)
+          && request.resource.data.keys().hasAll(['type', 'granted', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['type', 'granted', 'updatedAt'])
+          && request.resource.data.type == resource.data.type
+          && request.resource.data.granted is bool
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if false;
+      }
+
+      // LGPD — log de processamento de dados (leitura pelo owner; escrita exclusiva pelo servidor).
+      match /dataProcessingLog/{logId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+
       match /goals/{goalId} {
         allow read:   if isOwner(userId);
         allow create: if isOwner(userId) && isValidGoalCreate(userId);
         allow update: if isOwner(userId) && isValidGoalUpdate(userId);
+        allow delete: if isOwner(userId);
+      }
+
+      // Score history — persisted monthly by client; read-only after write.
+      // Document ID is YYYY-MM; schema is versioned.
+      match /scoreHistory/{monthId} {
+        allow read:   if isOwner(userId);
+        allow create: if isOwner(userId) && isValidScoreHistoryWrite(monthId);
+        allow update: if isOwner(userId) && isValidScoreHistoryWrite(monthId);
+        allow delete: if false;
+      }
+
+      match /challenges/{challengeId} {
+        allow read:   if isOwner(userId);
+        allow create: if isOwner(userId) && isValidChallengeWrite();
+        allow update: if isOwner(userId) && isValidChallengeUpdate();
         allow delete: if isOwner(userId);
       }
     }

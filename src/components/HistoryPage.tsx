@@ -60,6 +60,7 @@ interface Props {
   onServerSearch?: (term: string) => void;
   serverCategoryFilter?: string;
   onServerCategoryFilter?: (cat: string) => void;
+  onAddNew?: () => void;
 }
 
 export default function HistoryPage({
@@ -84,6 +85,7 @@ export default function HistoryPage({
   onServerSearch,
   serverCategoryFilter,
   onServerCategoryFilter,
+  onAddNew,
 }: Props) {
   const stats = useMemo(() => {
     let totalIn = 0, totalOut = 0;
@@ -162,6 +164,7 @@ export default function HistoryPage({
           {...(serverSearchTerm !== undefined ? { serverSearchTerm } : {})}
           {...(onServerCategoryFilter ? { onServerCategoryFilter } : {})}
           {...(serverCategoryFilter !== undefined ? { serverCategoryFilter } : {})}
+          {...(onAddNew ? { onAddNew } : {})}
         />
       </motion.div>
     </div>

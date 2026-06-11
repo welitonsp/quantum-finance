@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { after, describe, it } = require('node:test');
+const { after, beforeEach, describe, it } = require('node:test');
 
 const firebaseFunctionsTest = require('firebase-functions-test');
 
@@ -9,6 +9,9 @@ const originalAdminModule = require.cache[adminModulePath];
 
 const writes = [];
 let autoDocIndex = 0;
+
+// Idempotency store: path → data (simulates Firestore doc existence)
+const idemStore = {};
 
 function nextDocId() {
   const ids = ['tx-test-id', 'history-test-id'];
@@ -32,19 +35,37 @@ function createDocRef(path, id) {
     collection(name) {
       return createCollectionRef(`${path}/${name}`);
     },
+    async get() {
+      const stored = idemStore[path];
+      if (stored) return { exists: true, data: () => stored };
+      return { exists: false, data: () => undefined };
+    },
   };
 }
 
 const mockDb = {
   collection: createCollectionRef,
+  doc(path) {
+    const parts = path.split('/');
+    const id = parts[parts.length - 1];
+    return createDocRef(path, id);
+  },
   async runTransaction(callback) {
     const transaction = {
       set(ref, payload) {
+        // Persist idempotency writes so t.get() sees them within the same tx
+        if (ref.path.includes('/idempotency/')) {
+          idemStore[ref.path] = payload;
+        }
         writes.push({ path: ref.path, payload });
       },
+      async get(ref) {
+        const stored = idemStore[ref.path];
+        if (stored) return { exists: true, data: () => stored };
+        return { exists: false, data: () => undefined };
+      },
     };
-
-    await callback(transaction);
+    return callback(transaction);
   },
 };
 
@@ -71,7 +92,7 @@ require.cache[adminModulePath] = {
   exports: mockAdmin,
 };
 
-const { createTransaction } = require('../index');
+const { createTransaction } = require('../lib/index');
 const wrappedCreateTransaction = testEnv.wrap(createTransaction);
 
 after(() => {
@@ -104,6 +125,7 @@ function validPayload() {
 function resetFirestoreMock() {
   writes.length = 0;
   autoDocIndex = 0;
+  Object.keys(idemStore).forEach(k => delete idemStore[k]);
 }
 
 function assertNoForbiddenFields(value) {
@@ -122,9 +144,9 @@ function assertNoForbiddenFields(value) {
 }
 
 describe('createTransaction callable', () => {
-  it('creates a manual transaction with auth and App Check context', async () => {
-    resetFirestoreMock();
+  beforeEach(() => resetFirestoreMock());
 
+  it('creates a manual transaction with auth and App Check context', async () => {
     const result = await wrappedCreateTransaction({
       data: validPayload(),
       auth: { uid: 'test-user-id' },
@@ -202,8 +224,6 @@ describe('createTransaction callable', () => {
   });
 
   it('rejects unauthenticated calls before writing', async () => {
-    resetFirestoreMock();
-
     await assert.rejects(
       () => wrappedCreateTransaction({
         data: validPayload(),
@@ -216,5 +236,60 @@ describe('createTransaction callable', () => {
     );
 
     assert.equal(writes.length, 0);
+  });
+
+  it('stores idempotency key atomically on first call', async () => {
+    const idemKey = 'a1b2c3d4-e5f6-4a7b-89c0-d1e2f3a4b5c6';
+
+    const result = await wrappedCreateTransaction({
+      data: { ...validPayload(), idempotencyKey: idemKey },
+      auth: { uid: 'uid-idem' },
+      app: { appId: 'test-app-id' },
+    });
+
+    assert.equal(typeof result.id, 'string');
+
+    // 3 writes: idempotency key + transaction + history
+    assert.equal(writes.length, 3);
+    const idemWrite = writes.find(w => w.path.includes('/idempotency/'));
+    assert.ok(idemWrite, 'idempotency key write expected');
+    assert.equal(idemWrite.payload.txId, result.id);
+    assert.deepEqual(idemWrite.payload.createdAt, { __op: 'serverTimestamp' });
+  });
+
+  it('returns same txId without writing on duplicate idempotencyKey', async () => {
+    const idemKey = 'b2c3d4e5-f6a7-4b8c-90d1-e2f3a4b5c6d7';
+    const uid = 'uid-dedup';
+
+    // Pre-seed idempotency store as if first call already completed
+    const existingTxId = 'pre-existing-tx-id';
+    idemStore[`users/${uid}/idempotency/${idemKey}`] = {
+      txId: existingTxId,
+      createdAt: { __op: 'serverTimestamp' },
+    };
+
+    const result = await wrappedCreateTransaction({
+      data: { ...validPayload(), idempotencyKey: idemKey },
+      auth: { uid },
+      app: { appId: 'test-app-id' },
+    });
+
+    assert.equal(result.id, existingTxId, 'must return original txId on duplicate');
+    assert.equal(writes.length, 0, 'must not write anything on duplicate');
+  });
+
+  it('ignores malformed idempotencyKey (not a UUID v4)', async () => {
+    const result = await wrappedCreateTransaction({
+      data: { ...validPayload(), idempotencyKey: 'not-a-uuid' },
+      auth: { uid: 'uid-bad-key' },
+      app: { appId: 'test-app-id' },
+    });
+
+    assert.equal(typeof result.id, 'string');
+    // No idempotency write — key was ignored
+    const idemWrite = writes.find(w => w.path.includes('/idempotency/'));
+    assert.equal(idemWrite, undefined, 'malformed key must be ignored');
+    // 2 normal writes: transaction + history
+    assert.equal(writes.length, 2);
   });
 });

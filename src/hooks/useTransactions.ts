@@ -90,12 +90,13 @@ function computeBackoffMs(attempt: number): number {
 // ─── Op Types (sem any) ───────────────────────────────────────────────────────
 
 interface AddOp {
-  type:        'add';
-  tempId:      string;
-  txId:        string;
-  data:        Partial<Transaction>;
-  retries:     number;
-  nextRetryAt: number;
+  type:            'add';
+  tempId:          string;
+  txId:            string;
+  idempotencyKey:  string;
+  data:            Partial<Transaction>;
+  retries:         number;
+  nextRetryAt:     number;
 }
 interface UpdateOp {
   type:          'update';
@@ -158,6 +159,10 @@ interface UseTransactionsReturn {
 
 function makeTempId(): string {
   return `__temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+}
+
+function makeIdempotencyKey(): string {
+  return crypto.randomUUID();
 }
 
 function makeManualTransactionId(uid: string): string {
@@ -445,13 +450,14 @@ export function useTransactions(
               functions, 'createTransaction'
             );
             const callPayload: Record<string, unknown> = {
-              description: op.data.description ?? '',
-              value_cents:  op.data.value_cents,
-              type:         op.data.type ?? 'saida',
-              category:     op.data.category ?? 'Outros',
-              date:         op.data.date ?? new Date().toISOString().slice(0, 10),
-              source:       'manual',
-              isRecurring:  op.data.isRecurring ?? false,
+              description:     op.data.description ?? '',
+              value_cents:     op.data.value_cents,
+              type:            op.data.type ?? 'saida',
+              category:        op.data.category ?? 'Outros',
+              date:            op.data.date ?? new Date().toISOString().slice(0, 10),
+              source:          'manual',
+              isRecurring:     op.data.isRecurring ?? false,
+              idempotencyKey:  op.idempotencyKey,
             };
             if (op.data.account   !== undefined) callPayload['account']   = op.data.account;
             if (op.data.accountId !== undefined) callPayload['accountId'] = op.data.accountId;
@@ -688,7 +694,7 @@ export function useTransactions(
 
     return new Promise<string>((resolve, reject) => {
       pendingAddResolvers.current.set(tempId, { resolve, reject });
-      enqueue({ type: 'add', tempId, txId, data: enriched, retries: 0, nextRetryAt: 0 });
+      enqueue({ type: 'add', tempId, txId, idempotencyKey: makeIdempotencyKey(), data: enriched, retries: 0, nextRetryAt: 0 });
     });
   }, [uid, enqueue]);
 
@@ -800,7 +806,7 @@ export function useTransactions(
       optimistics.push(optimistic);
       tempIds.push(tempId);
       // Push directly to avoid N processQueue triggers; one call below handles all
-      queueRef.current.push({ type: 'add', tempId, txId, data: enriched, retries: 0, nextRetryAt: 0 });
+      queueRef.current.push({ type: 'add', tempId, txId, idempotencyKey: makeIdempotencyKey(), data: enriched, retries: 0, nextRetryAt: 0 });
     });
 
     setTransactions(prev => [...optimistics, ...prev]);

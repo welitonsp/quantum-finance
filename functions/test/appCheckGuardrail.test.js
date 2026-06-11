@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { describe, it } = require('node:test');
 
-const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.ts'), 'utf8');
 
 // All callables now require App Check enforcement (rollout completed in security audit 2026-06-02).
 const ALL_CALLABLES_WITH_APP_CHECK_ENFORCEMENT = [
@@ -14,7 +14,8 @@ const ALL_CALLABLES_WITH_APP_CHECK_ENFORCEMENT = [
 ];
 
 function callableOptions(exportName) {
-  const pattern = new RegExp(`exports\\.${exportName}\\s*=\\s*onCall\\(\\s*({[\\s\\S]*?})\\s*,`);
+  // Match TypeScript `export const X = onCall({ ... },`
+  const pattern = new RegExp(`export const ${exportName}\\s*=\\s*onCall\\(\\s*({[\\s\\S]*?})\\s*,`);
   const match = source.match(pattern);
   assert.ok(match, `${exportName} callable options not found`);
   return match[1];

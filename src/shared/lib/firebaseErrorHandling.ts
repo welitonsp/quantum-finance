@@ -52,6 +52,17 @@ export const FIREBASE_ERROR_OPERATIONS = [
   'goal_delete',
   'installment_group_load',
   'installment_group_cancel',
+  'data_processing_log',
+  'data_processing_log_read',
+  'user_consents_read',
+  'user_consents_save',
+  'score_history_persist',
+  'score_history_load',
+  'challenges_load',
+  'debt_load',
+  'debt_add',
+  'debt_update',
+  'debt_delete',
 ] as const;
 
 export type FirebaseErrorOperation = typeof FIREBASE_ERROR_OPERATIONS[number];

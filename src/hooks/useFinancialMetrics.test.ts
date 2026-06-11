@@ -70,6 +70,29 @@ describe('computeFinancialMetrics - centavos canônicos', () => {
     expect(metrics.endividamento).toBe(12.5);
   });
 
+  it('cardOpenInvoicesCents é subtraído do patrimônio líquido como passivo corrente', () => {
+    const accounts: Account[] = [
+      mkAcc({ id: 'a1', type: 'corrente',    balance: c(500000) }),  // R$ 5.000
+      mkAcc({ id: 'a2', type: 'investimento', balance: c(300000) }), // R$ 3.000
+    ];
+    // Fatura aberta: R$ 200,00 = 20000 centavos
+    const metrics = computeFinancialMetrics([], accounts, undefined, undefined, 20000);
+
+    expect(metrics.ativos).toBe(8000);       // 5000 + 3000
+    expect(metrics.passivos).toBe(200);      // 20000 centavos = R$ 200
+    expect(metrics.patrimonioLiquido).toBe(7800); // 8000 - 200
+  });
+
+  it('cardOpenInvoicesCents zero não altera patrimônio líquido', () => {
+    const accounts: Account[] = [
+      mkAcc({ id: 'a1', type: 'corrente', balance: c(100000) }),
+    ];
+    const sem  = computeFinancialMetrics([], accounts);
+    const zero = computeFinancialMetrics([], accounts, undefined, undefined, 0);
+    expect(sem.patrimonioLiquido).toBe(zero.patrimonioLiquido);
+    expect(sem.patrimonioLiquido).toBe(1000);
+  });
+
   it('filtra por mês/ano sem depender de value legado', () => {
     const txs: Transaction[] = [
       mkTx({ id: '1', value_cents: c(500000), type: 'entrada', date: '2026-04-10' }),

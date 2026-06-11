@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { describe, it } = require('node:test');
 
-const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.ts'), 'utf8');
 const financialUtilsSource = fs.readFileSync(
   path.join(__dirname, '..', 'src', 'lib', 'financialUtils.ts'),
   'utf8',

@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback } from 'react';
 import type { Transaction } from '../../../shared/types/transaction';
 import type { UserCategory } from '../../../shared/schemas/categorySchemas';
 import { fromCentavos } from '../../../shared/types/money';
+import { annotateRiskScores } from '../../../utils/riskScore';
 import {
   calculateRunningBalances,
   getTransactionAbsCentavos,
@@ -27,6 +28,7 @@ export type SortBy                  = 'date_desc' | 'date_asc' | 'value_desc' | 
 export type GroupByOption           = 'date' | 'category' | 'none';
 export type FilterType              = 'all' | 'entrada' | 'saida' | 'transferencia';
 export type ReconciliationStatusFilter = 'all' | 'reconciled' | 'unreconciled';
+export type RiskFilter = 'all' | 'elevated' | 'anomalous';
 
 export type VirtualRowEntry =
   | { kind: 'header'; group: Group }
@@ -69,6 +71,10 @@ export function useTransactionFilters(
   const [filterOrigin, setFilterOrigin] = useState('');
   const [filterReconciliationStatus, setFilterReconciliationStatus] =
     useState<ReconciliationStatusFilter>('all');
+  const [filterRisk, setFilterRisk] = useState<RiskFilter>('all');
+
+  // ── Annotate risk scores on full list (once per transactions change) ───────
+  const annotated = useMemo(() => annotateRiskScores(transactions), [transactions]);
 
   // ── Derivados simples ──────────────────────────────────────────────────────
   const minCents = parseBRLToCents(valueMin);
@@ -87,7 +93,7 @@ export function useTransactionFilters(
 
   // ── Lista filtrada + ordenada ──────────────────────────────────────────────
   const filtered = useMemo<Transaction[]>(() => {
-    let list = transactions;
+    let list = annotated;
 
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -116,6 +122,8 @@ export function useTransactionFilters(
     if (filterReconciliationStatus === 'unreconciled') {
       list = list.filter(isImportedUnreconciledTransaction);
     }
+    if (filterRisk === 'elevated')  list = list.filter(tx => tx.riskScore === 'elevated' || tx.riskScore === 'anomalous');
+    if (filterRisk === 'anomalous') list = list.filter(tx => tx.riskScore === 'anomalous');
 
     return [...list].sort((a, b) => {
       if (sortBy === 'date_desc')  return (b.date ?? '').localeCompare(a.date ?? '');
@@ -126,9 +134,9 @@ export function useTransactionFilters(
       return 0;
     });
   }, [
-    transactions, search, filterType, filterCat,
+    annotated, search, filterType, filterCat,
     dateFrom, dateTo, minCents, maxCents,
-    filterOrigin, filterReconciliationStatus, sortBy,
+    filterOrigin, filterReconciliationStatus, filterRisk, sortBy,
   ]);
 
   // ── Grupos ────────────────────────────────────────────────────────────────
@@ -181,7 +189,7 @@ export function useTransactionFilters(
 
   // ── Contagem por categoria (sem filtro de categoria) ──────────────────────
   const baseForCategoryCounts = useMemo<Transaction[]>(() => {
-    let list = transactions;
+    let list = annotated;
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(tx =>
@@ -210,7 +218,7 @@ export function useTransactionFilters(
     }
     return list;
   }, [
-    transactions, search, filterType, dateFrom, dateTo,
+    annotated, search, filterType, dateFrom, dateTo,
     minCents, maxCents, filterOrigin, filterReconciliationStatus,
   ]);
 
@@ -274,10 +282,13 @@ export function useTransactionFilters(
       filterReconciliationStatus !== 'all'
         ? { id: 'reconciliation', label: `Conciliação: ${RECONCILIATION_FILTER_LABELS[filterReconciliationStatus]}`, clear: () => setFilterReconciliationStatus('all') }
         : null,
+      filterRisk !== 'all'
+        ? { id: 'risk', label: filterRisk === 'anomalous' ? '🔴 Anômalas' : '🟡 Elevadas+', clear: () => setFilterRisk('all') }
+        : null,
     ] as (ActiveFilter | null)[]
   ).filter((f): f is ActiveFilter => f !== null), [
     filterType, filterCat, search, dateFrom, dateTo,
-    minCents, maxCents, filterOrigin, filterReconciliationStatus,
+    minCents, maxCents, filterOrigin, filterReconciliationStatus, filterRisk,
   ]);
 
   const clearAllFilters = useCallback(() => {
@@ -290,6 +301,7 @@ export function useTransactionFilters(
     setValueMax('');
     setFilterOrigin('');
     setFilterReconciliationStatus('all');
+    setFilterRisk('all');
   }, []);
 
   return {
@@ -305,6 +317,7 @@ export function useTransactionFilters(
     valueMax,    setValueMax,
     filterOrigin,  setFilterOrigin,
     filterReconciliationStatus, setFilterReconciliationStatus,
+    filterRisk, setFilterRisk,
     // Valores derivados
     minCents,
     maxCents,
