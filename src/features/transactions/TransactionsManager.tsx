@@ -37,6 +37,7 @@ import {
   type GroupByOption,
   type FilterType,
   type ReconciliationStatusFilter,
+  type RiskFilter,
 } from './hooks/useTransactionFilters';
 import { useTransactionSelection } from './hooks/useTransactionSelection';
 
@@ -143,6 +144,7 @@ export default function TransactionsManager({
     valueMax,    setValueMax,
     filterOrigin,  setFilterOrigin,
     filterReconciliationStatus, setFilterReconciliationStatus,
+    filterRisk, setFilterRisk,
     categoryOptions,
     filtered,
     groups,
@@ -197,7 +199,7 @@ export default function TransactionsManager({
   useEffect(() => {
     setSelected(new Set());
     setBatchAction(null);
-  }, [search, filterType, filterCat, dateFrom, dateTo, valueMin, valueMax, filterOrigin, filterReconciliationStatus]);
+  }, [search, filterType, filterCat, dateFrom, dateTo, valueMin, valueMax, filterOrigin, filterReconciliationStatus, filterRisk]);
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
@@ -557,6 +559,22 @@ export default function TransactionsManager({
                       <option value="all">Todas</option>
                       <option value="reconciled">Conciliadas</option>
                       <option value="unreconciled">Importadas não conciliadas</option>
+                    </select>
+                  </div>
+
+                  <div className="relative">
+                    <span className="pointer-events-none absolute -top-1.5 left-2 z-10 rounded bg-quantum-bgSecondary px-1 text-[9px] font-bold uppercase text-quantum-fgMuted">
+                      Risco
+                    </span>
+                    <select
+                      value={filterRisk}
+                      onChange={e => setFilterRisk(e.target.value as RiskFilter)}
+                      aria-label="Filtrar por score de risco"
+                      className="input-quantum pl-3 py-2 text-xs appearance-none"
+                    >
+                      <option value="all">Todos os riscos</option>
+                      <option value="elevated">🟡 Elevadas ou anômalas</option>
+                      <option value="anomalous">🔴 Apenas anômalas</option>
                     </select>
                   </div>
 

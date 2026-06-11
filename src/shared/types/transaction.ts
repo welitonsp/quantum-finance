@@ -54,6 +54,8 @@ export interface Transaction {
   _lastOpId?: string;
   /** Lowercase version of description written on create/update — enables server-side prefix search. */
   descriptionLower?: string;
+  /** Client-computed statistical risk flag — not persisted to Firestore. */
+  riskScore?: 'normal' | 'elevated' | 'anomalous';
 }
 
 export interface ParsedTransaction extends Omit<Transaction, 'id' | 'uid' | 'createdAt' | 'updatedAt'> {
