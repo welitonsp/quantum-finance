@@ -6,7 +6,7 @@ import type { Centavos } from '../shared/types/money';
 
 const C = (n: number): Centavos => n as Centavos;
 
-function tx(overrides: Partial<Transaction> & { id: string; value_cents: Centavos; type: 'entrada' | 'saida'; date: string }): Transaction {
+function tx(overrides: Partial<Transaction> & { id: string; value_cents: Centavos; type: 'entrada' | 'saida' | 'transferencia'; date: string }): Transaction {
   return {
     uid: 'uid-1',
     description: 'test',
@@ -75,6 +75,18 @@ describe('useRunningBalance', () => {
     const { result } = renderHook(() => useRunningBalance(txs));
     expect(result.current.overflowWarning).toBe(true);
     expect(result.current.balances.has('b')).toBe(false);
+  });
+
+  it('não altera saldo acumulado em transferências', () => {
+    const txs = [
+      tx({ id: 'a', date: '2026-01-01', type: 'entrada',      value_cents: C(10000) }),
+      tx({ id: 'b', date: '2026-01-02', type: 'transferencia', value_cents: C(4000)  }),
+      tx({ id: 'c', date: '2026-01-03', type: 'saida',         value_cents: C(2000)  }),
+    ];
+    const { result } = renderHook(() => useRunningBalance(txs));
+    expect(result.current.balances.get('a')).toBe(10000);
+    expect(result.current.balances.get('b')).toBe(10000); // unchanged by transfer
+    expect(result.current.balances.get('c')).toBe(8000);
   });
 
   it('permite saldo negativo sem overflow', () => {

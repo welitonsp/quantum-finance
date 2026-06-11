@@ -1,5 +1,6 @@
 // src/features/transactions/components/TransactionRow.tsx
 import React from 'react';
+import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import {
   CheckSquare, Square, ArrowUpRight, ArrowDownRight, ArrowRightLeft,
@@ -87,7 +88,16 @@ export const TransactionRow = React.memo(function TransactionRow({
       </div>
 
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-bold text-quantum-fg truncate leading-tight">{tx.description}</p>
+        <p
+          className="text-sm font-bold text-quantum-fg truncate leading-tight cursor-copy select-text"
+          title="Duplo clique para copiar"
+          onDoubleClick={() => {
+            if (!tx.description) return;
+            navigator.clipboard.writeText(tx.description).then(() => {
+              toast.success('Copiado!', { duration: 1500 });
+            }).catch(() => undefined);
+          }}
+        >{tx.description}</p>
         <div className="flex flex-wrap items-center gap-2 mt-1">
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${cs.bg} ${cs.text} ${cs.border}`}>
             {tx.category ?? 'Diversos'}
@@ -149,6 +159,23 @@ export const TransactionRow = React.memo(function TransactionRow({
                 : <History className="w-2.5 h-2.5" />}
               {getTransactionOriginLabel(tx)}
             </span>
+
+            {tx.riskScore === 'anomalous' && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-red-500/10 border border-red-500/25 text-red-400 text-[9px] font-black uppercase tracking-wider"
+                title="Valor muito acima da média desta categoria"
+              >
+                🔴 Anômala
+              </span>
+            )}
+            {tx.riskScore === 'elevated' && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-400 text-[9px] font-black uppercase tracking-wider"
+                title="Valor acima da média desta categoria"
+              >
+                🟡 Elevada
+              </span>
+            )}
           </div>
 
           <span className="text-[10px] text-quantum-fgMuted font-mono border-l border-quantum-border pl-2">

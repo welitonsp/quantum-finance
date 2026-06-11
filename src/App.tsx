@@ -15,6 +15,7 @@ import { useRecurring } from './hooks/useRecurring';
 import { useCategoryRules } from './hooks/useCategoryRules';
 import { useCategories } from './hooks/useCategories';
 import { useAppLogic } from './hooks/useAppLogic';
+import { useCreditCards } from './hooks/useCreditCards';
 import { logSanitizedFirebaseError } from './shared/lib/firebaseErrorHandling';
 
 import Sidebar from './components/Sidebar';
@@ -39,6 +40,8 @@ const QuantumAIPage     = lazy(() => import('./components/QuantumAIPage'));
 const HistoryPage       = lazy(() => import('./components/HistoryPage'));
 const CommandPalette    = lazy(() => import('./components/CommandPalette'));
 const SimulationCenter  = lazy(() => import('./features/simulation/SimulationCenter'));
+const PurchaseSimulator = lazy(() => import('./features/simulation/PurchaseSimulator'));
+const DebtModule        = lazy(() => import('./features/debts/DebtModule'));
 
 // ─── Quantum Loader ──────────────────────────────────────────────────────────
 const QuantumLoader = () => (
@@ -165,10 +168,13 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   } = useTransactions(safeUID, userCategoryRules, undefined, serverSearch);
   const { accounts } = useAccounts(safeUID);
   const { recurringTasks } = useRecurring(safeUID);
+  // totalFaturaCents: faturas abertas de cartões — passivo corrente para o net worth
+  const { totalFaturaCents, cards: creditCards } = useCreditCards(safeUID, transactions);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
-    useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts, categories);
+    useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts, categories, totalFaturaCents);
 
-  const [isTransferFormOpen, setIsTransferFormOpen] = useState(false);
+  const [isTransferFormOpen,    setIsTransferFormOpen]    = useState(false);
+  const [transferInitialValues, setTransferInitialValues] = useState<import('./features/transactions/TransferForm').TransferInitialValues>({});
 
   const {
     isAIChatOpen, setIsAIChatOpen, isFormOpen, setIsFormOpen, isSettingsOpen, setIsSettingsOpen,
@@ -295,7 +301,16 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                   />
                 )}
                 {currentPage === 'accounts'   && <AccountsManager   uid={safeUID} />}
-                {currentPage === 'cards'      && <CreditCardManager uid={safeUID} transactions={allTransactions} />}
+                {currentPage === 'cards'      && (
+                  <CreditCardManager
+                    uid={safeUID}
+                    transactions={allTransactions}
+                    onPayInvoice={(valueCents, description) => {
+                      setTransferInitialValues({ valueCents, description });
+                      setIsTransferFormOpen(true);
+                    }}
+                  />
+                )}
                 {currentPage === 'recurring'  && <RecurringManager  uid={safeUID} />}
                 {currentPage === 'quantum'    && (
                   <QuantumAIPage
@@ -330,6 +345,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     onServerSearch={setServerSearchTerm}
                     serverCategoryFilter={serverCategoryFilter}
                     onServerCategoryFilter={setServerCategoryFilter}
+                    onAddNew={() => setIsFormOpen(true)}
                   />
                 )}
                 {currentPage === 'reports' && (
@@ -343,6 +359,20 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                   <SimulationCenter
                     transactions={displayedTransactions}
                     balances={moduleBalances}
+                  />
+                )}
+                {currentPage === 'debts' && (
+                  <DebtModule uid={safeUID} />
+                )}
+                {currentPage === 'purchase-simulator' && (
+                  <PurchaseSimulator
+                    transactions={displayedTransactions}
+                    balances={moduleBalances}
+                    uid={safeUID}
+                    onRegisterPurchase={(prefill) => {
+                      setTransactionToEdit(prefill as Transaction);
+                      setIsFormOpen(true);
+                    }}
                   />
                 )}
               </Suspense>
@@ -366,6 +396,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
       <ErrorBoundary>
         <Suspense fallback={null}>
           <AIAssistantChat
+            uid={safeUID}
             transactions={displayedTransactions}
             balances={moduleBalances}
             isOpen={isAIChatOpen}
@@ -388,13 +419,15 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
           onSave={handleSaveTransaction}
           editingTransaction={transactionToEdit}
           onCancelEdit={handleCloseForm}
+          creditCards={creditCards}
         />
       )}
       {isTransferFormOpen && (
         <TransferForm
           uid={safeUID}
           accounts={accounts}
-          onClose={() => setIsTransferFormOpen(false)}
+          initialValues={transferInitialValues}
+          onClose={() => { setIsTransferFormOpen(false); setTransferInitialValues({}); }}
         />
       )}
     </div>

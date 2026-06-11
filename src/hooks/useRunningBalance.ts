@@ -30,6 +30,8 @@ export function useRunningBalance(transactions: Transaction[]): RunningBalanceRe
       const cents = tx.value_cents;
       if (typeof cents !== 'number' || !Number.isSafeInteger(cents)) continue;
 
+      // Transfers move money between accounts — they don't change the net balance.
+      if (tx.type === 'transferencia') { balances.set(tx.id, running); continue; }
       const delta = tx.type === 'entrada' ? (cents as Centavos) : -(cents as Centavos);
       const next  = running + delta;
 

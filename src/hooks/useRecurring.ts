@@ -103,6 +103,9 @@ export function useRecurring(uid: string): UseRecurringReturn {
     });
     await batch.commit();
 
+    // P3 controlado (FASE 6C): AuditService.logAction é fire-and-forget intencional.
+    // Falha no log não reverte a operação principal; risco contido em self-forgery
+    // dentro do próprio uid. Migração para Cloud Function adiada — ver CLAUDE.md §FASE 6C.
     void AuditService.logAction({
       userId: uid,
       action: 'ADD_RECURRING',
@@ -146,6 +149,7 @@ export function useRecurring(uid: string): UseRecurringReturn {
         to:   String(data[k as keyof Partial<RecurringTask>] ?? '').slice(0, 200),
       }));
     const changedKeys = Object.keys(data).join(',').slice(0, 200);
+    // P3 controlado (FASE 6C): fire-and-forget intencional — ver comentário em addRecurring.
     void AuditService.logAction({
       userId: uid,
       action: 'UPDATE_RECURRING',
@@ -172,6 +176,7 @@ export function useRecurring(uid: string): UseRecurringReturn {
     batch.delete(taskRef);
     await batch.commit();
 
+    // P3 controlado (FASE 6C): fire-and-forget intencional — ver comentário em addRecurring.
     void AuditService.logAction({
       userId: uid,
       action: 'DELETE_RECURRING',

@@ -54,6 +54,10 @@ export interface Transaction {
   _lastOpId?: string;
   /** Lowercase version of description written on create/update — enables server-side prefix search. */
   descriptionLower?: string;
+  /** Client-computed statistical risk flag — not persisted to Firestore. */
+  riskScore?: 'normal' | 'elevated' | 'anomalous';
+  /** Competência da parcela no formato YYYY-MM: mês em que a fatura é cobrada, respeitando o closingDay do cartão. */
+  competencia?: string;
 }
 
 export interface ParsedTransaction extends Omit<Transaction, 'id' | 'uid' | 'createdAt' | 'updatedAt'> {
@@ -110,10 +114,17 @@ export interface CreditCard {
 }
 
 export interface CardMetrics {
+  /** @deprecated use limitCents + formatBRL for display */
   limitVal: number;
+  /** @deprecated use faturaCents + formatBRL for display */
   faturaAtual: number;
-  /** Fatura atual em centavos inteiros (fonte canônica para cálculos financeiros). */
+  /** Fatura atual em centavos inteiros (fonte canônica). */
   faturaCents: Centavos;
+  /** Limite do cartão em centavos inteiros (fonte canônica). */
+  limitCents: Centavos;
+  /** Limite disponível em centavos inteiros (fonte canônica). */
+  disponivelCents: Centavos;
+  /** @deprecated use disponivelCents + formatBRL for display */
   disponivel: number;
   compromisso: number;
   daysUntilDue: number;

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { Transaction, RecurringTask } from '../shared/types/transaction';
-import { fromCentavos } from '../shared/types/money';
+import { formatBRL } from '../shared/types/money';
+import type { Centavos } from '../shared/types/money';
 import { getTransactionCentavos } from '../utils/transactionUtils';
 import type { TimeRange } from './useFinancialData';
 
@@ -22,6 +23,8 @@ interface Params {
   balance:        number;
   timeRange:      TimeRange;
   loading:        boolean;
+  /** Financial health score 0–100 from useFinancialMetrics (optional). */
+  healthScore?:   number;
 }
 
 const SEC = { 'Assinaturas': true, 'assinaturas': true };
@@ -60,6 +63,7 @@ export function computeCopilotInsights(
   transactions: Transaction[],
   recurringTasks: RecurringTask[],
   balance: number,
+  healthScore?: number,
 ): CopilotInsight[] {
   const insights: CopilotInsight[] = [];
   const now = new Date();
@@ -87,7 +91,7 @@ export function computeCopilotInsights(
         severity: daysLeft <= 15 ? 'critical' : daysLeft <= 30 ? 'warning' : 'info',
         emoji:    '🔥',
         title:    'Burn Rate da Reserva',
-        body:     `Ao ritmo atual de R$ ${fromCentavos(Math.round(dailyBurnCents)).toFixed(0)}/dia, sua reserva esgota em ${daysLeft} dias.`,
+        body:     `Ao ritmo atual de ${formatBRL(Math.round(dailyBurnCents) as Centavos)}/dia, sua reserva esgota em ${daysLeft} dias.`,
         metric:   `${daysLeft}d restantes`,
       });
     } else if (projectedEnd > 0) {
@@ -100,7 +104,7 @@ export function computeCopilotInsights(
             severity: pct >= 100 ? 'critical' : 'warning',
             emoji:    '🔥',
             title:    'Projeção de Gastos',
-            body:     `Projeção: R$ ${fromCentavos(Math.round(projectedEnd)).toFixed(0)} até fim do mês — ${pct}% da receita.`,
+            body:     `Projeção: ${formatBRL(Math.round(projectedEnd) as Centavos)} até fim do mês — ${pct}% da receita.`,
             metric:   `${pct}% da receita`,
           });
         }
@@ -164,8 +168,8 @@ export function computeCopilotInsights(
       severity: subTasks.length >= 5 ? 'warning' : 'info',
       emoji:    '📦',
       title:    `${subTasks.length} Assinaturas Ativas`,
-      body:     `Você tem ${subTasks.length} assinaturas recorrentes totalizando R$ ${fromCentavos(totalSubCents).toFixed(0)}/mês.`,
-      metric:   `R$ ${fromCentavos(totalSubCents).toFixed(0)}/mês`,
+      body:     `Você tem ${subTasks.length} assinaturas recorrentes totalizando ${formatBRL(totalSubCents as Centavos)}/mês.`,
+      metric:   `${formatBRL(totalSubCents as Centavos)}/mês`,
     });
   }
 
@@ -190,7 +194,7 @@ export function computeCopilotInsights(
         emoji:    isUp ? '📊' : '✅',
         title:    isUp ? 'Gastos Semanais Acima' : 'Ótima Semana!',
         body:     isUp
-          ? `Esta semana você gastou ${Math.round(weekDelta)}% mais que na semana passada (R$ ${fromCentavos(curWeekCents).toFixed(0)} vs R$ ${fromCentavos(prevWeekCents).toFixed(0)}).`
+          ? `Esta semana você gastou ${Math.round(weekDelta)}% mais que na semana passada (${formatBRL(curWeekCents as Centavos)} vs ${formatBRL(prevWeekCents as Centavos)}).`
           : `Esta semana você gastou ${Math.round(Math.abs(weekDelta))}% menos que na semana passada — boa contenção!`,
         metric:   `${isUp ? '+' : '-'}${Math.round(Math.abs(weekDelta))}% semana`,
       });
@@ -217,10 +221,43 @@ export function computeCopilotInsights(
         severity: 'critical',
         emoji:    '🚨',
         title:    'Despesas Superam Receitas',
-        body:     `Seus gastos já superam a renda em R$ ${fromCentavos(Math.abs(savedCents)).toFixed(0)} este mês.`,
-        metric:   `−R$ ${fromCentavos(Math.abs(savedCents)).toFixed(0)}`,
+        body:     `Seus gastos já superam a renda em ${formatBRL(Math.abs(savedCents) as Centavos)} este mês.`,
+        metric:   `−${formatBRL(Math.abs(savedCents) as Centavos)}`,
       });
     }
+  }
+
+  // ── 6. Financial health score ───────────────────────────────────────────────
+  if (typeof healthScore === 'number' && Number.isFinite(healthScore)) {
+    const score = Math.round(Math.max(0, Math.min(100, healthScore)));
+    let severity: InsightSeverity;
+    let emoji: string;
+    let title: string;
+    let body: string;
+
+    if (score >= 80) {
+      severity = 'positive';
+      emoji    = '🏅';
+      title    = `Saúde Financeira: ${score}/100`;
+      body     = `Sua pontuação de saúde financeira está excelente. Continue mantendo bons hábitos de poupança e controle de dívidas.`;
+    } else if (score >= 60) {
+      severity = 'info';
+      emoji    = '💡';
+      title    = `Saúde Financeira: ${score}/100`;
+      body     = `Sua saúde financeira está boa, mas há espaço para melhorar. Avalie reduzir o comprometimento de renda em despesas fixas.`;
+    } else if (score >= 40) {
+      severity = 'warning';
+      emoji    = '⚠️';
+      title    = `Saúde Financeira: ${score}/100`;
+      body     = `Atenção: sua pontuação financeira indica vulnerabilidade. Foque em reduzir passivos e aumentar a reserva de emergência.`;
+    } else {
+      severity = 'critical';
+      emoji    = '🚨';
+      title    = `Saúde Financeira Crítica: ${score}/100`;
+      body     = `Situação financeira requer ação imediata. Reduza gastos discricionários e priorize quitar as dívidas de maior custo.`;
+    }
+
+    insights.push({ id: 'health-score', severity, emoji, title, body, metric: `${score}/100` });
   }
 
   // Limit to 5 most relevant, prioritizing critical/warning
@@ -237,11 +274,12 @@ export function useQuantumCopilot({
   balance,
   timeRange,
   loading,
+  healthScore,
 }: Params): { insights: CopilotInsight[]; hasInsights: boolean } {
   const insights = useMemo(() => {
     if (!uid || loading || transactions.length === 0) return [];
-    return computeCopilotInsights(transactions, recurringTasks, balance);
-  }, [uid, loading, transactions, recurringTasks, balance, timeRange]); // timeRange triggers refresh
+    return computeCopilotInsights(transactions, recurringTasks, balance, healthScore);
+  }, [uid, loading, transactions, recurringTasks, balance, timeRange, healthScore]); // timeRange triggers refresh
 
   return { insights, hasInsights: insights.length > 0 };
 }

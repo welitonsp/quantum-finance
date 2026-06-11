@@ -1,7 +1,7 @@
 import { useNavigation } from '../contexts/NavigationContext';
 import {
   LayoutDashboard, PieChart, Settings, LogOut,
-  Landmark, BrainCircuit, Repeat, Clock, X, CreditCard, FlaskConical,
+  Landmark, BrainCircuit, Repeat, Clock, X, CreditCard, FlaskConical, ShoppingCart, TrendingDown,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -32,7 +32,8 @@ const navGroups: NavGroup[] = [
       { id: 'dashboard',  icon: LayoutDashboard, label: 'Dashboard'          },
       { id: 'reports',    icon: PieChart,        label: 'BI & Relatórios'    },
       { id: 'quantum',    icon: BrainCircuit,    label: 'Quantum AI'         },
-      { id: 'simulation', icon: FlaskConical,    label: 'Monte Carlo'        },
+      { id: 'simulation',          icon: FlaskConical,   label: 'Monte Carlo'        },
+      { id: 'purchase-simulator', icon: ShoppingCart,   label: 'Simulador de Compra' },
     ],
   },
   {
@@ -41,7 +42,8 @@ const navGroups: NavGroup[] = [
       { id: 'accounts',  icon: Landmark,   label: 'Minhas Contas'      },
       { id: 'cards',     icon: CreditCard, label: 'Cartões de Crédito' },
       { id: 'history',   icon: Clock,      label: 'Movimentações'      },
-      { id: 'recurring', icon: Repeat,     label: 'Despesas Fixas'     },
+      { id: 'recurring', icon: Repeat,       label: 'Despesas Fixas'     },
+      { id: 'debts',     icon: TrendingDown, label: 'Dívidas'            },
     ],
   },
 ];
