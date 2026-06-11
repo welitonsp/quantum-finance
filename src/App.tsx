@@ -167,7 +167,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   const { accounts } = useAccounts(safeUID);
   const { recurringTasks } = useRecurring(safeUID);
   // totalFaturaCents: faturas abertas de cartões — passivo corrente para o net worth
-  const { totalFaturaCents } = useCreditCards(safeUID, transactions);
+  const { totalFaturaCents, cards: creditCards } = useCreditCards(safeUID, transactions);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
     useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts, categories, totalFaturaCents);
 
@@ -401,6 +401,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
           onSave={handleSaveTransaction}
           editingTransaction={transactionToEdit}
           onCancelEdit={handleCloseForm}
+          creditCards={creditCards}
         />
       )}
       {isTransferFormOpen && (

@@ -5,7 +5,7 @@ import {
   Calendar, DollarSign, Tag, FileText, CheckCircle, Plus, CreditCard,
 } from 'lucide-react';
 import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
-import type { Transaction } from '../../shared/types/transaction';
+import type { Transaction, CreditCard as CreditCardType } from '../../shared/types/transaction';
 import { formatBRL, fromCentavos, toCentavos } from '../../shared/types/money';
 import { isIncome } from '../../utils/transactionUtils';
 import { useCategories } from '../../hooks/useCategories';
@@ -131,6 +131,7 @@ interface FormData {
   type: 'entrada' | 'saida';
   category: string;
   date: string;
+  cardId?: string;
 }
 
 interface Props {
@@ -138,9 +139,10 @@ interface Props {
   onSave: (tx: Partial<Transaction>) => Promise<void>;
   editingTransaction: Transaction | null;
   onCancelEdit: () => void;
+  creditCards?: CreditCardType[];
 }
 
-export default function TransactionForm({ uid, onSave, editingTransaction, onCancelEdit }: Props) {
+export default function TransactionForm({ uid, onSave, editingTransaction, onCancelEdit, creditCards }: Props) {
   const isEditing = Boolean(editingTransaction);
   const {
     categories,
@@ -296,12 +298,15 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
     setIsSubmitting(true); setError('');
     try {
       if (installmentMode && !isEditing && formData.type === 'saida') {
+        const selectedCard = creditCards?.find(c => c.id === formData.cardId);
         await FirestoreService.createInstallmentGroupWithHistory(uid, {
           description:      formData.description.trim(),
           totalValueCents:  valueCents,
           installmentCount: Math.max(2, Math.min(120, installmentCount)),
           date:             formData.date,
           category:         formData.category,
+          ...(formData.cardId ? { cardId: formData.cardId } : {}),
+          ...(selectedCard ? { closingDay: selectedCard.closingDay } : {}),
         });
       } else {
         const value = fromCentavos(valueCents);

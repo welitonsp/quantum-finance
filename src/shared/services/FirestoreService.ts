@@ -129,6 +129,8 @@ export interface InstallmentGroupCreateDTO {
   category:         string;
   accountId?:       string;
   cardId?:          string;
+  /** Dia de fechamento do cartão (1–31). Quando presente, a competência de cada parcela é calculada corretamente: compra após fechamento entra na fatura do mês seguinte. */
+  closingDay?:      number;
 }
 
 function addMonthsToDate(dateStr: string, months: number): string {
@@ -142,6 +144,40 @@ function addMonthsToDate(dateStr: string, months: number): string {
   const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
   const day = Math.min(d, lastDay);
   return `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/**
+ * Calcula a competência (YYYY-MM) de uma parcela considerando o dia de fechamento do cartão.
+ * Regra: compra realizada APÓS o fechamento entra na fatura do mês seguinte.
+ * Parcelas subsequentes avançam um mês por índice.
+ *
+ * @param purchaseDateISO  Data da compra no formato YYYY-MM-DD
+ * @param closingDay       Dia de fechamento do cartão (1–31); se ausente, usa mês calendário
+ * @param installmentIndex Índice da parcela (0-based: 0 = primeira parcela)
+ */
+export function resolveCompetencia(purchaseDateISO: string, closingDay: number | undefined, installmentIndex: number): string {
+  const parts = purchaseDateISO.split('-').map(Number);
+  const y = parts[0] ?? 2000;
+  const m = parts[1] ?? 1;
+  const d = parts[2] ?? 1;
+
+  // Sem closingDay: competência é o próprio mês da data da parcela (comportamento legado)
+  let baseYear = y;
+  let baseMonth = m; // 1-based
+
+  if (closingDay !== undefined && closingDay >= 1 && closingDay <= 31) {
+    // Compra após o fechamento → primeira fatura é do mês seguinte
+    if (d > closingDay) {
+      baseMonth += 1;
+      if (baseMonth > 12) { baseMonth = 1; baseYear += 1; }
+    }
+  }
+
+  // Avança pelo índice da parcela
+  const totalMonths = (baseYear * 12 + (baseMonth - 1)) + installmentIndex;
+  const resultYear  = Math.floor(totalMonths / 12);
+  const resultMonth = (totalMonths % 12) + 1; // 1-based
+  return `${resultYear}-${String(resultMonth).padStart(2, '0')}`;
 }
 
 export interface TransactionUpdateDTO {
@@ -1006,6 +1042,7 @@ export const FirestoreService = {
       const index = i + 1; // 1-based
       const valueCents = index === n ? lastInstallment : perInstallment;
       const date = addMonthsToDate(data.date, i);
+      const competencia = resolveCompetencia(data.date, data.closingDay, i);
 
       const txRef = i === 0 ? groupAnchorRef : doc(txCol(uid));
       const historyRef = doc(
@@ -1020,6 +1057,7 @@ export const FirestoreService = {
         type:                 'saida' as const,
         category:             data.category,
         date,
+        competencia,
         source:               'manual' as const,
         isRecurring:          false,
         installmentGroupId:   groupId,
@@ -1036,6 +1074,7 @@ export const FirestoreService = {
         type:                 'saida',
         value_cents:          valueCents,
         date,
+        competencia,
         source:               'manual',
         category:             data.category,
         installmentGroupId:   groupId,
