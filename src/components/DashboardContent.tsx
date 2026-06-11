@@ -38,6 +38,8 @@ import { useScoreHistory } from '../hooks/useScoreHistory';
 import FinancialHealthScore from './FinancialHealthScore';
 import WeeklyCashflowWidget from './WeeklyCashflowWidget';
 import { useWeeklyCashflow } from '../hooks/useWeeklyCashflow';
+import TimelineWidget from './TimelineWidget';
+import { toCentavos as toBalanceCents } from '../shared/schemas/financialSchemas';
 import EconomyChallengeWidget from './EconomyChallengeWidget';
 import GoalsPanel from './GoalsPanel';
 import AnomalyAlerts from './AnomalyAlerts';
@@ -520,6 +522,15 @@ export default function DashboardContent({
             />
           </div>
         </div>
+      </motion.div>
+
+      {/* ── TIMELINE 90 DIAS ──────────────────────────────────── */}
+      <motion.div variants={itemVariants}>
+        <TimelineWidget
+          transactions={txSet}
+          recurringTasks={recurringTasks}
+          currentBalanceCents={toBalanceCents(saldo)}
+        />
       </motion.div>
 
       {/* ── FAB MOBILE ────────────────────────────────────────── */}
