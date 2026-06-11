@@ -34,6 +34,8 @@ import QuantumInsights from './QuantumInsights';
 import QuantumCopilotCards from './QuantumCopilotCards';
 import { useQuantumCopilot } from '../hooks/useQuantumCopilot';
 import FinancialHealthScore from './FinancialHealthScore';
+import WeeklyCashflowWidget from './WeeklyCashflowWidget';
+import { useWeeklyCashflow } from '../hooks/useWeeklyCashflow';
 import GoalsPanel from './GoalsPanel';
 import AnomalyAlerts from './AnomalyAlerts';
 import toast from 'react-hot-toast';
@@ -295,6 +297,8 @@ export default function DashboardContent({
     loading,
   });
 
+  const { weeks: cashflowWeeks, futureEvents } = useWeeklyCashflow(allTransactions, recurringTasks);
+
   return (
     <motion.div
       variants={containerVariants}
@@ -387,6 +391,14 @@ export default function DashboardContent({
 
       <motion.div variants={itemVariants}>
         <FinancialHealthScore metrics={metrics} loading={loadingMetrics} />
+      </motion.div>
+
+      <motion.div variants={itemVariants}>
+        <WeeklyCashflowWidget
+          weeks={cashflowWeeks}
+          futureEvents={futureEvents}
+          loading={loading}
+        />
       </motion.div>
 
       <motion.div variants={itemVariants}>
