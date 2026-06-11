@@ -15,6 +15,7 @@ import { useRecurring } from './hooks/useRecurring';
 import { useCategoryRules } from './hooks/useCategoryRules';
 import { useCategories } from './hooks/useCategories';
 import { useAppLogic } from './hooks/useAppLogic';
+import { useCreditCards } from './hooks/useCreditCards';
 import { logSanitizedFirebaseError } from './shared/lib/firebaseErrorHandling';
 
 import Sidebar from './components/Sidebar';
@@ -165,8 +166,10 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   } = useTransactions(safeUID, userCategoryRules, undefined, serverSearch);
   const { accounts } = useAccounts(safeUID);
   const { recurringTasks } = useRecurring(safeUID);
+  // totalFaturaCents: faturas abertas de cartões — passivo corrente para o net worth
+  const { totalFaturaCents } = useCreditCards(safeUID, transactions);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
-    useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts, categories);
+    useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts, categories, totalFaturaCents);
 
   const [isTransferFormOpen,    setIsTransferFormOpen]    = useState(false);
   const [transferInitialValues, setTransferInitialValues] = useState<import('./features/transactions/TransferForm').TransferInitialValues>({});
