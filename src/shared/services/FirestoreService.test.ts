@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { FirestoreService } from './FirestoreService';
+import { FirestoreService, resolveCompetencia } from './FirestoreService';
 import { toCentavos } from '../types/money';
 import type { Transaction } from '../types/transaction';
 
@@ -1772,5 +1772,51 @@ describe('FirestoreService.createInstallmentGroupWithHistory', () => {
 
     expect(typeof id).toBe('string');
     expect(id.length).toBeGreaterThan(0);
+  });
+});
+
+describe('resolveCompetencia', () => {
+  it('sem closingDay: competência é o mês da compra (parcela 0)', () => {
+    expect(resolveCompetencia('2026-06-15', undefined, 0)).toBe('2026-06');
+  });
+
+  it('sem closingDay: parcela 1 avança um mês', () => {
+    expect(resolveCompetencia('2026-06-15', undefined, 1)).toBe('2026-07');
+  });
+
+  it('compra ANTES do fechamento: competência = mês atual', () => {
+    // Fechamento dia 20, compra dia 15 → competência junho
+    expect(resolveCompetencia('2026-06-15', 20, 0)).toBe('2026-06');
+  });
+
+  it('compra NO DIA do fechamento: competência = mês atual (≤ fecha)', () => {
+    expect(resolveCompetencia('2026-06-20', 20, 0)).toBe('2026-06');
+  });
+
+  it('compra APÓS fechamento: competência = mês seguinte', () => {
+    // Fechamento dia 20, compra dia 21 → cai na fatura de julho
+    expect(resolveCompetencia('2026-06-21', 20, 0)).toBe('2026-07');
+  });
+
+  it('compra após fechamento em dezembro: vira janeiro do ano seguinte', () => {
+    expect(resolveCompetencia('2026-12-25', 20, 0)).toBe('2027-01');
+  });
+
+  it('compra após fechamento: parcela 2 é base+1 mês', () => {
+    // Compra 21/jun, fecha 20 → base=jul → parcela 1 = ago
+    expect(resolveCompetencia('2026-06-21', 20, 1)).toBe('2026-08');
+  });
+
+  it('compra antes do fechamento: 12 parcelas cobre 12 meses', () => {
+    const first = resolveCompetencia('2026-01-10', 20, 0);
+    const last  = resolveCompetencia('2026-01-10', 20, 11);
+    expect(first).toBe('2026-01');
+    expect(last).toBe('2026-12');
+  });
+
+  it('virada de ano em parcelas: jan→dez→jan', () => {
+    // Compra nov após fechamento → base=dez, parcela 1 = jan seguinte
+    expect(resolveCompetencia('2026-11-25', 20, 0)).toBe('2026-12');
+    expect(resolveCompetencia('2026-11-25', 20, 1)).toBe('2027-01');
   });
 });

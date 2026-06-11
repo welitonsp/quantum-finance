@@ -56,6 +56,8 @@ export interface Transaction {
   descriptionLower?: string;
   /** Client-computed statistical risk flag — not persisted to Firestore. */
   riskScore?: 'normal' | 'elevated' | 'anomalous';
+  /** Competência da parcela no formato YYYY-MM: mês em que a fatura é cobrada, respeitando o closingDay do cartão. */
+  competencia?: string;
 }
 
 export interface ParsedTransaction extends Omit<Transaction, 'id' | 'uid' | 'createdAt' | 'updatedAt'> {
