@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Save, ArrowRightLeft, AlertCircle, CheckCircle } from 'lucide-react';
-import { toCentavos, formatBRL } from '../../shared/types/money';
+import { toCentavos, fromCentavos, formatBRL, type Centavos } from '../../shared/types/money';
 import { FirestoreService, type TransferCreateDTO } from '../../shared/services/FirestoreService';
 import type { Account } from '../../shared/types/transaction';
 
@@ -12,10 +12,17 @@ const panelVariants = {
   exit:    { opacity: 0, y: 24, scale: 0.96, transition: { duration: 0.18 } },
 };
 
+export interface TransferInitialValues {
+  toAccountId?: string;
+  valueCents?:  Centavos;
+  description?: string;
+}
+
 interface Props {
-  uid:      string;
-  accounts: Account[];
-  onClose:  () => void;
+  uid:            string;
+  accounts:       Account[];
+  onClose:        () => void;
+  initialValues?: TransferInitialValues;
 }
 
 function formatFormMoney(raw: string): string | null {
@@ -29,14 +36,18 @@ function formatFormMoney(raw: string): string | null {
   }
 }
 
-export default function TransferForm({ uid, accounts, onClose }: Props) {
+export default function TransferForm({ uid, accounts, onClose, initialValues }: Props) {
   const today = new Date().toLocaleDateString('sv-SE');
 
+  const initValue = initialValues?.valueCents
+    ? fromCentavos(initialValues.valueCents).toFixed(2)
+    : '';
+
   const [fromAccountId, setFromAccountId] = useState('');
-  const [toAccountId,   setToAccountId]   = useState('');
-  const [value,         setValue]         = useState('');
+  const [toAccountId,   setToAccountId]   = useState(initialValues?.toAccountId ?? '');
+  const [value,         setValue]         = useState(initValue);
   const [date,          setDate]          = useState(today);
-  const [description,   setDescription]   = useState('');
+  const [description,   setDescription]   = useState(initialValues?.description ?? '');
   const [isSubmitting,  setIsSubmitting]  = useState(false);
   const [error,         setError]         = useState('');
   const [saved,         setSaved]         = useState(false);
@@ -47,7 +58,8 @@ export default function TransferForm({ uid, accounts, onClose }: Props) {
     valueRef.current?.focus();
   }, []);
 
-  const activeAccounts = accounts.filter(a => a.type !== 'cartao');
+  const originAccounts      = accounts.filter(a => a.type !== 'cartao');
+  const destinationAccounts = accounts;
 
   const preview = formatFormMoney(value);
   const sameAccount = fromAccountId && toAccountId && fromAccountId === toAccountId;
@@ -184,7 +196,7 @@ export default function TransferForm({ uid, accounts, onClose }: Props) {
                 required
               >
                 <option value="">Selecione a conta de origem</option>
-                {activeAccounts.map(a => (
+                {originAccounts.map(a => (
                   <option key={a.id} value={a.id}>{a.name}</option>
                 ))}
               </select>
@@ -203,7 +215,7 @@ export default function TransferForm({ uid, accounts, onClose }: Props) {
                 required
               >
                 <option value="">Selecione a conta de destino</option>
-                {activeAccounts.map(a => (
+                {destinationAccounts.map(a => (
                   <option key={a.id} value={a.id}>{a.name}</option>
                 ))}
               </select>

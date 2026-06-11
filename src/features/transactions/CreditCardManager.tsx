@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CreditCard, Plus, Trash2, Edit2, CheckCircle,
-  AlertTriangle, ShieldAlert,
+  AlertTriangle, ShieldAlert, Banknote,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCreditCards } from '../../hooks/useCreditCards';
@@ -15,8 +15,9 @@ import type { MoneyInput } from '../../shared/types/money';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Props {
-  uid:          string;
-  transactions?: Transaction[];
+  uid:            string;
+  transactions?:  Transaction[];
+  onPayInvoice?:  (valueCents: import('../../shared/types/money').Centavos, description: string) => void;
 }
 
 interface CardFormData {
@@ -226,7 +227,7 @@ function CardForm({ initial, onSave, onCancel }: CardFormProps) {
 }
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
-export default function CreditCardManager({ uid, transactions = [] }: Props) {
+export default function CreditCardManager({ uid, transactions = [], onPayInvoice }: Props) {
   const { cards, loading, addCard, updateCard, removeCard } = useCreditCards(uid, transactions);
   const [showForm,    setShowForm]    = useState(false);
   const [editingCard, setEditingCard] = useState<CreditCardWithMetrics | null>(null);
@@ -362,6 +363,14 @@ export default function CreditCardManager({ uid, transactions = [] }: Props) {
                   </div>
 
                   <div className="flex gap-2">
+                    {onPayInvoice && card.metrics.faturaCents > 0 && (
+                      <button
+                        onClick={() => onPayInvoice(card.metrics.faturaCents, `Pagamento fatura ${card.name}`)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-400 hover:text-blue-300 hover:border-blue-400/40 transition-all"
+                      >
+                        <Banknote className="w-3.5 h-3.5" /> Pagar fatura
+                      </button>
+                    )}
                     <button
                       onClick={() => { setEditingCard(card); setShowForm(false); }}
                       className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-quantum-bgSecondary border border-quantum-border rounded-xl text-xs text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/30 transition-all"

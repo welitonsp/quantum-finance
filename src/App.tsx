@@ -168,7 +168,8 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
     useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts, categories);
 
-  const [isTransferFormOpen, setIsTransferFormOpen] = useState(false);
+  const [isTransferFormOpen,    setIsTransferFormOpen]    = useState(false);
+  const [transferInitialValues, setTransferInitialValues] = useState<import('./features/transactions/TransferForm').TransferInitialValues>({});
 
   const {
     isAIChatOpen, setIsAIChatOpen, isFormOpen, setIsFormOpen, isSettingsOpen, setIsSettingsOpen,
@@ -295,7 +296,16 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                   />
                 )}
                 {currentPage === 'accounts'   && <AccountsManager   uid={safeUID} />}
-                {currentPage === 'cards'      && <CreditCardManager uid={safeUID} transactions={allTransactions} />}
+                {currentPage === 'cards'      && (
+                  <CreditCardManager
+                    uid={safeUID}
+                    transactions={allTransactions}
+                    onPayInvoice={(valueCents, description) => {
+                      setTransferInitialValues({ valueCents, description });
+                      setIsTransferFormOpen(true);
+                    }}
+                  />
+                )}
                 {currentPage === 'recurring'  && <RecurringManager  uid={safeUID} />}
                 {currentPage === 'quantum'    && (
                   <QuantumAIPage
@@ -394,7 +404,8 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
         <TransferForm
           uid={safeUID}
           accounts={accounts}
-          onClose={() => setIsTransferFormOpen(false)}
+          initialValues={transferInitialValues}
+          onClose={() => { setIsTransferFormOpen(false); setTransferInitialValues({}); }}
         />
       )}
     </div>
