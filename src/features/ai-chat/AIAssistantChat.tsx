@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { X, Send, BrainCircuit, User, ChevronDown } from 'lucide-react';
+import { X, Send, BrainCircuit, User, ChevronDown, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GeminiService } from './GeminiService';
 import { ConversationMemory } from './ConversationMemory';
@@ -164,6 +164,44 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading,    setIsLoading]    = useState(false);
+  const [callCount,    setCallCount]    = useState(0);
+
+  const RATE_LIMIT_MAX  = 20;
+  const RATE_LIMIT_WARN = 18;
+  const RATE_LIMIT_KEY  = `qf_rate_${uid}`;
+  const RATE_WINDOW_MS  = 60 * 60 * 1000; // 1 hour
+
+  // Sync callCount from localStorage on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(RATE_LIMIT_KEY);
+      if (!raw) return;
+      const calls: number[] = JSON.parse(raw);
+      const now = Date.now();
+      const recent = calls.filter(t => now - t < RATE_WINDOW_MS);
+      localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(recent));
+      setCallCount(recent.length);
+    } catch {
+      // ignore
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid]);
+
+  const recordCall = () => {
+    try {
+      const raw = localStorage.getItem(RATE_LIMIT_KEY);
+      const calls: number[] = raw ? (JSON.parse(raw) as number[]) : [];
+      const now = Date.now();
+      const recent = [...calls.filter(t => now - t < RATE_WINDOW_MS), now];
+      localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(recent));
+      setCallCount(recent.length);
+    } catch {
+      // ignore
+    }
+  };
+
+  const rateLimitReached = callCount >= RATE_LIMIT_MAX;
+  const rateLimitWarning = callCount >= RATE_LIMIT_WARN && !rateLimitReached;
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -177,7 +215,7 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
 
   const submitMessage = async (text: string) => {
     const userText = text.trim();
-    if (!userText) return;
+    if (!userText || rateLimitReached) return;
 
     setInputMessage('');
     const newMessages: Message[] = [...messages, { role: 'user', text: userText }];
@@ -213,6 +251,7 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
       // Derive citations from the top transactions relevant to the query
       const citations = pickCitations(userText, contextTxs);
 
+      recordCall();
       memory.append({ role: 'assistant', content: aiResponse, timestamp: new Date().toISOString() });
 
       const aiMessage: Message = citations.length
@@ -354,23 +393,33 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
           {/* Input */}
           <form
             onSubmit={handleSendMessage}
-            className="p-4 bg-quantum-bg/80 border-t border-quantum-border flex gap-2 relative z-10"
+            className="p-4 bg-quantum-bg/80 border-t border-quantum-border flex flex-col gap-2 relative z-10"
           >
-            <input
-              type="text"
-              value={inputMessage}
-              onChange={e => setInputMessage(e.target.value)}
-              placeholder="Analise os meus gastos, Comandante..."
-              disabled={isLoading}
-              className="flex-1 bg-quantum-bgSecondary border border-quantum-border rounded-xl px-4 py-2.5 text-sm text-quantum-fg placeholder:text-quantum-fgMuted focus:outline-none focus:border-quantum-accent/50 focus:shadow-[0_0_0_2px_rgba(0,230,138,0.1)] transition-all disabled:opacity-50"
-            />
-            <button
-              type="submit"
-              disabled={isLoading || !inputMessage.trim()}
-              className="p-2.5 bg-quantum-accent/90 hover:bg-quantum-accent text-quantum-bg rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(0,230,138,0.25)] hover:shadow-[0_0_20px_rgba(0,230,138,0.4)] active:scale-95"
-            >
-              <Send className="w-5 h-5" />
-            </button>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={inputMessage}
+                onChange={e => setInputMessage(e.target.value)}
+                placeholder={rateLimitReached ? 'Limite atingido. Tente novamente em breve.' : 'Analise os meus gastos, Comandante...'}
+                disabled={isLoading || rateLimitReached}
+                className="flex-1 bg-quantum-bgSecondary border border-quantum-border rounded-xl px-4 py-2.5 text-sm text-quantum-fg placeholder:text-quantum-fgMuted focus:outline-none focus:border-quantum-accent/50 focus:shadow-[0_0_0_2px_rgba(0,230,138,0.1)] transition-all disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={isLoading || !inputMessage.trim() || rateLimitReached}
+                className="p-2.5 bg-quantum-accent/90 hover:bg-quantum-accent text-quantum-bg rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(0,230,138,0.25)] hover:shadow-[0_0_20px_rgba(0,230,138,0.4)] active:scale-95"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className={rateLimitWarning ? 'text-amber-400' : rateLimitReached ? 'text-red-400 font-medium' : 'text-quantum-fgMuted'}>
+                {callCount}/{RATE_LIMIT_MAX} chamadas usadas neste período
+              </span>
+              {(rateLimitWarning || rateLimitReached) && (
+                <AlertTriangle className={`w-3.5 h-3.5 ${rateLimitReached ? 'text-red-400' : 'text-amber-400'}`} />
+              )}
+            </div>
           </form>
         </motion.div>
       )}

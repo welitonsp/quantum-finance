@@ -1163,6 +1163,30 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
+      // LGPD — consentimentos do usuário (leitura e escrita pelo próprio owner).
+      match /consents/{consentId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasAll(['type', 'granted', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['type', 'granted', 'updatedAt'])
+          && request.resource.data.type is string
+          && request.resource.data.granted is bool
+          && request.resource.data.updatedAt == request.time;
+        allow update: if isOwner(userId)
+          && request.resource.data.keys().hasAll(['type', 'granted', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['type', 'granted', 'updatedAt'])
+          && request.resource.data.type == resource.data.type
+          && request.resource.data.granted is bool
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if false;
+      }
+
+      // LGPD — log de processamento de dados (leitura pelo owner; escrita exclusiva pelo servidor).
+      match /dataProcessingLog/{logId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+
       match /goals/{goalId} {
         allow read:   if isOwner(userId);
         allow create: if isOwner(userId) && isValidGoalCreate(userId);
