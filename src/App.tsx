@@ -40,6 +40,7 @@ const QuantumAIPage     = lazy(() => import('./components/QuantumAIPage'));
 const HistoryPage       = lazy(() => import('./components/HistoryPage'));
 const CommandPalette    = lazy(() => import('./components/CommandPalette'));
 const SimulationCenter  = lazy(() => import('./features/simulation/SimulationCenter'));
+const PurchaseSimulator = lazy(() => import('./features/simulation/PurchaseSimulator'));
 
 // ─── Quantum Loader ──────────────────────────────────────────────────────────
 const QuantumLoader = () => (
@@ -357,6 +358,17 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                   <SimulationCenter
                     transactions={displayedTransactions}
                     balances={moduleBalances}
+                  />
+                )}
+                {currentPage === 'purchase-simulator' && (
+                  <PurchaseSimulator
+                    transactions={displayedTransactions}
+                    balances={moduleBalances}
+                    uid={safeUID}
+                    onRegisterPurchase={(prefill) => {
+                      setTransactionToEdit(prefill as Transaction);
+                      setIsFormOpen(true);
+                    }}
                   />
                 )}
               </Suspense>
