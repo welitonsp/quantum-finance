@@ -33,6 +33,7 @@ import { useCreditCards } from '../hooks/useCreditCards';
 import QuantumInsights from './QuantumInsights';
 import QuantumCopilotCards from './QuantumCopilotCards';
 import { useQuantumCopilot } from '../hooks/useQuantumCopilot';
+import { useScoreHistory } from '../hooks/useScoreHistory';
 import FinancialHealthScore from './FinancialHealthScore';
 import WeeklyCashflowWidget from './WeeklyCashflowWidget';
 import { useWeeklyCashflow } from '../hooks/useWeeklyCashflow';
@@ -288,6 +289,8 @@ export default function DashboardContent({
   // FIX: single source of truth for transactions
   } = useDashboardData(allTransactions, loading, categories);
 
+  const { history: scoreHistory } = useScoreHistory(user?.uid ?? '', metrics);
+
   const { insights: copilotInsights } = useQuantumCopilot({
     uid:            user?.uid ?? '',
     transactions:   allTransactions,
@@ -390,7 +393,7 @@ export default function DashboardContent({
       <QuantumInsights metrics={metrics} loading={loadingMetrics} />
 
       <motion.div variants={itemVariants}>
-        <FinancialHealthScore metrics={metrics} loading={loadingMetrics} />
+        <FinancialHealthScore metrics={metrics} loading={loadingMetrics} history={scoreHistory} />
       </motion.div>
 
       <motion.div variants={itemVariants}>

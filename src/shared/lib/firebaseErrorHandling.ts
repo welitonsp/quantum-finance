@@ -56,6 +56,8 @@ export const FIREBASE_ERROR_OPERATIONS = [
   'data_processing_log_read',
   'user_consents_read',
   'user_consents_save',
+  'score_history_persist',
+  'score_history_load',
 ] as const;
 
 export type FirebaseErrorOperation = typeof FIREBASE_ERROR_OPERATIONS[number];
