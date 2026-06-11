@@ -31,6 +31,10 @@ export interface BudgetInsight extends Budget {
   projectedSpend:      number;
   projectedSpendCents: Centavos;
   status:              'success' | 'warning' | 'danger';
+  /** Gasto no mês anterior para a mesma categoria (centavos inteiros). */
+  prevMonthSpentCents: Centavos;
+  /** Variação percentual vs mês anterior. null se não há dados anteriores. */
+  vsLastMonthPct:      number | null;
 }
 
 export type BudgetWriteData = Omit<Budget, 'id' | 'createdAt' | 'targetAmountCents'>;
@@ -49,6 +53,15 @@ export interface UseBudgetsReturn {
 export function currentMonthStr(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** Returns the YYYY-MM string for the month preceding the given YYYY-MM string. */
+export function prevMonthStr(month: string): string {
+  const parts = month.split('-');
+  const y = Number(parts[0] ?? 2000);
+  const m = Number(parts[1] ?? 1);
+  const d = new Date(y, m - 2, 1); // m-2: JS month is 0-based, and we want previous month
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 function normCat(cat: string | undefined): string {
@@ -141,6 +154,20 @@ export function useBudgets(uid: string, transactions: Transaction[]): UseBudgets
         const projProgress   = Math.min(Math.max(projectedCents / safeTarget, 0), 1);
         const remainingCents = addCentavos(budget.targetAmountCents, -spentCents);
 
+        // Previous month spending for the same category
+        const prevMonth = prevMonthStr(budget.month);
+        const prevMonthSpentCents = transactions.reduce((sum, tx) => {
+          const isExpense = checkExpense(tx.type);
+          const txMonth   = (tx.date ?? '').slice(0, 7);
+          if (!isExpense || txMonth !== prevMonth || normCat(tx.category) !== normKey) return sum;
+          if (tx.value_cents === undefined) return sum;
+          return addCentavos(sum, absCentavos(tx.value_cents));
+        }, 0 as Centavos);
+
+        const vsLastMonthPct: number | null = prevMonthSpentCents > 0
+          ? ((spentCents - prevMonthSpentCents) / prevMonthSpentCents) * 100
+          : null;
+
         return {
           ...budget,
           spent,
@@ -151,6 +178,8 @@ export function useBudgets(uid: string, transactions: Transaction[]): UseBudgets
           projectedSpend: projected,
           projectedSpendCents: projectedCents,
           status:         calcStatus(progress, projProgress),
+          prevMonthSpentCents,
+          vsLastMonthPct,
         };
       })
       // Deterministic sort: severity DESC (danger first), then progress DESC within tier

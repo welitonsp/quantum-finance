@@ -1,10 +1,11 @@
 // src/hooks/useGoals.ts
 // CRUD de metas de poupança em users/{uid}/goals
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   collection, query, orderBy, onSnapshot,
   addDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from 'firebase/firestore';
+import Decimal from 'decimal.js';
 import { db } from '../shared/api/firebase/index';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import type { SavingsGoal } from '../shared/types/transaction';
@@ -13,8 +14,16 @@ import type { Centavos } from '../shared/types/money';
 export type GoalCreateInput = Omit<SavingsGoal, 'id' | 'createdAt' | 'updatedAt'>;
 export type GoalUpdateInput = Partial<GoalCreateInput>;
 
+/** SavingsGoal enriquecida com campos computados derivados. */
+export interface EnrichedGoal extends SavingsGoal {
+  /** Contribuição mensal necessária para atingir a meta até targetDate (centavos inteiros). 0 se sem prazo ou prazo expirado. */
+  monthlyContributionNeeded: Centavos;
+  /** Dias restantes até o prazo. null se sem prazo. Negativo se expirado. */
+  daysRemaining: number | null;
+}
+
 interface UseGoalsReturn {
-  goals:      SavingsGoal[];
+  goals:      EnrichedGoal[];
   loading:    boolean;
   addGoal:    (data: GoalCreateInput) => Promise<string>;
   updateGoal: (id: string, data: GoalUpdateInput) => Promise<void>;
@@ -23,12 +32,36 @@ interface UseGoalsReturn {
   setProgress:(id: string, currentCents: Centavos) => Promise<void>;
 }
 
+/** Pure function: compute derived fields for a single goal. Exported for testing. */
+export function enrichGoal(goal: SavingsGoal, todayMs: number = Date.now()): EnrichedGoal {
+  let daysRemaining: number | null = null;
+  let monthlyContributionNeeded: Centavos = 0 as Centavos;
+
+  if (goal.deadline) {
+    const deadlineMs = new Date(goal.deadline).getTime();
+    const diffMs     = deadlineMs - todayMs;
+    daysRemaining    = Math.ceil(diffMs / 86_400_000);
+
+    const shortfallCents = new Decimal(goal.targetCents).minus(goal.currentCents);
+    if (shortfallCents.greaterThan(0) && daysRemaining > 0) {
+      // months remaining = days / 30.4375 (average Gregorian month)
+      const monthsLeft = new Decimal(daysRemaining).div('30.4375');
+      if (monthsLeft.greaterThan(0)) {
+        const perMonth = shortfallCents.div(monthsLeft).toDecimalPlaces(0, Decimal.ROUND_CEIL);
+        monthlyContributionNeeded = perMonth.toNumber() as Centavos;
+      }
+    }
+  }
+
+  return { ...goal, daysRemaining, monthlyContributionNeeded };
+}
+
 export function useGoals(uid: string): UseGoalsReturn {
-  const [goals,   setGoals]   = useState<SavingsGoal[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [rawGoals, setRawGoals] = useState<SavingsGoal[]>([]);
+  const [loading,  setLoading]  = useState(true);
 
   useEffect(() => {
-    if (!uid) { setGoals([]); setLoading(false); return; }
+    if (!uid) { setRawGoals([]); setLoading(false); return; }
     setLoading(true);
 
     const ref = collection(db, 'users', uid, 'goals');
@@ -37,7 +70,7 @@ export function useGoals(uid: string): UseGoalsReturn {
     const unsub = onSnapshot(
       q,
       snap => {
-        setGoals(snap.docs.map(d => ({
+        setRawGoals(snap.docs.map(d => ({
           ...(d.data() as Omit<SavingsGoal, 'id'>),
           id: d.id,
         })));
@@ -47,6 +80,11 @@ export function useGoals(uid: string): UseGoalsReturn {
     );
     return () => unsub();
   }, [uid]);
+
+  const goals = useMemo<EnrichedGoal[]>(
+    () => rawGoals.map(g => enrichGoal(g)),
+    [rawGoals],
+  );
 
   const addGoal = useCallback(async (data: GoalCreateInput): Promise<string> => {
     if (!uid) throw new Error('Utilizador não autenticado.');
@@ -82,3 +120,4 @@ export function useGoals(uid: string): UseGoalsReturn {
 
   return { goals, loading, addGoal, updateGoal, removeGoal, setProgress };
 }
+

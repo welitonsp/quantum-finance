@@ -148,6 +148,20 @@ function BudgetCard({ insight, onRemove }: BudgetCardProps) {
           </span>
         </div>
       )}
+
+      {/* vs Mês Anterior — only when we have previous month data */}
+      {insight.vsLastMonthPct !== null && (
+        <div className="flex items-center gap-1 text-[10px] text-quantum-fgMuted mt-1">
+          <TrendingUp className={`w-3 h-3 shrink-0 ${insight.vsLastMonthPct > 0 ? 'text-red-400 rotate-0' : 'text-emerald-400 rotate-180'}`} />
+          <span>
+            vs mês anterior:{' '}
+            <span className={`font-bold ${insight.vsLastMonthPct > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+              {insight.vsLastMonthPct > 0 ? '+' : ''}{insight.vsLastMonthPct.toFixed(0)}%
+            </span>
+            <span className="ml-1">({formatCurrency(fromCentavos(insight.prevMonthSpentCents))})</span>
+          </span>
+        </div>
+      )}
     </motion.div>
   );
 }

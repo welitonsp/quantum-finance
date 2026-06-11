@@ -2,17 +2,20 @@
 // Painel de metas de poupança: listagem, criação e progresso.
 import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Target, Plus, Trash2, X, Check, AlertCircle, Calendar, Pencil } from 'lucide-react';
+import { Target, Plus, Trash2, X, Check, AlertCircle, Calendar, Pencil, TrendingUp } from 'lucide-react';
 import { useGoals } from '../hooks/useGoals';
-import type { SavingsGoal } from '../shared/types/transaction';
+import type { EnrichedGoal } from '../hooks/useGoals';
 import { formatBRL, fromCentavos, toCentavos } from '../shared/types/money';
 import type { Centavos } from '../shared/types/money';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
+import EmergencyFundCalculator from '../features/goals/EmergencyFundCalculator';
 
 interface Props {
   uid: string;
   /** Ativos totais em centavos (de useFinancialMetrics), usado como base de progresso. */
   ativosCents?: number;
+  /** Despesas mensais médias em centavos — alimenta EmergencyFundCalculator. */
+  monthlyExpensesCents?: Centavos;
 }
 
 const GOAL_EMOJIS = ['🎯', '🏠', '✈️', '🚗', '📱', '🎓', '💍', '🏖️', '💰', '🏋️'];
@@ -26,7 +29,7 @@ function daysLeft(deadline: string | null | undefined): number | null {
 function GoalCard({
   goal, onDelete, onUpdateProgress,
 }: {
-  goal: SavingsGoal;
+  goal: EnrichedGoal;
   onDelete: (id: string) => void;
   onUpdateProgress: (id: string, cents: Centavos) => Promise<void>;
 }) {
@@ -119,16 +122,30 @@ function GoalCard({
             </div>
           </motion.div>
         ) : (
-          <motion.div key="info" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-between text-[10px] text-quantum-fgMuted">
-            <span>
-              <span className="font-bold text-quantum-fg">{formatBRL(fromCentavos(goal.currentCents))}</span>
-              {' / '}
-              {formatBRL(fromCentavos(goal.targetCents))}
-            </span>
-            <span className={`font-bold ${done ? 'text-emerald-400' : ''}`}>
-              {done ? '✓ Concluída' : `Faltam ${formatBRL(fromCentavos(remaining))}`}
-            </span>
-            <span className="font-mono font-bold">{pct.toFixed(0)}%</span>
+          <motion.div key="info" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-1">
+            <div className="flex items-center justify-between text-[10px] text-quantum-fgMuted">
+              <span>
+                <span className="font-bold text-quantum-fg">{formatBRL(fromCentavos(goal.currentCents))}</span>
+                {' / '}
+                {formatBRL(fromCentavos(goal.targetCents))}
+              </span>
+              <span className={`font-bold ${done ? 'text-emerald-400' : ''}`}>
+                {done ? '✓ Concluída' : `Faltam ${formatBRL(fromCentavos(remaining))}`}
+              </span>
+              <span className="font-mono font-bold">{pct.toFixed(0)}%</span>
+            </div>
+            {!done && goal.monthlyContributionNeeded > 0 && (
+              <div className="flex items-center gap-1 text-[10px] text-quantum-fgMuted">
+                <TrendingUp className="w-3 h-3 shrink-0 text-blue-400" />
+                <span>
+                  Guardar{' '}
+                  <span className="font-bold text-blue-400">
+                    {formatBRL(fromCentavos(goal.monthlyContributionNeeded))}
+                  </span>
+                  /mês para atingir a meta
+                </span>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -226,7 +243,7 @@ function NewGoalForm({ onSave, onCancel }: NewGoalFormProps) {
   );
 }
 
-export default function GoalsPanel({ uid, ativosCents }: Props) {
+export default function GoalsPanel({ uid, ativosCents, monthlyExpensesCents }: Props) {
   const { goals, loading, addGoal, removeGoal, setProgress } = useGoals(uid);
   const [adding, setAdding] = useState(false);
 
@@ -279,6 +296,17 @@ export default function GoalsPanel({ uid, ativosCents }: Props) {
           </button>
         )}
       </div>
+
+      {/* Emergency Fund Calculator */}
+      {monthlyExpensesCents !== undefined && (
+        <div className="mb-5">
+          <EmergencyFundCalculator
+            monthlyExpensesCents={monthlyExpensesCents}
+            currentSavingsCents={(ativosCents ?? 0) as Centavos}
+            onCreateGoal={addGoal}
+          />
+        </div>
+      )}
 
       <AnimatePresence initial={false}>
         {adding && (

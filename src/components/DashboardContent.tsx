@@ -28,6 +28,7 @@ import { SparkLine } from './SparkLine';
 import { IntelStrip } from './IntelStrip';
 import KPICards from './KPICards';
 import type { Transaction, ModuleBalances, CategoryDataPoint, Account, RecurringTask } from '../shared/types/transaction';
+import { toCentavos, type Centavos } from '../shared/types/money';
 import { useFinancialMetrics } from '../hooks/useFinancialMetrics';
 import { useCreditCards } from '../hooks/useCreditCards';
 import QuantumInsights from './QuantumInsights';
@@ -393,6 +394,9 @@ export default function DashboardContent({
         <GoalsPanel
           uid={user?.uid ?? ''}
           {...(metrics ? { ativosCents: metrics.ativosCents } : {})}
+          {...(metrics && metrics.despesa > 0
+            ? { monthlyExpensesCents: toCentavos(metrics.despesa) as Centavos }
+            : {})}
         />
       </motion.div>
 
