@@ -896,6 +896,70 @@ service cloud.firestore {
               || request.resource.data.updatedAt == request.time);
     }
 
+    function isValidDebt(data) {
+      return data.keys().hasAll([
+            'uid', 'name', 'creditor', 'totalCents', 'remainingCents',
+            'interestRate', 'installments', 'paidInstallments',
+            'dueDayOfMonth', 'startDate', 'category', 'active',
+            'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'uid', 'name', 'creditor', 'totalCents', 'remainingCents',
+            'interestRate', 'installments', 'paidInstallments',
+            'dueDayOfMonth', 'startDate', 'category', 'active',
+            'createdAt', 'updatedAt'
+          ])
+          && isStringSized(data.name, 1, 200)
+          && isStringSized(data.creditor, 1, 200)
+          && isPositiveSafeInt(data.totalCents)
+          && isPositiveSafeInt(data.remainingCents)
+          && data.interestRate is number
+          && data.interestRate >= 0
+          && isSafeInt(data.installments)
+          && data.installments >= 1
+          && isSafeInt(data.paidInstallments)
+          && data.paidInstallments >= 0
+          && isSafeInt(data.dueDayOfMonth)
+          && data.dueDayOfMonth >= 1
+          && data.dueDayOfMonth <= 31
+          && isStringSized(data.startDate, 10, 10)
+          && data.category in ['emprestimo', 'financiamento', 'cartao', 'cheque_especial', 'outro']
+          && data.active is bool;
+    }
+
+    function isValidDebtCreate(data) {
+      return isValidDebt(data)
+          && data.createdAt == request.time
+          && data.updatedAt == request.time;
+    }
+
+    function isValidDebtUpdate(data) {
+      return data.keys().hasAll([
+            'uid', 'name', 'creditor', 'totalCents', 'remainingCents',
+            'interestRate', 'installments', 'paidInstallments',
+            'dueDayOfMonth', 'startDate', 'category', 'active',
+            'createdAt', 'updatedAt'
+          ])
+          && isStringSized(data.name, 1, 200)
+          && isStringSized(data.creditor, 1, 200)
+          && isPositiveSafeInt(data.totalCents)
+          && data.remainingCents is int
+          && data.remainingCents >= 0
+          && data.interestRate is number
+          && data.interestRate >= 0
+          && isSafeInt(data.installments)
+          && data.installments >= 1
+          && isSafeInt(data.paidInstallments)
+          && data.paidInstallments >= 0
+          && isSafeInt(data.dueDayOfMonth)
+          && data.dueDayOfMonth >= 1
+          && data.dueDayOfMonth <= 31
+          && isStringSized(data.startDate, 10, 10)
+          && data.category in ['emprestimo', 'financiamento', 'cartao', 'cheque_especial', 'outro']
+          && data.active is bool
+          && data.createdAt == resource.data.createdAt;
+    }
+
     function isValidGoal(data) {
       return data.keys().hasAll(['name', 'targetCents', 'currentCents', 'createdAt', 'updatedAt'])
           && data.keys().hasOnly([
@@ -1083,6 +1147,13 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow create: if isOwner(userId) && isValidSimulationCreate(userId);
         allow update: if isOwner(userId) && isValidSimulationUpdate(userId);
+        allow delete: if isOwner(userId);
+      }
+
+      match /debts/{debtId} {
+        allow read:   if isOwner(userId);
+        allow create: if isOwner(userId) && isValidDebtCreate(request.resource.data);
+        allow update: if isOwner(userId) && isValidDebtUpdate(request.resource.data);
         allow delete: if isOwner(userId);
       }
 
