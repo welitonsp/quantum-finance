@@ -3,19 +3,21 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CreditCard, Plus, Trash2, Edit2, CheckCircle,
-  AlertTriangle, ShieldAlert,
+  AlertTriangle, ShieldAlert, Banknote,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCreditCards } from '../../hooks/useCreditCards';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 import { fromCentavos } from '../../shared/schemas/financialSchemas';
+import { formatCurrency } from '../../utils/formatters';
 import type { CreditCard as CreditCardType, CreditCardWithMetrics, Transaction } from '../../shared/types/transaction';
 import type { MoneyInput } from '../../shared/types/money';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Props {
-  uid:          string;
-  transactions?: Transaction[];
+  uid:            string;
+  transactions?:  Transaction[];
+  onPayInvoice?:  (valueCents: import('../../shared/types/money').Centavos, description: string) => void;
 }
 
 interface CardFormData {
@@ -98,13 +100,13 @@ function CardVisual({ card }: { card: CreditCardWithMetrics }) {
             <div>
               <p className="text-[9px] uppercase tracking-widest text-white/30 mb-0.5">Disponível</p>
               <p className="text-sm font-black font-mono text-quantum-fg">
-                R$ {metrics.disponivel.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                {formatCurrency(fromCentavos(metrics.disponivelCents))}
               </p>
             </div>
             <div className="text-right">
               <p className="text-[9px] uppercase tracking-widest text-white/30 mb-0.5">Limite Total</p>
               <p className="text-sm font-bold font-mono" style={{ color: `${color}CC` }}>
-                R$ {metrics.limitVal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                {formatCurrency(fromCentavos(metrics.limitCents))}
               </p>
             </div>
           </div>
@@ -225,7 +227,7 @@ function CardForm({ initial, onSave, onCancel }: CardFormProps) {
 }
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
-export default function CreditCardManager({ uid, transactions = [] }: Props) {
+export default function CreditCardManager({ uid, transactions = [], onPayInvoice }: Props) {
   const { cards, loading, addCard, updateCard, removeCard } = useCreditCards(uid, transactions);
   const [showForm,    setShowForm]    = useState(false);
   const [editingCard, setEditingCard] = useState<CreditCardWithMetrics | null>(null);
@@ -348,11 +350,11 @@ export default function CreditCardManager({ uid, transactions = [] }: Props) {
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div className="bg-quantum-bgSecondary rounded-xl p-2.5">
                       <p className="text-[9px] text-quantum-fgMuted uppercase tracking-wider mb-1">Fatura</p>
-                      <p className="text-xs font-bold text-quantum-red font-mono">R$ {card.metrics.faturaAtual.toFixed(0)}</p>
+                      <p className="text-xs font-bold text-quantum-red font-mono">{formatCurrency(fromCentavos(card.metrics.faturaCents))}</p>
                     </div>
                     <div className="bg-quantum-bgSecondary rounded-xl p-2.5">
                       <p className="text-[9px] text-quantum-fgMuted uppercase tracking-wider mb-1">Livre</p>
-                      <p className="text-xs font-bold text-quantum-accent font-mono">R$ {card.metrics.disponivel.toFixed(0)}</p>
+                      <p className="text-xs font-bold text-quantum-accent font-mono">{formatCurrency(fromCentavos(card.metrics.disponivelCents))}</p>
                     </div>
                     <div className="bg-quantum-bgSecondary rounded-xl p-2.5">
                       <p className="text-[9px] text-quantum-fgMuted uppercase tracking-wider mb-1">Fecho</p>
@@ -361,6 +363,14 @@ export default function CreditCardManager({ uid, transactions = [] }: Props) {
                   </div>
 
                   <div className="flex gap-2">
+                    {onPayInvoice && card.metrics.faturaCents > 0 && (
+                      <button
+                        onClick={() => onPayInvoice(card.metrics.faturaCents, `Pagamento fatura ${card.name}`)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-400 hover:text-blue-300 hover:border-blue-400/40 transition-all"
+                      >
+                        <Banknote className="w-3.5 h-3.5" /> Pagar fatura
+                      </button>
+                    )}
                     <button
                       onClick={() => { setEditingCard(card); setShowForm(false); }}
                       className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-quantum-bgSecondary border border-quantum-border rounded-xl text-xs text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/30 transition-all"

@@ -33,7 +33,11 @@ import { useCreditCards } from '../hooks/useCreditCards';
 import QuantumInsights from './QuantumInsights';
 import QuantumCopilotCards from './QuantumCopilotCards';
 import { useQuantumCopilot } from '../hooks/useQuantumCopilot';
+import { useScoreHistory } from '../hooks/useScoreHistory';
 import FinancialHealthScore from './FinancialHealthScore';
+import WeeklyCashflowWidget from './WeeklyCashflowWidget';
+import { useWeeklyCashflow } from '../hooks/useWeeklyCashflow';
+import EconomyChallengeWidget from './EconomyChallengeWidget';
 import GoalsPanel from './GoalsPanel';
 import AnomalyAlerts from './AnomalyAlerts';
 import toast from 'react-hot-toast';
@@ -286,6 +290,8 @@ export default function DashboardContent({
   // FIX: single source of truth for transactions
   } = useDashboardData(allTransactions, loading, categories);
 
+  const { history: scoreHistory } = useScoreHistory(user?.uid ?? '', metrics);
+
   const { insights: copilotInsights } = useQuantumCopilot({
     uid:            user?.uid ?? '',
     transactions:   allTransactions,
@@ -294,6 +300,8 @@ export default function DashboardContent({
     timeRange,
     loading,
   });
+
+  const { weeks: cashflowWeeks, futureEvents } = useWeeklyCashflow(allTransactions, recurringTasks);
 
   return (
     <motion.div
@@ -386,13 +394,29 @@ export default function DashboardContent({
       <QuantumInsights metrics={metrics} loading={loadingMetrics} />
 
       <motion.div variants={itemVariants}>
-        <FinancialHealthScore metrics={metrics} loading={loadingMetrics} />
+        <FinancialHealthScore metrics={metrics} loading={loadingMetrics} history={scoreHistory} />
+      </motion.div>
+
+      <motion.div variants={itemVariants}>
+        <WeeklyCashflowWidget
+          weeks={cashflowWeeks}
+          futureEvents={futureEvents}
+          loading={loading}
+        />
       </motion.div>
 
       <motion.div variants={itemVariants}>
         <GoalsPanel
           uid={user?.uid ?? ''}
           {...(metrics ? { ativosCents: metrics.ativosCents } : {})}
+        />
+      </motion.div>
+
+      <motion.div variants={itemVariants}>
+        <EconomyChallengeWidget
+          uid={user?.uid ?? ''}
+          transactions={allTransactions}
+          loading={loading}
         />
       </motion.div>
 
