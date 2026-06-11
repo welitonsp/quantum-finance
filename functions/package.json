@@ -21,8 +21,8 @@
     "firebase-functions": "^7.0.0"
   },
   "devDependencies": {
-    "@types/node": "^24.10.1",
-    "firebase-functions-test": "^3.4.1",
+    "@types/node": "^24.13.1",
+    "firebase-functions-test": "^3.5.0",
     "typescript": "^6.0.3"
   },
   "private": true
