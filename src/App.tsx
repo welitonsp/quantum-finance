@@ -396,6 +396,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
       <ErrorBoundary>
         <Suspense fallback={null}>
           <AIAssistantChat
+            uid={safeUID}
             transactions={displayedTransactions}
             balances={moduleBalances}
             isOpen={isAIChatOpen}
