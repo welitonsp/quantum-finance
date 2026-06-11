@@ -54,6 +54,8 @@ export function useFinancialData(
   currentYear: number,
   accounts: Account[] = [],
   categories: UserCategory[] = [],
+  /** Soma das faturas abertas de cartões em centavos inteiros (fonte: useCreditCards.totalFaturaCents). */
+  cardOpenInvoicesCents?: Centavos,
 ): FinancialDataReturn {
 
   const displayedTransactions = useMemo(() => {
@@ -108,16 +110,24 @@ export function useFinancialData(
       if (['cartao', 'divida'].includes(acc.type)) passivos += Math.abs(v);
     });
 
+    // Faturas abertas de cartões de crédito são passivos correntes não reflectidos
+    // nos saldos de conta — subtraí-las do patrimônio líquido evita dupla contagem.
+    const invoicesCents =
+      cardOpenInvoicesCents && Number.isFinite(cardOpenInvoicesCents) && cardOpenInvoicesCents > 0
+        ? Math.abs(Math.trunc(cardOpenInvoicesCents))
+        : 0;
+    const totalPassivos = passivos + invoicesCents;
+
     return {
       geral: {
         saldo:      fromCentavos(saldoAcumulado.plus(new Decimal(openingBalance)).toNumber()),
         receitas:   fromCentavos(receitasMes.toNumber()),
         despesas:   fromCentavos(despesasMes.toNumber()),
-        patrimonio: fromCentavos(ativos - passivos),
-        dividas:    fromCentavos(passivos),
+        patrimonio: fromCentavos(ativos - totalPassivos),
+        dividas:    fromCentavos(totalPassivos),
       }
     };
-  }, [transactions, activeModule, currentMonth, currentYear, accounts]);
+  }, [transactions, activeModule, currentMonth, currentYear, accounts, cardOpenInvoicesCents]);
 
   const categoryData = useMemo((): CategoryDataPoint[] => {
     const map: Record<string, number> = {};

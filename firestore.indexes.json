@@ -47,6 +47,13 @@
         { "fieldPath": "category", "order": "ASCENDING"  },
         { "fieldPath": "date",     "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "recurringTasks",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "active", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [
