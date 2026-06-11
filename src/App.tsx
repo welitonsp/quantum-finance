@@ -330,6 +330,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     onServerSearch={setServerSearchTerm}
                     serverCategoryFilter={serverCategoryFilter}
                     onServerCategoryFilter={setServerCategoryFilter}
+                    onAddNew={() => setIsFormOpen(true)}
                   />
                 )}
                 {currentPage === 'reports' && (
