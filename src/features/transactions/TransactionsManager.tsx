@@ -3,7 +3,7 @@
 // Thin orchestrator: holds state, delegates rendering to sub-components.
 import { useState, useCallback, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Check } from 'lucide-react';
+import { Check, AlertTriangle } from 'lucide-react';
 import type { Transaction } from '../../shared/types/transaction';
 import type { BulkUpdate } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
@@ -19,6 +19,7 @@ import {
 } from '../../shared/lib/firebaseErrorHandling';
 // Re-export para compatibilidade com testes que importam deste módulo
 export { calculateTransactionTotals } from './transactionGroupUtils';
+import { useSubscriptionAlerts } from '../../hooks/useSubscriptionAlerts';
 import {
   useTransactionFilters,
 } from './hooks/useTransactionFilters';
@@ -54,6 +55,10 @@ interface Props {
   onServerSearch?: (term: string) => void;
   serverCategoryFilter?: string;
   onServerCategoryFilter?: (cat: string) => void;
+  // ── Nova transação ───────────────────────────────────────────────────────
+  onAddNew?: () => void;
+  // ── Recorrentes (para alertas de assinaturas) ────────────────────────────
+  recurringTasks?: import('../../shared/types/transaction').RecurringTask[];
 }
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
@@ -78,10 +83,15 @@ export default function TransactionsManager({
   onServerSearch,
   serverCategoryFilter = '',
   onServerCategoryFilter,
+  onAddNew,
+  recurringTasks = [],
 }: Props) {
   const effectiveUid = uid ?? auth.currentUser?.uid ?? '';
   const { categories: loadedCategories } = useCategories(providedCategories ? '' : effectiveUid);
   const categories = providedCategories ?? loadedCategories;
+
+  // ── Alertas de assinaturas ────────────────────────────────────────────────
+  const subscriptionAlerts = useSubscriptionAlerts(recurringTasks, transactions);
 
   // ── Estado de UI (painéis) ────────────────────────────────────────────────
   const [filtersOpen,   setFiltersOpen]   = useState(false);
@@ -170,10 +180,23 @@ export default function TransactionsManager({
       if (e.key === 'Escape' && !auditOpen && historyTx === null) {
         cancelBatch();
       }
+      // Shortcut N = nova transação (apenas quando foco não está em campo de texto)
+      if (
+        e.key === 'n' &&
+        !e.altKey && !e.ctrlKey && !e.metaKey &&
+        onAddNew &&
+        document.activeElement?.tagName !== 'INPUT' &&
+        document.activeElement?.tagName !== 'TEXTAREA' &&
+        document.activeElement?.tagName !== 'SELECT' &&
+        !(document.activeElement as HTMLElement | null)?.isContentEditable
+      ) {
+        e.preventDefault();
+        onAddNew();
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [auditOpen, historyTx, cancelBatch]);
+  }, [auditOpen, historyTx, cancelBatch, onAddNew]);
 
   // Sincroniza newCat com as categorias disponíveis
   useEffect(() => {
@@ -274,9 +297,14 @@ export default function TransactionsManager({
   }, [selected, newCat, onBulkUpdate, undoLastBulkUpdate, clearBulkSnapshot, clearSelected]);
 
   if (loading) return (
-    <div role="status" aria-label="Carregando movimentações" className="flex flex-col items-center justify-center py-20 gap-3 text-quantum-fgMuted">
-      <div className="w-8 h-8 border-2 border-quantum-accent/30 border-t-quantum-accent rounded-full animate-spin" />
-      <span className="text-xs uppercase tracking-widest animate-pulse">A Sincronizar Matriz...</span>
+    <div role="status" aria-label="Carregando movimentações" className="flex flex-col p-4 gap-2">
+      {[...Array(6)].map((_, i) => (
+        <div key={i} className="animate-pulse flex items-center gap-3 px-4 py-3 border border-quantum-border rounded-xl bg-quantum-bgSecondary/50">
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4" />
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/6 ml-auto" />
+        </div>
+      ))}
     </div>
   );
 
@@ -424,6 +452,23 @@ export default function TransactionsManager({
           onClose={() => setInstallmentTx(null)}
           onCanceled={() => setInstallmentTx(null)}
         />
+      )}
+
+      {/* ═══ ALERTAS DE ASSINATURAS ═════════════════════════════════════════ */}
+      {subscriptionAlerts.length > 0 && (
+        <div className="px-4 md:px-5 py-2 border-b border-quantum-border bg-amber-500/5 space-y-1">
+          {subscriptionAlerts.slice(0, 3).map(alert => (
+            <div key={alert.taskId} className="flex items-center gap-2 text-xs text-amber-400">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              {alert.type === 'price_increase'
+                ? `${alert.description}: aumento de ${alert.increasePercent?.toFixed(1)}% detectado`
+                : `${alert.description}: sem cobrança há 2+ meses`}
+            </div>
+          ))}
+          {subscriptionAlerts.length > 3 && (
+            <p className="text-[10px] text-amber-400/70">+{subscriptionAlerts.length - 3} outros alertas</p>
+          )}
+        </div>
       )}
 
       {/* ═══ LISTA DE TRANSAÇÕES ════════════════════════════════════════════ */}
