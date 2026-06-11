@@ -980,8 +980,8 @@ export const FirestoreService = {
     data: InstallmentGroupCreateDTO,
   ): Promise<string> {
     if (!uid) throw new Error('[Firestore][createInstallmentGroupWithHistory] UID ausente.');
-    if (data.installmentCount < 2 || data.installmentCount > 999) {
-      throw new Error('[Firestore][createInstallmentGroupWithHistory] installmentCount deve ser entre 2 e 999.');
+    if (data.installmentCount < 2 || data.installmentCount > 120) {
+      throw new Error('[Firestore][createInstallmentGroupWithHistory] installmentCount deve ser entre 2 e 120.');
     }
     if (!data.description.trim()) {
       throw new Error('[Firestore][createInstallmentGroupWithHistory] Descrição obrigatória.');
@@ -998,72 +998,69 @@ export const FirestoreService = {
 
     const timestamp = serverTimestamp();
 
-    // Cria todas as parcelas em lotes de 240 pares (480 ops) — seguro abaixo do limite de 500
-    const BATCH_SIZE = 240;
-    for (let batchStart = 0; batchStart < n; batchStart += BATCH_SIZE) {
-      const batch = writeBatch(db);
-      const batchEnd = Math.min(batchStart + BATCH_SIZE, n);
+    // Cap de 120 parcelas garante que todos os documentos (120 tx + 120 history = 240 ops)
+    // caibam em um único writeBatch — operação atômica, sem risco de grupo parcial órfão.
+    const batch = writeBatch(db);
 
-      for (let i = batchStart; i < batchEnd; i++) {
-        const index = i + 1; // 1-based
-        const valueCents = index === n ? lastInstallment : perInstallment;
-        const date = addMonthsToDate(data.date, i);
+    for (let i = 0; i < n; i++) {
+      const index = i + 1; // 1-based
+      const valueCents = index === n ? lastInstallment : perInstallment;
+      const date = addMonthsToDate(data.date, i);
 
-        const txRef = i === 0 ? groupAnchorRef : doc(txCol(uid));
-        const historyRef = doc(
-          collection(db, 'users', uid, 'transactions', txRef.id, 'history'),
-          'create',
-        );
+      const txRef = i === 0 ? groupAnchorRef : doc(txCol(uid));
+      const historyRef = doc(
+        collection(db, 'users', uid, 'transactions', txRef.id, 'history'),
+        'create',
+      );
 
-        const txPayload = {
-          description:          `${data.description.trim()} (${index}/${n})`,
-          value_cents:          valueCents,
-          schemaVersion:        2 as const,
-          type:                 'saida' as const,
-          category:             data.category,
-          date,
-          source:               'manual' as const,
-          isRecurring:          false,
-          installmentGroupId:   groupId,
-          installmentIndex:     index,
-          installmentCount:     n,
-          installmentTotalCents: total,
-          createdAt:            timestamp,
-          updatedAt:            timestamp,
-          ...(data.accountId ? { accountId: data.accountId } : {}),
-          ...(data.cardId    ? { cardId:    data.cardId    } : {}),
-        };
+      const txPayload = {
+        description:          `${data.description.trim()} (${index}/${n})`,
+        value_cents:          valueCents,
+        schemaVersion:        2 as const,
+        type:                 'saida' as const,
+        category:             data.category,
+        date,
+        source:               'manual' as const,
+        isRecurring:          false,
+        installmentGroupId:   groupId,
+        installmentIndex:     index,
+        installmentCount:     n,
+        installmentTotalCents: total,
+        createdAt:            timestamp,
+        updatedAt:            timestamp,
+        ...(data.accountId ? { accountId: data.accountId } : {}),
+        ...(data.cardId    ? { cardId:    data.cardId    } : {}),
+      };
 
-        const afterSnapshot = {
-          type:                 'saida',
-          value_cents:          valueCents,
-          date,
-          source:               'manual',
-          category:             data.category,
-          installmentGroupId:   groupId,
-          installmentIndex:     index,
-          installmentCount:     n,
-          installmentTotalCents: total,
-        };
+      const afterSnapshot = {
+        type:                 'saida',
+        value_cents:          valueCents,
+        date,
+        source:               'manual',
+        category:             data.category,
+        installmentGroupId:   groupId,
+        installmentIndex:     index,
+        installmentCount:     n,
+        installmentTotalCents: total,
+      };
 
-        const historyPayload = {
-          action:        'CREATE',
-          txId:          txRef.id,
-          createdAt:     timestamp,
-          schemaVersion: 1,
-          origin:        'manual',
-          amount_cents:  valueCents,
-          category:      data.category,
-          after:         afterSnapshot,
-          changedFields: Object.keys(afterSnapshot),
-        };
+      const historyPayload = {
+        action:        'CREATE',
+        txId:          txRef.id,
+        createdAt:     timestamp,
+        schemaVersion: 1,
+        origin:        'manual',
+        amount_cents:  valueCents,
+        category:      data.category,
+        after:         afterSnapshot,
+        changedFields: Object.keys(afterSnapshot),
+      };
 
-        batch.set(txRef, txPayload);
-        batch.set(historyRef, historyPayload);
-      }
-
-      await batch.commit();
+      batch.set(txRef, txPayload);
+      batch.set(historyRef, historyPayload);
     }
+
+    await batch.commit();
 
     return groupId;
   },

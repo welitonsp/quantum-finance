@@ -299,7 +299,7 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
         await FirestoreService.createInstallmentGroupWithHistory(uid, {
           description:      formData.description.trim(),
           totalValueCents:  valueCents,
-          installmentCount: Math.max(2, Math.min(999, installmentCount)),
+          installmentCount: Math.max(2, Math.min(120, installmentCount)),
           date:             formData.date,
           category:         formData.category,
         });
@@ -438,9 +438,9 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
                       <input
                         type="number"
                         min={2}
-                        max={999}
+                        max={120}
                         value={installmentCount}
-                        onChange={e => setInstallmentCount(Math.max(2, Math.min(999, parseInt(e.target.value, 10) || 2)))}
+                        onChange={e => setInstallmentCount(Math.max(2, Math.min(120, parseInt(e.target.value, 10) || 2)))}
                         className="input-quantum w-24 text-center"
                       />
                       {(() => {
