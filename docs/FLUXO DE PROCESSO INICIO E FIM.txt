@@ -1,0 +1,23 @@
+✅ FLUXO QUANTUM FINANCE — PADRÃO PROFISSIONAL
+
+📋 AO INICIAR TRABALHO:
+  git checkout main
+  git pull
+  git checkout -b feat/nome-da-funcionalidade   ← cria branch isolada
+  npm run dev
+
+💻 DURANTE O DESENVOLVIMENTO:
+  npm run lint                                  ← antes de qualquer commit
+  git add .
+  git commit -m "tipo: descrição clara"
+     tipos: feat | fix | security | refactor | docs | test
+
+🚀 AO FINALIZAR:
+  npm run lint && npm run build                 ← build deve passar
+  git push origin feat/nome-da-funcionalidade
+  → Criar Pull Request no GitHub
+  → Revisar diff antes de aprovar
+  → Merge na main
+  → Vercel faz deploy automático
+
+🔒 NUNCA: git push direto na main com código financeiro não revisado

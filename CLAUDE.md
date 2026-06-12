@@ -2,9 +2,50 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
+## Estado Consolidado — PRs #178–#210 — 2026-06-12
+
+> Bloco mais recente. Em caso de divergência com qualquer seção abaixo, **este bloco é a referência**.
+
+### 1. Status atual
+
+- Branch principal: `main`. Último merge consolidado: PR #207 (FASE 8 — LGPD compliance + security hardening) + dep bumps #165–#170.
+- **PRs abertos em 2026-06-12 (FASE 0 do plano SGC — mergear nesta ordem):**
+  - #208 `fix(build)`: commita `src/hooks/useSubscriptionAlerts.ts` (importado pela main desde o #201 mas nunca commitado — **clone limpo/Vercel quebravam**) + testes de `executeScheduledRecurrents`.
+  - #209 `chore(lint)`: ignora `.claire/**` no ESLint/gitignore + remove `eslint-disable` órfão (empilhado sobre #208).
+  - #210 `chore(deps)`: `npm audit fix` — críticas zeradas (protobufjs RCE) nos dois lados; restantes exigem major bump `firebase` 10→12 (decisão do owner).
+- **Functions em produção (6)**: 5 callables (`createTransaction`, `deleteUserData`, `categorizeTransactionsBatch`, `chatWithQuantumAI`, `generateAuditReport`) + 1 agendada (`executeScheduledRecurrents`, cron `0 4 * * *`). Todas em `southamerica-east1`, TypeScript (`functions/src/`), App Check enforce+consume nas callables.
+- **Auditoria completa 2026-06-12**: ver `docs/RELATORIO-AUDITORIA-E-INCORPORACAO-SGC-2026-06-12.md` (estado do sistema, cibersegurança, plano de incorporação do SGC).
+
+### 2. Fases mergeadas após o bloco FASES 11–26
+
+| PRs | Escopo |
+|---|---|
+| #179–#186 | FASES 27–34: floats residuais eliminados + TTL idempotency; **functions migradas CJS→TypeScript**; Copilot proativo; Budget AI + alertas 80/100%; Score History + card compartilhável; Fluxo de Caixa Semanal; Desafio de Economia com XP; Risk Score por transação |
+| #187–#189 | P0s: transferências fora do saldo acumulado; parcelamento atômico (cap 120); fix dupla contagem de quota IA |
+| #190–#197 | FASE 1.x: `toFixed` monetário eliminado; pagar fatura via transferência; auditoria de segurança 1.7; net worth com faturas/parcelas futuras; **competência por fechamento do cartão** (`competencia`); **`executeScheduledRecurrents` agendada server-side**; Zod strict em `createTransferWithHistory` |
+| #198–#201 | FASE 2.x: **`FirestoreService` dividido em repos de domínio** (`firestoreCore.ts`, `transactionRepo.ts`, `transferRepo.ts`, `installmentRepo.ts`, `recurringRepo.ts` — `FirestoreService.ts` virou fachada); **`TransactionsManager` dividido em componentes** (`TransactionRow` etc.); `useInsightsEngine`; quick wins UX |
+| #202–#207 | FASES 3–8: `PurchaseSimulator` na navegação; **módulo de dívidas** (`features/debts`); fundo de emergência + budget vs actual + projeções de metas; timeline financeira 90 dias; AI copilot auditável com citações e memória; LGPD compliance + hardening |
+
+### 3. Suíte de testes (2026-06-12)
+
+- Frontend: **56 arquivos / 1034 testes passando / 168 skipped** (rules rodam via `npm run test:rules` com emulator).
+- Functions: **128 testes** (`npm --prefix functions test`, node:test).
+
+### 4. Pendências conhecidas (auditoria 2026-06-12)
+
+1. **Owner (manual, urgente)**: rotacionar chave Gemini + senha Neon vazadas no histórico git do projeto SGC (`C:\SGC-Atual`, commit `ea0e672`) — detalhe na Parte 5.1 do relatório.
+2. Remoção física de ~14 worktrees órfãos já mergeados em `.claude/worktrees/` (comandos na Parte 2 do relatório); 4 worktrees têm commits não alcançáveis pela main — decidir antes de apagar.
+3. Major bump `firebase` 10→12 (resolve 10 vulns moderadas/1 alta restantes) — breaking, PR dedicado.
+4. Confirmar host de produção (Vercel vs Firebase Hosting): headers de segurança (HSTS/CSP/X-Frame-Options) só existem em `firebase.json`; **não há `vercel.json`**.
+5. Verificar se Firebase Storage está desabilitado no console (não existe `storage.rules`).
+
+### 5. Próximo marco — Plano SGC (aprovado 2026-06-12)
+
+Incorporação da capacidade do SGC em fases (plano completo na Parte 4 do relatório): FASE 1 importação NFC-e via QR Code SEFAZ GO (callable `importNfceFromSefaz`, idempotência pela chave de acesso de 44 dígitos como `importHash`, anti-SSRF com host fixo); FASE 2 itens (`nfceItems`, convenções `quantityDec3`/`unitPriceDec4` inteiros); FASE 3 classificação IA (Gemini + cache); FASE 4 catálogo pessoal + histórico de preços. Pré-requisito: spike de egress SEFAZ↔GCP.
+
 ## Estado Consolidado — FASES 11–26 — 2026-06-09
 
-> Blocos anteriores substituídos. Em caso de divergência, **este bloco é a referência**.
+> Bloco histórico (substituído pelo bloco 2026-06-12 acima).
 
 ### 1. Status atual
 - Branch principal: `main`.
