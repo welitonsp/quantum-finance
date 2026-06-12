@@ -184,7 +184,6 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
     } catch {
       // ignore
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uid]);
 
   const recordCall = () => {

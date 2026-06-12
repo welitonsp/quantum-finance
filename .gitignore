@@ -64,3 +64,4 @@ Thumbs.db
 # =========================
 *.local
 .claude/
+.claire/
