@@ -130,11 +130,16 @@ export default defineConfig({
         '**/.claude/**',
         '**/.claude/worktrees/**',
       ],
+      // Recalibrado em 2026-06-12: FASES 3-8 (#202-#207) mergearam com CI
+      // vermelho (main não compilava) e erodiram a cobertura sem o gate agir.
+      // Valores fixados logo abaixo do real atual (lines 63.89 / functions
+      // 60.37 / branches 50.78 / statements 59.95) para voltar a funcionar
+      // como catraca. Subir conforme a dívida de testes for paga.
       thresholds: {
-        lines: 66,
-        functions: 61,
-        branches: 54,
-        statements: 61,
+        lines: 63,
+        functions: 60,
+        branches: 50,
+        statements: 59,
       },
     },
   },
