@@ -87,7 +87,8 @@ describe('useSubscriptionAlerts', () => {
   });
 
   it('não verifica preço quando value_cents esperado é 0/ausente', () => {
-    const tasks = [makeTask({ value_cents: undefined })];
+    const { value_cents: _omitted, ...taskSemValor } = makeTask();
+    const tasks = [taskSemValor as RecurringTask];
     const txs = [
       makeTx({ date: '2026-05-10', value_cents: 3990 as Centavos }),
       makeTx({ date: '2026-06-10', value_cents: 9990 as Centavos }),
@@ -143,7 +144,7 @@ describe('useSubscriptionAlerts', () => {
   });
 
   it('não alerta missing_execution sem lastExecutedMonth', () => {
-    const tasks = [makeTask({ lastExecutedMonth: undefined })];
+    const tasks = [makeTask()]; // makeTask não define lastExecutedMonth
     const txs = [makeTx({ date: '2026-03-10' })];
     const { result } = renderHook(() => useSubscriptionAlerts(tasks, txs));
     expect(result.current).toEqual([]);
@@ -172,7 +173,8 @@ describe('useSubscriptionAlerts', () => {
   });
 
   it('trata frequency ausente como mensal', () => {
-    const tasks = [makeTask({ frequency: undefined })];
+    const { frequency: _omitted, ...taskSemFreq } = makeTask();
+    const tasks = [taskSemFreq as RecurringTask];
     const txs = [
       makeTx({ date: '2026-05-10', value_cents: 3990 as Centavos }),
       makeTx({ date: '2026-06-10', value_cents: 4490 as Centavos }),
