@@ -2,19 +2,33 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — FASES 11–26 — 2026-06-09
+## Estado Consolidado — Visão Estratégica 2.0 (2026-06-12)
 
 > Blocos anteriores substituídos. Em caso de divergência, **este bloco é a referência**.
 
-### 1. Status atual
+### 1. Status atual e Últimos PRs
 - Branch principal: `main`.
-- Último commit na main: merge PR #176 (FASE 25 — Estabilidade Core)
-- Último commit na main: merge PR #177 (FASE 26 — Idempotência server-side)
-- **Plano Firebase: BLAZE** (upgrade realizado em 2026-06-08)
-- 5 Cloud Functions deployadas em produção (`southamerica-east1`, Node.js 24, 2nd Gen)
-- Firestore Rules deployadas em produção
-- **Sentry: REMOVIDO** (decisão do owner — fora do projeto)
-- Stash legado preservado e intocado.
+- Últimas integrações (substituindo PR #211):
+  - **#208** fix(build): commit `useSubscriptionAlerts` hook missing do PR #201.
+  - **#209** chore(lint): ignore agent worktree dirs e drop unused eslint-disable.
+  - **#210** chore(deps): npm audit fix — eliminadas vulnerabilidades critical/high (sem `--force`).
+  - **#212** docs(product): adicionado Documento Mestre Quantum Finance 2.0.
+
+### 1.1 Diretrizes Oficiais (Quantum Finance 2.0)
+- **Documento Mestre:** O Quantum Finance 2.0 é a referência estratégica oficial.
+- **Módulo de Compras:** O "Sistema Gestão de Compras" não é mais um produto ativo, servindo apenas como referência conceitual para a futura criação do módulo interno **Compras Inteligentes**.
+- **NFC-e Restrita:** O uso de NFC-e real está **bloqueado** até que haja um Threat Model de SSRF, validação de host/domínio, logs sanitizados e exigência de revisão humana.
+- **Próxima Fase:** Inventário read-only de UI/produto.
+
+### 1.2 Zonas Proibidas de Alteração
+É terminantemente **proibido** alterar os seguintes componentes/regras fora de uma fase própria autorizada:
+- A regra dos centavos e o uso obrigatório de `Decimal.js`.
+- A validação `Zod strict()` nos payloads.
+- O **Modelo A** (escritas e histórico atômicos).
+- Trilha de histórico (`history append-only`).
+- Política de logs sanitizados (sem PII).
+- Idempotência server-side e App Check.
+- Os arquivos/camadas: `firestore.rules`, `Cloud Functions`, `package-lock.json`.
 
 ### 2. Fases implementadas e mergeadas
 
