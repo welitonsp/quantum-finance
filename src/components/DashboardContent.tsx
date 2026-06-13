@@ -43,6 +43,7 @@ import { toCentavos as toBalanceCents } from '../shared/schemas/financialSchemas
 import EconomyChallengeWidget from './EconomyChallengeWidget';
 import GoalsPanel from './GoalsPanel';
 import AnomalyAlerts from './AnomalyAlerts';
+import CentroComandoWidget from './CentroComandoWidget';
 import toast from 'react-hot-toast';
 import { useRecurringAutoExecute } from '../hooks/useRecurringAutoExecute';
 import type { TimeRange } from '../hooks/useFinancialData';
@@ -246,7 +247,7 @@ export default function DashboardContent({
 
   const { status, color, rec, score, savingsRate, debtRatio, goalProgress } = st;
 
-  const { totalFaturaCents } = useCreditCards(user?.uid ?? '', allTransactions);
+  const { cards: creditCards, totalFaturaCents } = useCreditCards(user?.uid ?? '', allTransactions);
 
   const { metrics, loadingMetrics } = useFinancialMetrics(
     user?.uid ?? '',
@@ -313,6 +314,15 @@ export default function DashboardContent({
       animate="visible"
       className="max-w-[1800px] mx-auto px-4 md:px-6 py-8 space-y-6"
     >
+      {/* ── CENTRO DE COMANDO — alertas acionáveis no topo ───── */}
+      <motion.div variants={itemVariants}>
+        <CentroComandoWidget
+          budgetAlerts={budgetAlerts}
+          recurringTasks={recurringTasks}
+          cards={creditCards}
+        />
+      </motion.div>
+
       {/* ── HERO ──────────────────────────────────────────────── */}
       <motion.div variants={itemVariants} className="relative bg-quantum-card/40 backdrop-blur-xl border border-quantum-border rounded-3xl p-6 md:p-8 overflow-hidden transition-all hover:shadow-2xl">
         <div className={`absolute top-0 right-0 w-[500px] h-[500px] blur-[100px] opacity-20 rounded-full ${glowColor} -translate-y-1/2 translate-x-1/3 animate-slow-rotate`} />
