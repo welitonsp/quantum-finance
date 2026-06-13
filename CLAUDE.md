@@ -2,7 +2,7 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — Pós-ROADMAP-MESTRE-v2 + FASES 9–10 (2026-06-13)
+## Estado Consolidado — Pós-ROADMAP-MESTRE-v2 + FASES 9–16 (2026-06-13)
 
 > Blocos anteriores substituídos. Em caso de divergência, **este bloco é a referência**.
 > **Regra operacional:** Atualizar este bloco após cada PR mergeado ou marco relevante.
@@ -11,9 +11,10 @@
 - Branch principal: `main`.
 - **ROADMAP-MESTRE-v2 (FASES 0–8): todas mergeadas.**
 - **Fase de documentação 2.0: concluída** (5 docs produto + Política Copilot IA).
-- **FASES 9–10: mergeadas** (Compras Inteligentes + TTL idempotency).
-- Suíte: **57 arquivos · 1080 testes passando · 168 skipped · build OK**.
+- **FASES 9–16: mergeadas** (Compras Inteligentes + TTL idempotency + IR + Anti-Tarifa + Finanças Compartilhadas + AppShell).
+- Suíte: **60 arquivos · 1143 testes passando · 168 skipped · build OK**.
 - Últimas integrações relevantes (cronologia inversa):
+  - **PR #224** feat(appshell): FASE 16 — Sidebar 8 módulos oficiais, labels PT-BR, rota `wallet` removida.
   - **PR #223** feat(shared-finance): FASE 15 — Finanças Compartilhadas (grupos, split, balancete).
   - **PR #222** feat(anti-tarifa): FASE 14 — Agente Anti-Tarifa com detecção de cobranças recorrentes.
   - **PR #221** feat(ir): FASE 13 — Módulo IR: informe de rendimentos e apuração de ganho de capital.
@@ -130,13 +131,13 @@ Roadmap FASES 0–10 concluído. Backlog pós-roadmap organizado segundo os **8 
 | 13 | **Módulo IR** — informe de rendimentos + ganho de capital | ✅ PR #221 |
 | 14 | **Agente Anti-Tarifa** — detecção de cobranças recorrentes | ✅ PR #222 |
 | 15 | **Finanças Compartilhadas** — grupos, split, balancete | ✅ PR #223 |
+| 16 | **AppShell / Navegação** — Sidebar 8 módulos 2.0, PT-BR, rota `wallet` removida | ✅ PR #224 |
 
 #### 8.2 Próximas iniciativas — alinhadas aos 8 módulos 2.0
 Referência: `docs/product/INVENTARIO_UI_PRODUTO_QUANTUM_2026-06-12.md` (seção 22 — fases seguintes).
 
 | # | Módulo 2.0 | Iniciativa | Status |
 |---|---|---|---|
-| 16 | **AppShell / Navegação** | Reorganizar Sidebar para os 8 módulos oficiais; padronizar labels PT-BR; remover rota `wallet` ambígua | pendente |
 | 17 | **Design System mínimo** | Consolidar Button, Card, Modal, Drawer, Badge, EmptyState, Skeleton, MoneyInput em componentes compartilhados | pendente |
 | 18 | **Centro de Comando** | Reduzir Dashboard a alertas acionáveis, vencimentos e decisões imediatas; mover análises para módulos | pendente |
 | 19 | **Timeline Financeira** | Página dedicada unindo passado registrado + futuro projetado + recorrências + parcelas + cenários | pendente |
