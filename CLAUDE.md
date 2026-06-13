@@ -2,23 +2,36 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — Visão Estratégica 2.0 (2026-06-12)
+## Estado Consolidado — ROADMAP-MESTRE-v2 Completo (2026-06-13)
 
 > Blocos anteriores substituídos. Em caso de divergência, **este bloco é a referência**.
 
-### 1. Status atual e Últimos PRs
+### 1. Status atual
 - Branch principal: `main`.
-- Últimas integrações (substituindo PR #211):
-  - **#208** fix(build): commit `useSubscriptionAlerts` hook missing do PR #201.
-  - **#209** chore(lint): ignore agent worktree dirs e drop unused eslint-disable.
-  - **#210** chore(deps): npm audit fix — eliminadas vulnerabilidades critical/high (sem `--force`).
-  - **#212** docs(product): adicionado Documento Mestre Quantum Finance 2.0.
+- **ROADMAP-MESTRE-v2 (FASES 0–8): todas mergeadas.**
+- **Fase de documentação 2.0: concluída** (5 docs produto + Política Copilot IA).
+- Suíte: **57 arquivos · 1050 testes passando · 168 skipped · build OK**.
+- Últimas integrações relevantes:
+  - **#187** fix(balance): transferências não alteram saldo acumulado (P0-1).
+  - **#188** fix(installments): parcelamento atômico, cap 120 parcelas (P0-2).
+  - **#189** fix(ai): remover dupla contagem de quota de IA (P0-3).
+  - **#190–#197** FASES 1.1–1.7: competência cartão, pagar fatura por transferência, zero toFixed monetário, recorrências server-side, Zod em transferência, net worth com passivos, auditoria de segurança.
+  - **#198–#201** FASES 2.1–2.5: split FirestoreService, split TransactionsManager, insightsEngine unificado, quick wins UX.
+  - **#202** FASE 3: Simulador de Decisão de Compra.
+  - **#203** FASE 4: Plano de Quitação de Dívidas.
+  - **#204** FASE 5: Reserva de emergência + orçamento vs real + projeção de metas.
+  - **#205** FASE 6: Timeline financeira 90 dias + recorrências.
+  - **#206** FASE 7: Agente Financeiro Conversacional auditável.
+  - **#207** FASE 8: LGPD compliance + hardening de segurança.
+  - **#212–#216** Docs 2.0: Visão Estratégica, CLAUDE sync, Inventário UI, Inventário comparativo, Threat Model NFC-e.
+  - **11bdf68** docs(product): Política Copilot IA — Fase 2D.
 
 ### 1.1 Diretrizes Oficiais (Quantum Finance 2.0)
-- **Documento Mestre:** O Quantum Finance 2.0 é a referência estratégica oficial.
-- **Módulo de Compras:** O "Sistema Gestão de Compras" não é mais um produto ativo, servindo apenas como referência conceitual para a futura criação do módulo interno **Compras Inteligentes**.
-- **NFC-e Restrita:** O uso de NFC-e real está **bloqueado** até que haja um Threat Model de SSRF, validação de host/domínio, logs sanitizados e exigência de revisão humana.
-- **Próxima Fase:** Inventário read-only de UI/produto.
+- **Documento Mestre:** `docs/product/QUANTUM_FINANCE_VISAO_ESTRATEGICA_2_0.md` é a referência estratégica oficial.
+- **Política IA:** `docs/product/POLITICA_COPILOT_IA_QUANTUM_2026-06-12.md` — todo PR futuro com IA deve declarar dados usados, auditoria, idempotência, App Check, Zod, centavos e fallback.
+- **Módulo de Compras:** O "Sistema Gestão de Compras" não é mais um produto ativo. Módulo **Compras Inteligentes** será construído internamente no Quantum Finance.
+- **NFC-e Restrita:** Bloqueada até Threat Model completo de SSRF. Ver `docs/product/THREAT_MODEL_COMPRAS_INTELIGENTES_NFCE_2026-06-12.md`.
+- **Próxima Fase:** Backlog pós-roadmap — ver seção 8.
 
 ### 1.2 Zonas Proibidas de Alteração
 É terminantemente **proibido** alterar os seguintes componentes/regras fora de uma fase própria autorizada:
@@ -30,34 +43,29 @@
 - Idempotência server-side e App Check.
 - Os arquivos/camadas: `firestore.rules`, `Cloud Functions`, `package-lock.json`.
 
-### 2. Fases implementadas e mergeadas
+### 2. Fases implementadas e mergeadas (ROADMAP-MESTRE-v2)
 
 | Fase | Escopo | PR |
 |---|---|---|
-| FASE 11C | Parcelamento: `createInstallmentGroupWithHistory`, badge no `TransactionRow`, toggle no `TransactionForm` | #163 |
-| FASE 12A–12D | Transferências (ícone `⇄`, filtro), 4 índices Firestore, `FinancialHealthScore.tsx` | #163 |
-| FASE 13A–13C | `InstallmentGroupDrawer`, relatório CSV mensal, `GoalsPanel` com metas animadas | #163 |
-| FASE 14A–14E | Edição inline de metas/contas, `AnomalyAlerts`, `useRecurringAutoExecute` scaffold | #163 |
-| FASE 15A–15C | Testes unitários (exportCSV, GeminiService, recurring), recorrentes anuais, badge pause/resume | #163 |
-| FASE 16 | Playwright E2E: config, Auth Emulator, 5 suítes | #163 |
-| FASE 17A | Sincronização CLAUDE.md | #163 |
-| FASE 17B | Busca server-side por `description` via `descriptionLower` prefix query + índice `descriptionLower ASC + date DESC` | #169 |
-| FASE 17C | `consumeAppCheckToken` replay protection nas 4 Cloud Functions | #169 |
-| FASE 17D | Sentry: `SentryService.ts` com PII scrubbing, init em produção, `captureError` no ErrorBoundary | #169 |
-| FASE 18A | `descriptionLower` adicionado na importação CSV/OFX/PDF | #169 |
-| FASE 18B | Filtro server-side por categoria (`onServerCategoryFilter` callback) em `useTransactions` | #169 |
-| FASE 18C | Cache de emuladores no CI (E2E job) | #169 |
-| FASE 18D | UI select "Servidor" para filtro de categoria em `TransactionsManager` | #169 |
-| FASE 19A | Fix 5 P0 Firestore Rules: `txAllowedKeys` + history `after` + goals collection + recurring `dueMonth`/`lastExecutedMonth` + Modelo A em `useRecurringAutoExecute` | #169 |
-| FASE 20A | Migração `createTransaction`: Spark client-side → callable server-trusted Blaze (`httpsCallable`) | PR aberto |
-| FASE 20B | `deleteUserData` Cloud Function: `adminDb.recursiveDelete(users/{uid})` + `auth.deleteUser(uid)` (hard delete LGPD) | PR aberto |
-| FASE 20C | Deploy produção: Firestore Rules + Functions (5 callables, Node.js 24, 2nd Gen, `southamerica-east1`) | #171 |
-| FASE 21 | `useRecurringAutoExecute` migrado para `httpsCallable('createTransaction')` Blaze; remove `Math.round` proibido | #172 |
-| FASE 22 | Toast de notificação ao auto-executar recorrentes: `onExecuted` callback + `toast.success` em `DashboardContent` | #172 |
-| FASE 23 | Fix E2E CI: `emulators:exec` substitui `emulators:start &` + `wait-on`; job blocking novamente | #172 |
-| FASE 24 | Fix 3 E2E `fixme`: import CSV (Dashboard + `aria-label` selector), goals progress bar (container `.h-2` selector) — 19/19 passing | #174 |
-| FASE 25 | Fix P0 `descriptionLower` stale on edit (`normalizeUpdatePayload`); Fix P1 `parseFloat`→`toCentavos` em `AccountsManager`; Remove Sentry completamente | #176 |
-| FASE 26 | Idempotência server-side em `createTransaction`: `idempotencyKey` UUID v4 do cliente; pre-check + escrita atômica em `users/{uid}/idempotency/{key}`; Firestore Rules deny-all clients; 4 novos testes | #177 |
+| FASE 0 | Fix P0: dupla quota IA, parcelamento não-atômico, transferência no saldo acumulado | #187 #188 #189 |
+| FASE 1.1 | Competência por fechamento do cartão (`closingDay` + `competencia` YYYY-MM) | #195 |
+| FASE 1.2 | Pagar fatura do cartão via transferência | #191 |
+| FASE 1.3 | Zero `toFixed` monetário em cartões e insights | #190 |
+| FASE 1.4 | Cloud Function agendada para recorrências server-side | #196 |
+| FASE 1.5 | Zod strict schema em `createTransferWithHistory` | #197 |
+| FASE 1.6 | Net worth reflete faturas e parcelas futuras como passivo | #193 |
+| FASE 1.7 | Auditoria de segurança herdada + correções | #192 |
+| FASE 2.1 | Split `FirestoreService.ts` em repos por domínio | #198 |
+| FASE 2.2 | Split `TransactionsManager.tsx` em componentes focados | #199 |
+| FASE 2.3 | `useInsightsEngine` unificado (7 widgets → motor puro testável) | #200 |
+| FASE 2.5 | Quick wins UX: undo 10s, edição em lote, memória categorização, drill-down | #201 |
+| FASE 3 | Simulador de Decisão de Compra (`purchaseSimulator.ts`) | #202 |
+| FASE 4 | Plano de Quitação de Dívidas (`debtPlanner.ts`, coleção `debts`) | #203 |
+| FASE 5 | Reserva de emergência + orçamento vs real + projeção de metas | #204 |
+| FASE 6 | Timeline financeira 90 dias + recorrências inteligentes + alertas | #205 |
+| FASE 7 | Agente Financeiro Conversacional auditável (refs por referência, tool registry) | #206 |
+| FASE 8 | LGPD compliance + MFA + rate limiting + Secret Manager + backups | #207 |
+| LEGADO 29–34 | Copilot proativo, Budget AI, Score History, Fluxo Caixa Semanal, Gamification, Risk Score | #181–#186 |
 
 ### 3. Contratos críticos vivos (inalterados)
 - `value_cents` é a fonte canônica. `value` legado **nunca** é usado em cálculo financeiro.
@@ -100,10 +108,17 @@ lastExecutedMonth?: string;        // formato YYYY-MM
 - Script de diagnóstico read-only: `functions/scripts/diagnoseLegacyTransactions.js`.
 - Migração automática de float → `value_cents` continua **bloqueada**.
 
-### 8. Próximas etapas recomendadas
-1. **QA funcional em produção**: testar criação de transação via callable, auto-execução de recorrentes com toast, exclusão de conta via `deleteUserData`, busca server-side e filtro por categoria.
-2. **`firebase deploy --only firestore:indexes,firestore:rules,functions`** — propagar idempotency (nova coleção nas Rules) + demais índices.
-3. **TTL automático para `idempotency/{key}`**: criar Cloud Function schedulada ou habilitar TTL policy no Firestore para expirar keys após 24h (evitar crescimento ilimitado da coleção).
+### 8. Backlog pós-roadmap (próximas iniciativas)
+Roadmap FASES 0–8 concluído. Iniciativas priorizadas para o próximo ciclo:
+
+1. **Módulo Compras Inteligentes** — listas de mercado, histórico de preços confirmado, impacto em orçamento; NFC-e somente após gate de segurança completo.
+2. **Open Finance** — integração read-only com dados bancários via API autorizada (BACEN Open Finance).
+3. **Módulo IR** — apuração de ganhos de capital, informe de rendimentos, relatório anual.
+4. **App Nativo** — React Native ou Progressive Web App com push notifications.
+5. **Agente anti-tarifa** — detecção e alerta de tarifas bancárias recorrentes.
+6. **Finanças compartilhadas** — split de despesas entre usuários (casais, grupos).
+7. **TTL automático `idempotency/{key}`** — Cloud Function schedulada ou TTL policy Firestore para expirar keys após 24h.
+8. **Deploy produção pendente** — `firebase deploy --only firestore:indexes,firestore:rules,functions` para propagar todas as Rules e índices novos.
 
 ### 9. Comandos de validação padrão
 ```bash
