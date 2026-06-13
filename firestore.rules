@@ -896,6 +896,46 @@ service cloud.firestore {
               || request.resource.data.updatedAt == request.time);
     }
 
+    function isValidShoppingUnit(unit) {
+      return unit in ['un', 'kg', 'g', 'L', 'mL', 'cx', 'pct', 'dz'];
+    }
+
+    function isValidShoppingItem(item) {
+      return item.keys().hasAll(['id', 'productName', 'quantity', 'unit', 'estimatedUnitPriceCents', 'estimatedTotalCents', 'checked', 'createdAt'])
+          && item.productName is string && item.productName.size() >= 1 && item.productName.size() <= 120
+          && item.quantity is string && item.quantity.size() >= 1
+          && isValidShoppingUnit(item.unit)
+          && isSafeInt(item.estimatedUnitPriceCents) && item.estimatedUnitPriceCents >= 0
+          && isSafeInt(item.estimatedTotalCents) && item.estimatedTotalCents >= 0
+          && item.checked is bool
+          && item.createdAt is string;
+    }
+
+    function isValidShoppingListCreate(data) {
+      return data.keys().hasAll(['uid', 'name', 'estimatedTotalCents', 'status', 'items', 'createdAt', 'updatedAt', 'schemaVersion'])
+          && data.uid is string
+          && isStringSized(data.name, 1, 80)
+          && isSafeInt(data.estimatedTotalCents) && data.estimatedTotalCents >= 0
+          && data.status in ['open', 'in_progress', 'done']
+          && data.items is list && data.items.size() <= 200
+          && data.schemaVersion == 1
+          && data.createdAt == request.time
+          && data.updatedAt == request.time;
+    }
+
+    function isValidPriceObservationCreate(data) {
+      return data.keys().hasAll(['uid', 'productName', 'store', 'unitPriceCents', 'quantity', 'unit', 'observedAt', 'createdAt', 'schemaVersion'])
+          && data.uid is string
+          && isStringSized(data.productName, 1, 120)
+          && isStringSized(data.store, 1, 80)
+          && isPositiveSafeInt(data.unitPriceCents)
+          && data.quantity is string && data.quantity.size() >= 1
+          && isValidShoppingUnit(data.unit)
+          && data.observedAt is string && data.observedAt.size() == 10
+          && data.schemaVersion == 1
+          && data.createdAt == request.time;
+    }
+
     function isValidDebt(data) {
       return data.keys().hasAll([
             'uid', 'name', 'creditor', 'totalCents', 'remainingCents',
@@ -1207,6 +1247,22 @@ service cloud.firestore {
         allow read:   if isOwner(userId);
         allow create: if isOwner(userId) && isValidChallengeWrite();
         allow update: if isOwner(userId) && isValidChallengeUpdate();
+        allow delete: if isOwner(userId);
+      }
+
+      // Compras Inteligentes — listas de compras com itens embutidos.
+      match /shoppingLists/{listId} {
+        allow read:   if isOwner(userId);
+        allow create: if isOwner(userId) && isValidShoppingListCreate(request.resource.data);
+        allow update: if isOwner(userId);
+        allow delete: if isOwner(userId);
+      }
+
+      // Histórico de preços por produto/loja — append-mostly, sem delete.
+      match /priceObservations/{obsId} {
+        allow read:   if isOwner(userId);
+        allow create: if isOwner(userId) && isValidPriceObservationCreate(request.resource.data);
+        allow update: if false;
         allow delete: if isOwner(userId);
       }
     }

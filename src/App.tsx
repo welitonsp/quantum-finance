@@ -42,6 +42,7 @@ const CommandPalette    = lazy(() => import('./components/CommandPalette'));
 const SimulationCenter  = lazy(() => import('./features/simulation/SimulationCenter'));
 const PurchaseSimulator = lazy(() => import('./features/simulation/PurchaseSimulator'));
 const DebtModule        = lazy(() => import('./features/debts/DebtModule'));
+const ShoppingPage      = lazy(() => import('./features/shopping/ShoppingPage'));
 
 // ─── Quantum Loader ──────────────────────────────────────────────────────────
 const QuantumLoader = () => (
@@ -374,6 +375,9 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                       setIsFormOpen(true);
                     }}
                   />
+                )}
+                {currentPage === 'shopping' && (
+                  <ShoppingPage uid={safeUID} />
                 )}
               </Suspense>
             </ErrorBoundary>

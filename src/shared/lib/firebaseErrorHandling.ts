@@ -63,6 +63,12 @@ export const FIREBASE_ERROR_OPERATIONS = [
   'debt_add',
   'debt_update',
   'debt_delete',
+  'shopping_lists_load',
+  'shopping_list_create',
+  'shopping_list_update',
+  'shopping_list_delete',
+  'price_observations_load',
+  'price_observation_add',
 ] as const;
 
 export type FirebaseErrorOperation = typeof FIREBASE_ERROR_OPERATIONS[number];
