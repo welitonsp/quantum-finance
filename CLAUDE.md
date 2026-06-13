@@ -2,35 +2,39 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — ROADMAP-MESTRE-v2 Completo (2026-06-13)
+## Estado Consolidado — Pós-ROADMAP-MESTRE-v2 + FASE 9 (2026-06-13)
 
 > Blocos anteriores substituídos. Em caso de divergência, **este bloco é a referência**.
+> **Regra operacional:** Atualizar este bloco após cada PR mergeado ou marco relevante.
 
 ### 1. Status atual
 - Branch principal: `main`.
 - **ROADMAP-MESTRE-v2 (FASES 0–8): todas mergeadas.**
 - **Fase de documentação 2.0: concluída** (5 docs produto + Política Copilot IA).
-- Suíte: **57 arquivos · 1050 testes passando · 168 skipped · build OK**.
-- Últimas integrações relevantes:
-  - **#187** fix(balance): transferências não alteram saldo acumulado (P0-1).
-  - **#188** fix(installments): parcelamento atômico, cap 120 parcelas (P0-2).
-  - **#189** fix(ai): remover dupla contagem de quota de IA (P0-3).
-  - **#190–#197** FASES 1.1–1.7: competência cartão, pagar fatura por transferência, zero toFixed monetário, recorrências server-side, Zod em transferência, net worth com passivos, auditoria de segurança.
-  - **#198–#201** FASES 2.1–2.5: split FirestoreService, split TransactionsManager, insightsEngine unificado, quick wins UX.
-  - **#202** FASE 3: Simulador de Decisão de Compra.
-  - **#203** FASE 4: Plano de Quitação de Dívidas.
-  - **#204** FASE 5: Reserva de emergência + orçamento vs real + projeção de metas.
-  - **#205** FASE 6: Timeline financeira 90 dias + recorrências.
+- **FASE 9 (Compras Inteligentes): PR #218 aberto** — aguardando merge.
+- Suíte: **57 arquivos · 1080 testes passando · 168 skipped · build OK**.
+- Últimas integrações relevantes (cronologia inversa):
+  - **PR #218** feat(shopping): FASE 9 — Módulo Compras Inteligentes *(aguardando merge)*.
+  - **#217** docs(project): sync CLAUDE.md pós-ROADMAP-MESTRE-v2.
+  - **#216** docs(security): Threat Model NFC-e / Compras Inteligentes.
+  - **#215** docs(product): Inventário comparativo Quantum × SGC.
+  - **#214** docs(product): Inventário UI/produto Quantum.
+  - **#213** docs(project): sync CLAUDE com estratégia 2.0.
+  - **#212** docs(product): Documento Mestre Quantum Finance 2.0.
+  - **#207** FASE 8: LGPD compliance + MFA + hardening de segurança.
   - **#206** FASE 7: Agente Financeiro Conversacional auditável.
-  - **#207** FASE 8: LGPD compliance + hardening de segurança.
-  - **#212–#216** Docs 2.0: Visão Estratégica, CLAUDE sync, Inventário UI, Inventário comparativo, Threat Model NFC-e.
-  - **11bdf68** docs(product): Política Copilot IA — Fase 2D.
+  - **#205** FASE 6: Timeline financeira 90 dias + recorrências.
+  - **#204** FASE 5: Reserva de emergência + orçamento vs real + metas.
+  - **#203** FASE 4: Plano de Quitação de Dívidas.
+  - **#202** FASE 3: Simulador de Decisão de Compra.
+  - **#198–#201** FASES 2.1–2.5: split FirestoreService/TransactionsManager, insightsEngine unificado, quick wins UX.
+  - **#187–#197** FASES 0 e 1.x: P0 bugs + competência cartão + zero float + recorrências server-side + Zod transfer + net worth passivos + segurança.
 
 ### 1.1 Diretrizes Oficiais (Quantum Finance 2.0)
 - **Documento Mestre:** `docs/product/QUANTUM_FINANCE_VISAO_ESTRATEGICA_2_0.md` é a referência estratégica oficial.
-- **Política IA:** `docs/product/POLITICA_COPILOT_IA_QUANTUM_2026-06-12.md` — todo PR futuro com IA deve declarar dados usados, auditoria, idempotência, App Check, Zod, centavos e fallback.
-- **Módulo de Compras:** O "Sistema Gestão de Compras" não é mais um produto ativo. Módulo **Compras Inteligentes** será construído internamente no Quantum Finance.
-- **NFC-e Restrita:** Bloqueada até Threat Model completo de SSRF. Ver `docs/product/THREAT_MODEL_COMPRAS_INTELIGENTES_NFCE_2026-06-12.md`.
+- **Política IA:** `docs/product/POLITICA_COPILOT_IA_QUANTUM_2026-06-12.md` — todo PR futuro com IA deve declarar: dados usados, auditoria, idempotência, App Check, Zod, centavos, fallback de baixa confiança.
+- **Módulo Compras Inteligentes:** Implementado na FASE 9 (PR #218). NFC-e real permanece **bloqueada**. Ver `docs/product/THREAT_MODEL_COMPRAS_INTELIGENTES_NFCE_2026-06-12.md`.
+- **SGC (Sistema Gestão de Compras):** Descontinuado como produto autônomo. Serviu apenas como referência conceitual para a FASE 9.
 - **Próxima Fase:** Backlog pós-roadmap — ver seção 8.
 
 ### 1.2 Zonas Proibidas de Alteração
@@ -43,29 +47,30 @@
 - Idempotência server-side e App Check.
 - Os arquivos/camadas: `firestore.rules`, `Cloud Functions`, `package-lock.json`.
 
-### 2. Fases implementadas e mergeadas (ROADMAP-MESTRE-v2)
+### 2. Fases implementadas e mergeadas
 
-| Fase | Escopo | PR |
-|---|---|---|
-| FASE 0 | Fix P0: dupla quota IA, parcelamento não-atômico, transferência no saldo acumulado | #187 #188 #189 |
-| FASE 1.1 | Competência por fechamento do cartão (`closingDay` + `competencia` YYYY-MM) | #195 |
-| FASE 1.2 | Pagar fatura do cartão via transferência | #191 |
-| FASE 1.3 | Zero `toFixed` monetário em cartões e insights | #190 |
-| FASE 1.4 | Cloud Function agendada para recorrências server-side | #196 |
-| FASE 1.5 | Zod strict schema em `createTransferWithHistory` | #197 |
-| FASE 1.6 | Net worth reflete faturas e parcelas futuras como passivo | #193 |
-| FASE 1.7 | Auditoria de segurança herdada + correções | #192 |
-| FASE 2.1 | Split `FirestoreService.ts` em repos por domínio | #198 |
-| FASE 2.2 | Split `TransactionsManager.tsx` em componentes focados | #199 |
-| FASE 2.3 | `useInsightsEngine` unificado (7 widgets → motor puro testável) | #200 |
-| FASE 2.5 | Quick wins UX: undo 10s, edição em lote, memória categorização, drill-down | #201 |
-| FASE 3 | Simulador de Decisão de Compra (`purchaseSimulator.ts`) | #202 |
-| FASE 4 | Plano de Quitação de Dívidas (`debtPlanner.ts`, coleção `debts`) | #203 |
-| FASE 5 | Reserva de emergência + orçamento vs real + projeção de metas | #204 |
-| FASE 6 | Timeline financeira 90 dias + recorrências inteligentes + alertas | #205 |
-| FASE 7 | Agente Financeiro Conversacional auditável (refs por referência, tool registry) | #206 |
-| FASE 8 | LGPD compliance + MFA + rate limiting + Secret Manager + backups | #207 |
-| LEGADO 29–34 | Copilot proativo, Budget AI, Score History, Fluxo Caixa Semanal, Gamification, Risk Score | #181–#186 |
+| Fase | Escopo | PR | Status |
+|---|---|---|---|
+| FASE 0 | Fix P0: dupla quota IA, parcelamento não-atômico, transferência no saldo acumulado | #187 #188 #189 | ✅ |
+| FASE 1.1 | Competência por fechamento do cartão (`closingDay` + `competencia` YYYY-MM) | #195 | ✅ |
+| FASE 1.2 | Pagar fatura do cartão via transferência | #191 | ✅ |
+| FASE 1.3 | Zero `toFixed` monetário em cartões e insights | #190 | ✅ |
+| FASE 1.4 | Cloud Function agendada para recorrências server-side | #196 | ✅ |
+| FASE 1.5 | Zod strict schema em `createTransferWithHistory` | #197 | ✅ |
+| FASE 1.6 | Net worth reflete faturas e parcelas futuras como passivo | #193 | ✅ |
+| FASE 1.7 | Auditoria de segurança herdada + correções | #192 | ✅ |
+| FASE 2.1 | Split `FirestoreService.ts` em repos por domínio | #198 | ✅ |
+| FASE 2.2 | Split `TransactionsManager.tsx` em componentes focados | #199 | ✅ |
+| FASE 2.3 | `useInsightsEngine` unificado (7 widgets → motor puro testável) | #200 | ✅ |
+| FASE 2.5 | Quick wins UX: undo 10s, edição em lote, memória categorização, drill-down | #201 | ✅ |
+| FASE 3 | Simulador de Decisão de Compra (`purchaseSimulator.ts`) | #202 | ✅ |
+| FASE 4 | Plano de Quitação de Dívidas (`debtPlanner.ts`, coleção `debts`) | #203 | ✅ |
+| FASE 5 | Reserva de emergência + orçamento vs real + projeção de metas | #204 | ✅ |
+| FASE 6 | Timeline financeira 90 dias + recorrências inteligentes + alertas | #205 | ✅ |
+| FASE 7 | Agente Financeiro Conversacional auditável (refs por referência, tool registry) | #206 | ✅ |
+| FASE 8 | LGPD compliance + MFA + rate limiting + Secret Manager + backups | #207 | ✅ |
+| FASE 9 | Compras Inteligentes: listas, itens, check-off, histórico de preços | #218 | ⏳ PR aberto |
+| LEGADO 29–34 | Copilot proativo, Budget AI, Score History, Fluxo Caixa Semanal, Gamification, Risk Score | #181–#186 | ✅ |
 
 ### 3. Contratos críticos vivos (inalterados)
 - `value_cents` é a fonte canônica. `value` legado **nunca** é usado em cálculo financeiro.
@@ -109,16 +114,19 @@ lastExecutedMonth?: string;        // formato YYYY-MM
 - Migração automática de float → `value_cents` continua **bloqueada**.
 
 ### 8. Backlog pós-roadmap (próximas iniciativas)
-Roadmap FASES 0–8 concluído. Iniciativas priorizadas para o próximo ciclo:
+Roadmap FASES 0–8 concluído. FASE 9 (Compras Inteligentes) em PR aberto. Próximas:
 
-1. **Módulo Compras Inteligentes** — listas de mercado, histórico de preços confirmado, impacto em orçamento; NFC-e somente após gate de segurança completo.
-2. **Open Finance** — integração read-only com dados bancários via API autorizada (BACEN Open Finance).
-3. **Módulo IR** — apuração de ganhos de capital, informe de rendimentos, relatório anual.
-4. **App Nativo** — React Native ou Progressive Web App com push notifications.
-5. **Agente anti-tarifa** — detecção e alerta de tarifas bancárias recorrentes.
-6. **Finanças compartilhadas** — split de despesas entre usuários (casais, grupos).
-7. **TTL automático `idempotency/{key}`** — Cloud Function schedulada ou TTL policy Firestore para expirar keys após 24h.
-8. **Deploy produção pendente** — `firebase deploy --only firestore:indexes,firestore:rules,functions` para propagar todas as Rules e índices novos.
+| # | Iniciativa | Observação |
+|---|---|---|
+| 9 | **Compras Inteligentes** — MVP: listas, itens, check-off, histórico de preços | PR #218 em aberto |
+| 10 | **TTL idempotency/{key}** — Cloud Function schedulada ou TTL policy para expirar keys após 24h | manutenção técnica rápida |
+| 11 | **Deploy produção** — `firebase deploy --only firestore:indexes,firestore:rules,functions` | propagar Rules e índices novos |
+| 12 | **Open Finance** — integração read-only via BACEN Open Finance API | fase técnica própria |
+| 13 | **Módulo IR** — apuração de ganhos de capital, informe de rendimentos, relatório anual | fase técnica própria |
+| 14 | **Agente anti-tarifa** — detecção e alerta de tarifas bancárias recorrentes | pode usar insightsEngine |
+| 15 | **Finanças compartilhadas** — split de despesas entre usuários (casais, grupos) | novo modelo de dados |
+| 16 | **App Nativo / PWA completo** — push notifications, offline-first | após estabilização web |
+| — | **NFC-e** — leitura de nota fiscal eletrônica | **bloqueada** até gate de segurança completo |
 
 ### 9. Comandos de validação padrão
 ```bash
@@ -144,54 +152,69 @@ npm run test:e2e
 - Confirmar git status limpo.
 - Atualizar `CLAUDE.md` após marco relevante.
 
-## Referência Rápida de Arquivos Críticos (estado real — 2026-06-06)
+## Referência Rápida de Arquivos Críticos (estado real — 2026-06-13)
 
-| Arquivo | Linhas | Responsabilidade |
-|---|---|---|
-| `src/features/transactions/TransactionsManager.tsx` | 1070 | Listagem, filtros (4 tabs incl. Transferências), relatório mensal, parcelamentos |
-| `src/hooks/useTransactions.ts` | 972 | Hook central de CRUD/paginação/import/sync-queue |
-| `src/shared/services/FirestoreService.ts` | 1149 | Helpers de escrita atômica (Modelo A) + parcelamentos + cancelamento |
-| `src/features/transactions/ReconciliationEngine.tsx` | 554 | Modal de reconciliação interativa |
-| `src/features/transactions/ImportButton.tsx` | 456 | Fluxo de importação CSV/OFX/PDF |
-| `src/features/transactions/TransactionForm.tsx` | 565 | Formulário de criação/edição + toggle de parcelamento |
-| `src/components/TransactionHistoryDrawer.tsx` | 334 | Drawer de histórico por transação |
-| `src/hooks/useTransactionHistory.ts` | 218 | Hook de histórico por transação |
-| `src/hooks/useAuditLogs.ts` | 261 | Hook de logs globais |
-| `src/components/AuditTimeline.tsx` | 219 | Timeline global de auditoria |
-| `src/components/FinancialHealthScore.tsx` | — | Score 0-100 com 4 pilares financeiros |
-| `src/components/AnomalyAlerts.tsx` | — | Alertas de anomalia por categoria (client-side) |
-| `src/components/GoalsPanel.tsx` | — | Metas de poupança com progresso animado |
-| `src/components/RecurringManager.tsx` | 349 | Gestão de recorrentes (mensal + anual, pause/resume, badge status) |
-| `src/features/transactions/components/InstallmentGroupDrawer.tsx` | — | Gestão de parcelas (listar, cancelar futuras) |
-| `src/hooks/useGoals.ts` | — | CRUD em tempo real de `users/{uid}/goals` |
-| `src/hooks/useRecurringAutoExecute.ts` | — | Scaffold client-side de materialização de recorrentes |
-| `src/utils/exportCSV.ts` | — | `computeMonthlyReport` + `generateMonthlyReportCSV` |
-| `firestore.rules` | 1019 | Regras de segurança com schema versionado v2 |
+| Arquivo | Responsabilidade |
+|---|---|
+| `src/features/transactions/TransactionsManager.tsx` | Listagem, filtros, relatório mensal, parcelamentos (dividido em FASE 2.2) |
+| `src/hooks/useTransactions.ts` | Hook central de CRUD/paginação/import/sync-queue |
+| `src/shared/services/FirestoreService.ts` | Barrel → repos por domínio após FASE 2.1 |
+| `src/features/transactions/ReconciliationEngine.tsx` | Modal de reconciliação interativa |
+| `src/features/transactions/ImportButton.tsx` | Fluxo de importação CSV/OFX/PDF |
+| `src/features/transactions/TransactionForm.tsx` | Formulário de criação/edição + toggle parcelamento |
+| `src/components/TransactionHistoryDrawer.tsx` | Drawer de histórico por transação |
+| `src/hooks/useTransactionHistory.ts` | Hook de histórico por transação |
+| `src/hooks/useAuditLogs.ts` | Hook de logs globais |
+| `src/components/AuditTimeline.tsx` | Timeline global de auditoria |
+| `src/components/FinancialHealthScore.tsx` | Score 0-100 com 4 pilares financeiros |
+| `src/components/AnomalyAlerts.tsx` | Alertas de anomalia por categoria (client-side) |
+| `src/components/GoalsPanel.tsx` | Metas de poupança com progresso animado |
+| `src/components/RecurringManager.tsx` | Gestão de recorrentes (mensal + anual, pause/resume) |
+| `src/hooks/useGoals.ts` | CRUD em tempo real de `users/{uid}/goals` |
+| `src/hooks/useRecurringAutoExecute.ts` | Scaffold client-side → server-side após FASE 1.4 |
+| `src/utils/exportCSV.ts` | `computeMonthlyReport` + `generateMonthlyReportCSV` |
+| `src/lib/purchaseSimulator.ts` | Motor puro de simulação de compra (zero I/O, zero float) |
+| `src/lib/debtPlanner.ts` | Motor de plano de quitação de dívidas |
+| `src/lib/insightsEngine.ts` | Motor unificado de insights (7 widgets, FASE 2.3) |
+| `src/features/debts/DebtModule.tsx` | Módulo de dívidas — coleção `debts` |
+| `src/features/simulation/PurchaseSimulator.tsx` | UI do simulador de compra com veredito |
+| `src/features/shopping/ShoppingPage.tsx` | Página principal de Compras Inteligentes (FASE 9) |
+| `src/features/shopping/hooks/useShoppingLists.ts` | CRUD real-time de `users/{uid}/shoppingLists` |
+| `src/features/shopping/hooks/usePriceObservations.ts` | Histórico de preços por produto/loja |
+| `src/shared/types/shopping.ts` | Tipos: ShoppingList, ShoppingListItem, PriceObservation |
+| `src/shared/schemas/shoppingSchemas.ts` | Zod `.strict()` para payloads de Compras |
+| `src/shared/types/money.ts` | Tipo `Centavos`, `toCentavos`, `formatBRL`, Decimal.js |
+| `src/shared/schemas/financialSchemas.ts` | Schemas Zod para transações |
+| `src/shared/lib/firebaseErrorHandling.ts` | `logSanitizedFirebaseError` + `FIREBASE_ERROR_OPERATIONS` |
+| `firestore.rules` | Regras de segurança com schema versionado (inclui shoppingLists/priceObservations) |
+| `firestore.indexes.json` | Índices compostos para queries paginadas |
+| `functions/index.js` | 5 Cloud Functions (createTransaction + 3 IA + deleteUserData) |
+| `playwright.config.ts` | Config E2E: Chromium, webServer com VITE_USE_EMULATOR |
+| `e2e/tests/` | 5 suítes E2E: smoke, create, filters, import-csv, goals |
 | `firestore.indexes.json` | — | 4 índices compostos para `transactions` |
 | `functions/index.js` | 461 | 4 Cloud Functions (createTransaction + 3 IA) |
 | `playwright.config.ts` | — | Config E2E: Chromium, webServer com VITE_USE_EMULATOR |
 | `e2e/tests/` | — | 5 suítes E2E: smoke, create, filters, import-csv, goals |
 
-## Hooks presentes (2026-06-06)
+## Hooks presentes (2026-06-13)
 
-`useAccounts`, `useAppLogic`, `useAuditLogs`, `useBudgets`, `useCategories`, `useCategoryRules`, `useCreditCards`, `useFinancialData`, `useFinancialKPIs`, `useFinancialMetrics`, `useForecast`, `useGoals`, `useImportActions`, `useModalState`, `useRecurring`, `useRecurringAutoExecute`, `useRunningBalance`, `useTransactionActions`, `useTransactionHistory`, `useTransactions`, `useTransactionsPagination`
+`useAccounts`, `useAppLogic`, `useAuditLogs`, `useBudgets`, `useCategories`, `useCategoryRules`, `useCreditCards`, `useFinancialData`, `useFinancialKPIs`, `useFinancialMetrics`, `useForecast`, `useGoals`, `useImportActions`, `useInsightsEngine`, `useModalState`, `usePriceObservations`, `useRecurring`, `useRecurringAutoExecute`, `useRunningBalance`, `useShoppingLists`, `useTransactionActions`, `useTransactionHistory`, `useTransactions`, `useTransactionsPagination`
 
-## Suíte de testes (2026-06-06 — pós-FASE 15A/15B)
+## Suíte de testes (2026-06-13 — pós-FASE 9)
 
-- **52 arquivos de teste** (51 passando + 1 skipped — rules)
-- **915 testes passando · 159 skipped** (rules rodam em `npm run test:rules` com emulator)
-- 47 `.test.ts` · 5 `.test.tsx`
+- **57 arquivos de teste** (56 passando + 1 skipped — rules)
+- **1080 testes passando · 168 skipped** (rules rodam em `npm run test:rules` com emulator)
 - **5 suítes E2E Playwright** (requerem emuladores Firebase)
 
-### Arquivos de teste adicionados nas FASES 15A/15B
-- `src/utils/exportCSV.test.ts` — 18 testes (`computeMonthlyReport`, `generateMonthlyReportCSV`)
-- `src/features/ai-chat/GeminiService.test.ts` — 10 testes (`detectAnomalies`)
-- `src/hooks/useRecurringAutoExecute.test.ts` — 25 testes (pendingTasks mensal + anual, dueDateForTask, hook integration)
-- `e2e/tests/01-smoke.spec.ts` — 3 testes E2E de carregamento
-- `e2e/tests/02-transaction-create.spec.ts` — 4 testes E2E de criação
-- `e2e/tests/03-transaction-filters.spec.ts` — 5 testes E2E de filtros
-- `e2e/tests/04-import-csv.spec.ts` — 3 testes E2E de importação
-- `e2e/tests/05-goals-panel.spec.ts` — 4 testes E2E de metas
+### Testes adicionados na FASE 9
+- `src/features/shopping/__tests__/shoppingSchemas.test.ts` — 22 testes (schemas Zod: list, item, check, price observation)
+
+### Arquivos de teste chave
+- `src/__tests__/consoleLoggingPolicy.test.ts` — guarda automática contra `console.*` cru em `src/`
+- `src/__tests__/firestoreRules.audit.test.ts` — cobertura de regras Firestore (roda com emulator)
+- `src/lib/purchaseSimulator.test.ts` — motor de simulação de compra
+- `src/lib/debtPlanner.test.ts` — motor de plano de dívidas
+- `src/features/shopping/__tests__/shoppingSchemas.test.ts` — schemas de Compras Inteligentes
 
 ## Estado Consolidado — Política de Observabilidade e Logging (FASE 9F/9G) — 2026-05-15
 
@@ -1219,24 +1242,32 @@ Estes quatro comandos devem passar antes de qualquer commit/PR.
 | `firestore.rules` | 1019 linhas | Regras de segurança com schema versionado v2 |
 | `functions/index.js` | 461 linhas | 4 Cloud Functions (createTransaction + 3 IA) |
 
-## Collections Firestore com Regras Explícitas
+## Collections Firestore com Regras Explícitas (2026-06-13)
 
 Todas sob `/users/{userId}/`:
 
-| Subcoleção | Linha em `firestore.rules` |
+| Subcoleção | Responsabilidade |
 |---|---|
-| (raiz do usuário) | 319 |
-| `transactions/{txId}` | 322 |
-| `transactions/{txId}/history/{historyId}` | 328 |
-| `accounts/{accountId}` | 335 |
-| `audit_logs/{logId}` | 342 |
-| `system_logs/{logId}` | 348 |
-| `usage/ai_calls` | 354 |
-| `budgets/{budgetId}` | 361 |
-| `categoryRules/{ruleId}` | 368 |
-| `categories/{categoryId}` | 375 |
-| `creditCards/{cardId}` | 382 |
-| `recurringTasks/{taskId}` | 391 |
-| `recurring/{taskId}` | 398 |
-| `simulations/{simId}` | 402 |
-| `/{document=**}` (deny-all catch) | 410 |
+| `transactions/{txId}` | Transações financeiras (fonte canônica: `value_cents`) |
+| `transactions/{txId}/history/{historyId}` | History append-only por transação (Modelo A) |
+| `accounts/{accountId}` | Contas bancárias e carteiras |
+| `audit_logs/{logId}` | Logs de auditoria globais |
+| `system_logs/{logId}` | Logs de sistema sanitizados |
+| `usage/ai_calls` | Contador de chamadas de IA |
+| `budgets/{budgetId}` | Orçamentos por categoria |
+| `categoryRules/{ruleId}` | Regras automáticas de categorização |
+| `categories/{categoryId}` | Categorias personalizadas |
+| `creditCards/{cardId}` | Cartões de crédito (limite, closingDay, vencimento) |
+| `recurringTasks/{taskId}` | Tarefas recorrentes |
+| `recurring/{taskId}` | Recorrentes (alias) |
+| `simulations/{simId}` | Simulações Monte Carlo |
+| `debts/{debtId}` | Dívidas com juros e parcelamento (FASE 4) |
+| `goals/{goalId}` | Metas de poupança (FASE 5) |
+| `scoreHistory/{monthId}` | Score histórico mensal |
+| `challenges/{challengeId}` | Desafios de economia (gamification) |
+| `idempotency/{keyId}` | Chaves de idempotência (write exclusivo do Admin SDK — deny clients) |
+| `consents/{consentId}` | Consentimentos LGPD |
+| `dataProcessingLog/{logId}` | Log de processamento de dados (LGPD — server-only) |
+| `shoppingLists/{listId}` | Listas de compras com itens embutidos (FASE 9) |
+| `priceObservations/{obsId}` | Histórico de preços por produto/loja — append-mostly, update bloqueado (FASE 9) |
+| `/{document=**}` | Deny-all catch-all |
