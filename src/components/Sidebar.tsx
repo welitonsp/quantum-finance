@@ -1,7 +1,7 @@
 import { useNavigation } from '../contexts/NavigationContext';
 import {
   LayoutDashboard, PieChart, Settings, LogOut,
-  Landmark, BrainCircuit, Repeat, Clock, X, CreditCard, FlaskConical, ShoppingCart, TrendingDown,
+  Landmark, BrainCircuit, Repeat, Clock, X, CreditCard, FlaskConical, ShoppingCart, TrendingDown, ShoppingBag,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -29,11 +29,12 @@ const navGroups: NavGroup[] = [
   {
     title: 'Visão Principal',
     items: [
-      { id: 'dashboard',  icon: LayoutDashboard, label: 'Dashboard'          },
-      { id: 'reports',    icon: PieChart,        label: 'BI & Relatórios'    },
-      { id: 'quantum',    icon: BrainCircuit,    label: 'Quantum AI'         },
-      { id: 'simulation',          icon: FlaskConical,   label: 'Monte Carlo'        },
-      { id: 'purchase-simulator', icon: ShoppingCart,   label: 'Simulador de Compra' },
+      { id: 'dashboard',          icon: LayoutDashboard, label: 'Dashboard'            },
+      { id: 'reports',            icon: PieChart,        label: 'BI & Relatórios'      },
+      { id: 'quantum',            icon: BrainCircuit,    label: 'Quantum AI'           },
+      { id: 'simulation',         icon: FlaskConical,    label: 'Monte Carlo'          },
+      { id: 'purchase-simulator', icon: ShoppingCart,    label: 'Simulador de Compra'  },
+      { id: 'shopping',           icon: ShoppingBag,     label: 'Compras Inteligentes' },
     ],
   },
   {
