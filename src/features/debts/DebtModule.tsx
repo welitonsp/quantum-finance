@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Loader2, PlusCircle, Trash2, CheckCircle2, TrendingDown, AlertCircle, CreditCard } from 'lucide-react';
+import { LoadingPage } from '../../shared/components/ui';
 import toast from 'react-hot-toast';
 
 import {
@@ -365,14 +366,7 @@ export default function DebtModule({ uid }: Props) {
     await addDebt(data);
   }, [addDebt]);
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <Loader2 className="w-10 h-10 text-cyan-400 animate-spin" />
-        <span className="text-xs text-quantum-fgMuted uppercase tracking-widest animate-pulse">Carregando dívidas...</span>
-      </div>
-    );
-  }
+  if (loading) return <LoadingPage label="Carregando dívidas..." />;
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
