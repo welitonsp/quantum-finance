@@ -515,7 +515,7 @@ service cloud.firestore {
           ]);
     }
 
-    function isValidManualCreateHistoryForTransaction(data, txId, tx) {
+    function isValidManualCreateHistoryForTransaction(data, tx) {
       return tx.source == 'manual'
           && !tx.keys().hasAny([
             'importHash', 'uid', 'id', 'value', 'isDeleted', 'deletedAt',
@@ -562,7 +562,7 @@ service cloud.firestore {
           && isManualCreateHistory(data)
           && !exists(transactionPath)
           && existsAfter(transactionPath)
-          && isValidManualCreateHistoryForTransaction(data, txId, getAfter(transactionPath).data);
+          && isValidManualCreateHistoryForTransaction(data, getAfter(transactionPath).data);
     }
 
     function isValidImportCreateHistoryInSameBatch(data, userId, txId, historyId) {
@@ -900,17 +900,6 @@ service cloud.firestore {
       return unit in ['un', 'kg', 'g', 'L', 'mL', 'cx', 'pct', 'dz'];
     }
 
-    function isValidShoppingItem(item) {
-      return item.keys().hasAll(['id', 'productName', 'quantity', 'unit', 'estimatedUnitPriceCents', 'estimatedTotalCents', 'checked', 'createdAt'])
-          && item.productName is string && item.productName.size() >= 1 && item.productName.size() <= 120
-          && item.quantity is string && item.quantity.size() >= 1
-          && isValidShoppingUnit(item.unit)
-          && isSafeInt(item.estimatedUnitPriceCents) && item.estimatedUnitPriceCents >= 0
-          && isSafeInt(item.estimatedTotalCents) && item.estimatedTotalCents >= 0
-          && item.checked is bool
-          && item.createdAt is string;
-    }
-
     function isValidShoppingListCreate(data) {
       return data.keys().hasAll(['uid', 'name', 'estimatedTotalCents', 'status', 'items', 'createdAt', 'updatedAt', 'schemaVersion'])
           && data.uid is string
@@ -1012,14 +1001,14 @@ service cloud.firestore {
           && (!('emoji' in data) || isStringSized(data.emoji, 1, 8));
     }
 
-    function isValidGoalCreate(userId) {
+    function isValidGoalCreate() {
       let data = request.resource.data;
       return isValidGoal(data)
           && data.createdAt == request.time
           && data.updatedAt == request.time;
     }
 
-    function isValidGoalUpdate(userId) {
+    function isValidGoalUpdate() {
       let data = request.resource.data;
       return isValidGoal(data)
           && data.createdAt == resource.data.createdAt
@@ -1229,8 +1218,8 @@ service cloud.firestore {
 
       match /goals/{goalId} {
         allow read:   if isOwner(userId);
-        allow create: if isOwner(userId) && isValidGoalCreate(userId);
-        allow update: if isOwner(userId) && isValidGoalUpdate(userId);
+        allow create: if isOwner(userId) && isValidGoalCreate();
+        allow update: if isOwner(userId) && isValidGoalUpdate();
         allow delete: if isOwner(userId);
       }
 
