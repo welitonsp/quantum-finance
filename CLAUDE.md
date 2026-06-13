@@ -122,7 +122,7 @@ Roadmap FASES 0–10 concluído. Próximas:
 | # | Iniciativa | Status |
 |---|---|---|
 | 11 | **Deploy produção** — `firebase deploy --only firestore:indexes,firestore:rules,functions` | ✅ concluído (PR #220 limpou warnings pós-deploy) |
-| 12 | **Open Finance** — integração read-only via BACEN Open Finance API | planejado |
+| 12 | **Open Finance** — integração read-only via BACEN Open Finance API | ⛔ bloqueado (requer certificado mTLS BACEN — sem orçamento) |
 | 13 | **Módulo IR** — apuração de ganhos de capital, informe de rendimentos, relatório anual | planejado |
 | 14 | **Agente anti-tarifa** — detecção e alerta de tarifas bancárias recorrentes | planejado |
 | 15 | **Finanças compartilhadas** — split de despesas entre usuários (casais, grupos) | planejado |
