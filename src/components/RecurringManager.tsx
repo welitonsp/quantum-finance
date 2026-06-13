@@ -73,7 +73,7 @@ export default function RecurringManager({ uid }: Props) {
         ...(newFrequency === 'anual' ? { dueMonth: newDueMonth } : {}),
         active:      true,
       });
-      toast.success('Despesa fixa registada!');
+      toast.success('Despesa fixa registrada!');
       setIsAddModalOpen(false);
       setNewDescription(''); setNewValue(''); setNewCategory('Moradia'); setNewFrequency('mensal');
       setNewDueDay(1); setNewDueMonth(1);
@@ -116,7 +116,7 @@ export default function RecurringManager({ uid }: Props) {
   };
 
   if (loading) {
-    return <div className="p-8 text-center text-cyan-500 animate-pulse font-mono uppercase tracking-widest text-xs mt-10">A carregar motor de contratos...</div>;
+    return <div className="p-8 text-center text-cyan-500 animate-pulse font-mono uppercase tracking-widest text-xs mt-10">Carregando contratos...</div>;
   }
 
   return (
@@ -172,7 +172,7 @@ export default function RecurringManager({ uid }: Props) {
               <div className="w-16 h-16 bg-quantum-bgSecondary/50 rounded-full flex items-center justify-center mb-4">
                 <Repeat className="w-8 h-8 text-quantum-fgMuted" />
               </div>
-              <p className="text-quantum-fgMuted font-medium">Nenhuma despesa fixa registada.</p>
+              <p className="text-quantum-fgMuted font-medium">Nenhuma despesa fixa registrada.</p>
               <p className="text-xs text-quantum-fgMuted mt-1">Clique no botão "+" acima para adicionar.</p>
             </div>
           ) : (

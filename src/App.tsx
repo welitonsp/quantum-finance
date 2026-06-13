@@ -51,7 +51,7 @@ const SharedFinancePage = lazy(() => import('./features/shared-finance/SharedFin
 const QuantumLoader = () => (
   <div className="flex flex-col items-center justify-center h-64 gap-4">
     <Loader2 className="w-10 h-10 text-quantum-accent animate-spin" />
-    <span className="text-xs text-quantum-fgMuted uppercase tracking-widest animate-pulse">A carregar módulo...</span>
+    <span className="text-xs text-quantum-fgMuted uppercase tracking-widest animate-pulse">Carregando módulo...</span>
   </div>
 );
 
@@ -325,7 +325,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     currentYear={currentYear}
                   />
                 )}
-                {(currentPage === 'history' || currentPage === 'wallet') && (
+                {currentPage === 'history' && (
                   <HistoryPage
                     transactions={displayedTransactions}
                     loading={loading}

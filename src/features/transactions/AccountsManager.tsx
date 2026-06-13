@@ -163,7 +163,7 @@ export default function AccountsManager({ uid }: Props) {
       </div>
 
       {loadingAccounts ? (
-        <div className="text-center py-10 text-quantum-fgMuted animate-pulse font-bold">A carregar os seus cofres...</div>
+        <div className="text-center py-10 text-quantum-fgMuted animate-pulse font-bold">Carregando contas...</div>
       ) : accounts.length === 0 ? (
         <div className="bg-white dark:bg-quantum-card/30 border-2 border-dashed border-slate-200 dark:border-quantum-border rounded-3xl p-10 text-center">
           <Wallet className="w-12 h-12 mx-auto text-quantum-fg dark:text-slate-700 mb-4" />

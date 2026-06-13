@@ -2,9 +2,10 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
-  Search, Plus, BarChart2, BookOpen, Wallet, BrainCircuit,
-  Eye, EyeOff, CreditCard, RefreshCw,
+  Search, Plus, BarChart2, Clock, Landmark, BrainCircuit,
+  Eye, EyeOff, CreditCard, Repeat,
   TrendingUp, Zap, Command, Swords, Scissors, HeartPulse, FileText,
+  TrendingDown, FlaskConical, Receipt, ShoppingBag, ShoppingCart, Users, ShieldAlert,
   type LucideIcon,
 } from 'lucide-react';
 import { usePrivacy } from '../contexts/PrivacyContext';
@@ -56,7 +57,12 @@ const COMMANDER_COMMANDS: CommandItem[] = [
   },
 ];
 
-const NAV_IDS = new Set(['go-dashboard','go-history','go-reports','go-wallet','go-accounts','go-cards','go-recurring','go-quantum']);
+const NAV_IDS = new Set([
+  'go-dashboard','go-history','go-reports','go-accounts','go-cards',
+  'go-recurring','go-debts','go-simulation','go-ir',
+  'go-shopping','go-purchase-simulator','go-shared-finance',
+  'go-quantum','go-anti-tarifa',
+]);
 
 interface BuildCommandsArgs {
   navigate: (page: string) => void;
@@ -66,15 +72,21 @@ interface BuildCommandsArgs {
 
 function buildCommands({ navigate, togglePrivacy, isPrivacyMode }: BuildCommandsArgs): CommandItem[] {
   return [
-    { id: 'new-transaction', label: 'Nova Transação',         description: 'Adicionar receita ou despesa',         icon: Plus,        shortcut: 'Alt+N', group: 'Ações',        action: () => { toast.success('Abrindo formulário de transação…'); navigate('dashboard'); } },
-    { id: 'go-dashboard',   label: 'Painel Central',          description: 'Ir para o Dashboard',                  icon: TrendingUp,  shortcut: null,    group: 'Navegar',      action: () => { navigate('dashboard'); toast.success('Painel Central'); } },
-    { id: 'go-history',     label: 'Livro Razão',             description: 'Histórico completo de transações',     icon: BookOpen,    shortcut: null,    group: 'Navegar',      action: () => { navigate('history');   toast.success('Livro Razão'); } },
-    { id: 'go-reports',     label: 'Relatórios Analíticos',   description: 'Gráficos e análises financeiras',      icon: BarChart2,   shortcut: null,    group: 'Navegar',      action: () => { navigate('reports');   toast.success('Relatórios Analíticos'); } },
-    { id: 'go-wallet',      label: 'Carteira',                description: 'Visão consolidada dos ativos',         icon: Wallet,      shortcut: null,    group: 'Navegar',      action: () => { navigate('wallet');    toast.success('Carteira'); } },
-    { id: 'go-accounts',    label: 'As Minhas Contas',        description: 'Gerir contas bancárias',               icon: Wallet,      shortcut: null,    group: 'Navegar',      action: () => { navigate('accounts');  toast.success('As Minhas Contas'); } },
-    { id: 'go-cards',       label: 'Cartões de Crédito',      description: 'Gerir cartões e faturas',              icon: CreditCard,  shortcut: null,    group: 'Navegar',      action: () => { navigate('cards');     toast.success('Cartões de Crédito'); } },
-    { id: 'go-recurring',   label: 'Despesas Recorrentes',    description: 'Gerir assinaturas e recorrências',     icon: RefreshCw,   shortcut: null,    group: 'Navegar',      action: () => { navigate('recurring'); toast.success('Despesas Recorrentes'); } },
-    { id: 'go-quantum',     label: 'Quantum AI',              description: 'Inteligência Artificial financeira',   icon: BrainCircuit,shortcut: null,    group: 'Navegar',      action: () => { navigate('quantum');   toast.success('Quantum AI'); } },
+    { id: 'new-transaction',       label: 'Nova Transação',            description: 'Adicionar receita ou despesa',              icon: Plus,         shortcut: 'Alt+N', group: 'Ações',    action: () => { toast.success('Abrindo formulário de transação…'); navigate('dashboard'); } },
+    { id: 'go-dashboard',         label: 'Centro de Comando',         description: 'Ir para o painel principal',                icon: TrendingUp,   shortcut: null,    group: 'Navegar',  action: () => { navigate('dashboard');          toast.success('Centro de Comando'); } },
+    { id: 'go-history',           label: 'Movimentações',             description: 'Histórico completo de transações',           icon: Clock,        shortcut: null,    group: 'Navegar',  action: () => { navigate('history');            toast.success('Movimentações'); } },
+    { id: 'go-reports',           label: 'BI & Relatórios',           description: 'Gráficos e análises financeiras',            icon: BarChart2,    shortcut: null,    group: 'Navegar',  action: () => { navigate('reports');            toast.success('BI & Relatórios'); } },
+    { id: 'go-accounts',          label: 'Contas',                    description: 'Gerenciar contas bancárias',                 icon: Landmark,     shortcut: null,    group: 'Navegar',  action: () => { navigate('accounts');           toast.success('Contas'); } },
+    { id: 'go-cards',             label: 'Cartões de Crédito',        description: 'Gerenciar cartões e faturas',                icon: CreditCard,   shortcut: null,    group: 'Navegar',  action: () => { navigate('cards');              toast.success('Cartões de Crédito'); } },
+    { id: 'go-recurring',         label: 'Despesas Fixas',            description: 'Gerenciar assinaturas e recorrências',       icon: Repeat,       shortcut: null,    group: 'Navegar',  action: () => { navigate('recurring');          toast.success('Despesas Fixas'); } },
+    { id: 'go-debts',             label: 'Dívidas',                   description: 'Plano de quitação de dívidas',               icon: TrendingDown, shortcut: null,    group: 'Navegar',  action: () => { navigate('debts');              toast.success('Dívidas'); } },
+    { id: 'go-simulation',        label: 'Simulação Monte Carlo',     description: 'Simulador de cenários financeiros',           icon: FlaskConical, shortcut: null,    group: 'Navegar',  action: () => { navigate('simulation');         toast.success('Simulação Monte Carlo'); } },
+    { id: 'go-ir',                label: 'Módulo IR',                 description: 'Apuração de imposto de renda',               icon: Receipt,      shortcut: null,    group: 'Navegar',  action: () => { navigate('ir');                 toast.success('Módulo IR'); } },
+    { id: 'go-shopping',          label: 'Compras Inteligentes',      description: 'Listas e histórico de preços',               icon: ShoppingBag,  shortcut: null,    group: 'Navegar',  action: () => { navigate('shopping');           toast.success('Compras Inteligentes'); } },
+    { id: 'go-purchase-simulator',label: 'Simulador de Compra',       description: 'Decidir se vale a pena comprar agora',       icon: ShoppingCart, shortcut: null,    group: 'Navegar',  action: () => { navigate('purchase-simulator'); toast.success('Simulador de Compra'); } },
+    { id: 'go-shared-finance',    label: 'Finanças Compartilhadas',   description: 'Split de despesas entre grupos',             icon: Users,        shortcut: null,    group: 'Navegar',  action: () => { navigate('shared-finance');     toast.success('Finanças Compartilhadas'); } },
+    { id: 'go-quantum',           label: 'Quantum AI',                description: 'Inteligência artificial financeira',         icon: BrainCircuit, shortcut: null,    group: 'Navegar',  action: () => { navigate('quantum');            toast.success('Quantum AI'); } },
+    { id: 'go-anti-tarifa',       label: 'Agente Anti-Tarifa',        description: 'Detectar cobranças bancárias ocultas',       icon: ShieldAlert,  shortcut: null,    group: 'Navegar',  action: () => { navigate('anti-tarifa');        toast.success('Agente Anti-Tarifa'); } },
     {
       id:          'toggle-privacy',
       label:       isPrivacyMode ? 'Desativar Modo Privacidade' : 'Ativar Modo Privacidade',

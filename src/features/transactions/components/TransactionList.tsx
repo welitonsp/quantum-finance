@@ -214,7 +214,7 @@ function LoadMoreButton({
         {isLoading ? (
           <>
             <span className="w-4 h-4 border-2 border-quantum-fgMuted/30 border-t-quantum-fgMuted rounded-full animate-spin" />
-            A carregar mais...
+            Carregando mais...
           </>
         ) : (
           <>

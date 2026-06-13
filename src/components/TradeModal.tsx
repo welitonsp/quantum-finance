@@ -25,7 +25,7 @@ export default function TradeModal({ isOpen, onClose, assetSymbol }: Props) {
     setIsSubmitting(true);
     try {
       await new Promise<void>((resolve) => setTimeout(resolve, 800));
-      toast(`📊 Simulação registada: Operação de ${quantity} ${assetSymbol ?? ''}`, {
+      toast(`📊 Simulação registrada: Operação de ${quantity} ${assetSymbol ?? ''}`, {
         icon: '🔬',
         style: { background: '#1E2A3F', color: '#fff', border: '1px solid #3b82f6' },
         duration: 5000,
