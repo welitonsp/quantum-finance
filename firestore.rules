@@ -1256,6 +1256,71 @@ service cloud.firestore {
       }
     }
 
+    // ─── Finanças Compartilhadas ─────────────────────────────────────────────
+    match /groups/{groupId} {
+      function isMember() {
+        return request.auth != null
+            && request.auth.uid in resource.data.memberUids;
+      }
+
+      function isMemberAfter() {
+        return request.auth != null
+            && request.auth.uid in request.resource.data.memberUids;
+      }
+
+      function isGroupOwner() {
+        return request.auth != null
+            && resource.data.ownerUid == request.auth.uid;
+      }
+
+      function isValidGroupCreate() {
+        let d = request.resource.data;
+        return d.keys().hasAll(['name', 'ownerUid', 'memberUids', 'members', 'createdAt', 'updatedAt', 'schemaVersion'])
+            && d.ownerUid == request.auth.uid
+            && d.name is string && d.name.size() >= 1 && d.name.size() <= 80
+            && d.memberUids is list && d.memberUids.size() >= 1
+            && request.auth.uid in d.memberUids
+            && d.members is list
+            && d.schemaVersion == 1
+            && d.createdAt == request.time
+            && d.updatedAt == request.time;
+      }
+
+      allow read:   if isMember();
+      allow create: if request.auth != null && isValidGroupCreate();
+      allow update: if isGroupOwner() && isMemberAfter();
+      allow delete: if isGroupOwner();
+
+      match /expenses/{expenseId} {
+        function isGroupMemberForExpense() {
+          return request.auth != null
+              && request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberUids;
+        }
+
+        function isValidExpenseCreate() {
+          let d = request.resource.data;
+          return d.keys().hasAll([
+                'description', 'totalCents', 'category', 'date',
+                'payerUid', 'payerDisplayName', 'splitMethod', 'shares',
+                'groupId', 'createdAt', 'updatedAt', 'schemaVersion'
+              ])
+              && d.description is string && d.description.size() >= 1 && d.description.size() <= 160
+              && isPositiveSafeInt(d.totalCents)
+              && d.splitMethod in ['igual', 'proporcional', 'personalizado']
+              && d.shares is list && d.shares.size() >= 1
+              && d.groupId == groupId
+              && d.schemaVersion == 1
+              && d.createdAt == request.time
+              && d.updatedAt == request.time;
+        }
+
+        allow read:   if isGroupMemberForExpense();
+        allow create: if isGroupMemberForExpense() && isValidExpenseCreate();
+        allow update: if isGroupMemberForExpense();
+        allow delete: if isGroupMemberForExpense();
+      }
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
