@@ -14,6 +14,7 @@
 - **FASES 9–10: mergeadas** (Compras Inteligentes + TTL idempotency).
 - Suíte: **57 arquivos · 1080 testes passando · 168 skipped · build OK**.
 - Últimas integrações relevantes (cronologia inversa):
+  - **PR #220** fix(rules): remoção de parâmetros não usados e dead code em `firestore.rules` (zero warnings no deploy).
   - **PR #219** chore(functions): FASE 10 — TTL 24h para `idempotency/{key}` via `expireAt` + Firestore TTL policy.
   - **PR #218** feat(shopping): FASE 9 — Módulo Compras Inteligentes.
   - **#217** docs(project): sync CLAUDE.md pós-ROADMAP-MESTRE-v2.
@@ -120,7 +121,7 @@ Roadmap FASES 0–10 concluído. Próximas:
 
 | # | Iniciativa | Status |
 |---|---|---|
-| 11 | **Deploy produção** — `firebase deploy --only firestore:indexes,firestore:rules,functions` | pendente |
+| 11 | **Deploy produção** — `firebase deploy --only firestore:indexes,firestore:rules,functions` | ✅ concluído (PR #220 limpou warnings pós-deploy) |
 | 12 | **Open Finance** — integração read-only via BACEN Open Finance API | planejado |
 | 13 | **Módulo IR** — apuração de ganhos de capital, informe de rendimentos, relatório anual | planejado |
 | 14 | **Agente anti-tarifa** — detecção e alerta de tarifas bancárias recorrentes | planejado |
