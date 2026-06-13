@@ -11,9 +11,10 @@
 - Branch principal: `main`.
 - **ROADMAP-MESTRE-v2 (FASES 0–8): todas mergeadas.**
 - **Fase de documentação 2.0: concluída** (5 docs produto + Política Copilot IA).
-- **FASES 9–16: mergeadas** (Compras Inteligentes + TTL idempotency + IR + Anti-Tarifa + Finanças Compartilhadas + AppShell).
-- Suíte: **60 arquivos · 1143 testes passando · 168 skipped · build OK**.
+- **FASES 9–17: mergeadas** (Compras Inteligentes + TTL idempotency + IR + Anti-Tarifa + Finanças Compartilhadas + AppShell + Design System).
+- Suíte: **60 arquivos · 1152 testes passando · 168 skipped · build OK**.
 - Últimas integrações relevantes (cronologia inversa):
+    - **PR #225** feat(ui): FASE 17 — Design System mínimo: 8 primitivos em `src/shared/components/ui/` (Spinner, EmptyState, Skeleton, Badge, Card, Button, MoneyDisplay, LoadingPage).
   - **PR #224** feat(appshell): FASE 16 — Sidebar 8 módulos oficiais, labels PT-BR, rota `wallet` removida.
   - **PR #223** feat(shared-finance): FASE 15 — Finanças Compartilhadas (grupos, split, balancete).
   - **PR #222** feat(anti-tarifa): FASE 14 — Agente Anti-Tarifa com detecção de cobranças recorrentes.
@@ -132,13 +133,13 @@ Roadmap FASES 0–10 concluído. Backlog pós-roadmap organizado segundo os **8 
 | 14 | **Agente Anti-Tarifa** — detecção de cobranças recorrentes | ✅ PR #222 |
 | 15 | **Finanças Compartilhadas** — grupos, split, balancete | ✅ PR #223 |
 | 16 | **AppShell / Navegação** — Sidebar 8 módulos 2.0, PT-BR, rota `wallet` removida | ✅ PR #224 |
+| 17 | **Design System mínimo** — 8 primitivos em `src/shared/components/ui/` | ✅ PR #225 |
 
 #### 8.2 Próximas iniciativas — alinhadas aos 8 módulos 2.0
 Referência: `docs/product/INVENTARIO_UI_PRODUTO_QUANTUM_2026-06-12.md` (seção 22 — fases seguintes).
 
 | # | Módulo 2.0 | Iniciativa | Status |
 |---|---|---|---|
-| 17 | **Design System mínimo** | Consolidar Button, Card, Modal, Drawer, Badge, EmptyState, Skeleton, MoneyInput em componentes compartilhados | pendente |
 | 18 | **Centro de Comando** | Reduzir Dashboard a alertas acionáveis, vencimentos e decisões imediatas; mover análises para módulos | pendente |
 | 19 | **Timeline Financeira** | Página dedicada unindo passado registrado + futuro projetado + recorrências + parcelas + cenários | pendente |
 | 20 | **Planejamento** | Consolidar BudgetWidget + alertas + projeção em módulo próprio com histórico de limites | pendente |
