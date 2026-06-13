@@ -59,7 +59,7 @@
   "fieldOverrides": [
     {
       "collectionGroup": "idempotency",
-      "fieldPath": "createdAt",
+      "fieldPath": "expireAt",
       "indexes": [],
       "ttlConfig": {}
     }

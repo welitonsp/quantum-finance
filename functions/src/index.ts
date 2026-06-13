@@ -360,9 +360,12 @@ export const createTransaction = onCall(
         if (idemSnap.exists) {
           return { id: idemSnap.data()!['txId'] as string };
         }
+        // expireAt: 24 h — consumed by Firestore native TTL policy
+        const expireAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
         t.set(idemRef, {
           txId:      txRef.id,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          expireAt,
         });
       }
       t.set(txRef,   txPayload);
