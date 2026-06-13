@@ -14,6 +14,7 @@
 - **FASES 9–10: mergeadas** (Compras Inteligentes + TTL idempotency).
 - Suíte: **57 arquivos · 1080 testes passando · 168 skipped · build OK**.
 - Últimas integrações relevantes (cronologia inversa):
+  - **PR #223** feat(shared-finance): FASE 15 — Finanças Compartilhadas (grupos, split, balancete).
   - **PR #222** feat(anti-tarifa): FASE 14 — Agente Anti-Tarifa com detecção de cobranças recorrentes.
   - **PR #221** feat(ir): FASE 13 — Módulo IR: informe de rendimentos e apuração de ganho de capital.
   - **PR #220** fix(rules): remoção de parâmetros não usados e dead code em `firestore.rules` (zero warnings no deploy).
@@ -127,7 +128,7 @@ Roadmap FASES 0–10 concluído. Próximas:
 | 12 | **Open Finance** — integração read-only via BACEN Open Finance API | ⛔ bloqueado (requer certificado mTLS BACEN — sem orçamento) |
 | 13 | **Módulo IR** — apuração de ganhos de capital, informe de rendimentos, relatório anual | ✅ concluído (PR #221) |
 | 14 | **Agente anti-tarifa** — detecção e alerta de tarifas bancárias recorrentes | ✅ concluído (PR #222) |
-| 15 | **Finanças compartilhadas** — split de despesas entre usuários (casais, grupos) | planejado |
+| 15 | **Finanças compartilhadas** — split de despesas entre usuários (casais, grupos) | ✅ concluído (PR #223) |
 | 12 | **Open Finance** — integração read-only via BACEN Open Finance API | fase técnica própria |
 | 13 | **Módulo IR** — apuração de ganhos de capital, informe de rendimentos, relatório anual | fase técnica própria |
 | 14 | **Agente anti-tarifa** — detecção e alerta de tarifas bancárias recorrentes | pode usar insightsEngine |
