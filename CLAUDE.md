@@ -2,7 +2,7 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — Pós-ROADMAP-MESTRE-v2 + FASE 9 (2026-06-13)
+## Estado Consolidado — Pós-ROADMAP-MESTRE-v2 + FASES 9–10 (2026-06-13)
 
 > Blocos anteriores substituídos. Em caso de divergência, **este bloco é a referência**.
 > **Regra operacional:** Atualizar este bloco após cada PR mergeado ou marco relevante.
@@ -11,10 +11,11 @@
 - Branch principal: `main`.
 - **ROADMAP-MESTRE-v2 (FASES 0–8): todas mergeadas.**
 - **Fase de documentação 2.0: concluída** (5 docs produto + Política Copilot IA).
-- **FASE 9 (Compras Inteligentes): PR #218 aberto** — aguardando merge.
+- **FASES 9–10: mergeadas** (Compras Inteligentes + TTL idempotency).
 - Suíte: **57 arquivos · 1080 testes passando · 168 skipped · build OK**.
 - Últimas integrações relevantes (cronologia inversa):
-  - **PR #218** feat(shopping): FASE 9 — Módulo Compras Inteligentes *(aguardando merge)*.
+  - **PR #219** chore(functions): FASE 10 — TTL 24h para `idempotency/{key}` via `expireAt` + Firestore TTL policy.
+  - **PR #218** feat(shopping): FASE 9 — Módulo Compras Inteligentes.
   - **#217** docs(project): sync CLAUDE.md pós-ROADMAP-MESTRE-v2.
   - **#216** docs(security): Threat Model NFC-e / Compras Inteligentes.
   - **#215** docs(product): Inventário comparativo Quantum × SGC.
@@ -69,7 +70,8 @@
 | FASE 6 | Timeline financeira 90 dias + recorrências inteligentes + alertas | #205 | ✅ |
 | FASE 7 | Agente Financeiro Conversacional auditável (refs por referência, tool registry) | #206 | ✅ |
 | FASE 8 | LGPD compliance + MFA + rate limiting + Secret Manager + backups | #207 | ✅ |
-| FASE 9 | Compras Inteligentes: listas, itens, check-off, histórico de preços | #218 | ⏳ PR aberto |
+| FASE 9 | Compras Inteligentes: listas, itens, check-off, histórico de preços | #218 | ✅ |
+| FASE 10 | TTL automático `idempotency/{key}`: campo `expireAt` + Firestore TTL policy (`fieldOverrides`) | #219 | ✅ |
 | LEGADO 29–34 | Copilot proativo, Budget AI, Score History, Fluxo Caixa Semanal, Gamification, Risk Score | #181–#186 | ✅ |
 
 ### 3. Contratos críticos vivos (inalterados)
@@ -114,13 +116,15 @@ lastExecutedMonth?: string;        // formato YYYY-MM
 - Migração automática de float → `value_cents` continua **bloqueada**.
 
 ### 8. Backlog pós-roadmap (próximas iniciativas)
-Roadmap FASES 0–8 concluído. FASE 9 (Compras Inteligentes) em PR aberto. Próximas:
+Roadmap FASES 0–10 concluído. Próximas:
 
-| # | Iniciativa | Observação |
+| # | Iniciativa | Status |
 |---|---|---|
-| 9 | **Compras Inteligentes** — MVP: listas, itens, check-off, histórico de preços | PR #218 em aberto |
-| 10 | **TTL idempotency/{key}** — Cloud Function schedulada ou TTL policy para expirar keys após 24h | manutenção técnica rápida |
-| 11 | **Deploy produção** — `firebase deploy --only firestore:indexes,firestore:rules,functions` | propagar Rules e índices novos |
+| 11 | **Deploy produção** — `firebase deploy --only firestore:indexes,firestore:rules,functions` | pendente |
+| 12 | **Open Finance** — integração read-only via BACEN Open Finance API | planejado |
+| 13 | **Módulo IR** — apuração de ganhos de capital, informe de rendimentos, relatório anual | planejado |
+| 14 | **Agente anti-tarifa** — detecção e alerta de tarifas bancárias recorrentes | planejado |
+| 15 | **Finanças compartilhadas** — split de despesas entre usuários (casais, grupos) | planejado |
 | 12 | **Open Finance** — integração read-only via BACEN Open Finance API | fase técnica própria |
 | 13 | **Módulo IR** — apuração de ganhos de capital, informe de rendimentos, relatório anual | fase técnica própria |
 | 14 | **Agente anti-tarifa** — detecção e alerta de tarifas bancárias recorrentes | pode usar insightsEngine |
