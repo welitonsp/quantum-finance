@@ -119,22 +119,39 @@ lastExecutedMonth?: string;        // formato YYYY-MM
 - Script de diagnóstico read-only: `functions/scripts/diagnoseLegacyTransactions.js`.
 - Migração automática de float → `value_cents` continua **bloqueada**.
 
-### 8. Backlog pós-roadmap (próximas iniciativas)
-Roadmap FASES 0–10 concluído. Próximas:
+### 8. Backlog pós-roadmap — alinhado à Visão Estratégica 2.0
+Roadmap FASES 0–10 concluído. Backlog pós-roadmap organizado segundo os **8 módulos oficiais** definidos em `docs/product/QUANTUM_FINANCE_VISAO_ESTRATEGICA_2_0.md`.
 
+#### 8.1 Entregues (pós-roadmap)
 | # | Iniciativa | Status |
 |---|---|---|
-| 11 | **Deploy produção** — `firebase deploy --only firestore:indexes,firestore:rules,functions` | ✅ concluído (PR #220 limpou warnings pós-deploy) |
-| 12 | **Open Finance** — integração read-only via BACEN Open Finance API | ⛔ bloqueado (requer certificado mTLS BACEN — sem orçamento) |
-| 13 | **Módulo IR** — apuração de ganhos de capital, informe de rendimentos, relatório anual | ✅ concluído (PR #221) |
-| 14 | **Agente anti-tarifa** — detecção e alerta de tarifas bancárias recorrentes | ✅ concluído (PR #222) |
-| 15 | **Finanças compartilhadas** — split de despesas entre usuários (casais, grupos) | ✅ concluído (PR #223) |
-| 12 | **Open Finance** — integração read-only via BACEN Open Finance API | fase técnica própria |
-| 13 | **Módulo IR** — apuração de ganhos de capital, informe de rendimentos, relatório anual | fase técnica própria |
-| 14 | **Agente anti-tarifa** — detecção e alerta de tarifas bancárias recorrentes | pode usar insightsEngine |
-| 15 | **Finanças compartilhadas** — split de despesas entre usuários (casais, grupos) | novo modelo de dados |
-| 16 | **App Nativo / PWA completo** — push notifications, offline-first | após estabilização web |
-| — | **NFC-e** — leitura de nota fiscal eletrônica | **bloqueada** até gate de segurança completo |
+| 11 | **Deploy produção** + limpeza de warnings Firestore Rules | ✅ PR #220 |
+| 12 | **Open Finance** — BACEN API | ⛔ bloqueado (sem certificado mTLS — sem orçamento) |
+| 13 | **Módulo IR** — informe de rendimentos + ganho de capital | ✅ PR #221 |
+| 14 | **Agente Anti-Tarifa** — detecção de cobranças recorrentes | ✅ PR #222 |
+| 15 | **Finanças Compartilhadas** — grupos, split, balancete | ✅ PR #223 |
+
+#### 8.2 Próximas iniciativas — alinhadas aos 8 módulos 2.0
+Referência: `docs/product/INVENTARIO_UI_PRODUTO_QUANTUM_2026-06-12.md` (seção 22 — fases seguintes).
+
+| # | Módulo 2.0 | Iniciativa | Status |
+|---|---|---|---|
+| 16 | **AppShell / Navegação** | Reorganizar Sidebar para os 8 módulos oficiais; padronizar labels PT-BR; remover rota `wallet` ambígua | pendente |
+| 17 | **Design System mínimo** | Consolidar Button, Card, Modal, Drawer, Badge, EmptyState, Skeleton, MoneyInput em componentes compartilhados | pendente |
+| 18 | **Centro de Comando** | Reduzir Dashboard a alertas acionáveis, vencimentos e decisões imediatas; mover análises para módulos | pendente |
+| 19 | **Timeline Financeira** | Página dedicada unindo passado registrado + futuro projetado + recorrências + parcelas + cenários | pendente |
+| 20 | **Planejamento** | Consolidar BudgetWidget + alertas + projeção em módulo próprio com histórico de limites | pendente |
+| 21 | **Patrimônio & Objetivos** | Unificar AccountsManager + GoalsPanel + DebtModule + CreditCardManager em visão consolidada | pendente |
+| 22 | **Copilot IA** | Contrato visual unificado: fonte/dados, insight/recomendação/ação, confiança, confirmação humana | pendente |
+| 23 | **Cofre / Governança** | Módulo explícito: LGPD, auditoria, categorias, permissões IA, histórico append-only visível | pendente |
+| 24 | **PWA / App Nativo** | Push notifications, offline-first, manifest otimizado | após estabilização 8 módulos |
+| — | **NFC-e** | Leitura de nota fiscal eletrônica | **bloqueada** — aguarda gate de segurança SSRF completo |
+
+#### 8.3 Regras para as próximas fases (extraídas dos docs de produto)
+- AppShell/navegação **não pode alterar** `functions/`, `firestore.rules`, schemas, services financeiros, testes, `.env`, `package.json`
+- Design System **não pode alterar** cálculos monetários nem centavos inteiros
+- Toda feature com IA deve responder: quais dados usa, qual ação sugere, qual confirmação exige, qual evento de auditoria registra
+- NFC-e continua **bloqueada** até threat model SSRF completo com validação estrita de host/domínio
 
 ### 9. Comandos de validação padrão
 ```bash
