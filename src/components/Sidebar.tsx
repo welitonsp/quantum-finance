@@ -1,7 +1,7 @@
 import { useNavigation } from '../contexts/NavigationContext';
 import {
   LayoutDashboard, PieChart, Settings, LogOut,
-  Landmark, BrainCircuit, Repeat, Clock, X, CreditCard, FlaskConical, ShoppingCart, TrendingDown, ShoppingBag, Receipt,
+  Landmark, BrainCircuit, Repeat, Clock, X, CreditCard, FlaskConical, ShoppingCart, TrendingDown, ShoppingBag, Receipt, ShieldAlert,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -36,6 +36,7 @@ const navGroups: NavGroup[] = [
       { id: 'purchase-simulator', icon: ShoppingCart,    label: 'Simulador de Compra'  },
       { id: 'shopping',           icon: ShoppingBag,     label: 'Compras Inteligentes' },
       { id: 'ir',                 icon: Receipt,         label: 'Módulo IR'            },
+      { id: 'anti-tarifa',        icon: ShieldAlert,     label: 'Agente Anti-Tarifa'   },
     ],
   },
   {
