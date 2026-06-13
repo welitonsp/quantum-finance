@@ -369,7 +369,7 @@ export default function DebtModule({ uid }: Props) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <Loader2 className="w-10 h-10 text-cyan-400 animate-spin" />
-        <span className="text-xs text-quantum-fgMuted uppercase tracking-widest animate-pulse">A carregar dívidas...</span>
+        <span className="text-xs text-quantum-fgMuted uppercase tracking-widest animate-pulse">Carregando dívidas...</span>
       </div>
     );
   }

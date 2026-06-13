@@ -93,7 +93,7 @@ export function useTransactionActions({
         toast.success('Movimentação atualizada com sucesso!');
       } else {
         await add(payload);
-        toast.success('Nova movimentação registada!');
+        toast.success('Nova movimentação registrada!');
       }
       setIsFormOpen(false);
       setTransactionToEdit(null);

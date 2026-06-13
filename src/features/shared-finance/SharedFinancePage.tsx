@@ -36,7 +36,7 @@ export default function SharedFinancePage({ uid, displayName }: Props) {
   if (loadingGroups) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-400 text-sm">
-        A carregar grupos…
+        Carregando grupos…
       </div>
     );
   }
@@ -247,7 +247,7 @@ function GroupDetail({ group, uid, displayName }: { group: Group; uid: string; d
 
       {/* Lista de despesas */}
       {loading ? (
-        <p className="text-sm text-gray-400 text-center py-8">A carregar despesas…</p>
+        <p className="text-sm text-gray-400 text-center py-8">Carregando despesas…</p>
       ) : expenses.length === 0 ? (
         <div className="text-center py-12 text-gray-400">
           <Receipt className="w-10 h-10 mx-auto mb-3 opacity-30" />

@@ -157,7 +157,7 @@ function AnomaliesPanel({ transactions, currentMonth, currentYear }: AnomaliesPa
     return (
       <div className="flex items-center gap-3 p-4 bg-quantum-accentDim border border-quantum-accent/20 rounded-xl">
         <CheckCircle className="w-5 h-5 text-quantum-accent shrink-0" />
-        <span className="text-sm text-quantum-fg">Nenhuma anomalia detetada. Perfil de gastos estável.</span>
+        <span className="text-sm text-quantum-fg">Nenhuma anomalia detectada. Perfil de gastos estável.</span>
       </div>
     );
   }
@@ -371,7 +371,7 @@ export default function QuantumAIPage({
           </div>
           <div className="space-y-3">
             {topCats.length === 0 ? (
-              <p className="text-sm text-quantum-fgMuted text-center py-4">Sem despesas registadas este mês.</p>
+              <p className="text-sm text-quantum-fgMuted text-center py-4">Sem despesas registradas este mês.</p>
             ) : topCats.map((c, i) => {
               const maxVal = topCats[0]?.total ?? 1;
               const pct    = Math.round((c.total / maxVal) * 100);

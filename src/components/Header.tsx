@@ -11,14 +11,20 @@ import { getTransactionAbsCentavos, isIncome, isExpense } from '../utils/transac
 import { fromCentavos } from '../shared/types/money';
 
 const PAGE_TITLES: Record<string, string> = {
-  dashboard: 'Painel Central',
-  reports:   'Relatórios Analíticos',
-  history:   'Livro Razão',
-  wallet:    'Carteira',
-  accounts:  'As Minhas Contas',
-  cards:     'Cartões de Crédito',
-  quantum:   'Quantum AI',
-  recurring: 'Despesas Recorrentes',
+  dashboard:          'Centro de Comando',
+  history:            'Movimentações',
+  reports:            'BI & Relatórios',
+  accounts:           'Contas',
+  cards:              'Cartões de Crédito',
+  recurring:          'Despesas Fixas',
+  debts:              'Dívidas',
+  simulation:         'Simulação Monte Carlo',
+  ir:                 'Módulo IR',
+  shopping:           'Compras Inteligentes',
+  'purchase-simulator': 'Simulador de Compra',
+  'shared-finance':   'Finanças Compartilhadas',
+  quantum:            'Quantum AI',
+  'anti-tarifa':      'Agente Anti-Tarifa',
 };
 
 // ─── HUD de Burn Rate ──────────────────────────────────────────────────────────
@@ -185,7 +191,7 @@ function SurvivalKPIs({ transactions, currentMonth, currentYear }: SurvivalKPIsP
         <motion.div
           variants={kpiItem}
           className="flex items-center gap-2.5 px-3.5 py-2 bg-quantum-card/60 backdrop-blur-sm border border-quantum-border rounded-xl"
-          title="Valor disponível por dia até ao fim do mês"
+          title="Valor disponível por dia até o fim do mês"
         >
           <div className={`p-1.5 rounded-lg bg-quantum-bgSecondary ${libColor.text}`}>
             <Wind className="w-3.5 h-3.5" />
