@@ -10,7 +10,7 @@ test.describe('Smoke — carregamento da app', () => {
     await page.goto('/');
 
     // Aguarda a app sair do estado de loading (auth + data)
-    await expect(page.getByText('Quantum Finance').or(page.getByText('Dashboard')).first())
+    await expect(page.getByRole('heading', { name: 'Centro de Comando' }).first())
       .toBeVisible({ timeout: 20_000 });
 
     // Nenhum erro 500 ou tela branca
@@ -21,14 +21,14 @@ test.describe('Smoke — carregamento da app', () => {
   test('sidebar exibe os itens de navegação principais', async ({ page }) => {
     await page.goto('/');
 
-    await expect(page.getByText('Dashboard').first()).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText('Movimentações').first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole('button', { name: 'Centro de Comando' }).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: 'Movimentações' }).first()).toBeVisible({ timeout: 5_000 });
   });
 
   test('navegar para Movimentações exibe o painel de transações', async ({ page }) => {
     await page.goto('/');
 
-    await page.getByText('Movimentações').first().click();
+    await page.getByRole('button', { name: 'Movimentações' }).first().click();
 
     // Aguarda o painel de movimentações
     await expect(

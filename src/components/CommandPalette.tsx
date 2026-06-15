@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
-  Search, Plus, BarChart2, Clock, CalendarRange, Target, Wallet, ShieldCheck, Landmark, BrainCircuit,
+  Search, Plus, BarChart2, Clock, CalendarRange, CalendarDays, Target, Wallet, ShieldCheck, Landmark, BrainCircuit,
   Eye, EyeOff, CreditCard, Repeat,
   TrendingUp, Zap, Command, Swords, Scissors, HeartPulse, FileText,
   TrendingDown, FlaskConical, Receipt, ShoppingBag, ShoppingCart, Users, ShieldAlert,
@@ -61,7 +61,7 @@ const NAV_IDS = new Set([
   'go-dashboard','go-history','go-reports','go-accounts','go-cards',
   'go-recurring','go-debts','go-simulation','go-ir',
   'go-shopping','go-purchase-simulator','go-shared-finance',
-  'go-quantum','go-anti-tarifa','go-timeline','go-planning','go-patrimonio','go-copilot','go-cofre',
+  'go-quantum','go-anti-tarifa','go-timeline','go-planning','go-patrimonio','go-copilot','go-cofre','go-calendar',
 ]);
 
 interface BuildCommandsArgs {
@@ -92,6 +92,7 @@ function buildCommands({ navigate, togglePrivacy, isPrivacyMode }: BuildCommands
     { id: 'go-patrimonio',        label: 'Patrimônio & Objetivos',    description: 'Visão consolidada de ativos, passivos e metas', icon: Wallet,       shortcut: null,    group: 'Navegar',  action: () => { navigate('patrimonio');         toast.success('Patrimônio & Objetivos'); } },
     { id: 'go-copilot',           label: 'Copilot IA',                description: 'Insights locais com fonte, confiança e confirmação', icon: BrainCircuit, shortcut: null,    group: 'Navegar',  action: () => { navigate('copilot');            toast.success('Copilot IA'); } },
     { id: 'go-cofre',             label: 'Cofre & Governança',        description: 'LGPD, auditoria, permissões IA e histórico',         icon: ShieldCheck,  shortcut: null,    group: 'Navegar',  action: () => { navigate('cofre');              toast.success('Cofre & Governança'); } },
+    { id: 'go-calendar',          label: 'Calendário Financeiro',     description: 'Vencimentos, fechamentos de cartão e prazos de metas', icon: CalendarDays, shortcut: null,    group: 'Navegar',  action: () => { navigate('calendar');           toast.success('Calendário Financeiro'); } },
     {
       id:          'toggle-privacy',
       label:       isPrivacyMode ? 'Desativar Modo Privacidade' : 'Ativar Modo Privacidade',

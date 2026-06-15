@@ -8,33 +8,33 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Importação CSV', () => {
   test.beforeEach(async ({ page }) => {
-    // O ImportButton está no Header, visível na página de Dashboard
+    // O ImportButton está no Header, visível na página Centro de Comando.
     await page.goto('/');
-    await expect(
-      page.getByText('Quantum Finance').or(page.getByText('Dashboard')).first()
-    ).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('heading', { name: 'Centro de Comando' }).first())
+      .toBeVisible({ timeout: 20_000 });
   });
 
   test('botão de importação está visível no Header', async ({ page }) => {
-    const importBtn = page.locator('[aria-label="Importar ficheiro de extrato"]').first();
+    const importBtn = page.getByRole('button', { name: 'Importar ficheiro de extrato' }).first();
     await expect(importBtn).toBeVisible({ timeout: 10_000 });
   });
 
   test('clicar no botão de importação abre o modal Ingestão Quântica', async ({ page }) => {
-    const importBtn = page.locator('[aria-label="Importar ficheiro de extrato"]').first();
+    const importBtn = page.getByRole('button', { name: 'Importar ficheiro de extrato' }).first();
     await expect(importBtn).toBeVisible({ timeout: 10_000 });
     await importBtn.click();
 
-    // Modal com título "Ingestão Quântica" deve aparecer
-    await expect(page.locator('[role="dialog"]').first()).toBeVisible({ timeout: 10_000 });
+    // Modal com título "Ingestão Quântica" deve aparecer.
+    await expect(page.getByRole('dialog', { name: 'Ingestão Quântica' }).first())
+      .toBeVisible({ timeout: 10_000 });
   });
 
   test('modal de importação contém input de arquivo', async ({ page }) => {
-    const importBtn = page.locator('[aria-label="Importar ficheiro de extrato"]').first();
+    const importBtn = page.getByRole('button', { name: 'Importar ficheiro de extrato' }).first();
     await expect(importBtn).toBeVisible({ timeout: 10_000 });
     await importBtn.click();
 
-    const dialog = page.locator('[role="dialog"]').first();
+    const dialog = page.getByRole('dialog', { name: 'Ingestão Quântica' }).first();
     await expect(dialog).toBeVisible({ timeout: 10_000 });
 
     // Input de arquivo deve estar presente dentro do dialog

@@ -54,6 +54,7 @@ const PlanningPage      = lazy(() => import('./features/planning/PlanningPage'))
 const PatrimonioPage    = lazy(() => import('./features/patrimonio/PatrimonioPage'));
 const CopilotPage       = lazy(() => import('./features/copilot/CopilotPage'));
 const GovernancePage    = lazy(() => import('./features/governance/GovernancePage'));
+const CalendarPage      = lazy(() => import('./features/calendar/CalendarPage'));
 
 // ─── Quantum Loader ──────────────────────────────────────────────────────────
 const QuantumLoader = () => (
@@ -417,6 +418,9 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                 )}
                 {currentPage === 'cofre' && (
                   <GovernancePage uid={safeUID} />
+                )}
+                {currentPage === 'calendar' && (
+                  <CalendarPage uid={safeUID} />
                 )}
               </Suspense>
             </ErrorBoundary>
