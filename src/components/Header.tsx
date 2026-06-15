@@ -28,6 +28,7 @@ const PAGE_TITLES: Record<string, string> = {
   timeline:           'Timeline Financeira',
   planning:           'Planejamento',
   patrimonio:         'Patrimônio & Objetivos',
+  copilot:            'Copilot IA',
 };
 
 // ─── HUD de Burn Rate ──────────────────────────────────────────────────────────
