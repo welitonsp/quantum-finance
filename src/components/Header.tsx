@@ -29,6 +29,7 @@ const PAGE_TITLES: Record<string, string> = {
   planning:           'Planejamento',
   patrimonio:         'Patrimônio & Objetivos',
   copilot:            'Copilot IA',
+  cofre:              'Cofre & Governança',
 };
 
 // ─── HUD de Burn Rate ──────────────────────────────────────────────────────────
