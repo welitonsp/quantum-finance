@@ -25,6 +25,7 @@ const PAGE_TITLES: Record<string, string> = {
   'shared-finance':   'Finanças Compartilhadas',
   quantum:            'Quantum AI',
   'anti-tarifa':      'Agente Anti-Tarifa',
+  timeline:           'Timeline Financeira',
 };
 
 // ─── HUD de Burn Rate ──────────────────────────────────────────────────────────
