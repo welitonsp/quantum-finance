@@ -61,7 +61,7 @@ const NAV_IDS = new Set([
   'go-dashboard','go-history','go-reports','go-accounts','go-cards',
   'go-recurring','go-debts','go-simulation','go-ir',
   'go-shopping','go-purchase-simulator','go-shared-finance',
-  'go-quantum','go-anti-tarifa','go-timeline','go-planning','go-patrimonio',
+  'go-quantum','go-anti-tarifa','go-timeline','go-planning','go-patrimonio','go-copilot',
 ]);
 
 interface BuildCommandsArgs {
@@ -90,6 +90,7 @@ function buildCommands({ navigate, togglePrivacy, isPrivacyMode }: BuildCommands
     { id: 'go-timeline',          label: 'Timeline Financeira',       description: 'Passado registrado + futuro projetado 90d',  icon: CalendarRange, shortcut: null,    group: 'Navegar',  action: () => { navigate('timeline');           toast.success('Timeline Financeira'); } },
     { id: 'go-planning',          label: 'Planejamento',              description: 'Orçamentos por categoria e metas de poupança', icon: Target,       shortcut: null,    group: 'Navegar',  action: () => { navigate('planning');           toast.success('Planejamento'); } },
     { id: 'go-patrimonio',        label: 'Patrimônio & Objetivos',    description: 'Visão consolidada de ativos, passivos e metas', icon: Wallet,       shortcut: null,    group: 'Navegar',  action: () => { navigate('patrimonio');         toast.success('Patrimônio & Objetivos'); } },
+    { id: 'go-copilot',           label: 'Copilot IA',                description: 'Insights locais com fonte, confiança e confirmação', icon: BrainCircuit, shortcut: null,    group: 'Navegar',  action: () => { navigate('copilot');            toast.success('Copilot IA'); } },
     {
       id:          'toggle-privacy',
       label:       isPrivacyMode ? 'Desativar Modo Privacidade' : 'Ativar Modo Privacidade',

@@ -66,8 +66,9 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Copilot IA',
     items: [
-      { id: 'quantum',     icon: Cpu,         label: 'Quantum AI'         },
-      { id: 'anti-tarifa', icon: ShieldAlert, label: 'Agente Anti-Tarifa' },
+      { id: 'copilot',     icon: BrainCircuit, label: 'Copilot IA'        },
+      { id: 'quantum',     icon: Cpu,          label: 'Quantum AI'        },
+      { id: 'anti-tarifa', icon: ShieldAlert,  label: 'Agente Anti-Tarifa'},
     ],
   },
   {

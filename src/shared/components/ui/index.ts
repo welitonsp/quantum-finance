@@ -1,4 +1,6 @@
 export { Badge }        from './Badge';
+export { CopilotInsightCard } from './CopilotInsightCard';
+export type { CopilotInsightData, InsightType, ConfidenceLevel } from './CopilotInsightCard';
 export { Button }       from './Button';
 export { Card }         from './Card';
 export { EmptyState }   from './EmptyState';
