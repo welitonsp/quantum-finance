@@ -2,7 +2,7 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — Pós-ROADMAP-MESTRE-v2 + FASES 9–21 (2026-06-15)
+## Estado Consolidado — Pós-ROADMAP-MESTRE-v2 + FASES 9–22 (2026-06-15)
 
 > Blocos anteriores substituídos. Em caso de divergência, **este bloco é a referência**.
 > **Regra operacional:** Atualizar este bloco após cada PR mergeado ou marco relevante.
@@ -11,9 +11,10 @@
 - Branch principal: `main`.
 - **ROADMAP-MESTRE-v2 (FASES 0–8): todas mergeadas.**
 - **Fase de documentação 2.0: concluída** (5 docs produto + Política Copilot IA).
-- **FASES 9–21: mergeadas** (Compras Inteligentes + TTL idempotency + IR + Anti-Tarifa + Finanças Compartilhadas + AppShell + Design System + Centro de Comando + Timeline + Planejamento + Patrimônio).
-- Suíte: **60 arquivos · 1156 testes passando · 168 skipped · build OK**.
+- **FASES 9–22: mergeadas** (Compras Inteligentes + TTL idempotency + IR + Anti-Tarifa + Finanças Compartilhadas + AppShell + Design System + Centro de Comando + Timeline + Planejamento + Patrimônio + Copilot IA).
+- Suíte: **60 arquivos · 1158 testes passando · 168 skipped · build OK**.
 - Últimas integrações relevantes (cronologia inversa):
+  - **PR #232** feat(copilot): FASE 22 — Copilot IA: `CopilotPage.tsx` + `CopilotInsightCard.tsx` com contrato visual unificado (tipo, confiança, fontes, confirmação humana).
   - **PR #231** feat(patrimonio): FASE 21 — Módulo Patrimônio & Objetivos: `PatrimonioPage.tsx` com KPIs de patrimônio líquido + hub de 4 módulos.
   - **PR #230** feat(planning): FASE 20 — Módulo Planejamento: `PlanningPage.tsx` unificando BudgetWidget + GoalsPanel; fix PT-PT em BudgetWidget.
   - **PR #229** feat(timeline): FASE 19 — Timeline Financeira dedicada: `TimelinePage.tsx`, KPIs 90d, filtros de evento, lista expansível, wiring Sidebar/Header/CommandPalette.
@@ -148,7 +149,7 @@ Referência: `docs/product/INVENTARIO_UI_PRODUTO_QUANTUM_2026-06-12.md` (seção
 | 19 | **Timeline Financeira** | Página dedicada unindo passado registrado + futuro projetado + recorrências + parcelas + cenários | ✅ PR #229 |
 | 20 | **Planejamento** | Consolidar BudgetWidget + alertas + projeção em módulo próprio com histórico de limites | ✅ PR #230 |
 | 21 | **Patrimônio & Objetivos** | Unificar AccountsManager + GoalsPanel + DebtModule + CreditCardManager em visão consolidada | ✅ PR #231 |
-| 22 | **Copilot IA** | Contrato visual unificado: fonte/dados, insight/recomendação/ação, confiança, confirmação humana | pendente |
+| 22 | **Copilot IA** | Contrato visual unificado: fonte/dados, insight/recomendação/ação, confiança, confirmação humana | ✅ PR #232 |
 | 23 | **Cofre / Governança** | Módulo explícito: LGPD, auditoria, categorias, permissões IA, histórico append-only visível | pendente |
 | 24 | **PWA / App Nativo** | Push notifications, offline-first, manifest otimizado | após estabilização 8 módulos |
 | — | **NFC-e** | Leitura de nota fiscal eletrônica | **bloqueada** — aguarda gate de segurança SSRF completo |
