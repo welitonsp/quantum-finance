@@ -2,7 +2,7 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — Pós-ROADMAP-MESTRE-v2 + FASES 9–23 (2026-06-15)
+## Estado Consolidado — Pós-ROADMAP-MESTRE-v2 + FASES 9–24 (2026-06-15)
 
 > Blocos anteriores substituídos. Em caso de divergência, **este bloco é a referência**.
 > **Regra operacional:** Atualizar este bloco após cada PR mergeado ou marco relevante.
@@ -11,10 +11,11 @@
 - Branch principal: `main`.
 - **ROADMAP-MESTRE-v2 (FASES 0–8): todas mergeadas.**
 - **Fase de documentação 2.0: concluída** (5 docs produto + Política Copilot IA).
-- **FASES 9–23: mergeadas** (Compras Inteligentes + TTL idempotency + IR + Anti-Tarifa + Finanças Compartilhadas + AppShell + Design System + Centro de Comando + Timeline + Planejamento + Patrimônio + Copilot IA + Cofre/Governança).
-- **Backlog pós-roadmap (FASES 16–23): COMPLETO.** Os 8 módulos oficiais do Quantum Finance 2.0 estão todos implementados.
-- Suíte: **60 arquivos · 1159 testes passando · 168 skipped · build OK**.
+- **FASES 9–24: mergeadas** (Compras Inteligentes + TTL idempotency + IR + Anti-Tarifa + Finanças Compartilhadas + AppShell + Design System + Centro de Comando + Timeline + Planejamento + Patrimônio + Copilot IA + Cofre/Governança + PWA/App Nativo).
+- **Backlog pós-roadmap (FASES 16–24): COMPLETO.**
+- Suíte: **60 arquivos · 1161 testes passando · 168 skipped · build OK · PWA 36 entradas pré-cacheadas**.
 - Últimas integrações relevantes (cronologia inversa):
+  - **PR #235** feat(pwa): FASE 24 — PWA / App Nativo: manifest otimizado (shortcuts, lang pt-BR, orientação, ícones any+maskable), `offline.html`, `OfflineIndicator`, `usePushNotifications` (FCM token em `fcmTokens/`), seção push em GovernancePage, regra Firestore `fcmTokens`.
   - **PR #234** feat(governance): FASE 23 — Cofre & Governança: `GovernancePage.tsx` com LGPD, auditoria, permissões IA e histórico append-only visível.
   - **PR #232** feat(copilot): FASE 22 — Copilot IA: `CopilotPage.tsx` + `CopilotInsightCard.tsx` com contrato visual unificado (tipo, confiança, fontes, confirmação humana).
   - **PR #231** feat(patrimonio): FASE 21 — Módulo Patrimônio & Objetivos: `PatrimonioPage.tsx` com KPIs de patrimônio líquido + hub de 4 módulos.
@@ -153,7 +154,7 @@ Referência: `docs/product/INVENTARIO_UI_PRODUTO_QUANTUM_2026-06-12.md` (seção
 | 21 | **Patrimônio & Objetivos** | Unificar AccountsManager + GoalsPanel + DebtModule + CreditCardManager em visão consolidada | ✅ PR #231 |
 | 22 | **Copilot IA** | Contrato visual unificado: fonte/dados, insight/recomendação/ação, confiança, confirmação humana | ✅ PR #232 |
 | 23 | **Cofre / Governança** | Módulo explícito: LGPD, auditoria, categorias, permissões IA, histórico append-only visível | ✅ PR #234 |
-| 24 | **PWA / App Nativo** | Push notifications, offline-first, manifest otimizado | após estabilização 8 módulos |
+| 24 | **PWA / App Nativo** | Manifest otimizado, offline.html, OfflineIndicator, FCM/push (foundation) | ✅ PR #235 |
 | — | **NFC-e** | Leitura de nota fiscal eletrônica | **bloqueada** — aguarda gate de segurança SSRF completo |
 
 #### 8.3 Regras para as próximas fases (extraídas dos docs de produto)
@@ -1304,4 +1305,5 @@ Todas sob `/users/{userId}/`:
 | `dataProcessingLog/{logId}` | Log de processamento de dados (LGPD — server-only) |
 | `shoppingLists/{listId}` | Listas de compras com itens embutidos (FASE 9) |
 | `priceObservations/{obsId}` | Histórico de preços por produto/loja — append-mostly, update bloqueado (FASE 9) |
+| `fcmTokens/{tokenId}` | Tokens FCM para push notifications — owner escreve/deleta, leitura exclusiva Admin SDK (FASE 24) |
 | `/{document=**}` | Deny-all catch-all |
