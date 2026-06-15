@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint';
 import { defineConfig, globalIgnores } from 'eslint/config';
 
 export default defineConfig([
-  globalIgnores(['dist', 'coverage', 'functions/**', '.firebase/**', '.claude/**', '.claire/**', '*.config.js', 'eslint.config.js', 'playwright.config.ts', 'e2e/**']),
+  globalIgnores(['dist', 'coverage', 'functions/**', '.firebase/**', '.claude/**', '.claire/**', '*.config.js', 'eslint.config.js', 'playwright.config.ts', 'e2e/**', 'public/**']),
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
     extends: [

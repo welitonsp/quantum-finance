@@ -22,6 +22,7 @@ import type { Centavos } from './shared/types/money';
 
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
+import OfflineIndicator from './shared/components/OfflineIndicator';
 import LoginScreen from './components/LoginScreen';
 import QuantumBackground from './components/QuantumBackground';
 import DashboardContent from './components/DashboardContent';
@@ -240,6 +241,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   return (
     <div className="flex h-screen overflow-hidden font-sans transition-colors duration-500 relative">
       <Toaster position="bottom-right" />
+      <OfflineIndicator />
       <ConfirmDeleteModal
         transaction={transactionToDelete}
         onCancel={() => setTransactionToDelete(null)}

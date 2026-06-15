@@ -1254,6 +1254,19 @@ service cloud.firestore {
         allow update: if false;
         allow delete: if isOwner(userId);
       }
+
+      // FCM tokens — gravados pelo client (owner); lidos apenas pelo Admin SDK (server-side).
+      match /fcmTokens/{tokenId} {
+        allow read:   if false;
+        allow create: if isOwner(userId)
+            && request.resource.data.keys().hasAll(['token', 'platform', 'createdAt'])
+            && request.resource.data.keys().hasOnly(['token', 'platform', 'createdAt'])
+            && request.resource.data.token   == tokenId
+            && request.resource.data.platform == 'web'
+            && request.resource.data.createdAt == request.time;
+        allow update: if false;
+        allow delete: if isOwner(userId);
+      }
     }
 
     // ─── Finanças Compartilhadas ─────────────────────────────────────────────
