@@ -21,9 +21,10 @@ jobs:
         uses: lewagon/wait-on-check-action@v1.7.0
         with:
           ref: ${{ github.sha }}
-          check-name: '✅ CI Success'
+          check-name: 'E2E Tests (Playwright)'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 20
+          checks-discovery-timeout: 900
 
   deploy_rules:
     name: 🔒 Deploy Firestore Rules
