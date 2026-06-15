@@ -1,6 +1,6 @@
 import { useNavigation } from '../contexts/NavigationContext';
 import {
-  LayoutDashboard, Clock, CalendarRange, Target, Settings, LogOut,
+  LayoutDashboard, Clock, CalendarRange, Target, Wallet, Settings, LogOut,
   Landmark, BrainCircuit, Repeat, CreditCard, TrendingDown, ShoppingBag,
   Receipt, ShieldAlert, Users, Cpu, FlaskConical, ShoppingCart,
   PieChart, X,
@@ -49,9 +49,10 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Patrimônio & Objetivos',
     items: [
-      { id: 'accounts', icon: Landmark,   label: 'Contas'    },
-      { id: 'cards',    icon: CreditCard, label: 'Cartões'   },
-      { id: 'ir',       icon: Receipt,    label: 'Módulo IR' },
+      { id: 'patrimonio', icon: Wallet,     label: 'Patrimônio & Objetivos' },
+      { id: 'accounts',   icon: Landmark,   label: 'Contas'                 },
+      { id: 'cards',      icon: CreditCard, label: 'Cartões'                },
+      { id: 'ir',         icon: Receipt,    label: 'Módulo IR'              },
     ],
   },
   {
