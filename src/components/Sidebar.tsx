@@ -1,6 +1,6 @@
 import { useNavigation } from '../contexts/NavigationContext';
 import {
-  LayoutDashboard, Clock, Settings, LogOut,
+  LayoutDashboard, Clock, CalendarRange, Settings, LogOut,
   Landmark, BrainCircuit, Repeat, CreditCard, TrendingDown, ShoppingBag,
   Receipt, ShieldAlert, Users, Cpu, FlaskConical, ShoppingCart,
   PieChart, X,
@@ -32,8 +32,9 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Principal',
     items: [
-      { id: 'dashboard', icon: LayoutDashboard, label: 'Centro de Comando' },
-      { id: 'history',   icon: Clock,           label: 'Movimentações'     },
+      { id: 'dashboard', icon: LayoutDashboard, label: 'Centro de Comando'  },
+      { id: 'history',   icon: Clock,           label: 'Movimentações'      },
+      { id: 'timeline',  icon: CalendarRange,   label: 'Timeline Financeira'},
     ],
   },
   {

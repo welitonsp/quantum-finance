@@ -17,6 +17,8 @@ import { useCategories } from './hooks/useCategories';
 import { useAppLogic } from './hooks/useAppLogic';
 import { useCreditCards } from './hooks/useCreditCards';
 import { logSanitizedFirebaseError } from './shared/lib/firebaseErrorHandling';
+import { toCentavos as toBalanceCents } from './shared/schemas/financialSchemas';
+import type { Centavos } from './shared/types/money';
 
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -46,6 +48,7 @@ const ShoppingPage      = lazy(() => import('./features/shopping/ShoppingPage'))
 const IRPage            = lazy(() => import('./features/ir/IRPage'));
 const AntiTarifaPage    = lazy(() => import('./features/anti-tarifa/AntiTarifaPage'));
 const SharedFinancePage = lazy(() => import('./features/shared-finance/SharedFinancePage'));
+const TimelinePage      = lazy(() => import('./features/timeline/TimelinePage'));
 
 // ─── Quantum Loader ──────────────────────────────────────────────────────────
 const QuantumLoader = () => (
@@ -390,6 +393,12 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                 )}
                 {currentPage === 'shared-finance' && (
                   <SharedFinancePage uid={safeUID} displayName={user?.displayName ?? 'Você'} />
+                )}
+                {currentPage === 'timeline' && (
+                  <TimelinePage
+                    uid={safeUID}
+                    currentBalanceCents={toBalanceCents(moduleBalances?.geral?.saldo ?? 0) as Centavos}
+                  />
                 )}
               </Suspense>
             </ErrorBoundary>
