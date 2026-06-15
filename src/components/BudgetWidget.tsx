@@ -287,7 +287,7 @@ function AddForm({ onAdd, onClose }: AddFormProps) {
             className="btn-quantum-primary flex items-center gap-1.5 text-xs px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-3.5 h-3.5" />
-            {busy ? 'A guardar…' : 'Criar Orçamento'}
+            {busy ? 'Salvando…' : 'Criar Orçamento'}
           </button>
         </div>
       </form>
@@ -430,7 +430,7 @@ function SuggestModal({ suggestions, onApprove, onClose }: SuggestModalProps) {
               className="btn-quantum-primary text-xs px-4 py-2 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Check className="w-3.5 h-3.5" />
-              {busy ? 'A criar…' : `Criar ${selected.size} orçamento${selected.size !== 1 ? 's' : ''}`}
+              {busy ? 'Criando…' : `Criar ${selected.size} orçamento${selected.size !== 1 ? 's' : ''}`}
             </button>
           </div>
         </div>
@@ -552,7 +552,7 @@ export default function BudgetWidget({ uid, transactions }: Props) {
             </p>
             <p className="text-[10px] text-quantum-fgMuted">
               {insights.length === 0
-                ? 'Nenhuma categoria monitorizada'
+                ? 'Nenhuma categoria monitorada'
                 : `${insights.length} ${insights.length === 1 ? 'categoria' : 'categorias'}`
                   + (dangerCount  > 0 ? ` · ${dangerCount} excedida${dangerCount  > 1 ? 's' : ''}` : '')
                   + (warningCount > 0 ? ` · ${warningCount} em atenção` : '')

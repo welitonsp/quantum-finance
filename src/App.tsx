@@ -49,6 +49,7 @@ const IRPage            = lazy(() => import('./features/ir/IRPage'));
 const AntiTarifaPage    = lazy(() => import('./features/anti-tarifa/AntiTarifaPage'));
 const SharedFinancePage = lazy(() => import('./features/shared-finance/SharedFinancePage'));
 const TimelinePage      = lazy(() => import('./features/timeline/TimelinePage'));
+const PlanningPage      = lazy(() => import('./features/planning/PlanningPage'));
 
 // ─── Quantum Loader ──────────────────────────────────────────────────────────
 const QuantumLoader = () => (
@@ -399,6 +400,9 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     uid={safeUID}
                     currentBalanceCents={toBalanceCents(moduleBalances?.geral?.saldo ?? 0) as Centavos}
                   />
+                )}
+                {currentPage === 'planning' && (
+                  <PlanningPage uid={safeUID} />
                 )}
               </Suspense>
             </ErrorBoundary>

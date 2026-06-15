@@ -26,6 +26,7 @@ const PAGE_TITLES: Record<string, string> = {
   quantum:            'Quantum AI',
   'anti-tarifa':      'Agente Anti-Tarifa',
   timeline:           'Timeline Financeira',
+  planning:           'Planejamento',
 };
 
 // ─── HUD de Burn Rate ──────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
-  Search, Plus, BarChart2, Clock, CalendarRange, Landmark, BrainCircuit,
+  Search, Plus, BarChart2, Clock, CalendarRange, Target, Landmark, BrainCircuit,
   Eye, EyeOff, CreditCard, Repeat,
   TrendingUp, Zap, Command, Swords, Scissors, HeartPulse, FileText,
   TrendingDown, FlaskConical, Receipt, ShoppingBag, ShoppingCart, Users, ShieldAlert,
@@ -61,7 +61,7 @@ const NAV_IDS = new Set([
   'go-dashboard','go-history','go-reports','go-accounts','go-cards',
   'go-recurring','go-debts','go-simulation','go-ir',
   'go-shopping','go-purchase-simulator','go-shared-finance',
-  'go-quantum','go-anti-tarifa','go-timeline',
+  'go-quantum','go-anti-tarifa','go-timeline','go-planning',
 ]);
 
 interface BuildCommandsArgs {
@@ -88,6 +88,7 @@ function buildCommands({ navigate, togglePrivacy, isPrivacyMode }: BuildCommands
     { id: 'go-quantum',           label: 'Quantum AI',                description: 'Inteligência artificial financeira',         icon: BrainCircuit, shortcut: null,    group: 'Navegar',  action: () => { navigate('quantum');            toast.success('Quantum AI'); } },
     { id: 'go-anti-tarifa',       label: 'Agente Anti-Tarifa',        description: 'Detectar cobranças bancárias ocultas',       icon: ShieldAlert,   shortcut: null,    group: 'Navegar',  action: () => { navigate('anti-tarifa');        toast.success('Agente Anti-Tarifa'); } },
     { id: 'go-timeline',          label: 'Timeline Financeira',       description: 'Passado registrado + futuro projetado 90d',  icon: CalendarRange, shortcut: null,    group: 'Navegar',  action: () => { navigate('timeline');           toast.success('Timeline Financeira'); } },
+    { id: 'go-planning',          label: 'Planejamento',              description: 'Orçamentos por categoria e metas de poupança', icon: Target,       shortcut: null,    group: 'Navegar',  action: () => { navigate('planning');           toast.success('Planejamento'); } },
     {
       id:          'toggle-privacy',
       label:       isPrivacyMode ? 'Desativar Modo Privacidade' : 'Ativar Modo Privacidade',
