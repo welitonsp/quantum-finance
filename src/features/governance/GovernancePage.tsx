@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import {
   ShieldCheck, ScrollText, Clock, BrainCircuit, Tag, ChevronRight,
-  CheckCircle2, AlertTriangle, Lock,
+  CheckCircle2, AlertTriangle, Lock, Bell, BellOff,
 } from 'lucide-react';
 import { useAuditLogs } from '../../hooks/useAuditLogs';
 import AuditTimeline from '../../components/AuditTimeline';
 import DataPrivacyPanel from '../settings/DataPrivacyPanel';
-import { LoadingPage } from '../../shared/components/ui';
+import { LoadingPage, Spinner } from '../../shared/components/ui';
+import { usePushNotifications } from '../../shared/hooks/usePushNotifications';
 
 interface Props {
   uid: string;
@@ -25,6 +26,14 @@ const AI_PERMISSIONS = [
 export default function GovernancePage({ uid }: Props) {
   const { logs, loading: loadingLogs } = useAuditLogs(uid);
   const [showAuditTimeline, setShowAuditTimeline] = useState(false);
+  const {
+    permission: pushPermission,
+    loading:    pushLoading,
+    error:      pushError,
+    isSupported: pushSupported,
+    requestPermission: requestPush,
+    revokePermission:  revokePush,
+  } = usePushNotifications(uid);
 
   if (loadingLogs) return <LoadingPage label="Carregando governança..." />;
 
@@ -141,6 +150,62 @@ export default function GovernancePage({ uid }: Props) {
               Via Configurações (⚙️)
             </span>
           </div>
+        </div>
+      </section>
+
+      {/* Notificações Push */}
+      <section aria-labelledby="push-heading">
+        <div className="flex items-center gap-2 mb-4">
+          <Bell className="w-4 h-4 text-quantum-fgMuted" />
+          <h2 id="push-heading" className="text-sm font-bold text-quantum-fgMuted uppercase tracking-wider">Notificações Push</h2>
+        </div>
+        <div className="bg-quantum-card/40 border border-quantum-border rounded-2xl p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm font-black text-quantum-fg">Notificações no Dispositivo</p>
+              <p className="text-xs text-quantum-fgMuted mt-0.5">
+                {!pushSupported
+                  ? 'Não disponível neste navegador ou ambiente'
+                  : pushPermission === 'granted'
+                    ? 'Ativas — alertas de orçamento, faturas e metas'
+                    : pushPermission === 'denied'
+                      ? 'Bloqueadas pelo navegador'
+                      : 'Receba alertas de orçamento, faturas e metas'
+                }
+              </p>
+            </div>
+            {pushSupported && pushPermission !== 'denied' && (
+              <button
+                onClick={pushPermission === 'granted' ? revokePush : requestPush}
+                disabled={pushLoading}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                  pushPermission === 'granted'
+                    ? 'bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20'
+                    : 'bg-quantum-bgSecondary border border-quantum-border text-quantum-fg hover:border-quantum-accent/40'
+                }`}
+              >
+                {pushLoading
+                  ? <Spinner size="sm" />
+                  : pushPermission === 'granted'
+                    ? <><BellOff className="w-3.5 h-3.5" />Desativar</>
+                    : <><Bell className="w-3.5 h-3.5" />Ativar</>
+                }
+              </button>
+            )}
+          </div>
+          {pushPermission === 'denied' && (
+            <p className="text-xs text-amber-400/80 mt-3 border-t border-quantum-border/30 pt-3">
+              Para reativar, altere as permissões de notificação nas configurações do navegador.
+            </p>
+          )}
+          {pushError && (
+            <p className="text-xs text-red-400/70 mt-2">{pushError}</p>
+          )}
+          {!pushSupported && (
+            <p className="text-[10px] text-quantum-fgMuted mt-3 border-t border-quantum-border/30 pt-3">
+              Requer navegador compatível, HTTPS e chave VAPID configurada (<code className="font-mono">VITE_FCM_VAPID_KEY</code>).
+            </p>
+          )}
         </div>
       </section>
 

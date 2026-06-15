@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Sem conexão — Quantum Finance</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2rem;
+    }
+    .card {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      border-radius: 1.5rem;
+      padding: 3rem 2rem;
+      max-width: 28rem;
+      width: 100%;
+    }
+    .icon {
+      width: 4rem;
+      height: 4rem;
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.5rem;
+      font-size: 1.75rem;
+    }
+    h1 { font-size: 1.25rem; font-weight: 800; margin-bottom: 0.5rem; }
+    p  { font-size: 0.875rem; color: #94a3b8; line-height: 1.6; margin-bottom: 1.5rem; }
+    button {
+      background: #06b6d4;
+      color: #0f172a;
+      border: none;
+      border-radius: 0.75rem;
+      padding: 0.625rem 1.5rem;
+      font-size: 0.875rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: #22d3ee; }
+    .brand {
+      margin-top: 2rem;
+      font-size: 0.75rem;
+      color: #475569;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">📡</div>
+    <h1>Sem conexão</h1>
+    <p>
+      O Quantum Finance não consegue alcançar o servidor.<br/>
+      Verifique sua conexão com a internet e tente novamente.
+    </p>
+    <button onclick="location.reload()">Tentar novamente</button>
+    <p class="brand">Quantum Finance</p>
+  </div>
+</body>
+</html>
