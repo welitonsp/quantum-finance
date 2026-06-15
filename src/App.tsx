@@ -50,6 +50,7 @@ const AntiTarifaPage    = lazy(() => import('./features/anti-tarifa/AntiTarifaPa
 const SharedFinancePage = lazy(() => import('./features/shared-finance/SharedFinancePage'));
 const TimelinePage      = lazy(() => import('./features/timeline/TimelinePage'));
 const PlanningPage      = lazy(() => import('./features/planning/PlanningPage'));
+const PatrimonioPage    = lazy(() => import('./features/patrimonio/PatrimonioPage'));
 
 // ─── Quantum Loader ──────────────────────────────────────────────────────────
 const QuantumLoader = () => (
@@ -403,6 +404,9 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                 )}
                 {currentPage === 'planning' && (
                   <PlanningPage uid={safeUID} />
+                )}
+                {currentPage === 'patrimonio' && (
+                  <PatrimonioPage uid={safeUID} />
                 )}
               </Suspense>
             </ErrorBoundary>

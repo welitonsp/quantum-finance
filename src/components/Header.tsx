@@ -27,6 +27,7 @@ const PAGE_TITLES: Record<string, string> = {
   'anti-tarifa':      'Agente Anti-Tarifa',
   timeline:           'Timeline Financeira',
   planning:           'Planejamento',
+  patrimonio:         'Patrimônio & Objetivos',
 };
 
 // ─── HUD de Burn Rate ──────────────────────────────────────────────────────────
