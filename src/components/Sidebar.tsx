@@ -1,6 +1,6 @@
 import { useNavigation } from '../contexts/NavigationContext';
 import {
-  LayoutDashboard, Clock, CalendarRange, Target, Wallet, Settings, LogOut,
+  LayoutDashboard, Clock, CalendarRange, Target, Wallet, ShieldCheck, Settings, LogOut,
   Landmark, BrainCircuit, Repeat, CreditCard, TrendingDown, ShoppingBag,
   Receipt, ShieldAlert, Users, Cpu, FlaskConical, ShoppingCart,
   PieChart, X,
@@ -74,7 +74,8 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Cofre & Governança',
     items: [
-      { id: 'reports', icon: PieChart, label: 'BI & Relatórios' },
+      { id: 'cofre',   icon: ShieldCheck, label: 'Cofre & Governança' },
+      { id: 'reports', icon: PieChart,    label: 'BI & Relatórios'   },
     ],
   },
 ];
