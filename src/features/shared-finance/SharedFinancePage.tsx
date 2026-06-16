@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { useGroups, useGroupExpenses } from './hooks/useGroups';
 import { splitIgual, splitProporcional, calcularBalancete } from '../../lib/sharedSplitEngine';
-import { formatBRL } from '../../shared/types/money';
+import { formatBRL, toCentavos } from '../../shared/types/money';
 import type { SplitMethod, Group, SharedExpense, SharedExpenseCreatePayload } from '../../shared/types/shared';
 import type { Centavos } from '../../shared/types/money';
 import type { SplitParticipant } from '../../lib/sharedSplitEngine';
@@ -365,13 +365,16 @@ function AddExpenseModal({
   const [error, setError] = useState('');
 
   async function handleSubmit() {
-    const totalReais = parseFloat(totalStr.replace(',', '.'));
-    if (!description.trim() || isNaN(totalReais) || totalReais <= 0) {
+    let totalCents = 0 as Centavos;
+    try {
+      totalCents = toCentavos(totalStr);
+    } catch {
+      // invalid input — totalCents remains 0, caught by validation below
+    }
+    if (!description.trim() || totalCents <= 0) {
       setError('Preencha descrição e valor válido.');
       return;
     }
-
-    const totalCents = Math.round(totalReais * 100) as Centavos;
     const effectiveMembers = members.length > 0 ? members : [{ uid: currentUid, displayName: currentDisplayName }];
 
     const splitResult = splitMethod === 'proporcional'
