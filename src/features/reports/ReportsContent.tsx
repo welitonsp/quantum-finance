@@ -2,7 +2,6 @@
 import { useState, useMemo } from 'react';
 import { ComposedChart, BarChart, Bar, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Filter, AlertCircle, Calendar, Scissors, Sparkles, AlertTriangle } from 'lucide-react';
-import Decimal from 'decimal.js';
 import { formatCurrency } from '../../utils/formatters';
 import type { Transaction, Account } from '../../shared/types/transaction';
 import { getTransactionAbsCentavos, isExpense } from '../../utils/transactionUtils';
@@ -63,8 +62,8 @@ export default function ReportsContent({ transactions, accounts, categories = []
   const paretoData = useMemo<ParetoItem[]>(() => {
     if (!transactions || transactions.length === 0) return [];
 
-    const catTotals: Record<string, number> = {};
-    let totalDespesas = new Decimal(0);
+    const catTotalsCents: Record<string, number> = {};
+    let grandTotalCents = 0;
     const agora = new Date();
 
     transactions.forEach(t => {
@@ -79,26 +78,23 @@ export default function ReportsContent({ transactions, accounts, categories = []
         const cat = t.category ?? 'Diversos';
         if (expenseFilter === 'variables' && isLowCuttableCategory(cat, categories)) return;
 
-        const val = new Decimal(fromCentavos(getTransactionAbsCentavos(t)));
-        catTotals[cat] = catTotals[cat]
-          ? new Decimal(catTotals[cat]).plus(val).toNumber()
-          : val.toNumber();
-        totalDespesas = totalDespesas.plus(val);
+        const cents = getTransactionAbsCentavos(t);
+        catTotalsCents[cat] = (catTotalsCents[cat] ?? 0) + cents;
+        grandTotalCents += cents;
       }
     });
 
-    const sorted = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
-    const totalFloat = totalDespesas.toNumber();
-    let acumulado = 0;
+    const sorted = Object.entries(catTotalsCents).sort((a, b) => b[1] - a[1]);
+    let acumuladoCents = 0;
 
-    return sorted.map(([name, value], index) => {
-      acumulado += value;
+    return sorted.map(([name, cents], index) => {
+      acumuladoCents += cents;
       return {
         name,
-        valor:         Number(value.toFixed(2)),
-        pctIndividual: totalFloat > 0 ? Number(((value / totalFloat) * 100).toFixed(1)) : 0,
-        pctAcumulada:  totalFloat > 0 ? Number(((acumulado / totalFloat) * 100).toFixed(1)) : 0,
-        isTop80:       totalFloat > 0 && ((acumulado / totalFloat) * 100) <= 80.1,
+        valor:         fromCentavos(cents),
+        pctIndividual: grandTotalCents > 0 ? Number(((cents / grandTotalCents) * 100).toFixed(1)) : 0,
+        pctAcumulada:  grandTotalCents > 0 ? Number(((acumuladoCents / grandTotalCents) * 100).toFixed(1)) : 0,
+        isTop80:       grandTotalCents > 0 && ((acumuladoCents / grandTotalCents) * 100) <= 80.1,
         rank:          index + 1,
         color:         getCategoryColor(name, categories, index),
       };
