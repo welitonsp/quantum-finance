@@ -7,7 +7,7 @@
  */
 
 import type { Centavos } from '../shared/types/money';
-import { formatBRL } from '../shared/types/money';
+import { formatBRL, toCentavos } from '../shared/types/money';
 
 export interface SerializedContext {
   /** Map of token → formatted BRL value. e.g. {{ref_saldo}} → "R$ 1.234,00" */
@@ -28,7 +28,7 @@ export function serializeFinancialContext(params: {
 }): SerializedContext {
   const refs: Record<string, string> = {};
 
-  refs['ref_saldo']   = formatBRL(Math.round(params.balance * 100) as Centavos);
+  refs['ref_saldo']   = formatBRL(toCentavos(params.balance));
   refs['ref_receita'] = formatBRL(params.monthlyIncome);
   refs['ref_despesa'] = formatBRL(params.monthlyExpense);
 
