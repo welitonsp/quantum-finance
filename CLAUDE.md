@@ -2,26 +2,34 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — Pós-ROADMAP-MESTRE-v2 + FASES 9–24 (2026-06-15)
+## Estado Consolidado — Pós-ROADMAP-MESTRE-v2 + FASES 9–25 (2026-06-16)
 
 > Blocos anteriores substituídos. Em caso de divergência, **este bloco é a referência**.
 > **Regra operacional:** Atualizar este bloco após cada PR mergeado ou marco relevante.
 
 ### 1. Status atual
-- Branch principal: `main`.
+- Branch principal: `main` — HEAD `7c60091`.
 - **ROADMAP-MESTRE-v2 (FASES 0–8): todas mergeadas.**
 - **Fase de documentação 2.0: concluída** (5 docs produto + Política Copilot IA).
-- **FASES 9–24: mergeadas** (Compras Inteligentes + TTL idempotency + IR + Anti-Tarifa + Finanças Compartilhadas + AppShell + Design System + Centro de Comando + Timeline + Planejamento + Patrimônio + Copilot IA + Cofre/Governança + PWA/App Nativo).
-- **Backlog pós-roadmap (FASES 16–24): COMPLETO.**
+- **FASES 9–25: mergeadas** (Compras Inteligentes + TTL idempotency + IR + Anti-Tarifa + Finanças Compartilhadas + AppShell + Design System + Centro de Comando + Timeline + Planejamento + Patrimônio + Copilot IA + Cofre/Governança + PWA/App Nativo + Calendário Financeiro).
+- **Backlog pós-roadmap (FASES 16–25): COMPLETO.**
 - Suíte: **60 arquivos · 1161 testes passando · 168 skipped · build OK · PWA 36 entradas pré-cacheadas**.
+- CI / Security / Deploy Firebase: **todos verdes**. Nenhum PR aberto.
 - Últimas integrações relevantes (cronologia inversa):
+  - **PR #227** chore(deps): Dependabot — bump frontend-production group (8 pacotes).
+  - **PR #239** chore(deps-dev): Dependabot — bump frontend-development group (6 pacotes).
+  - **PR #233** chore(deps-dev): Dependabot — bump `@types/node`.
+  - **PR #240** chore(ci): migração dos workflows CI e Deploy para Node.js 24.
+  - **PR #237** chore(deps): Dependabot — bump `lewagon/wait-on-check-action` para v1.8.0.
   - **PR #235** feat(pwa): FASE 24 — PWA / App Nativo: manifest otimizado (shortcuts, lang pt-BR, orientação, ícones any+maskable), `offline.html`, `OfflineIndicator`, `usePushNotifications` (FCM token em `fcmTokens/`), seção push em GovernancePage, regra Firestore `fcmTokens`.
+  - **PR #238** fix(ci): estabilização E2E + Deploy Gate pós-FASE 25 — deploy gate alinhado ao check `E2E Tests (Playwright)` + `checks-discovery-timeout: 900`; correção IAM para deploy automático de `firestore.rules` via service account; smoke e import-csv E2E estabilizados.
+  - **PR #236** feat(calendar): FASE 25 — Calendário Financeiro: `CalendarPage.tsx` com grade mensal navegável, consolidando despesas/receitas fixas recorrentes (`dueDay`), vencimentos e fechamentos de cartão de crédito, e prazos de metas de poupança; painel de eventos por dia; wiring Sidebar/Header/CommandPalette.
   - **PR #234** feat(governance): FASE 23 — Cofre & Governança: `GovernancePage.tsx` com LGPD, auditoria, permissões IA e histórico append-only visível.
   - **PR #232** feat(copilot): FASE 22 — Copilot IA: `CopilotPage.tsx` + `CopilotInsightCard.tsx` com contrato visual unificado (tipo, confiança, fontes, confirmação humana).
   - **PR #231** feat(patrimonio): FASE 21 — Módulo Patrimônio & Objetivos: `PatrimonioPage.tsx` com KPIs de patrimônio líquido + hub de 4 módulos.
   - **PR #230** feat(planning): FASE 20 — Módulo Planejamento: `PlanningPage.tsx` unificando BudgetWidget + GoalsPanel; fix PT-PT em BudgetWidget.
   - **PR #229** feat(timeline): FASE 19 — Timeline Financeira dedicada: `TimelinePage.tsx`, KPIs 90d, filtros de evento, lista expansível, wiring Sidebar/Header/CommandPalette.
-    - **PR #226** feat(dashboard): FASE 18 — CentroComandoWidget: alertas acionáveis (orçamentos, faturas, despesas fixas) no topo do Dashboard.
+  - **PR #226** feat(dashboard): FASE 18 — CentroComandoWidget: alertas acionáveis (orçamentos, faturas, despesas fixas) no topo do Dashboard.
   - **PR #225** feat(ui): FASE 17 — Design System mínimo: 8 primitivos em `src/shared/components/ui/` (Spinner, EmptyState, Skeleton, Badge, Card, Button, MoneyDisplay, LoadingPage).
   - **PR #224** feat(appshell): FASE 16 — Sidebar 8 módulos oficiais, labels PT-BR, rota `wallet` removida.
   - **PR #223** feat(shared-finance): FASE 15 — Finanças Compartilhadas (grupos, split, balancete).
@@ -50,7 +58,7 @@
 - **Política IA:** `docs/product/POLITICA_COPILOT_IA_QUANTUM_2026-06-12.md` — todo PR futuro com IA deve declarar: dados usados, auditoria, idempotência, App Check, Zod, centavos, fallback de baixa confiança.
 - **Módulo Compras Inteligentes:** Implementado na FASE 9 (PR #218). NFC-e real permanece **bloqueada**. Ver `docs/product/THREAT_MODEL_COMPRAS_INTELIGENTES_NFCE_2026-06-12.md`.
 - **SGC (Sistema Gestão de Compras):** Descontinuado como produto autônomo. Serviu apenas como referência conceitual para a FASE 9.
-- **Próxima Fase:** Backlog pós-roadmap — ver seção 8.
+- **Próxima Fase:** Backlog pós-roadmap 2.0 **concluído** (FASES 16–25). Próximas iniciativas a definir conforme priorização do owner.
 
 ### 1.2 Zonas Proibidas de Alteração
 É terminantemente **proibido** alterar os seguintes componentes/regras fora de uma fase própria autorizada:
@@ -86,6 +94,7 @@
 | FASE 8 | LGPD compliance + MFA + rate limiting + Secret Manager + backups | #207 | ✅ |
 | FASE 9 | Compras Inteligentes: listas, itens, check-off, histórico de preços | #218 | ✅ |
 | FASE 10 | TTL automático `idempotency/{key}`: campo `expireAt` + Firestore TTL policy (`fieldOverrides`) | #219 | ✅ |
+| FASE 25 | Calendário Financeiro: `CalendarPage.tsx` com grade mensal, recorrentes, vencimentos/fechamentos de cartão, prazos de metas | #236 | ✅ |
 | LEGADO 29–34 | Copilot proativo, Budget AI, Score History, Fluxo Caixa Semanal, Gamification, Risk Score | #181–#186 | ✅ |
 
 ### 3. Contratos críticos vivos (inalterados)
@@ -144,7 +153,7 @@ Roadmap FASES 0–10 concluído. Backlog pós-roadmap organizado segundo os **8 
 | 17 | **Design System mínimo** — 8 primitivos em `src/shared/components/ui/` | ✅ PR #225 |
 | 18 | **Centro de Comando** — CentroComandoWidget no topo do Dashboard com alertas acionáveis | ✅ PR #226 |
 
-#### 8.2 Próximas iniciativas — alinhadas aos 8 módulos 2.0
+#### 8.2 Iniciativas de produto — alinhadas aos 8 módulos 2.0
 Referência: `docs/product/INVENTARIO_UI_PRODUTO_QUANTUM_2026-06-12.md` (seção 22 — fases seguintes).
 
 | # | Módulo 2.0 | Iniciativa | Status |
@@ -155,9 +164,20 @@ Referência: `docs/product/INVENTARIO_UI_PRODUTO_QUANTUM_2026-06-12.md` (seção
 | 22 | **Copilot IA** | Contrato visual unificado: fonte/dados, insight/recomendação/ação, confiança, confirmação humana | ✅ PR #232 |
 | 23 | **Cofre / Governança** | Módulo explícito: LGPD, auditoria, categorias, permissões IA, histórico append-only visível | ✅ PR #234 |
 | 24 | **PWA / App Nativo** | Manifest otimizado, offline.html, OfflineIndicator, FCM/push (foundation) | ✅ PR #235 |
+| 25 | **Calendário Financeiro** | Grade mensal navegável: recorrentes, vencimentos/fechamentos de cartão, prazos de metas | ✅ PR #236 |
 | — | **NFC-e** | Leitura de nota fiscal eletrônica | **bloqueada** — aguarda gate de segurança SSRF completo |
 
-#### 8.3 Regras para as próximas fases (extraídas dos docs de produto)
+#### 8.3 Infraestrutura / CI entregues (pós-roadmap)
+| PR | Escopo | Status |
+|---|---|---|
+| #238 | fix(ci): Deploy Gate alinhado ao check `E2E Tests (Playwright)` + IAM deploy `firestore.rules` + E2E estabilizados | ✅ |
+| #240 | chore(ci): migração de todos os workflows para Node.js 24 | ✅ |
+| #237 | chore(deps): `lewagon/wait-on-check-action` → v1.8.0 | ✅ |
+| #233 | chore(deps-dev): `@types/node` bump | ✅ |
+| #239 | chore(deps-dev): frontend-development group (6 pacotes) | ✅ |
+| #227 | chore(deps): frontend-production group (8 pacotes) | ✅ |
+
+#### 8.4 Regras para as próximas fases (extraídas dos docs de produto)
 - AppShell/navegação **não pode alterar** `functions/`, `firestore.rules`, schemas, services financeiros, testes, `.env`, `package.json`
 - Design System **não pode alterar** cálculos monetários nem centavos inteiros
 - Toda feature com IA deve responder: quais dados usa, qual ação sugere, qual confirmação exige, qual evento de auditoria registra
@@ -187,7 +207,7 @@ npm run test:e2e
 - Confirmar git status limpo.
 - Atualizar `CLAUDE.md` após marco relevante.
 
-## Referência Rápida de Arquivos Críticos (estado real — 2026-06-13)
+## Referência Rápida de Arquivos Críticos (estado real — 2026-06-16)
 
 | Arquivo | Responsabilidade |
 |---|---|
@@ -213,6 +233,7 @@ npm run test:e2e
 | `src/lib/insightsEngine.ts` | Motor unificado de insights (7 widgets, FASE 2.3) |
 | `src/features/debts/DebtModule.tsx` | Módulo de dívidas — coleção `debts` |
 | `src/features/simulation/PurchaseSimulator.tsx` | UI do simulador de compra com veredito |
+| `src/features/calendar/CalendarPage.tsx` | Calendário mensal: recorrentes, faturas, metas (FASE 25) |
 | `src/features/shopping/ShoppingPage.tsx` | Página principal de Compras Inteligentes (FASE 9) |
 | `src/features/shopping/hooks/useShoppingLists.ts` | CRUD real-time de `users/{uid}/shoppingLists` |
 | `src/features/shopping/hooks/usePriceObservations.ts` | Histórico de preços por produto/loja |
@@ -226,23 +247,23 @@ npm run test:e2e
 | `functions/index.js` | 5 Cloud Functions (createTransaction + 3 IA + deleteUserData) |
 | `playwright.config.ts` | Config E2E: Chromium, webServer com VITE_USE_EMULATOR |
 | `e2e/tests/` | 5 suítes E2E: smoke, create, filters, import-csv, goals |
-| `firestore.indexes.json` | — | 4 índices compostos para `transactions` |
-| `functions/index.js` | 461 | 4 Cloud Functions (createTransaction + 3 IA) |
-| `playwright.config.ts` | — | Config E2E: Chromium, webServer com VITE_USE_EMULATOR |
-| `e2e/tests/` | — | 5 suítes E2E: smoke, create, filters, import-csv, goals |
 
-## Hooks presentes (2026-06-13)
+## Hooks presentes (2026-06-16)
 
 `useAccounts`, `useAppLogic`, `useAuditLogs`, `useBudgets`, `useCategories`, `useCategoryRules`, `useCreditCards`, `useFinancialData`, `useFinancialKPIs`, `useFinancialMetrics`, `useForecast`, `useGoals`, `useImportActions`, `useInsightsEngine`, `useModalState`, `usePriceObservations`, `useRecurring`, `useRecurringAutoExecute`, `useRunningBalance`, `useShoppingLists`, `useTransactionActions`, `useTransactionHistory`, `useTransactions`, `useTransactionsPagination`
 
-## Suíte de testes (2026-06-13 — pós-FASE 9)
+## Suíte de testes (2026-06-16 — pós-FASE 25)
 
-- **57 arquivos de teste** (56 passando + 1 skipped — rules)
-- **1080 testes passando · 168 skipped** (rules rodam em `npm run test:rules` com emulator)
+- **60 arquivos de teste · 1161 testes passando · 168 skipped** (rules rodam em `npm run test:rules` com emulator)
 - **5 suítes E2E Playwright** (requerem emuladores Firebase)
+- FASE 25 (CalendarPage) não adicionou arquivos de teste — componente usa hooks já cobertos.
 
-### Testes adicionados na FASE 9
-- `src/features/shopping/__tests__/shoppingSchemas.test.ts` — 22 testes (schemas Zod: list, item, check, price observation)
+### Arquivos de teste chave
+- `src/__tests__/consoleLoggingPolicy.test.ts` — guarda automática contra `console.*` cru em `src/`
+- `src/__tests__/firestoreRules.audit.test.ts` — cobertura de regras Firestore (roda com emulator)
+- `src/lib/purchaseSimulator.test.ts` — motor de simulação de compra
+- `src/lib/debtPlanner.test.ts` — motor de plano de dívidas
+- `src/features/shopping/__tests__/shoppingSchemas.test.ts` — schemas Zod de Compras Inteligentes (22 testes)
 
 ### Arquivos de teste chave
 - `src/__tests__/consoleLoggingPolicy.test.ts` — guarda automática contra `console.*` cru em `src/`
