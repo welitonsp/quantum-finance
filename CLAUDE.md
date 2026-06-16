@@ -2,20 +2,27 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — Pós-ROADMAP-MESTRE-v2 + FASES 9–25 (2026-06-16)
+## Estado Consolidado — Pós-ROADMAP-MESTRE-v2 + FASES 9–25 + Trilha Monetária #242-#247 (2026-06-16)
 
 > Blocos anteriores substituídos. Em caso de divergência, **este bloco é a referência**.
 > **Regra operacional:** Atualizar este bloco após cada PR mergeado ou marco relevante.
 
 ### 1. Status atual
-- Branch principal: `main` — HEAD `7c60091`.
+- Branch principal: `main` — HEAD `988d21b`.
 - **ROADMAP-MESTRE-v2 (FASES 0–8): todas mergeadas.**
 - **Fase de documentação 2.0: concluída** (5 docs produto + Política Copilot IA).
 - **FASES 9–25: mergeadas** (Compras Inteligentes + TTL idempotency + IR + Anti-Tarifa + Finanças Compartilhadas + AppShell + Design System + Centro de Comando + Timeline + Planejamento + Patrimônio + Copilot IA + Cofre/Governança + PWA/App Nativo + Calendário Financeiro).
 - **Backlog pós-roadmap (FASES 16–25): COMPLETO.**
-- Suíte: **60 arquivos · 1161 testes passando · 168 skipped · build OK · PWA 36 entradas pré-cacheadas**.
+- **Trilha de auditoria monetária (PRs #242–#247): CONCLUÍDA.** Sem P0 monetário remanescente na base auditada.
+- Suíte: **61 arquivos · 1171 testes passando · 168 skipped · build OK · PWA 37 entradas pré-cacheadas**.
 - CI / Security / Deploy Firebase: **todos verdes**. Nenhum PR aberto.
 - Últimas integrações relevantes (cronologia inversa):
+  - **PR #247** fix(copilot): `useQuantumCopilot` — `balance * 100` substituído por `toCentavos(balance)`.
+  - **PR #246** fix(reports): `ReportsContent` — acumulação de totais por categoria em centavos inteiros; `Decimal` BRL intermediário removido.
+  - **PR #245** fix(lib): `antiTarifaEngine`, `irEngine`, `contextSerializer` — fallbacks monetários manuais substituídos por `toCentavos`.
+  - **PR #244** fix(shared-finance): `SharedFinancePage` — parsing monetário manual substituído por `toCentavos`.
+  - **PR #243** fix(transactions): `transactionGroupUtils` — parsing monetário manual substituído por `toCentavos`.
+  - **PR #242** fix(debts): `DebtModule` — `Number`/`Math.round` em entrada monetária substituídos por `toCentavos`.
   - **PR #227** chore(deps): Dependabot — bump frontend-production group (8 pacotes).
   - **PR #239** chore(deps-dev): Dependabot — bump frontend-development group (6 pacotes).
   - **PR #233** chore(deps-dev): Dependabot — bump `@types/node`.
@@ -100,6 +107,7 @@
 ### 3. Contratos críticos vivos (inalterados)
 - `value_cents` é a fonte canônica. `value` legado **nunca** é usado em cálculo financeiro.
 - **Proibido:** `Math.round(value * 100)`, `parseFloat`, `Number(value)` ou heurística float.
+- **Auditoria monetária pós-roadmap (PRs #242–#247):** sem P0 monetário remanescente na base de código auditada. Auditoria independente (Codex) confirmou ausência de P0 fora do escopo; demais achados classificados como P2/P3 ou falso positivo.
 - **Modelo A obrigatório:** Todo UPDATE de `transactions/{txId}` exige `_lastOpId` + `history/{_lastOpId}` no mesmo `writeBatch`. Validado por `existsAfter` nas Firestore Rules.
 - `importHash` permanece na transação real. **Proibido** em `audit_logs`, `before`/`after` e history.
 - Logs sanitizados obrigatoriamente em `src/` — `console.*` cru bloqueado por `consoleLoggingPolicy.test.ts`.
@@ -167,9 +175,15 @@ Referência: `docs/product/INVENTARIO_UI_PRODUTO_QUANTUM_2026-06-12.md` (seção
 | 25 | **Calendário Financeiro** | Grade mensal navegável: recorrentes, vencimentos/fechamentos de cartão, prazos de metas | ✅ PR #236 |
 | — | **NFC-e** | Leitura de nota fiscal eletrônica | **bloqueada** — aguarda gate de segurança SSRF completo |
 
-#### 8.3 Infraestrutura / CI entregues (pós-roadmap)
+#### 8.3 Infraestrutura / CI / Qualidade de código entregues (pós-roadmap)
 | PR | Escopo | Status |
 |---|---|---|
+| #247 | fix(copilot): `useQuantumCopilot` — `balance * 100` → `toCentavos(balance)` | ✅ |
+| #246 | fix(reports): `ReportsContent` — acumulação em centavos inteiros; remove `Decimal` BRL intermediário | ✅ |
+| #245 | fix(lib): `antiTarifaEngine`, `irEngine`, `contextSerializer` — fallbacks monetários → `toCentavos` | ✅ |
+| #244 | fix(shared-finance): `SharedFinancePage` — parsing monetário manual → `toCentavos` | ✅ |
+| #243 | fix(transactions): `transactionGroupUtils` — parsing monetário manual → `toCentavos` | ✅ |
+| #242 | fix(debts): `DebtModule` — `Number`/`Math.round` de entrada monetária → `toCentavos` | ✅ |
 | #238 | fix(ci): Deploy Gate alinhado ao check `E2E Tests (Playwright)` + IAM deploy `firestore.rules` + E2E estabilizados | ✅ |
 | #240 | chore(ci): migração de todos os workflows para Node.js 24 | ✅ |
 | #237 | chore(deps): `lewagon/wait-on-check-action` → v1.8.0 | ✅ |
