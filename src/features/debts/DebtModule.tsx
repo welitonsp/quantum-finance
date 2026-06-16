@@ -11,7 +11,7 @@ import {
   type DebtCategory,
   type DebtCreateDTO,
 } from '../../hooks/useDebts';
-import { formatBRL } from '../../shared/types/money';
+import { formatBRL, toCentavos } from '../../shared/types/money';
 import type { Centavos } from '../../shared/types/money';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 
@@ -79,8 +79,12 @@ function AddDebtModal({ onClose, onSave }: AddDebtModalProps) {
     const errs: Record<string, string> = {};
     if (!form.name.trim())          errs['name']          = 'Nome obrigatório';
     if (!form.creditor.trim())      errs['creditor']      = 'Credor obrigatório';
-    const totalVal = Number(form.totalCents.replace(',', '.'));
-    if (!totalVal || totalVal <= 0) errs['totalCents']    = 'Valor deve ser positivo';
+    try {
+      const cents = toCentavos(form.totalCents);
+      if (cents <= 0) errs['totalCents'] = 'Valor deve ser positivo';
+    } catch {
+      errs['totalCents'] = 'Valor inválido';
+    }
     const rate = Number(form.interestRate.replace(',', '.'));
     if (isNaN(rate) || rate < 0)    errs['interestRate']  = 'Taxa inválida';
     const inst = parseInt(form.installments);
@@ -97,10 +101,7 @@ function AddDebtModal({ onClose, onSave }: AddDebtModalProps) {
     if (!validate()) return;
     setSaving(true);
     try {
-      const totalVal   = Number(form.totalCents.replace(',', '.'));
-      // Convert to cents using integer arithmetic via Decimal (from money helpers is complex here;
-      // we do it manually: multiply by 100 and round)
-      const totalCents = Math.round(totalVal * 100) as Centavos;
+      const totalCents = toCentavos(form.totalCents);
 
       await onSave({
         name:             form.name.trim(),
