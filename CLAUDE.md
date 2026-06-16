@@ -220,6 +220,7 @@ npm run test:e2e
 - Atualizar main local.
 - Confirmar git status limpo.
 - Atualizar `CLAUDE.md` após marco relevante.
+- **Firebase Hosting preview channels:** TTL máximo `3d` (`expires: 3d` em `.github/workflows/firebase-hosting-pull-request.yml`). TTL default de 7d satura a cota de canais; PRs com muitos checks paralelos podem acionar 429 RESOURCE_EXHAUSTED.
 
 ## Referência Rápida de Arquivos Críticos (estado real — 2026-06-16)
 
