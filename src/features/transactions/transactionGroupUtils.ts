@@ -1,7 +1,7 @@
 // src/features/transactions/transactionGroupUtils.ts
 // Utilitários puros de agrupamento, formatação e parsing para TransactionsManager.
 import type { Transaction } from '../../shared/types/transaction';
-import { fromCentavos } from '../../shared/types/money';
+import { fromCentavos, toCentavos } from '../../shared/types/money';
 import {
   getTransactionAbsCentavos,
   isIncome as checkIncome,
@@ -84,7 +84,9 @@ export function parseBRLToCents(s: string): number | null {
   if (!cleaned) return null;
   // Aceita: "50", "50,00", "1.234,56", "1.234" — rejeita "50abc", "-50", etc.
   if (!/^(\d{1,3}(\.\d{3})*(,\d{1,2})?|\d+(,\d{1,2})?)$/.test(cleaned)) return null;
-  const n = Number(cleaned.replace(/\./g, '').replace(',', '.'));
-  if (isNaN(n) || n < 0) return null;
-  return Math.round(n * 100);
+  try {
+    return toCentavos(cleaned);
+  } catch {
+    return null;
+  }
 }
