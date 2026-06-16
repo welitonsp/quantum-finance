@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { Transaction, RecurringTask } from '../shared/types/transaction';
-import { formatBRL } from '../shared/types/money';
+import { formatBRL, toCentavos } from '../shared/types/money';
 import type { Centavos } from '../shared/types/money';
 import { getTransactionCentavos } from '../utils/transactionUtils';
 import type { TimeRange } from './useFinancialData';
@@ -81,7 +81,7 @@ export function computeCopilotInsights(
   const totalExpenseCents = thisMonthTxs.filter(isExpense).reduce((s, tx) => s + txCents(tx), 0);
   if (totalExpenseCents > 0 && dayOfMonth > 3) {
     const dailyBurnCents = totalExpenseCents / dayOfMonth;
-    const reservaCents   = balance * 100; // balance em reais → centavos
+    const reservaCents   = toCentavos(balance);
     const daysLeft       = reservaCents > 0 ? Math.floor(reservaCents / dailyBurnCents) : 0;
     const projectedEnd   = totalExpenseCents / dayOfMonth * daysInMonth;
 
