@@ -16,7 +16,7 @@
 import Decimal from 'decimal.js';
 import type { Transaction } from '../shared/types/transaction';
 import type { Centavos } from '../shared/types/money';
-import { addCentavos } from '../shared/types/money';
+import { addCentavos, toCentavos } from '../shared/types/money';
 
 // ──────────────────────────────────────────────
 // Tipos públicos
@@ -87,7 +87,7 @@ function isEntrada(tx: Transaction): boolean {
 function canonicalCents(tx: Transaction): Centavos {
   if (tx.value_cents !== undefined) return tx.value_cents;
   // fallback legado — nunca ocorre em documentos pós-FASE 1.3
-  return Math.round((tx.value ?? 0) * 100) as Centavos;
+  return toCentavos(tx.value ?? 0);
 }
 
 function hasTag(tx: Transaction, tag: string): boolean {

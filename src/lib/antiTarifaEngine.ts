@@ -12,7 +12,7 @@
 import Decimal from 'decimal.js';
 import type { Transaction } from '../shared/types/transaction';
 import type { Centavos } from '../shared/types/money';
-import { addCentavos } from '../shared/types/money';
+import { addCentavos, toCentavos } from '../shared/types/money';
 
 // ──────────────────────────────────────────────
 // Tipos públicos
@@ -101,7 +101,7 @@ function mesesAtras(meses: number): string {
 
 function canonicalCents(tx: Transaction): Centavos {
   if (tx.value_cents !== undefined) return tx.value_cents;
-  return Math.round((tx.value ?? 0) * 100) as Centavos;
+  return toCentavos(tx.value ?? 0);
 }
 
 function contemKeyword(desc: string, keywords: string[]): boolean {
