@@ -1,6 +1,6 @@
 import type { Transaction } from '../shared/types/transaction';
 import { absCentavos, addCentavos, type Centavos } from '../shared/types/money';
-import { isExpense as checkExpense } from './transactionUtils';
+import { isExpense as checkExpense, isInvoicePayment } from './transactionUtils';
 
 export const MONO = "'JetBrains Mono','Fira Code','SF Mono',ui-monospace,monospace";
 
@@ -114,7 +114,7 @@ export function calculateBudgetAlerts(
 
       const spentCents = transactions.reduce((sum, tx) => {
         if (tx.isDeleted === true) return sum;
-        if (!checkExpense(tx.type)) return sum;
+        if (!checkExpense(tx.type) || isInvoicePayment(tx)) return sum;
         if ((tx.date ?? '').slice(0, 7) !== budgetMonth) return sum;
         if (normalizeCategory(tx.category) !== budgetCategory) return sum;
         if (tx.value_cents === undefined) return sum;

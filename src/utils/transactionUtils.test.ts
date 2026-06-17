@@ -12,6 +12,8 @@ import {
   isImportedUnreconciledTransaction,
   isReconciledTransaction,
   isTransfer,
+  isInvoicePayment,
+  isConsumptionExpense,
 } from './transactionUtils';
 
 const cents = (value: number): Centavos => value as Centavos;
@@ -270,6 +272,33 @@ describe('canonicalizeTransactionType — transferencia', () => {
     expect(canonicalizeTransactionType('despesa')).toBe('saida');
     expect(canonicalizeTransactionType('outro')).toBe('saida');
     expect(canonicalizeTransactionType(undefined)).toBe('saida');
+  });
+});
+
+describe('isInvoicePayment', () => {
+  it('retorna true quando paidInvoiceMonth está presente', () => {
+    expect(isInvoicePayment(tx({ paidInvoiceMonth: '2026-06' }))).toBe(true);
+  });
+
+  it('retorna false quando paidInvoiceMonth está ausente', () => {
+    expect(isInvoicePayment(tx({ paidInvoiceMonth: undefined }))).toBe(false);
+    expect(isInvoicePayment(tx({}))).toBe(false);
+  });
+});
+
+describe('isConsumptionExpense', () => {
+  it('retorna true para saida sem paidInvoiceMonth', () => {
+    expect(isConsumptionExpense(tx({ type: 'saida' }))).toBe(true);
+    expect(isConsumptionExpense(tx({ type: 'despesa' }))).toBe(true);
+  });
+
+  it('retorna false para pagamento de fatura (saida com paidInvoiceMonth)', () => {
+    expect(isConsumptionExpense(tx({ type: 'saida', paidInvoiceMonth: '2026-06' }))).toBe(false);
+  });
+
+  it('retorna false para entradas e transferências', () => {
+    expect(isConsumptionExpense(tx({ type: 'entrada' }))).toBe(false);
+    expect(isConsumptionExpense(tx({ type: 'transferencia' }))).toBe(false);
   });
 });
 

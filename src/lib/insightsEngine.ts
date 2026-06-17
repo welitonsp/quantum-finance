@@ -12,7 +12,7 @@
 
 import type { Transaction, Account } from '../shared/types/transaction';
 import { type Centavos, fromCentavos } from '../shared/types/money';
-import { getTransactionAbsCentavos } from '../utils/transactionUtils';
+import { getTransactionAbsCentavos, isInvoicePayment } from '../utils/transactionUtils';
 import Decimal from 'decimal.js';
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -82,6 +82,10 @@ function isIncomeTx(tx: Transaction): boolean {
   return tx.type === 'entrada' || tx.type === 'receita';
 }
 
+function isConsumptionExpenseTx(tx: Transaction): boolean {
+  return isExpenseTx(tx) && !isInvoicePayment(tx);
+}
+
 /** Parse YYYY-MM-DD sem usar new Date(string) para evitar timezone bugs */
 function parseDateParts(dateStr: string): { y: number; m: number; d: number } | null {
   const parts = dateStr.split('-').map(Number);
@@ -135,7 +139,7 @@ export function computeAnomalies(ctx: InsightContext): AnomalyResult[] {
   // Agrupar histórico por mês→categoria (centavos inteiros)
   const byMonth: Record<string, Record<string, number>> = {};
   for (const tx of historicalTxs) {
-    if (!isExpenseTx(tx)) continue;
+    if (!isConsumptionExpenseTx(tx)) continue;
     const parts = parseDateParts(tx.date!);
     if (!parts) continue;
     const key = `${parts.y}-${parts.m}`;
@@ -164,7 +168,7 @@ export function computeAnomalies(ctx: InsightContext): AnomalyResult[] {
   // Totais do mês corrente por categoria (centavos)
   const currentByCat: Record<string, number> = {};
   for (const tx of currentTxs) {
-    if (!isExpenseTx(tx)) continue;
+    if (!isConsumptionExpenseTx(tx)) continue;
     const cat = tx.category ?? 'Outros';
     currentByCat[cat] = (currentByCat[cat] ?? 0) + getTransactionAbsCentavos(tx);
   }
@@ -227,7 +231,7 @@ export function computeHealthScore(ctx: InsightContext): HealthScore {
     const abs = new Decimal(getTransactionAbsCentavos(tx));
     if (isIncomeTx(tx)) {
       receita = receita.plus(abs);
-    } else if (isExpenseTx(tx)) {
+    } else if (isConsumptionExpenseTx(tx)) {
       despesa = despesa.plus(abs);
       if (tx.category && FIXED_CATEGORIES.has(tx.category.toLowerCase())) {
         custoFixoMensal = custoFixoMensal.plus(abs);
@@ -353,8 +357,8 @@ export function computeForecast(ctx: InsightContext): ForecastResult {
     if (!parts || parts.y !== curY || parts.m !== curM) continue;
 
     const abs = new Decimal(getTransactionAbsCentavos(tx));
-    if (isIncomeTx(tx))       incomeCents  = incomeCents.plus(abs);
-    else if (isExpenseTx(tx)) expenseCents = expenseCents.plus(abs);
+    if (isIncomeTx(tx))                    incomeCents  = incomeCents.plus(abs);
+    else if (isConsumptionExpenseTx(tx))   expenseCents = expenseCents.plus(abs);
   }
 
   // Burn rate diário → projeção de despesa extra até o fim do mês
@@ -415,8 +419,8 @@ export function computeKPIs(ctx: InsightContext): KPIResult {
     if (!parts || parts.y !== curY || parts.m !== curM) continue;
 
     const abs = new Decimal(getTransactionAbsCentavos(tx));
-    if (isIncomeTx(tx))       incomeCents  = incomeCents.plus(abs);
-    else if (isExpenseTx(tx)) expenseCents = expenseCents.plus(abs);
+    if (isIncomeTx(tx))                  incomeCents  = incomeCents.plus(abs);
+    else if (isConsumptionExpenseTx(tx)) expenseCents = expenseCents.plus(abs);
   }
 
   const savingsRatePct = incomeCents.greaterThan(0)

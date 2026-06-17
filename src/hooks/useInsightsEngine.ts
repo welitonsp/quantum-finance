@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import Decimal from 'decimal.js';
 import type { Transaction } from '../shared/types/transaction';
 import { type Centavos } from '../shared/types/money';
-import { getTransactionCentavos } from '../utils/transactionUtils';
+import { getTransactionCentavos, isInvoicePayment } from '../utils/transactionUtils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,6 +74,9 @@ function isExpenseTx(tx: Transaction): boolean {
 function isIncomeTx(tx: Transaction): boolean {
   return tx.type === 'entrada' || tx.type === 'receita';
 }
+function isConsumptionExpenseTx(tx: Transaction): boolean {
+  return isExpenseTx(tx) && !isInvoicePayment(tx);
+}
 
 export function filterByMonth(transactions: Transaction[], year: number, month: number): Transaction[] {
   return transactions.filter(tx => {
@@ -83,7 +86,7 @@ export function filterByMonth(transactions: Transaction[], year: number, month: 
 }
 
 export function computeTopExpenses(transactions: Transaction[], topN = 5): CategorySpend[] {
-  const expenses = transactions.filter(isExpenseTx);
+  const expenses = transactions.filter(isConsumptionExpenseTx);
   const totals = new Map<string, { cents: Decimal; count: number }>();
 
   for (const tx of expenses) {
@@ -120,8 +123,8 @@ export function computeTrend(
       return c ? acc.plus(c) : acc;
     }, new Decimal(0));
 
-  const curExpense  = sumCents(current,  isExpenseTx);
-  const prevExpense = sumCents(previous, isExpenseTx);
+  const curExpense  = sumCents(current,  isConsumptionExpenseTx);
+  const prevExpense = sumCents(previous, isConsumptionExpenseTx);
   const curIncome   = sumCents(current,  isIncomeTx);
   const prevIncome  = sumCents(previous, isIncomeTx);
 
@@ -151,7 +154,7 @@ export function computeTrend(
 }
 
 export function detectAnomalies(transactions: Transaction[], threshold = 3): AnomalyInsight[] {
-  const expenses = transactions.filter(isExpenseTx);
+  const expenses = transactions.filter(isConsumptionExpenseTx);
   const byCategory = new Map<string, number[]>();
 
   for (const tx of expenses) {

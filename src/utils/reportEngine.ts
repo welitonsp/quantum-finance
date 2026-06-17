@@ -1,5 +1,5 @@
 import type { Transaction, Account } from '../shared/types/transaction';
-import { isExpense, isIncome } from './transactionUtils';
+import { isExpense, isIncome, isInvoicePayment } from './transactionUtils';
 import { fromCentavos, toCentavos } from '../shared/types/money';
 
 export interface ParetoEntry {
@@ -50,7 +50,7 @@ export function calcPareto(transactions: Transaction[]): ParetoEntry[] {
   let grandCentavos = 0;
 
   for (const tx of transactions) {
-    if (!isExpense(tx.type)) continue;
+    if (!isExpense(tx.type) || isInvoicePayment(tx)) continue;
 
     const valueCentavos = getReportTransactionAbsCentavos(tx);
     if (valueCentavos <= 0) continue;
@@ -152,7 +152,7 @@ export function calcPatrimonyEvolution(
 
       if (isIncome(tx.type)) {
         balanceCentavos -= valueCentavos;
-      } else if (isExpense(tx.type)) {
+      } else if (isExpense(tx.type) && !isInvoicePayment(tx)) {
         balanceCentavos += valueCentavos;
       }
     }

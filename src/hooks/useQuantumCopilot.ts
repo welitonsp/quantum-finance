@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { Transaction, RecurringTask } from '../shared/types/transaction';
 import { formatBRL, toCentavos } from '../shared/types/money';
 import type { Centavos } from '../shared/types/money';
-import { getTransactionCentavos } from '../utils/transactionUtils';
+import { getTransactionCentavos, isInvoicePayment } from '../utils/transactionUtils';
 import type { TimeRange } from './useFinancialData';
 
 export type InsightSeverity = 'critical' | 'warning' | 'info' | 'positive';
@@ -34,7 +34,7 @@ function txCents(tx: Transaction): number {
 }
 
 function isExpense(tx: Transaction): boolean {
-  return tx.type === 'saida' || tx.type === 'despesa';
+  return (tx.type === 'saida' || tx.type === 'despesa') && !isInvoicePayment(tx);
 }
 function isIncome(tx: Transaction): boolean {
   return tx.type === 'entrada' || tx.type === 'receita';
