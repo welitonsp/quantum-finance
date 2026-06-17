@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import ImportButton from '../features/transactions/ImportButton';
 import { usePrivacy } from '../contexts/PrivacyContext';
 import type { Transaction } from '../shared/types/transaction';
-import { getTransactionAbsCentavos, isIncome, isExpense } from '../utils/transactionUtils';
+import { getTransactionAbsCentavos, isIncome, isExpense, isInvoicePayment } from '../utils/transactionUtils';
 import { fromCentavos } from '../shared/types/money';
 
 const PAGE_TITLES: Record<string, string> = {
@@ -52,7 +52,7 @@ function BurnRateHUD({ transactions, currentMonth, currentYear }: BurnRateProps)
 
     const despesasMes = transactions
       .filter(tx => {
-        if (!isExpense(tx.type)) return false;
+        if (!isExpense(tx.type) || isInvoicePayment(tx)) return false;
         const d = new Date((tx.date ?? tx.createdAt) as string);
         return d.getMonth() + 1 === currentMonth && d.getFullYear() === currentYear;
       })
@@ -133,7 +133,7 @@ function SurvivalKPIs({ transactions, currentMonth, currentYear }: SurvivalKPIsP
 
     const despesasMes = transactions
       .filter(tx => {
-        if (!isExpense(tx.type)) return false;
+        if (!isExpense(tx.type) || isInvoicePayment(tx)) return false;
         const d = new Date((tx.date ?? tx.createdAt) as string);
         return d.getMonth() + 1 === currentMonth && d.getFullYear() === currentYear;
       })
