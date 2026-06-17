@@ -34,6 +34,16 @@ type CreditCardFormPayload = Omit<CreditCardType, 'id' | 'limit'> & {
   limit: MoneyInput;
 };
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const COMPETENCIA_MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+/** Formata competência 'YYYY-MM' para rótulo curto pt-BR (ex.: 'abr/2025'). */
+function formatCompetencia(competencia: string): string {
+  const [year, month] = competencia.split('-').map(Number);
+  const idx = (month ?? 1) - 1;
+  return `${COMPETENCIA_MESES[idx] ?? '???'}/${year ?? ''}`;
+}
+
 // ─── CardVisual ───────────────────────────────────────────────────────────────
 function CardVisual({ card }: { card: CreditCardWithMetrics }) {
   const { metrics } = card;
@@ -101,7 +111,7 @@ function CardVisual({ card }: { card: CreditCardWithMetrics }) {
             <div>
               <p className="text-[9px] uppercase tracking-widest text-white/30 mb-0.5">Disponível</p>
               <p className="text-sm font-black font-mono text-quantum-fg">
-                {formatCurrency(fromCentavos(metrics.disponivelCents))}
+                {formatCurrency(fromCentavos(metrics.effectiveAvailableCents))}
               </p>
             </div>
             <div className="text-right">
@@ -457,13 +467,33 @@ export default function CreditCardManager({ uid, transactions = [], accounts = [
                     </div>
                     <div className="bg-quantum-bgSecondary rounded-xl p-2.5">
                       <p className="text-[9px] text-quantum-fgMuted uppercase tracking-wider mb-1">Livre</p>
-                      <p className="text-xs font-bold text-quantum-accent font-mono">{formatCurrency(fromCentavos(card.metrics.disponivelCents))}</p>
+                      <p className="text-xs font-bold text-quantum-accent font-mono">{formatCurrency(fromCentavos(card.metrics.effectiveAvailableCents))}</p>
                     </div>
                     <div className="bg-quantum-bgSecondary rounded-xl p-2.5">
                       <p className="text-[9px] text-quantum-fgMuted uppercase tracking-wider mb-1">Fecho</p>
                       <p className="text-xs font-bold text-quantum-fg">Dia {card.closingDay}</p>
                     </div>
                   </div>
+
+                  {card.metrics.futureInvoices.length > 0 && (
+                    <div className="bg-quantum-bgSecondary/60 rounded-xl p-2.5 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] text-quantum-fgMuted uppercase tracking-wider">Comprometido futuro</span>
+                        <span className="text-xs font-bold text-quantum-gold font-mono">{formatCurrency(fromCentavos(card.metrics.committedFutureCents))}</span>
+                      </div>
+                      <div className="space-y-1">
+                        {card.metrics.futureInvoices.slice(0, 6).map(inv => (
+                          <div key={inv.competencia} className="flex items-center justify-between text-[11px]">
+                            <span className="text-quantum-fgMuted">{formatCompetencia(inv.competencia)}</span>
+                            <span className="text-quantum-fg font-mono">{formatCurrency(fromCentavos(inv.netCents))}</span>
+                          </div>
+                        ))}
+                        {card.metrics.futureInvoices.length > 6 && (
+                          <p className="text-[10px] text-quantum-fgMuted text-center pt-0.5">+{card.metrics.futureInvoices.length - 6} meses</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex gap-2">
                     {card.metrics.faturaCents > 0 && (
