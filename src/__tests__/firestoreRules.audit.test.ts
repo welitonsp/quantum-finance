@@ -2729,5 +2729,154 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       await assertSucceeds(deleteDoc(docRef));
     });
   });
+
+  // ── M. paidInvoiceMonth — pagamento de fatura (PR #251) ─────────────────────
+  //
+  // Cobre a validação do campo paidInvoiceMonth adicionado ao pipeline de pagamento
+  // de fatura de cartão de crédito. O campo é válido apenas em:
+  //   - transações do tipo 'saida' com 'source=manual'
+  //   - quando 'cardId' está presente
+  //   - formato YYYY-MM
+  // Qualquer outra combinação deve ser rejeitada pelas Rules.
+
+  describe('M. paidInvoiceMonth — pagamento de fatura', () => {
+    const CARD_ID = 'card-m-test-001';
+    const INVOICE_MONTH = '2026-06';
+
+    // Payload base reutilizado em todos os testes M.
+    // É o mesmo padrão usado por commitManualCreateBatch, mas inline para clareza.
+    const paymentTxPayload = (overrides: Record<string, unknown> = {}) => ({
+      description: 'Pagamento fatura Cartão M',
+      value_cents:  50000,
+      schemaVersion: 2,
+      type:         'saida' as const,
+      category:     'Outros',
+      date:         '2026-06-17',
+      source:       'manual' as const,
+      isRecurring:  false,
+      cardId:       CARD_ID,
+      paidInvoiceMonth: INVOICE_MONTH,
+      createdAt:    serverTimestamp(),
+      updatedAt:    serverTimestamp(),
+      ...overrides,
+    });
+
+    // History/create correspondente ao payload de pagamento.
+    const paymentHistoryPayload = (
+      txId: string,
+      overrides: Record<string, unknown> = {},
+    ) => ({
+      action:       'CREATE' as const,
+      txId,
+      createdAt:    serverTimestamp(),
+      schemaVersion: 1,
+      origin:       'manual',
+      amount_cents: 50000,
+      category:     'Outros',
+      changedFields: [
+        'description', 'value_cents', 'schemaVersion', 'type',
+        'category', 'date', 'source', 'isRecurring', 'cardId', 'paidInvoiceMonth',
+      ],
+      after: {
+        description:      'Pagamento fatura Cartão M',
+        value_cents:       50000,
+        schemaVersion:     2,
+        type:              'saida' as const,
+        category:          'Outros',
+        date:              '2026-06-17',
+        source:            'manual' as const,
+        isRecurring:       false,
+        cardId:            CARD_ID,
+        paidInvoiceMonth:  INVOICE_MONTH,
+      },
+      ...overrides,
+    });
+
+    const commitPaymentBatch = async (
+      txId: string,
+      txOverrides: Record<string, unknown> = {},
+      historyOverrides: Record<string, unknown> = {},
+    ) => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'users', UID_A, 'transactions', txId), paymentTxPayload(txOverrides));
+      batch.set(
+        doc(db, 'users', UID_A, 'transactions', txId, 'history', 'create'),
+        paymentHistoryPayload(txId, historyOverrides),
+      );
+      return batch.commit();
+    };
+
+    // M1: fluxo completo de pagamento de fatura válido deve passar.
+    it('M1 — CREATE pagamento de fatura com paidInvoiceMonth e cardId válidos deve passar', async () => {
+      await assertSucceeds(commitPaymentBatch('tx-m1-payment-valid'));
+    });
+
+    // M2: paidInvoiceMonth com formato inválido (falta zero à esquerda) deve falhar.
+    it('M2 — paidInvoiceMonth com formato inválido deve falhar', async () => {
+      await assertFails(commitPaymentBatch('tx-m2-payment-badformat', {
+        paidInvoiceMonth: '2026-6', // formato incorreto: falta zero
+      }));
+    });
+
+    // M3: paidInvoiceMonth em transação do tipo 'transferencia' deve falhar.
+    // A rule exige type == 'saida' quando paidInvoiceMonth está presente.
+    it('M3 — paidInvoiceMonth em transferência deve falhar', async () => {
+      await assertFails(commitPaymentBatch(
+        'tx-m3-payment-transfer',
+        { type: 'transferencia' },
+        // after também tem type=transferencia para não introduzir divergência extra
+        { after: {
+          description: 'Pagamento fatura Cartão M',
+          value_cents: 50000, schemaVersion: 2,
+          type: 'transferencia' as const,
+          category: 'Outros', date: '2026-06-17',
+          source: 'manual' as const, isRecurring: false,
+          cardId: CARD_ID, paidInvoiceMonth: INVOICE_MONTH,
+        } },
+      ));
+    });
+
+    // M4: paidInvoiceMonth sem cardId deve falhar.
+    // A rule exige ('cardId' in data) quando paidInvoiceMonth está presente.
+    it('M4 — paidInvoiceMonth sem cardId deve falhar', async () => {
+      const txId = 'tx-m4-payment-nocardid';
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      // Monta manualmente sem cardId
+      const txNoCard = paymentTxPayload();
+      const { cardId: _c, ...txPayloadWithoutCard } = txNoCard as typeof txNoCard & { cardId: unknown };
+      void _c;
+      batch.set(doc(db, 'users', UID_A, 'transactions', txId), txPayloadWithoutCard);
+      const histNoCard = paymentHistoryPayload(txId);
+      const afterNoCard = { ...((histNoCard['after'] as Record<string, unknown>) ?? {}) };
+      delete afterNoCard['cardId'];
+      batch.set(
+        doc(db, 'users', UID_A, 'transactions', txId, 'history', 'create'),
+        { ...histNoCard, after: afterNoCard },
+      );
+      await assertFails(batch.commit());
+    });
+
+    // M5: history after.paidInvoiceMonth divergente da transaction deve falhar.
+    // optionalHistoryFieldMatches exige tx.paidInvoiceMonth == after.paidInvoiceMonth.
+    it('M5 — history after.paidInvoiceMonth divergente da transaction deve falhar', async () => {
+      await assertFails(commitPaymentBatch(
+        'tx-m5-payment-divergent',
+        { paidInvoiceMonth: '2026-06' },
+        { after: {
+          description: 'Pagamento fatura Cartão M',
+          value_cents: 50000, schemaVersion: 2,
+          type: 'saida' as const,
+          category: 'Outros', date: '2026-06-17',
+          source: 'manual' as const, isRecurring: false,
+          cardId: CARD_ID,
+          paidInvoiceMonth: '2026-07', // divergente — deve falhar
+        } },
+      ));
+    });
+  });
 });
 
