@@ -23,6 +23,7 @@ import {
   type FinancialSource,
 } from '../schemas/financialSchemas';
 import { fromCentavos, type Centavos, type MoneyInput } from '../types/money';
+import { computeCompetencia } from '../lib/competencia';
 import type { ReconciliationSource, ReconciliationStatus, Transaction } from '../types/transaction';
 import {
   canonicalizeTransactionType,
@@ -218,31 +219,17 @@ export function addMonthsToDate(dateStr: string, months: number): string {
 
 /**
  * Calcula a competência (YYYY-MM) de uma parcela considerando o dia de fechamento do cartão.
+ *
+ * @deprecated Delega para a fonte canônica `computeCompetencia` em
+ * `shared/lib/competencia`. Mantido como alias para compatibilidade dos callers
+ * existentes (installmentRepo, FirestoreService).
  */
 export function resolveCompetencia(
   purchaseDateISO: string,
   closingDay: number | undefined,
   installmentIndex: number,
 ): string {
-  const parts = purchaseDateISO.split('-').map(Number);
-  const y = parts[0] ?? 2000;
-  const m = parts[1] ?? 1;
-  const d = parts[2] ?? 1;
-
-  let baseYear = y;
-  let baseMonth = m; // 1-based
-
-  if (closingDay !== undefined && closingDay >= 1 && closingDay <= 31) {
-    if (d > closingDay) {
-      baseMonth += 1;
-      if (baseMonth > 12) { baseMonth = 1; baseYear += 1; }
-    }
-  }
-
-  const totalMonths = (baseYear * 12 + (baseMonth - 1)) + installmentIndex;
-  const resultYear  = Math.floor(totalMonths / 12);
-  const resultMonth = (totalMonths % 12) + 1; // 1-based
-  return `${resultYear}-${String(resultMonth).padStart(2, '0')}`;
+  return computeCompetencia(purchaseDateISO, closingDay, installmentIndex);
 }
 
 export function resolveCentavos(data: Pick<TransactionUpdateDTO, 'value' | 'value_cents'>): Centavos {

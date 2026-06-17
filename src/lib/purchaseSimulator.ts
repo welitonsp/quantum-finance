@@ -3,6 +3,9 @@
  * Zero React, zero Firebase, zero I/O. 100% testável.
  */
 import type { Centavos } from '../shared/types/money';
+import { computeCompetencia } from '../shared/lib/competencia';
+
+export { computeCompetencia };
 
 // ─── Tipos públicos ───────────────────────────────────────────────────────────
 
@@ -64,40 +67,6 @@ export interface PurchaseSimulatorResult {
   effectiveLimitAfterCents: Centavos;
   /** Percentual do limite comprometido após a compra */
   limitUsagePct: number;
-}
-
-// ─── Helper: competência de fatura ───────────────────────────────────────────
-
-/**
- * Calcula o mês de competência (YYYY-MM) para uma parcela.
- *
- * Regra: se a data da compra for >= dia de fechamento, a competência base é
- * o mês seguinte; caso contrário é o mês corrente. Para parcelas > 1,
- * incrementa a competência base pelo índice da parcela.
- */
-export function computeCompetencia(
-  purchaseDateISO: string,
-  closingDay: number,
-  installmentIndex: number,
-): string {
-  const [y, m, d] = purchaseDateISO.split('-').map(Number) as [number, number, number];
-  let baseYear = y;
-  let baseMonth = m; // 1-12
-
-  if (d >= closingDay) {
-    // Após fechamento → próxima fatura
-    baseMonth++;
-    if (baseMonth > 12) {
-      baseMonth = 1;
-      baseYear++;
-    }
-  }
-
-  const targetMonth = baseMonth + installmentIndex;
-  const finalYear = baseYear + Math.floor((targetMonth - 1) / 12);
-  const finalMonth = ((targetMonth - 1) % 12) + 1;
-
-  return `${finalYear}-${String(finalMonth).padStart(2, '0')}`;
 }
 
 // ─── Função principal ─────────────────────────────────────────────────────────

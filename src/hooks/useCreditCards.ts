@@ -6,6 +6,7 @@ import { db } from '../shared/api/firebase/index';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import { toCentavos, fromCentavos } from '../shared/schemas/financialSchemas';
 import { transactionRepo } from '../shared/services/transactionRepo';
+import { projectCardInvoices } from '../lib/cardProjection';
 import type { CreditCard, CreditCardWithMetrics, CardMetrics, Transaction } from '../shared/types/transaction';
 import type { MoneyInput, Centavos } from '../shared/types/money';
 import { getTransactionAbsCentavos, isExpense } from '../utils/transactionUtils';
@@ -69,6 +70,20 @@ function calcCardMetrics(card: CreditCard, transactions: Transaction[]): CardMet
     daysUntilDue = diasNoMes - diaHoje + card.dueDay;
   }
 
+  // FASE C — projeção de faturas futuras + limite efetivo (crédito rotativo real).
+  // A fatura atual permanece a fonte autoritativa do período corrente; o motor
+  // puro adiciona o comprometimento das parcelas futuras já lançadas.
+  const projection = projectCardInvoices({
+    cardId:           card.id,
+    closingDay:       card.closingDay,
+    limitCents,
+    transactions,
+    referenceDateISO: toYMD(hoje),
+  });
+  const committedFutureCents = projection.committedFutureCents;
+  const openTotalCents = (faturaCents + committedFutureCents) as Centavos;
+  const effectiveAvailableCents = Math.max(0, limitCents - openTotalCents) as Centavos;
+
   return {
     limitVal,
     faturaAtual,
@@ -80,6 +95,10 @@ function calcCardMetrics(card: CreditCard, transactions: Transaction[]): CardMet
     daysUntilDue,
     isOverLimit: faturaAtual > limitVal,
     alertLevel:  compromisso >= 90 ? 'critical' : compromisso >= 70 ? 'warning' : 'safe',
+    committedFutureCents,
+    openTotalCents,
+    effectiveAvailableCents,
+    futureInvoices: projection.futureInvoices.map(f => ({ competencia: f.competencia, netCents: f.netCents })),
   };
 }
 
