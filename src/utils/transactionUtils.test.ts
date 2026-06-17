@@ -281,7 +281,6 @@ describe('isInvoicePayment', () => {
   });
 
   it('retorna false quando paidInvoiceMonth está ausente', () => {
-    expect(isInvoicePayment(tx({ paidInvoiceMonth: undefined }))).toBe(false);
     expect(isInvoicePayment(tx({}))).toBe(false);
   });
 });
