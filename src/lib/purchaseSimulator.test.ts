@@ -12,9 +12,11 @@ describe('computeCompetencia', () => {
     expect(computeCompetencia('2025-01-05', 10, 0)).toBe('2025-01');
   });
 
-  it('compra no dia do fechamento → próxima competência', () => {
-    // Compra dia 10, fechamento dia 10 → parcela 0 = mês seguinte
-    expect(computeCompetencia('2025-01-10', 10, 0)).toBe('2025-02');
+  it('compra no dia do fechamento → fatura atual (regra canônica: dia > closingDay)', () => {
+    // Compra dia 10, fechamento dia 10 → o dia de fechamento ainda integra a
+    // fatura corrente; só `dia > closingDay` avança. Alinha o simulador à regra
+    // realmente persistida pelo installmentRepo.
+    expect(computeCompetencia('2025-01-10', 10, 0)).toBe('2025-01');
   });
 
   it('compra após fechamento → próxima competência', () => {

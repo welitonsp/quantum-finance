@@ -115,6 +115,13 @@ export interface CreditCard {
   updatedAt?: Timestamp | number | null;
 }
 
+export interface CardFutureInvoice {
+  /** Competência da fatura futura no formato YYYY-MM. */
+  competencia: string;
+  /** Fatura líquida projetada do mês em centavos inteiros. */
+  netCents: Centavos;
+}
+
 export interface CardMetrics {
   /** @deprecated use limitCents + formatBRL for display */
   limitVal: number;
@@ -124,7 +131,7 @@ export interface CardMetrics {
   faturaCents: Centavos;
   /** Limite do cartão em centavos inteiros (fonte canônica). */
   limitCents: Centavos;
-  /** Limite disponível em centavos inteiros (fonte canônica). */
+  /** Limite disponível considerando apenas a fatura atual (centavos inteiros). */
   disponivelCents: Centavos;
   /** @deprecated use disponivelCents + formatBRL for display */
   disponivel: number;
@@ -132,6 +139,14 @@ export interface CardMetrics {
   daysUntilDue: number;
   isOverLimit: boolean;
   alertLevel: 'safe' | 'warning' | 'critical';
+  /** Total comprometido em parcelas/faturas futuras em centavos inteiros (FASE C). */
+  committedFutureCents: Centavos;
+  /** Total em aberto = fatura atual + comprometido futuro, em centavos (FASE C). */
+  openTotalCents: Centavos;
+  /** Limite EFETIVO = max(0, limite − total em aberto), em centavos (FASE C). */
+  effectiveAvailableCents: Centavos;
+  /** Faturas futuras já comprometidas, por competência (FASE C). */
+  futureInvoices: CardFutureInvoice[];
 }
 
 export interface CreditCardWithMetrics extends CreditCard {
