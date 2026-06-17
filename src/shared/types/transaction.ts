@@ -58,6 +58,8 @@ export interface Transaction {
   riskScore?: 'normal' | 'elevated' | 'anomalous';
   /** Competência da parcela no formato YYYY-MM: mês em que a fatura é cobrada, respeitando o closingDay do cartão. */
   competencia?: string;
+  /** YYYY-MM do período de fatura quitado. Presente apenas em transações de pagamento de fatura; exclui a transação do cálculo de fatura aberta. */
+  paidInvoiceMonth?: string;
 }
 
 export interface ParsedTransaction extends Omit<Transaction, 'id' | 'uid' | 'createdAt' | 'updatedAt'> {

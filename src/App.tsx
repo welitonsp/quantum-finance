@@ -319,10 +319,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                   <CreditCardManager
                     uid={safeUID}
                     transactions={allTransactions}
-                    onPayInvoice={(valueCents, description) => {
-                      setTransferInitialValues({ valueCents, description });
-                      setIsTransferFormOpen(true);
-                    }}
+                    accounts={accounts}
                   />
                 )}
                 {currentPage === 'recurring'  && <RecurringManager  uid={safeUID} />}

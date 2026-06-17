@@ -1,23 +1,24 @@
 // src/features/transactions/CreditCardManager.tsx
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CreditCard, Plus, Trash2, Edit2, CheckCircle,
-  AlertTriangle, ShieldAlert, Banknote,
+  AlertTriangle, ShieldAlert, Banknote, X, Save,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCreditCards } from '../../hooks/useCreditCards';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 import { fromCentavos } from '../../shared/schemas/financialSchemas';
 import { formatCurrency } from '../../utils/formatters';
-import type { CreditCard as CreditCardType, CreditCardWithMetrics, Transaction } from '../../shared/types/transaction';
-import type { MoneyInput } from '../../shared/types/money';
+import { formatBRL } from '../../shared/types/money';
+import type { CreditCard as CreditCardType, CreditCardWithMetrics, Transaction, Account } from '../../shared/types/transaction';
+import type { Centavos, MoneyInput } from '../../shared/types/money';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Props {
-  uid:            string;
-  transactions?:  Transaction[];
-  onPayInvoice?:  (valueCents: import('../../shared/types/money').Centavos, description: string) => void;
+  uid:           string;
+  transactions?: Transaction[];
+  accounts?:     Account[];
 }
 
 interface CardFormData {
@@ -113,6 +114,107 @@ function CardVisual({ card }: { card: CreditCardWithMetrics }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── PayInvoiceModal ──────────────────────────────────────────────────────────
+interface PayInvoiceModalProps {
+  card:        CreditCardWithMetrics;
+  accounts:    Account[];
+  onClose:     () => void;
+  onPay:       (cardId: string, amountCents: Centavos, fromAccountId: string) => Promise<void>;
+}
+
+function PayInvoiceModal({ card, accounts, onClose, onPay }: PayInvoiceModalProps) {
+  const [fromAccountId, setFromAccountId] = useState('');
+  const [isSubmitting,  setIsSubmitting]  = useState(false);
+  const selectRef = useRef<HTMLSelectElement>(null);
+
+  useEffect(() => { selectRef.current?.focus(); }, []);
+
+  const payableAccounts = accounts.filter(a => a.type !== 'cartao');
+  const canSubmit = Boolean(fromAccountId) && !isSubmitting;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setIsSubmitting(true);
+    try {
+      await onPay(card.id, card.metrics.faturaCents, fromAccountId);
+      toast.success('Pagamento registrado!');
+      onClose();
+    } catch (err) {
+      logSanitizedFirebaseError('invoice_payment', err);
+      toast.error('Erro ao registrar pagamento.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <motion.div
+        className="relative w-full max-w-sm bg-quantum-bg border border-quantum-border rounded-2xl shadow-2xl overflow-hidden"
+        initial={{ opacity: 0, y: 32, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 20, scale: 0.96 }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Pagar fatura"
+      >
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-quantum-border">
+          <div className="flex items-center gap-2">
+            <Banknote className="w-5 h-5 text-blue-400" />
+            <h2 className="text-sm font-semibold text-quantum-fg">Pagar fatura — {card.name}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-quantum-fgMuted hover:text-quantum-fg transition-colors" aria-label="Fechar">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <form onSubmit={(e) => void handleSubmit(e)} className="px-5 pb-5 pt-4 space-y-4">
+          <div className="flex justify-between items-center p-3 bg-quantum-bgSecondary rounded-xl">
+            <span className="text-xs text-quantum-fgMuted">Valor da fatura</span>
+            <span className="text-sm font-bold text-quantum-red font-mono">
+              {formatBRL(card.metrics.faturaCents)}
+            </span>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-quantum-fgMuted mb-1.5" htmlFor="pi-from">
+              Conta de origem
+            </label>
+            <select
+              id="pi-from"
+              ref={selectRef}
+              value={fromAccountId}
+              onChange={e => setFromAccountId(e.target.value)}
+              className="w-full px-3 py-2.5 bg-quantum-card border border-quantum-border rounded-xl text-sm text-quantum-fg focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              required
+            >
+              <option value="">Selecione a conta</option>
+              {payableAccounts.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            {isSubmitting ? 'Registrando...' : <><Save className="w-4 h-4" />Confirmar pagamento</>}
+          </button>
+        </form>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -227,11 +329,12 @@ function CardForm({ initial, onSave, onCancel }: CardFormProps) {
 }
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
-export default function CreditCardManager({ uid, transactions = [], onPayInvoice }: Props) {
-  const { cards, loading, addCard, updateCard, removeCard } = useCreditCards(uid, transactions);
+export default function CreditCardManager({ uid, transactions = [], accounts = [] }: Props) {
+  const { cards, loading, addCard, updateCard, removeCard, payInvoice } = useCreditCards(uid, transactions);
   const [showForm,    setShowForm]    = useState(false);
   const [editingCard, setEditingCard] = useState<CreditCardWithMetrics | null>(null);
   const [deletingId,  setDeletingId]  = useState<string | null>(null);
+  const [payingCard,  setPayingCard]  = useState<CreditCardWithMetrics | null>(null);
 
   const handleSave = async (data: CreditCardFormPayload) => {
     try {
@@ -363,9 +466,9 @@ export default function CreditCardManager({ uid, transactions = [], onPayInvoice
                   </div>
 
                   <div className="flex gap-2">
-                    {onPayInvoice && card.metrics.faturaCents > 0 && (
+                    {card.metrics.faturaCents > 0 && (
                       <button
-                        onClick={() => onPayInvoice(card.metrics.faturaCents, `Pagamento fatura ${card.name}`)}
+                        onClick={() => setPayingCard(card)}
                         className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-400 hover:text-blue-300 hover:border-blue-400/40 transition-all"
                       >
                         <Banknote className="w-3.5 h-3.5" /> Pagar fatura
@@ -398,6 +501,18 @@ export default function CreditCardManager({ uid, transactions = [], onPayInvoice
           </AnimatePresence>
         </div>
       )}
+
+      <AnimatePresence>
+        {payingCard && (
+          <PayInvoiceModal
+            key="pay-invoice-modal"
+            card={payingCard}
+            accounts={accounts}
+            onClose={() => setPayingCard(null)}
+            onPay={payInvoice}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

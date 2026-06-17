@@ -400,9 +400,7 @@ export function computeKPIs(ctx: InsightContext): KPIResult {
 
   // Faturas abertas de cartões de crédito reduzem o patrimônio líquido
   if (cardOpenInvoicesCents && Number.isFinite(cardOpenInvoicesCents) && cardOpenInvoicesCents > 0) {
-    liabilitiesCents = liabilitiesCents.plus(
-      new Decimal(Math.abs(Math.trunc(cardOpenInvoicesCents))),
-    );
+    liabilitiesCents = liabilitiesCents.plus(new Decimal(cardOpenInvoicesCents));
   }
 
   const netWorthCents = assetsCents.minus(liabilitiesCents);
