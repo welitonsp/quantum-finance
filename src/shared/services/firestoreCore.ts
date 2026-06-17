@@ -68,6 +68,7 @@ export const transactionWriteCreateSchema = z.object({
   reconciledAt: z.unknown().optional(),
   reconciledBy: z.string().trim().min(1).max(128).optional(),
   descriptionLower: z.string().trim().max(160).optional(),
+  paidInvoiceMonth: z.string().regex(/^\d{4}-\d{2}$/).optional(),
 }).strict();
 
 export const transactionWriteUpdateSchema = transactionWriteCreateSchema.partial()
@@ -125,6 +126,7 @@ export const TRANSACTION_ALLOWED_KEYS = new Set([
   'installmentCount',
   'installmentTotalCents',
   'descriptionLower',
+  'paidInvoiceMonth',
 ]);
 
 export const HISTORY_SNAPSHOT_FORBIDDEN_FIELDS = new Set([
@@ -154,6 +156,7 @@ export const MANUAL_CREATE_CHANGED_FIELDS = [
   'cardId',
   'fromAccountId',
   'toAccountId',
+  'paidInvoiceMonth',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -268,6 +271,7 @@ export function buildManualCreatePayload(data: ManualTransactionCreateDTO): Reco
   if (data.account !== undefined) payload['account'] = data.account;
   if (data.accountId !== undefined) payload['accountId'] = data.accountId;
   if (data.cardId !== undefined) payload['cardId'] = data.cardId;
+  if (data.paidInvoiceMonth !== undefined) payload['paidInvoiceMonth'] = data.paidInvoiceMonth;
 
   const parsed = transactionWriteCreateSchema.safeParse(payload);
   if (!parsed.success) {

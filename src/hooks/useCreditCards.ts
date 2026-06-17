@@ -5,6 +5,7 @@ import {
 import { db } from '../shared/api/firebase/index';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import { toCentavos, fromCentavos } from '../shared/schemas/financialSchemas';
+import { transactionRepo } from '../shared/services/transactionRepo';
 import type { CreditCard, CreditCardWithMetrics, CardMetrics, Transaction } from '../shared/types/transaction';
 import type { MoneyInput, Centavos } from '../shared/types/money';
 import { getTransactionAbsCentavos, isExpense } from '../utils/transactionUtils';
@@ -27,17 +28,33 @@ function calcCardMetrics(card: CreditCard, transactions: Transaction[]): CardMet
   const inicioStr = toYMD(inicioFatura);
   const fimStr    = toYMD(fimFatura);
 
+  // YYYY-MM do início do período de faturamento atual — usado para identificar pagamentos deste período.
+  const currentInvoiceMonth = `${inicioFatura.getFullYear()}-${String(inicioFatura.getMonth() + 1).padStart(2, '0')}`;
+
   const billingTxs = transactions.filter(tx => {
     if (tx.cardId !== card.id) return false;
     if (!isExpense(tx.type)) return false;
+    if (tx.paidInvoiceMonth !== undefined) return false; // pagamentos não são cobranças
     const txDate = String(tx.date || tx.createdAt).slice(0, 10);
     return txDate >= inicioStr && txDate <= fimStr;
   });
 
-  const faturaCents = billingTxs.reduce(
-    (acc, tx) => (acc + getTransactionAbsCentavos(tx)) as ReturnType<typeof getTransactionAbsCentavos>,
-    0 as ReturnType<typeof getTransactionAbsCentavos>,
+  const chargesCents = billingTxs.reduce(
+    (acc, tx) => (acc + getTransactionAbsCentavos(tx)) as Centavos,
+    0 as Centavos,
   );
+
+  // Pagamentos registrados para este período de faturamento reduzem a fatura líquida.
+  const paymentsCents = transactions
+    .filter(tx =>
+      tx.cardId === card.id &&
+      tx.paidInvoiceMonth === currentInvoiceMonth &&
+      tx.isDeleted !== true &&
+      !tx.deletedAt,
+    )
+    .reduce((acc, tx) => (acc + getTransactionAbsCentavos(tx)) as Centavos, 0 as Centavos);
+
+  const faturaCents = Math.max(0, chargesCents - paymentsCents) as Centavos;
   const faturaAtual = fromCentavos(faturaCents);
 
   const limitCents     = (card.limit ?? 0) as Centavos;
@@ -68,12 +85,14 @@ function calcCardMetrics(card: CreditCard, transactions: Transaction[]): CardMet
 
 interface UseCreditCardsReturn {
   cards: CreditCardWithMetrics[];
-  /** Soma das faturas abertas de todos os cartões em centavos inteiros. */
+  /** Soma das faturas líquidas (cobranças − pagamentos) de todos os cartões em centavos inteiros. */
   totalFaturaCents: import('../shared/types/money').Centavos;
   loading: boolean;
   addCard: (data: CreditCardWriteInput) => Promise<string>;
   updateCard: (id: string, data: CreditCardUpdateInput) => Promise<void>;
   removeCard: (id: string) => Promise<void>;
+  /** Registra o pagamento da fatura de um cartão a partir de uma conta bancária. */
+  payInvoice: (cardId: string, amountCents: Centavos, fromAccountId: string) => Promise<void>;
 }
 
 type CreditCardWriteInput = Omit<CreditCard, 'id' | 'limit'> & {
@@ -143,6 +162,43 @@ export function useCreditCards(uid: string, transactions: Transaction[] = []): U
     await deleteDoc(doc(db, 'users', uid, 'creditCards', id));
   }, [uid]);
 
+  const payInvoice = useCallback(async (
+    cardId: string,
+    amountCents: Centavos,
+    fromAccountId: string,
+  ): Promise<void> => {
+    if (!uid) throw new Error('Utilizador não autenticado.');
+    if (amountCents <= 0) throw new Error('Valor de pagamento deve ser positivo.');
+
+    const card = cards.find(c => c.id === cardId);
+    const cardName = card?.name ?? 'Cartão';
+
+    // Calcula o YYYY-MM do período de faturamento atual para este cartão.
+    const hoje = new Date();
+    const diaHoje = hoje.getDate();
+    const closingDay = card?.closingDay ?? 1;
+    let invYear = hoje.getFullYear();
+    let invMonth = hoje.getMonth() + 1;
+    if (diaHoje < closingDay) {
+      invMonth -= 1;
+      if (invMonth < 1) { invMonth = 12; invYear -= 1; }
+    }
+    const invoiceMonth = `${invYear}-${String(invMonth).padStart(2, '0')}`;
+
+    await transactionRepo.createManualTransactionWithHistory(uid, {
+      description:      `Pagamento fatura ${cardName}`,
+      value_cents:      amountCents,
+      type:             'saida',
+      category:         'Outros',
+      date:             hoje.toLocaleDateString('sv-SE'),
+      source:           'manual',
+      cardId,
+      accountId:        fromAccountId,
+      paidInvoiceMonth: invoiceMonth,
+      isRecurring:      false,
+    });
+  }, [uid, cards]);
+
   const totalFaturaCents = useMemo(
     () => cardsWithMetrics.reduce(
       (sum, c) => (sum + c.metrics.faturaCents) as import('../shared/types/money').Centavos,
@@ -151,5 +207,5 @@ export function useCreditCards(uid: string, transactions: Transaction[] = []): U
     [cardsWithMetrics],
   );
 
-  return { cards: cardsWithMetrics, totalFaturaCents, loading, addCard, updateCard, removeCard };
+  return { cards: cardsWithMetrics, totalFaturaCents, loading, addCard, updateCard, removeCard, payInvoice };
 }
