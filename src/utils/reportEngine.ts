@@ -34,11 +34,10 @@ function getReportTransactionAbsCentavos(tx: Transaction): number {
   return Math.abs(toCentavos(tx.value));
 }
 
-/** balance da Account já vem em centavos — arredondamento defensivo. */
+/** balance da Account já vem em centavos. */
 function getAccountBalanceCentavos(account: Account): number {
-  const value = Number(account.balance);
-  if (!Number.isFinite(value)) return 0;
-  return Math.round(value);
+  if (!Number.isFinite(account.balance)) return 0;
+  return account.balance;
 }
 
 function round2(value: number): number {

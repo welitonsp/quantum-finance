@@ -38,8 +38,10 @@ export const installmentRepo = {
 
     const n = data.installmentCount;
     const total = Math.abs(data.totalValueCents) as Centavos;
-    const perInstallment = Math.floor(total / n) as Centavos;
-    const lastInstallment = (total - perInstallment * (n - 1)) as Centavos;
+    // Safe integer division: compute remainder first so (total - remainder) divides n exactly.
+    const remainder = (total % n) as Centavos;
+    const perInstallment = ((total - remainder) / n) as Centavos;
+    const lastInstallment = (perInstallment + remainder) as Centavos;
 
     const groupAnchorRef = doc(txCol(uid));
     const groupId = groupAnchorRef.id;

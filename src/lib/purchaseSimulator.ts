@@ -117,8 +117,10 @@ export function simulatePurchase(input: PurchaseSimulatorInput): PurchaseSimulat
 
   // ── 1. Parcelas (divisão inteira; restante na última) ──────────────────────
   const n = Math.max(1, Math.floor(installments));
-  const installmentCents = Math.floor(priceCents / n) as Centavos;
-  const lastInstallmentCents = (priceCents - installmentCents * (n - 1)) as Centavos;
+  // Safe integer division: compute remainder first so (priceCents - rem) divides n exactly.
+  const _rem = priceCents % n;
+  const installmentCents = ((priceCents - _rem) / n) as Centavos;
+  const lastInstallmentCents = (installmentCents + _rem) as Centavos;
   const totalCostCents = priceCents; // sem juros (cartão padrão)
 
   // ── 2. Impacto por competência ─────────────────────────────────────────────

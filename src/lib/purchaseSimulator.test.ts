@@ -207,6 +207,55 @@ describe('simulatePurchase — parcelamento 3x com CDI', () => {
     const total = result.invoiceImpact.reduce((s, x) => s + x.additionalCents, 0);
     expect(total).toBe(100000);
   });
+
+  it('invariante de soma: 7 parcelas com residual 5 centavos', () => {
+    // 10001 / 7 → base 1428, residual 5, última 1433
+    const result = simulatePurchase({
+      priceCents:          cents(10001),
+      installments:        7,
+      closingDay:          10,
+      purchaseDateISO:     '2025-06-05',
+      currentBalanceCents: cents(50000),
+    });
+    expect(result.installmentAmountCents).toBe(1428);
+    for (let i = 0; i < 6; i++) {
+      expect(result.invoiceImpact[i]!.additionalCents).toBe(1428);
+    }
+    expect(result.invoiceImpact[6]!.additionalCents).toBe(1433); // 1428 + 5
+    const sum = result.invoiceImpact.reduce((s, x) => s + x.additionalCents, 0);
+    expect(sum).toBe(10001);
+  });
+
+  it('invariante de soma: 1 centavo em 2 parcelas → [0, 1]', () => {
+    const result = simulatePurchase({
+      priceCents:          cents(1),
+      installments:        2,
+      closingDay:          10,
+      purchaseDateISO:     '2025-06-05',
+      currentBalanceCents: cents(50000),
+    });
+    expect(result.invoiceImpact[0]!.additionalCents).toBe(0);
+    expect(result.invoiceImpact[1]!.additionalCents).toBe(1);
+    const sum = result.invoiceImpact.reduce((s, x) => s + x.additionalCents, 0);
+    expect(sum).toBe(1);
+  });
+
+  it('invariante de soma preservada para qualquer combinação', () => {
+    const cases: Array<[number, number]> = [
+      [100, 3], [999, 4], [10000, 7], [100000, 12], [1000000, 120],
+    ];
+    for (const [price, n] of cases) {
+      const result = simulatePurchase({
+        priceCents:          cents(price),
+        installments:        n,
+        closingDay:          10,
+        purchaseDateISO:     '2025-06-05',
+        currentBalanceCents: cents(price * 2),
+      });
+      const sum = result.invoiceImpact.reduce((s, x) => s + x.additionalCents, 0);
+      expect(sum).toBe(price);
+    }
+  });
 });
 
 // ─── simulatePurchase — impacto de competência ───────────────────────────────

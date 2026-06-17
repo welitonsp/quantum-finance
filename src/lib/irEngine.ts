@@ -16,7 +16,7 @@
 import Decimal from 'decimal.js';
 import type { Transaction } from '../shared/types/transaction';
 import type { Centavos } from '../shared/types/money';
-import { addCentavos, toCentavos } from '../shared/types/money';
+import { addCentavos, fromCentavos, toCentavos } from '../shared/types/money';
 
 // ──────────────────────────────────────────────
 // Tipos públicos
@@ -266,9 +266,10 @@ export function exportarInformeCSV(informe: IRInforme): string {
   lines.push('');
   lines.push('Tipo,Descrição,Valor (R$),Qtd Transações');
 
+  const brl = (c: number) => fromCentavos(c).toFixed(2).replace('.', ',');
+
   for (const r of informe.rendimentos) {
-    const valor = (r.totalCents / 100).toFixed(2).replace('.', ',');
-    lines.push(`Rendimento,"${r.label}","${valor}",${r.transactionCount}`);
+    lines.push(`Rendimento,"${r.label}","${brl(r.totalCents)}",${r.transactionCount}`);
   }
 
   if (informe.ganhoCapital.length > 0) {
@@ -277,19 +278,15 @@ export function exportarInformeCSV(informe: IRInforme): string {
     lines.push('Ativo,Custo (R$),Receita (R$),Ganho Líquido (R$),Alíquota,IR Devido (R$)');
 
     for (const g of informe.ganhoCapital) {
-      const custo = (g.costCents / 100).toFixed(2).replace('.', ',');
-      const receita = (g.revenueCents / 100).toFixed(2).replace('.', ',');
-      const ganho = (g.gainCents / 100).toFixed(2).replace('.', ',');
-      const ir = (g.irDevidoCents / 100).toFixed(2).replace('.', ',');
       const aliq = `${(g.aliquota * 100).toFixed(0)}%`;
-      lines.push(`"${g.assetDescription}","${custo}","${receita}","${ganho}","${aliq}","${ir}"`);
+      lines.push(`"${g.assetDescription}","${brl(g.costCents)}","${brl(g.revenueCents)}","${brl(g.gainCents)}","${aliq}","${brl(g.irDevidoCents)}"`);
     }
   }
 
   lines.push('');
-  lines.push(`Total Tributável (R$),"${(informe.totalTributavelCents / 100).toFixed(2).replace('.', ',')}"`);
-  lines.push(`Total Isento (R$),"${(informe.totalIsentoCents / 100).toFixed(2).replace('.', ',')}"`);
-  lines.push(`IR Devido sobre Ganho de Capital (R$),"${(informe.totalIRDevidoCents / 100).toFixed(2).replace('.', ',')}"`);
+  lines.push(`Total Tributável (R$),"${brl(informe.totalTributavelCents)}"`);
+  lines.push(`Total Isento (R$),"${brl(informe.totalIsentoCents)}"`);
+  lines.push(`IR Devido sobre Ganho de Capital (R$),"${brl(informe.totalIRDevidoCents)}"`);
   lines.push(`Alíquota Efetiva,"${(informe.aliquotaEfetiva * 100).toFixed(2).replace('.', ',')}%"`);
 
   return lines.join('\n');
