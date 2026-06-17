@@ -8,7 +8,7 @@
 > **Regra operacional:** Atualizar este bloco após cada PR mergeado ou marco relevante.
 
 ### 1. Status atual
-- Branch principal: `main` — HEAD `e89477c` (PR #250 mergeado). PR #251 aberto.
+- Branch principal: `main` — HEAD `6dc0102` (PR #255 mergeado). Sem PR aberto.
 - **ROADMAP-MESTRE-v2 (FASES 0–8): todas mergeadas.**
 - **Fase de documentação 2.0: concluída** (5 docs produto + Política Copilot IA).
 - **FASES 9–25: mergeadas** (Compras Inteligentes + TTL idempotency + IR + Anti-Tarifa + Finanças Compartilhadas + AppShell + Design System + Centro de Comando + Timeline + Planejamento + Patrimônio + Copilot IA + Cofre/Governança + PWA/App Nativo + Calendário Financeiro).
@@ -16,10 +16,14 @@
 - **Trilha de auditoria monetária (PRs #242–#247): CONCLUÍDA.**
 - **Auditoria parcelamentos (PR #250):** P0 correção divisão inteira parcelas em `installmentRepo.ts` e `purchaseSimulator.ts` (algoritmo modulo-safe). P2 em `irEngine.ts` e `reportEngine.ts`.
 - **Auditoria cartões/faturas (PR #251):** P1 resolvido — fatura líquida correta ao pagar cartão + `PayInvoiceModal` dedicado. Campo `paidInvoiceMonth` adicionado ao pipeline. P2 `insightsEngine.ts` limpo.
-- Suíte: **62 arquivos · 1174 testes passando · 168 skipped · build OK · PWA 37 entradas pré-cacheadas**.
-- CI / Security / Deploy Firebase: **todos verdes**. PR #251 aberto (branch `feature/invoice-payment-flow`).
+- **FASE C — Parcelamento, fatura projetada e limite efetivo (PRs #253 + #255): CONCLUÍDA.** Motor puro `cardProjection.ts` projeta faturas futuras por competência e calcula limite EFETIVO = limite − (fatura atual + parcelas futuras); UI do `CreditCardManager` exibe limite efetivo + "Comprometido futuro". Competência unificada em `src/shared/lib/competencia.ts` (regra canônica `dia > closingDay`).
+- Suíte: **63 arquivos · 1193 testes passando · 173 skipped · build OK · PWA 37 entradas pré-cacheadas**.
+- CI / Security / Deploy Firebase: **todos verdes**. Sem PR aberto.
 - Últimas integrações relevantes (cronologia inversa):
-  - **PR #251** fix(cards): fatura líquida (cobranças − pagamentos) + `PayInvoiceModal` + campo `paidInvoiceMonth` (branch aberta, PR aberto).
+  - **PR #255** feat(cards): FASE C (UI) — `CreditCardManager` exibe limite efetivo (`effectiveAvailableCents`) e bloco "Comprometido futuro" por competência.
+  - **PR #253** feat(cards): FASE C (lógica) — motor puro `cardProjection.ts`, novos campos em `CardMetrics`, competência canônica `shared/lib/competencia.ts`.
+  - **PR #252** fix(analytics): exclui pagamentos de fatura do cálculo de despesas (Header/QuantumAIPage e demais agregações).
+  - **PR #251** fix(cards): fatura líquida (cobranças − pagamentos) + `PayInvoiceModal` + campo `paidInvoiceMonth`.
   - **PR #250** fix(installments): divisão modulo-safe + P2 irEngine/reportEngine.
   - **PR #249** chore(ci): reduce firebase preview channel ttl.
   - **PR #248** docs(project): sync monetary trail completion.
@@ -115,6 +119,8 @@
 - **Proibido:** `Math.round(value * 100)`, `parseFloat`, `Number(value)` ou heurística float.
 - **`paidInvoiceMonth`** (YYYY-MM) é o campo canônico para identificar pagamentos de fatura de cartão. Deve estar presente em toda transação `saida` que seja pagamento de fatura; a ausência deste campo classifica a transação como cobrança normal do cartão para fins de `calcCardMetrics`.
 - **Proibido em divisão de parcelas:** `Math.floor(total / n)` — usar sempre o padrão modulo-safe: `remainder = total % n; perInstallment = (total - remainder) / n; last = perInstallment + remainder`. Garante que `(total - remainder)` é divisível exatamente por `n`, eliminando erro float.
+- **Limite efetivo de cartão (FASE C):** `cardProjection.ts` é o motor puro canônico para projeção de faturas. `effectiveAvailableCents = max(0, limite − (fatura atual + parcelas futuras comprometidas))`. Parcelas canceladas (soft-delete) **não** comprometem o limite. `calcCardMetrics` consome o motor; os campos `disponivelCents` (só fatura atual) permanecem para compatibilidade.
+- **Competência canônica:** `src/shared/lib/competencia.ts` (`computeCompetencia`, regra `dia > closingDay`) é a fonte única; `resolveCompetencia` (firestoreCore) e o `computeCompetencia` do `purchaseSimulator` delegam a ela. **Atenção a duas convenções distintas:** `computeCompetencia` rotula pela competência de **fechamento/cobrança**, enquanto `invoiceCompetenciaForDate` (em `cardProjection.ts`) e `paidInvoiceMonth` rotulam pelo mês de **início** da janela de faturamento — diferem em 1 mês; o abatimento de pagamentos exige a convenção de início.
 - **Auditoria monetária pós-roadmap (PRs #242–#247):** sem P0 monetário remanescente na base de código auditada. Auditoria independente (Codex) confirmou ausência de P0 fora do escopo; demais achados classificados como P2/P3 ou falso positivo.
 - **Auditoria pós-trilha (2026-06-17):** P0 de divisão float em `installmentRepo.ts` e `purchaseSimulator.ts` corrigidos em PR `fix/installment-division-p0`.
 - **Modelo A obrigatório:** Todo UPDATE de `transactions/{txId}` exige `_lastOpId` + `history/{_lastOpId}` no mesmo `writeBatch`. Validado por `existsAfter` nas Firestore Rules.
