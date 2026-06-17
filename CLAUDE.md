@@ -2,26 +2,25 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — Pós-ROADMAP-MESTRE-v2 + FASES 9–25 + Trilha Monetária #242-#247 + Auditoria P0 (2026-06-17)
+## Estado Consolidado — Pós-ROADMAP-MESTRE-v2 + FASES 9–25 + Trilha Monetária + Auditoria Cartões (2026-06-17)
 
 > Blocos anteriores substituídos. Em caso de divergência, **este bloco é a referência**.
 > **Regra operacional:** Atualizar este bloco após cada PR mergeado ou marco relevante.
 
 ### 1. Status atual
-- Branch principal: `main` — HEAD `fb2019b`.
+- Branch principal: `main` — HEAD `e89477c` (PR #250 mergeado). PR #251 aberto.
 - **ROADMAP-MESTRE-v2 (FASES 0–8): todas mergeadas.**
 - **Fase de documentação 2.0: concluída** (5 docs produto + Política Copilot IA).
 - **FASES 9–25: mergeadas** (Compras Inteligentes + TTL idempotency + IR + Anti-Tarifa + Finanças Compartilhadas + AppShell + Design System + Centro de Comando + Timeline + Planejamento + Patrimônio + Copilot IA + Cofre/Governança + PWA/App Nativo + Calendário Financeiro).
 - **Backlog pós-roadmap (FASES 16–25): COMPLETO.**
 - **Trilha de auditoria monetária (PRs #242–#247): CONCLUÍDA.**
-- **Auditoria pós-trilha (2026-06-17):** 2 P0 identificados e corrigidos em branch `fix/installment-division-p0` (PR pendente):
-  - `installmentRepo.ts`: divisão inteira de parcelas substituída por algoritmo modulo-safe.
-  - `purchaseSimulator.ts`: mesma correção; 3 testes de invariante de soma adicionados.
-  - `irEngine.ts`: 8 conversões `/ 100` em CSV substituídas por `fromCentavos()` (P2).
-  - `reportEngine.ts`: coerção `Number()` + `Math.round` removida de `getAccountBalanceCentavos` (P2).
+- **Auditoria parcelamentos (PR #250):** P0 correção divisão inteira parcelas em `installmentRepo.ts` e `purchaseSimulator.ts` (algoritmo modulo-safe). P2 em `irEngine.ts` e `reportEngine.ts`.
+- **Auditoria cartões/faturas (PR #251):** P1 resolvido — fatura líquida correta ao pagar cartão + `PayInvoiceModal` dedicado. Campo `paidInvoiceMonth` adicionado ao pipeline. P2 `insightsEngine.ts` limpo.
 - Suíte: **62 arquivos · 1174 testes passando · 168 skipped · build OK · PWA 37 entradas pré-cacheadas**.
-- CI / Security / Deploy Firebase: **todos verdes**. Nenhum PR aberto.
+- CI / Security / Deploy Firebase: **todos verdes**. PR #251 aberto (branch `feature/invoice-payment-flow`).
 - Últimas integrações relevantes (cronologia inversa):
+  - **PR #251** fix(cards): fatura líquida (cobranças − pagamentos) + `PayInvoiceModal` + campo `paidInvoiceMonth` (branch aberta, PR aberto).
+  - **PR #250** fix(installments): divisão modulo-safe + P2 irEngine/reportEngine.
   - **PR #249** chore(ci): reduce firebase preview channel ttl.
   - **PR #248** docs(project): sync monetary trail completion.
   - **PR #247** fix(copilot): `useQuantumCopilot` — `balance * 100` substituído por `toCentavos(balance)`.
@@ -114,6 +113,7 @@
 ### 3. Contratos críticos vivos (inalterados)
 - `value_cents` é a fonte canônica. `value` legado **nunca** é usado em cálculo financeiro.
 - **Proibido:** `Math.round(value * 100)`, `parseFloat`, `Number(value)` ou heurística float.
+- **`paidInvoiceMonth`** (YYYY-MM) é o campo canônico para identificar pagamentos de fatura de cartão. Deve estar presente em toda transação `saida` que seja pagamento de fatura; a ausência deste campo classifica a transação como cobrança normal do cartão para fins de `calcCardMetrics`.
 - **Proibido em divisão de parcelas:** `Math.floor(total / n)` — usar sempre o padrão modulo-safe: `remainder = total % n; perInstallment = (total - remainder) / n; last = perInstallment + remainder`. Garante que `(total - remainder)` é divisível exatamente por `n`, eliminando erro float.
 - **Auditoria monetária pós-roadmap (PRs #242–#247):** sem P0 monetário remanescente na base de código auditada. Auditoria independente (Codex) confirmou ausência de P0 fora do escopo; demais achados classificados como P2/P3 ou falso positivo.
 - **Auditoria pós-trilha (2026-06-17):** P0 de divisão float em `installmentRepo.ts` e `purchaseSimulator.ts` corrigidos em PR `fix/installment-division-p0`.
