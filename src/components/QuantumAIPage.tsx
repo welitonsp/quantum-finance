@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { GeminiService } from '../features/ai-chat/GeminiService';
 import type { Transaction, ModuleBalances } from '../shared/types/transaction';
-import { getTransactionAbsCentavos, isExpense, isIncome } from '../utils/transactionUtils';
+import { getTransactionAbsCentavos, isExpense, isIncome, isInvoicePayment } from '../utils/transactionUtils';
 import { fromCentavos } from '../shared/types/money';
 
 interface Props {
@@ -37,7 +37,7 @@ function txAmountReais(tx: Transaction): number {
 function groupByCategory(transactions: Transaction[]): CatTotal[] {
   const map: Record<string, number> = {};
   transactions.forEach(tx => {
-    if (!isExpense(tx.type)) return;
+    if (!isExpense(tx.type) || isInvoicePayment(tx)) return;
     const cat = tx.category ?? 'Outros';
     map[cat] = (map[cat] ?? 0) + txAmountReais(tx);
   });
@@ -124,7 +124,7 @@ function AnomaliesPanel({ transactions, currentMonth, currentYear }: AnomaliesPa
 
     const catAtual: Record<string, number> = {};
     transactions.forEach(tx => {
-      if (!isExpense(tx.type)) return;
+      if (!isExpense(tx.type) || isInvoicePayment(tx)) return;
       const d = new Date((tx.date ?? tx.createdAt) as string);
       if (d.getMonth() + 1 !== currentMonth || d.getFullYear() !== currentYear) return;
       const cat = tx.category ?? 'Outros';
@@ -134,7 +134,7 @@ function AnomaliesPanel({ transactions, currentMonth, currentYear }: AnomaliesPa
     const catMedia: Record<string, number> = {};
     mesesAnteriores.forEach(({ month, year }) => {
       transactions.forEach(tx => {
-        if (!isExpense(tx.type)) return;
+        if (!isExpense(tx.type) || isInvoicePayment(tx)) return;
         const d = new Date((tx.date ?? tx.createdAt) as string);
         if (d.getMonth() + 1 !== month || d.getFullYear() !== year) return;
         const cat = tx.category ?? 'Outros';

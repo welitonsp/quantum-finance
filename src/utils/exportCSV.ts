@@ -1,5 +1,5 @@
 import type { Transaction } from '../shared/types/transaction';
-import { getTransactionAbsCentavos, isIncome, isExpense } from './transactionUtils';
+import { getTransactionAbsCentavos, isIncome, isExpense, isInvoicePayment } from './transactionUtils';
 import { fromCentavos } from '../shared/types/money';
 
 /** Escapa valor para célula CSV: envolve em aspas se contém vírgula, aspas ou quebra de linha. */
@@ -16,7 +16,8 @@ export function transactionsToCSV(transactions: Transaction[]): string {
     tx.date ?? '',
     tx.description ?? '',
     fromCentavos(getTransactionAbsCentavos(tx)).toFixed(2).replace('.', ','),
-    tx.type === 'entrada' || tx.type === 'receita' ? 'Receita' : 'Despesa',
+    tx.type === 'entrada' || tx.type === 'receita' ? 'Receita'
+      : isInvoicePayment(tx) ? 'Pagamento Fatura' : 'Despesa',
     tx.category ?? 'Outros',
     tx.account ?? '',
   ]);
@@ -57,7 +58,7 @@ export function computeMonthlyReport(
     const cents = getTransactionAbsCentavos(tx);
     if (tx.type === 'transferencia') { transferCount++; continue; }
     if (isIncome(tx.type))  { incomeCents  += cents; }
-    if (isExpense(tx.type)) {
+    if (isExpense(tx.type) && !isInvoicePayment(tx)) {
       expenseCents += cents;
       const cat = tx.category ?? 'Outros';
       catMap.set(cat, (catMap.get(cat) ?? 0) + cents);
@@ -132,7 +133,8 @@ export function generateMonthlyReportCSV(
 
   for (const tx of txs) {
     const tipo = tx.type === 'transferencia' ? 'Transferência'
-      : isIncome(tx.type) ? 'Receita' : 'Despesa';
+      : isIncome(tx.type) ? 'Receita'
+      : isInvoicePayment(tx) ? 'Pagamento Fatura' : 'Despesa';
     lines.push([
       tx.date ?? '',
       escapeCSV(tx.description ?? ''),

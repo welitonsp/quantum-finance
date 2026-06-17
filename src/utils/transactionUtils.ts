@@ -15,6 +15,21 @@ export const isIncomeTx = (tx: Transaction): boolean => isIncome(tx.type);
 export const isExpenseTx = (tx: Transaction): boolean => isExpense(tx.type);
 
 /**
+ * Returns true if the transaction is a credit card invoice payment.
+ * Invoice payments carry `paidInvoiceMonth` — they are `type='saida'` but represent
+ * liability settlement, not new consumption. The card purchase already records the cost.
+ */
+export const isInvoicePayment = (tx: Pick<Transaction, 'paidInvoiceMonth'>): boolean =>
+  tx.paidInvoiceMonth !== undefined;
+
+/**
+ * Returns true for real consumption expenses, excluding invoice payments.
+ * Use this — not `isExpense`/`isExpenseTx` — in spending, budget, and category analytics.
+ */
+export const isConsumptionExpense = (tx: Transaction): boolean =>
+  isExpenseTx(tx) && !isInvoicePayment(tx);
+
+/**
  * Canonical read helper for financial calculations.
  * v2 documents must contain value_cents. Legacy `value` is only converted when
  * the document is explicitly pre-v2/unknown, so new corrupt writes do not get

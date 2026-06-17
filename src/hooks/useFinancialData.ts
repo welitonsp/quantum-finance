@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import Decimal from 'decimal.js';
 import type { Transaction, Account, ModuleBalances, CategoryDataPoint } from '../shared/types/transaction';
-import { isIncome as checkIncome, isExpense as checkExpense } from '../utils/transactionUtils';
+import { isIncome as checkIncome, isExpense as checkExpense, isInvoicePayment } from '../utils/transactionUtils';
 import { getTransactionCentavos } from '../utils/transactionUtils';
 import { fromCentavos, type Centavos } from '../shared/types/money';
 import { normalizeCategoryName, type UserCategory } from '../shared/schemas/categorySchemas';
@@ -84,17 +84,18 @@ export function useFinancialData(
       if (activeModule !== 'geral' && txAccount !== activeModule) return;
 
       const val = new Decimal(Math.abs(txValueCents(tx)));
-      const isIncome = checkIncome(tx.type);
+      const isIncome  = checkIncome(tx.type);
+      const isInvPay  = isInvoicePayment(tx);
 
-      if (isIncome) saldoAcumulado = saldoAcumulado.plus(val);
-      else          saldoAcumulado = saldoAcumulado.minus(val);
+      if (isIncome)           saldoAcumulado = saldoAcumulado.plus(val);
+      else if (!isInvPay)     saldoAcumulado = saldoAcumulado.minus(val);
 
       const rawDate = tx.date || tx.createdAt;
       if (rawDate) {
         const txDate = resolveDate(rawDate);
         if (txDate && txDate.getMonth() + 1 === currentMonth && txDate.getFullYear() === currentYear) {
-          if (isIncome) receitasMes  = receitasMes.plus(val);
-          else          despesasMes  = despesasMes.plus(val);
+          if (isIncome)         receitasMes = receitasMes.plus(val);
+          else if (!isInvPay)   despesasMes = despesasMes.plus(val);
         }
       }
     });
@@ -132,7 +133,7 @@ export function useFinancialData(
   const categoryData = useMemo((): CategoryDataPoint[] => {
     const map: Record<string, number> = {};
     displayedTransactions.forEach(tx => {
-      if (checkExpense(tx.type)) {
+      if (checkExpense(tx.type) && !isInvoicePayment(tx)) {
         const cat = tx.category || 'Diversos';
         const current = map[cat] ? new Decimal(map[cat]) : new Decimal(0);
         const val = new Decimal(Math.abs(txValueCents(tx)));
@@ -232,14 +233,14 @@ export function useDashboardData(
 
     transactions.forEach(tx => {
       const val = new Decimal(Math.abs(txValueCents(tx)));
-      if (checkIncome(tx.type)) totalBalance = totalBalance.plus(val);
-      else                      totalBalance = totalBalance.minus(val);
+      if (checkIncome(tx.type))         totalBalance = totalBalance.plus(val);
+      else if (!isInvoicePayment(tx))   totalBalance = totalBalance.minus(val);
     });
 
     filtered.forEach(tx => {
       const val = new Decimal(Math.abs(txValueCents(tx)));
-      if (checkIncome(tx.type)) totalIncome  = totalIncome.plus(val);
-      else                      totalExpense = totalExpense.plus(val);
+      if (checkIncome(tx.type))         totalIncome  = totalIncome.plus(val);
+      else if (!isInvoicePayment(tx))   totalExpense = totalExpense.plus(val);
     });
 
     return {
@@ -258,8 +259,8 @@ export function useDashboardData(
       const key   = d.toISOString().slice(0, 10);
       const entry = map.get(key) ?? { income: new Decimal(0), expense: new Decimal(0) };
       const val   = new Decimal(Math.abs(txValueCents(tx)));
-      if (checkIncome(tx.type)) entry.income  = entry.income.plus(val);
-      else                      entry.expense = entry.expense.plus(val);
+      if (checkIncome(tx.type))         entry.income  = entry.income.plus(val);
+      else if (!isInvoicePayment(tx))   entry.expense = entry.expense.plus(val);
       map.set(key, entry);
     });
 
@@ -276,7 +277,7 @@ export function useDashboardData(
     const map = new Map<string, Decimal>();
 
     filtered.forEach(tx => {
-      if (!checkExpense(tx.type)) return;
+      if (!checkExpense(tx.type) || isInvoicePayment(tx)) return;
       const cat = tx.category || 'Diversos';
       map.set(cat, (map.get(cat) ?? new Decimal(0)).plus(
         new Decimal(Math.abs(txValueCents(tx)))

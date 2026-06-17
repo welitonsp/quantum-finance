@@ -4,7 +4,7 @@ import { ComposedChart, BarChart, Bar, AreaChart, Area, Line, XAxis, YAxis, Cart
 import { Filter, AlertCircle, Calendar, Scissors, Sparkles, AlertTriangle } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 import type { Transaction, Account } from '../../shared/types/transaction';
-import { getTransactionAbsCentavos, isExpense } from '../../utils/transactionUtils';
+import { getTransactionAbsCentavos, isExpense, isInvoicePayment } from '../../utils/transactionUtils';
 import { fromCentavos } from '../../shared/types/money';
 import { calcPareto, calcPatrimonyEvolution } from '../../utils/reportEngine';
 import { normalizeCategoryName, type UserCategory } from '../../shared/schemas/categorySchemas';
@@ -67,7 +67,7 @@ export default function ReportsContent({ transactions, accounts, categories = []
     const agora = new Date();
 
     transactions.forEach(t => {
-      if (isExpense(t.type)) {
+      if (isExpense(t.type) && !isInvoicePayment(t)) {
         const txDate = new Date(t.date ?? (t as Transaction & { createdAt?: string }).createdAt ?? '');
         const diffDias = (agora.getTime() - txDate.getTime()) / (1000 * 60 * 60 * 24);
 

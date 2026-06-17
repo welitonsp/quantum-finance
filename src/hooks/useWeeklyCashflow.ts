@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { Transaction, RecurringTask } from '../shared/types/transaction';
 import { fromCentavos } from '../shared/types/money';
 import { getTransactionCentavos } from '../utils/transactionUtils';
-import { isIncome as checkIncome, isExpense as checkExpense } from '../utils/transactionUtils';
+import { isIncome as checkIncome, isExpense as checkExpense, isInvoicePayment } from '../utils/transactionUtils';
 
 export interface WeekBucket {
   label:        string; // e.g. "Sem 1", "Semana 23/06"
@@ -90,8 +90,8 @@ export function useWeeklyCashflow(
       for (const bucket of weeks) {
         if (tx.date >= bucket.startDate && tx.date <= bucket.endDate) {
           const cents = Math.abs(getTransactionCentavos(tx) ?? 0);
-          if (checkIncome(tx.type)) bucket.incomeCents  += cents;
-          if (checkExpense(tx.type)) bucket.expenseCents += cents;
+          if (checkIncome(tx.type)) bucket.incomeCents += cents;
+          if (checkExpense(tx.type) && !isInvoicePayment(tx)) bucket.expenseCents += cents;
           break;
         }
       }

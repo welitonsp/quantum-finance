@@ -9,7 +9,7 @@ import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import Decimal from 'decimal.js';
 import type { Transaction, Account } from '../shared/types/transaction';
 import { fromCentavos, type Centavos } from '../shared/types/money';
-import { getTransactionCentavos } from '../utils/transactionUtils';
+import { getTransactionCentavos, isInvoicePayment } from '../utils/transactionUtils';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -112,7 +112,7 @@ export function computeFinancialMetrics(
     const val = new Decimal(Math.abs(rawVal));
     if (isIncome(tx.type)) {
       receita = receita.plus(val);
-    } else if (isExpense(tx.type)) {
+    } else if (isExpense(tx.type) && !isInvoicePayment(tx)) {
       despesa = despesa.plus(val);
       if (isFixedCategory(tx.category)) {
         custoFixoMensal = custoFixoMensal.plus(val);

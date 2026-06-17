@@ -8,7 +8,7 @@ import {
 import { db } from '../shared/api/firebase/index';
 import type { Transaction } from '../shared/types/transaction';
 import { absCentavos, addCentavos, fromCentavos, toCentavos, type Centavos } from '../shared/types/money';
-import { isExpense as checkExpense } from '../utils/transactionUtils';
+import { isExpense as checkExpense, isInvoicePayment } from '../utils/transactionUtils';
 
 // ─── Public Types ─────────────────────────────────────────────────────────────
 
@@ -136,9 +136,9 @@ export function useBudgets(uid: string, transactions: Transaction[]): UseBudgets
       .map(budget => {
         const normKey = normCat(budget.category);
 
-        // Sum expenses matching category + month (case-insensitive category)
+        // Sum expenses matching category + month (excludes invoice payments)
         const spentCents = transactions.reduce((sum, tx) => {
-          const isExpense = checkExpense(tx.type);
+          const isExpense = checkExpense(tx.type) && !isInvoicePayment(tx);
           const txMonth   = (tx.date ?? '').slice(0, 7);
           if (!isExpense || txMonth !== budget.month || normCat(tx.category) !== normKey) return sum;
           if (tx.value_cents === undefined) return sum;
@@ -154,10 +154,10 @@ export function useBudgets(uid: string, transactions: Transaction[]): UseBudgets
         const projProgress   = Math.min(Math.max(projectedCents / safeTarget, 0), 1);
         const remainingCents = addCentavos(budget.targetAmountCents, -spentCents);
 
-        // Previous month spending for the same category
+        // Previous month spending for the same category (excludes invoice payments)
         const prevMonth = prevMonthStr(budget.month);
         const prevMonthSpentCents = transactions.reduce((sum, tx) => {
-          const isExpense = checkExpense(tx.type);
+          const isExpense = checkExpense(tx.type) && !isInvoicePayment(tx);
           const txMonth   = (tx.date ?? '').slice(0, 7);
           if (!isExpense || txMonth !== prevMonth || normCat(tx.category) !== normKey) return sum;
           if (tx.value_cents === undefined) return sum;
