@@ -9,18 +9,20 @@
 
 ### 0. Estado atual (2026-06-19)
 - Branch principal: `main` — HEAD `111deb5` (PR #256 mergeado).
-- **5 PRs ABERTOS (verdes no CI, aguardando merge):**
+- **7 PRs ABERTOS (verdes no CI, aguardando merge):**
   - **#257** `feature/purchase-simulator-effective-limit` — **FASE D-2A**: simulador de compra passa a usar o limite efetivo real do cartão (`cardEffectiveLimitCents`); seletor de cartão + `closingDay`/`committedFutureCents` reais. +7 testes.
   - **#258** `docs/ai-agent-governance-h0` — **FASE H-0** (doc-only): governança do Agente Financeiro — `docs/AI_AGENT_GUARDRAILS.md`, `AI_TOOL_ROUTER.md`, `AI_RESPONSE_CONTRACT.md`, `AI_DECISION_JOURNAL.md` + reconciliação + seção README.
   - **#259** `feature/debt-strategy-engine` — **FASE E**: motor puro `src/lib/debtStrategy.ts` (avalanche × bola-de-neve, rollover, economia de juros, viabilidade) + painel "Plano de Quitação" no `DebtModule.tsx`. +12 testes.
-  - **#260** `feature/ai-decisions-journal` — **FASE H (fundação)**: regras Firestore de `users/{uid}/decisions` (bloco N, 10 rules tests) + `src/shared/schemas/agentSchemas.ts` (`ActionProposal` Zod `.strict()`) + `src/lib/agentResponseRenderer.ts` (placeholders/pipes + rejeição de número literal do LLM). +27 testes unitários. **NÃO tocou `functions/`.**
+  - **#260** `feature/ai-decisions-journal` — **FASE H (fundação)**: regras Firestore de `users/{uid}/decisions` (bloco N, 10 rules tests) + `src/shared/schemas/agentSchemas.ts` (`ActionProposal` Zod `.strict()`) + `src/lib/agentResponseRenderer.ts` (placeholders/pipes + rejeição de número literal do LLM). +27 testes unitários.
   - **#261** `docs/ijk-phase-closure` — **FASES I/J/K** (doc-only): `docs/RIPD.md`, `INCIDENT_RESPONSE.md`, `ARCHITECTURE_LAYERS.md`, `CHECKLISTS.md`.
-- Validação: typecheck/lint/build ✅; unit **1222** ✅; rules **182** ✅ (Java 21 + emulator).
+  - **#262** `docs/sync-claude-md-fase-deh` — sync deste CLAUDE.md (este PR).
+  - **#263** `feature/agent-action-execution` (empilhado em #260) — **FASE H (ação)**: callable **`executeAgentAction`** (`functions/src/index.ts`) — App Check enforce+consume, idempotência, gate `status==='confirmed'`, escrita atômica tx+history(origin 'ai')+`/decisions`. Validador puro `functions/src/agentActionValidation.ts` + 19 testes (`node --test` 145/145). Increment 1: só `register_purchase` à vista; demais kinds e parcelas → `unimplemented`. **Eleva as Cloud Functions de 5 → 6.**
+- Validação: typecheck/lint/build ✅; unit **1222** ✅; rules **182** ✅ (Java 21 + emulator); functions **145** ✅.
 
 ### 0.1 Correções de imprecisões do próprio CLAUDE.md (auditoria 2026-06-19)
 > Ver `docs/RECONCILIACAO_FASES_PENDENTES_2026-06-19.md`. Duas afirmações dos blocos abaixo estavam **incorretas** vs o código real:
 - **`src/lib/debtPlanner.ts` NUNCA existiu.** O plano de quitação por dívida vivia em `DebtModule.tsx` + `useDebts.ts` (`calcMonthlyPaymentCents`, amortização PV/r/n). O motor de **estratégia** (avalanche/bola-de-neve) só passou a existir como **`src/lib/debtStrategy.ts`** (PR #259). Onde os blocos antigos citam `debtPlanner.ts`, leia `debtStrategy.ts` (estratégia) / `useDebts.ts` (amortização). Não existe `debtPlanner.test.ts`; o teste é `src/lib/debtStrategy.test.ts`.
-- **FASE 7 / "Agente Conversacional auditável" estava superdimensionada.** O que existe é chat (`GeminiService`→callable `chatWithQuantumAI` + máscara PII + `ProactiveBriefing`), **sem** roteador de intenções, tool registry, contrato de placeholders, `ActionProposal` ou `/decisions`. A governança (H-0) e a fundação (H) chegaram em #258/#260; a **camada de ação server-trusted permanece pendente** (toca `functions/` — zona proibida não autorizada).
+- **FASE 7 / "Agente Conversacional auditável" estava superdimensionada.** O que existia era chat (`GeminiService`→callable `chatWithQuantumAI` + máscara PII + `ProactiveBriefing`), **sem** roteador de intenções, tool registry, contrato de placeholders, `ActionProposal` ou `/decisions`. A governança (H-0, #258), a fundação (H, #260) e a **camada de ação server-trusted** (`executeAgentAction`, #263) foram entregues nesta trilha. Ainda pendente (fases futuras): **intent router no LLM** dentro do chat, execução dos outros 3 kinds de ação e split de parcelas no `register_purchase`.
 
 ### 0.2 Coleção Firestore nova (PR #260)
 - `users/{uid}/decisions/{decisionId}` — Diário de Decisões do Agente (append-mostly): create owner-only com whitelist + enum de `intent`; update restrito à transição de status; delete client-side bloqueado. Ver `docs/AI_DECISION_JOURNAL.md`.
@@ -155,9 +157,10 @@
 - Stash legado não deve ser tocado sem ordem explícita.
 
 ### 4. App Check — estado real
-- **`enforceAppCheck: true`** + **`consumeAppCheckToken: true`** em **todas as 5 Cloud Functions**:
+- **`enforceAppCheck: true`** + **`consumeAppCheckToken: true`** em **todas as 6 Cloud Functions callable** (5 na main + `executeAgentAction` via PR #263):
   - `createTransaction`
-  - `deleteUserData` (nova — FASE 20B)
+  - `executeAgentAction` (nova — FASE H, PR #263; ação confirmada do Agente)
+  - `deleteUserData` (FASE 20B)
   - `categorizeTransactionsBatch`
   - `chatWithQuantumAI`
   - `generateAuditReport`
@@ -300,7 +303,7 @@ npm run test:e2e
 | `src/shared/lib/firebaseErrorHandling.ts` | `logSanitizedFirebaseError` + `FIREBASE_ERROR_OPERATIONS` |
 | `firestore.rules` | Regras de segurança com schema versionado (inclui shoppingLists/priceObservations) |
 | `firestore.indexes.json` | Índices compostos para queries paginadas |
-| `functions/index.js` | 5 Cloud Functions (createTransaction + 3 IA + deleteUserData) |
+| `functions/src/index.ts` | Cloud Functions (TS→`lib/`): createTransaction + 3 IA + deleteUserData + `executeAgentAction` (FASE H, #263) = 6 callables |
 | `playwright.config.ts` | Config E2E: Chromium, webServer com VITE_USE_EMULATOR |
 | `e2e/tests/` | 5 suítes E2E: smoke, create, filters, import-csv, goals |
 
