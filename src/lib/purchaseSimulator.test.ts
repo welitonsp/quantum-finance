@@ -260,6 +260,119 @@ describe('simulatePurchase — parcelamento 3x com CDI', () => {
   });
 });
 
+// ─── simulatePurchase — modo cartão real (FASE D-2A) ─────────────────────────
+describe('simulatePurchase — modo cartão real (FASE D-2A)', () => {
+  it('com cardEffectiveLimitCents: GREEN se preço dentro do limite efetivo', () => {
+    const result = simulatePurchase({
+      priceCents:              cents(50000), // R$ 500
+      installments:            1,
+      closingDay:              15,
+      purchaseDateISO:         '2025-06-05',
+      currentBalanceCents:     cents(100000),
+      cardEffectiveLimitCents: cents(80000), // R$ 800 efetivo
+    });
+    expect(result.verdict).toBe('green');
+    expect(result.effectiveLimitAfterCents).toBe(30000); // 800 - 500
+  });
+
+  it('com cardEffectiveLimitCents: RED se preço excede o limite efetivo', () => {
+    const result = simulatePurchase({
+      priceCents:              cents(90000), // R$ 900
+      installments:            1,
+      closingDay:              10,
+      purchaseDateISO:         '2025-06-05',
+      currentBalanceCents:     cents(500000),
+      cardEffectiveLimitCents: cents(80000), // R$ 800 — insuficiente
+    });
+    expect(result.verdict).toBe('red');
+    expect(result.verdictReasons[0]).toContain('limite efetivo');
+  });
+
+  it('compra dentro do saldo mas acima do limite efetivo → RED com cartão', () => {
+    // Sem cartão (balance check) seria GREEN; com cartão é RED.
+    const manual = simulatePurchase({
+      priceCents:          cents(80000),
+      installments:        1,
+      closingDay:          10,
+      purchaseDateISO:     '2025-06-05',
+      currentBalanceCents: cents(500000), // R$ 5000 — suficiente manualmente
+    });
+    expect(manual.verdict).toBe('green');
+
+    const withCard = simulatePurchase({
+      priceCents:              cents(80000),
+      installments:            1,
+      closingDay:              10,
+      purchaseDateISO:         '2025-06-05',
+      currentBalanceCents:     cents(500000),
+      cardEffectiveLimitCents: cents(50000), // R$ 500 — insuficiente
+    });
+    expect(withCard.verdict).toBe('red');
+    expect(withCard.verdictReasons[0]).toContain('limite efetivo');
+  });
+
+  it('fallback manual sem cardEffectiveLimitCents: usa currentBalanceCents', () => {
+    const result = simulatePurchase({
+      priceCents:          cents(60000),
+      installments:        1,
+      closingDay:          10,
+      purchaseDateISO:     '2025-06-05',
+      currentBalanceCents: cents(50000), // menor que o preço → RED
+    });
+    expect(result.verdict).toBe('red');
+    expect(result.verdictReasons[0]).toContain('saldo');
+  });
+
+  it('com committedFutureCents real: limitUsagePct inclui comprometimento existente', () => {
+    // price=R$1000, 2x=R$500/mês; committedFuture=R$1600; income=R$4000
+    // newCommitted = 1600+500=2100; ratio=52.5% > 30% → YELLOW
+    const result = simulatePurchase({
+      priceCents:              cents(100000),
+      installments:            2,
+      closingDay:              10,
+      purchaseDateISO:         '2025-06-05',
+      currentBalanceCents:     cents(500000),
+      monthlyIncomeCents:      cents(400000),
+      cardEffectiveLimitCents: cents(200000), // R$ 2000 efetivo — suficiente
+      currentCommittedCents:   cents(160000), // committedFutureCents real
+    });
+    expect(result.verdict).toBe('yellow');
+    expect(result.limitUsagePct).toBeCloseTo(0.525, 2);
+  });
+
+  it('parcelada: effectiveLimitAfterCents usa totalCostCents, não apenas a parcela', () => {
+    // effectiveLimitAfterCents deve ser limite - preço total, independente de parcelas.
+    const result = simulatePurchase({
+      priceCents:              cents(60000), // R$ 600 total
+      installments:            3,            // R$ 200/mês
+      closingDay:              10,
+      purchaseDateISO:         '2025-06-05',
+      currentBalanceCents:     cents(500000),
+      cardEffectiveLimitCents: cents(100000), // R$ 1000 efetivo
+    });
+    expect(result.verdict).not.toBe('red');
+    // max(0, 1000 - 600) = 400
+    expect(result.effectiveLimitAfterCents).toBe(40000);
+    // Invariante: totalCostCents não é duplicado
+    expect(result.totalCostCents).toBe(60000);
+    const invoiceSum = result.invoiceImpact.reduce((s, x) => s + x.additionalCents, 0);
+    expect(invoiceSum).toBe(60000);
+  });
+
+  it('com cartão: effectiveLimitAfterCents = 0 quando compra igual ao limite efetivo', () => {
+    const result = simulatePurchase({
+      priceCents:              cents(80000),
+      installments:            1,
+      closingDay:              10,
+      purchaseDateISO:         '2025-06-05',
+      currentBalanceCents:     cents(500000),
+      cardEffectiveLimitCents: cents(80000), // exatamente igual → GREEN, limite = 0
+    });
+    expect(result.verdict).toBe('green');
+    expect(result.effectiveLimitAfterCents).toBe(0);
+  });
+});
+
 // ─── simulatePurchase — impacto de competência ───────────────────────────────
 describe('simulatePurchase — impacto por competência', () => {
   it('compra após fechamento → primeira competência é o mês seguinte', () => {

@@ -13,8 +13,7 @@ import type { Centavos } from '../../shared/types/money';
 import { simulatePurchase } from '../../lib/purchaseSimulator';
 import type { PurchaseSimulatorResult, VerdictColor } from '../../lib/purchaseSimulator';
 import { usePrivacy } from '../../contexts/PrivacyContext';
-import type { Transaction } from '../../shared/types/transaction';
-import type { ModuleBalances } from '../../shared/types/transaction';
+import type { Transaction, ModuleBalances, CreditCardWithMetrics } from '../../shared/types/transaction';
 
 // ─── Helper de formatação ──────────────────────────────────────────────────────
 const MONTH_NAMES_PT = [
@@ -75,10 +74,11 @@ interface Props {
   balances: Partial<ModuleBalances> | null;
   uid?: string;
   onRegisterPurchase?: (prefill: Partial<Transaction>) => void;
+  creditCards?: CreditCardWithMetrics[];
 }
 
 // ─── Componente principal ──────────────────────────────────────────────────────
-export default function PurchaseSimulator({ balances, onRegisterPurchase }: Props) {
+export default function PurchaseSimulator({ balances, onRegisterPurchase, creditCards }: Props) {
   const { isPrivacyMode } = usePrivacy();
 
   // ── Inputs ──────────────────────────────────────────────────────────────────
@@ -90,6 +90,7 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase }: Prop
   const [committedRaw, setCommittedRaw]   = useState('');
   const [cdiRateStr, setCdiRateStr]       = useState('0.83');
   const [commitLimitPct, setCommitLimitPct] = useState(30);
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
 
   // Saldo vem do contexto financeiro
   const balanceCents = useMemo<Centavos>(() => {
@@ -97,27 +98,40 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase }: Prop
     try { return toCentavos(raw); } catch { return 0 as Centavos; }
   }, [balances]);
 
+  // Cartão selecionado (dados reais da FASE C)
+  const selectedCard = useMemo(
+    () => (creditCards ?? []).find(c => c.id === selectedCardId) ?? null,
+    [creditCards, selectedCardId],
+  );
+
   // ── Simulação ────────────────────────────────────────────────────────────────
   const result = useMemo<PurchaseSimulatorResult | null>(() => {
     const price = parseBrlInput(priceRaw);
     if (!price || price <= 0) return null;
 
     const monthlyIncome = parseBrlInput(incomeRaw) ?? undefined;
-    const committed = parseBrlInput(committedRaw) ?? (0 as Centavos);
     const cdi = parseFloat(cdiRateStr) / 100;
+
+    // Quando um cartão é selecionado: usa dados reais; caso contrário, fallback manual.
+    const effectiveClosingDay = selectedCard?.closingDay ?? closingDay;
+    const committed = selectedCard
+      ? selectedCard.metrics.committedFutureCents
+      : (parseBrlInput(committedRaw) ?? 0 as Centavos);
+    const cardEffectiveLimitCents = selectedCard?.metrics.effectiveAvailableCents;
 
     return simulatePurchase({
       priceCents:            price,
       installments,
-      closingDay,
+      closingDay:            effectiveClosingDay,
       purchaseDateISO:       purchaseDate,
       currentBalanceCents:   balanceCents,
       ...(monthlyIncome !== undefined ? { monthlyIncomeCents: monthlyIncome } : {}),
       commitmentLimitPct:    commitLimitPct / 100,
       currentCommittedCents: committed,
       cdiMonthlyRate:        isFinite(cdi) && cdi > 0 ? cdi : 0.0083,
+      ...(cardEffectiveLimitCents !== undefined ? { cardEffectiveLimitCents } : {}),
     });
-  }, [priceRaw, installments, closingDay, purchaseDate, balanceCents, incomeRaw, committedRaw, cdiRateStr, commitLimitPct]);
+  }, [priceRaw, installments, closingDay, purchaseDate, balanceCents, incomeRaw, committedRaw, cdiRateStr, commitLimitPct, selectedCard]);
 
   const handleRegister = useCallback(() => {
     const price = parseBrlInput(priceRaw);
@@ -163,6 +177,33 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase }: Prop
             <CreditCard className="w-3.5 h-3.5" /> Dados da Compra
           </h3>
 
+          {/* Seletor de cartão — visível apenas se houver cartões cadastrados */}
+          {creditCards && creditCards.length > 0 && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-quantum-fg flex items-center gap-1">
+                <CreditCard className="w-3 h-3" /> Cartão de crédito
+              </label>
+              <select
+                value={selectedCardId ?? ''}
+                onChange={e => setSelectedCardId(e.target.value || null)}
+                className="w-full bg-quantum-card/60 border border-quantum-border rounded-xl px-3 py-2.5 text-sm text-quantum-fg focus:outline-none focus:border-violet-500/60 transition-colors"
+              >
+                <option value="">Manual (sem cartão)</option>
+                {creditCards.map(card => (
+                  <option key={card.id} value={card.id}>
+                    {card.name} — efetivo {isPrivacyMode ? '•••••' : formatBRL(card.metrics.effectiveAvailableCents)}
+                  </option>
+                ))}
+              </select>
+              {selectedCard && (
+                <p className="text-[10px] text-cyan-400 flex items-center gap-1">
+                  <Info className="w-3 h-3" />
+                  Dados reais · fechamento dia {selectedCard.closingDay} · comprometido futuro {isPrivacyMode ? mask : formatBRL(selectedCard.metrics.committedFutureCents)}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Valor */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-quantum-fg">Valor da compra (R$)</label>
@@ -204,14 +245,17 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase }: Prop
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-quantum-fg">Dia de fechamento</label>
+              <label className="text-xs font-bold text-quantum-fg">
+                Dia de fechamento{selectedCard ? ' (cartão)' : ''}
+              </label>
               <input
                 type="number"
                 min={1}
                 max={31}
-                value={closingDay}
+                value={selectedCard?.closingDay ?? closingDay}
                 onChange={e => setClosingDay(Math.max(1, Math.min(31, Number(e.target.value))))}
-                className="w-full bg-quantum-card/60 border border-quantum-border rounded-xl px-3 py-2.5 text-sm text-quantum-fg focus:outline-none focus:border-violet-500/60 transition-colors"
+                readOnly={!!selectedCard}
+                className={`w-full bg-quantum-card/60 border border-quantum-border rounded-xl px-3 py-2.5 text-sm text-quantum-fg focus:outline-none transition-colors ${selectedCard ? 'opacity-60 cursor-not-allowed' : 'focus:border-violet-500/60'}`}
               />
             </div>
           </div>
@@ -235,14 +279,23 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase }: Prop
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-quantum-fg">Já comprometido (R$)</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder="ex: 800"
-                value={committedRaw}
-                onChange={e => setCommittedRaw(e.target.value)}
-                className="w-full bg-quantum-card/60 border border-quantum-border rounded-xl px-3 py-2.5 text-sm text-quantum-fg placeholder-quantum-fgMuted focus:outline-none focus:border-violet-500/60 transition-colors"
-              />
+              {selectedCard ? (
+                <div className="flex items-center justify-between bg-quantum-card/40 border border-quantum-border rounded-xl px-3 py-2.5">
+                  <span className="text-[10px] text-quantum-fgMuted">Parcelas futuras reais</span>
+                  <span className="text-sm font-mono font-bold text-violet-300">
+                    {isPrivacyMode ? mask : formatBRL(selectedCard.metrics.committedFutureCents)}
+                  </span>
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="ex: 800"
+                  value={committedRaw}
+                  onChange={e => setCommittedRaw(e.target.value)}
+                  className="w-full bg-quantum-card/60 border border-quantum-border rounded-xl px-3 py-2.5 text-sm text-quantum-fg placeholder-quantum-fgMuted focus:outline-none focus:border-violet-500/60 transition-colors"
+                />
+              )}
             </div>
           </div>
 
@@ -272,12 +325,23 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase }: Prop
             </div>
           </div>
 
-          {/* Saldo atual (informativo) */}
+          {/* Saldo / Limite efetivo (informativo) */}
           <div className="flex items-center justify-between pt-1 text-xs text-quantum-fgMuted border-t border-quantum-border">
-            <span>Saldo disponível atual</span>
-            <span className="font-mono font-bold text-cyan-400">
-              {isPrivacyMode ? mask : formatBRL(balanceCents)}
-            </span>
+            {selectedCard ? (
+              <>
+                <span>Limite efetivo do cartão</span>
+                <span className="font-mono font-bold text-violet-300">
+                  {isPrivacyMode ? mask : formatBRL(selectedCard.metrics.effectiveAvailableCents)}
+                </span>
+              </>
+            ) : (
+              <>
+                <span>Saldo disponível atual</span>
+                <span className="font-mono font-bold text-cyan-400">
+                  {isPrivacyMode ? mask : formatBRL(balanceCents)}
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -340,12 +404,15 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase }: Prop
                       label: 'Custo total',
                       value: showValue(result.totalCostCents),
                     },
-                    {
+                    ...(selectedCard ? [{
+                      label: 'Limite efetivo após compra',
+                      value: showValue(result.effectiveLimitAfterCents),
+                    }] : [{
                       label: '% comprometido (após)',
                       value: result.limitUsagePct > 0
                         ? `${(result.limitUsagePct * 100).toFixed(1)}%`
                         : '—',
-                    },
+                    }]),
                     ...(result.investmentGainCents !== undefined ? [{
                       label: 'Ganho CDI potencial',
                       value: showValue(result.investmentGainCents),

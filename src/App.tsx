@@ -380,6 +380,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     transactions={displayedTransactions}
                     balances={moduleBalances}
                     uid={safeUID}
+                    creditCards={creditCards}
                     onRegisterPurchase={(prefill) => {
                       setTransactionToEdit(prefill as Transaction);
                       setIsFormOpen(true);
