@@ -1278,6 +1278,47 @@ service cloud.firestore {
         allow update: if false;
         allow delete: if isOwner(userId);
       }
+
+      // Diário de decisões do Agente Financeiro (FASE H / H-0).
+      // Auditoria append-mostly: owner cria; update restrito à transição de
+      // status (userDecision/outcomeStatus); sem delete client-side (apenas
+      // hard-delete LGPD via Admin SDK). Ver docs/AI_DECISION_JOURNAL.md.
+      function isValidDecisionCreate() {
+        let d = request.resource.data;
+        return d.keys().hasAll(['userId', 'createdAt', 'intent', 'question', 'toolsUsed', 'userDecision', 'outcomeStatus'])
+            && d.keys().hasOnly(['userId', 'createdAt', 'intent', 'question', 'snapshotRef', 'toolsUsed', 'simulationResult', 'proposedAction', 'userDecision', 'outcomeStatus'])
+            && d.userId == userId
+            && d.createdAt == request.time
+            && d.intent in ['get_balances', 'get_invoice', 'explain_month', 'cashflow_briefing', 'simulate_purchase', 'plan_debt_payment', 'create_budget_proposal', 'contribute_to_goal_proposal']
+            && d.question is string && d.question.size() <= 2000
+            && d.toolsUsed is list
+            && d.userDecision in ['confirmed', 'rejected', 'expired', 'none']
+            && d.outcomeStatus in ['pending', 'applied', 'reverted', 'n/a']
+            && (!('snapshotRef' in d) || d.snapshotRef is string)
+            && (!('simulationResult' in d) || d.simulationResult is map)
+            && (!('proposedAction' in d) || d.proposedAction is map);
+      }
+
+      function isValidDecisionUpdate() {
+        let d = request.resource.data;
+        let prev = resource.data;
+        // Imutáveis: identidade e contexto original da decisão.
+        return d.userId == prev.userId
+            && d.createdAt == prev.createdAt
+            && d.intent == prev.intent
+            && d.question == prev.question
+            && d.keys().hasOnly(['userId', 'createdAt', 'intent', 'question', 'snapshotRef', 'toolsUsed', 'simulationResult', 'proposedAction', 'userDecision', 'outcomeStatus'])
+            // Apenas a transição de status pode evoluir.
+            && d.userDecision in ['confirmed', 'rejected', 'expired', 'none']
+            && d.outcomeStatus in ['pending', 'applied', 'reverted', 'n/a'];
+      }
+
+      match /decisions/{decisionId} {
+        allow read:   if isOwner(userId);
+        allow create: if isOwner(userId) && isValidDecisionCreate();
+        allow update: if isOwner(userId) && isValidDecisionUpdate();
+        allow delete: if false;
+      }
     }
 
     // ─── Finanças Compartilhadas ─────────────────────────────────────────────

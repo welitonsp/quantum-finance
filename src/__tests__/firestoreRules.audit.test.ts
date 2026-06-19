@@ -2878,5 +2878,112 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       ));
     });
   });
+
+  // ── N. decisions — Diário de Decisões do Agente (FASE H / H-0) ──────────────
+  //
+  // Cobre users/{uid}/decisions: create owner-only com whitelist e enum de intent,
+  // update restrito à transição de status, delete bloqueado e isolamento por uid.
+  // Ver docs/AI_DECISION_JOURNAL.md.
+
+  describe('N. decisions collection (FASE H)', () => {
+    const validDecision = (overrides: Record<string, unknown> = {}) => ({
+      userId: UID_A,
+      createdAt: serverTimestamp(),
+      intent: 'simulate_purchase',
+      question: 'Posso comprar um notebook de R$ 4.000?',
+      toolsUsed: ['purchaseSimulator'],
+      userDecision: 'none',
+      outcomeStatus: 'n/a',
+      ...overrides,
+    });
+
+    it('N1 — criar decisão válida pelo owner deve passar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'decisions');
+      await assertSucceeds(addDoc(ref, validDecision()));
+    });
+
+    it('N2 — criar com campos opcionais (snapshotRef, simulationResult) deve passar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'decisions');
+      await assertSucceeds(addDoc(ref, validDecision({
+        snapshotRef: 'snap-abc123',
+        simulationResult: { effectiveLimitAfterCents: 120000 },
+        proposedAction: { kind: 'register_purchase' },
+      })));
+    });
+
+    it('N3 — intent fora do enum deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'decisions');
+      await assertFails(addDoc(ref, validDecision({ intent: 'hack_the_bank' })));
+    });
+
+    it('N4 — userDecision fora do enum deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'decisions');
+      await assertFails(addDoc(ref, validDecision({ userDecision: 'maybe' })));
+    });
+
+    it('N5 — campo extra fora da whitelist deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'decisions');
+      await assertFails(addDoc(ref, validDecision({ rawStatement: 'CPF 123.456.789-00' })));
+    });
+
+    it('N6 — userId divergente do path deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'decisions');
+      await assertFails(addDoc(ref, validDecision({ userId: UID_B })));
+    });
+
+    it('N7 — usuário B não pode criar no path do usuário A', async () => {
+      const bob = testEnv.authenticatedContext(UID_B);
+      const ref = collection(bob.firestore(), 'users', UID_A, 'decisions');
+      await assertFails(addDoc(ref, validDecision()));
+    });
+
+    it('N8 — update apenas de status (userDecision/outcomeStatus) deve passar', async () => {
+      const id = 'decision-n8';
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID_A, 'decisions', id), {
+          userId: UID_A, createdAt: FIXED_TS, intent: 'simulate_purchase',
+          question: 'Posso comprar?', toolsUsed: ['purchaseSimulator'],
+          userDecision: 'none', outcomeStatus: 'pending',
+        });
+      });
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = doc(alice.firestore(), 'users', UID_A, 'decisions', id);
+      await assertSucceeds(updateDoc(ref, { userDecision: 'confirmed', outcomeStatus: 'applied' }));
+    });
+
+    it('N9 — update tentando alterar intent (imutável) deve falhar', async () => {
+      const id = 'decision-n9';
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID_A, 'decisions', id), {
+          userId: UID_A, createdAt: FIXED_TS, intent: 'simulate_purchase',
+          question: 'Posso comprar?', toolsUsed: ['purchaseSimulator'],
+          userDecision: 'none', outcomeStatus: 'pending',
+        });
+      });
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = doc(alice.firestore(), 'users', UID_A, 'decisions', id);
+      await assertFails(updateDoc(ref, { intent: 'get_balances' }));
+    });
+
+    it('N10 — delete client-side deve falhar (append-mostly)', async () => {
+      const id = 'decision-n10';
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID_A, 'decisions', id), {
+          userId: UID_A, createdAt: FIXED_TS, intent: 'simulate_purchase',
+          question: 'Posso comprar?', toolsUsed: ['purchaseSimulator'],
+          userDecision: 'none', outcomeStatus: 'pending',
+        });
+      });
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = doc(alice.firestore(), 'users', UID_A, 'decisions', id);
+      await assertFails(deleteDoc(ref));
+    });
+  });
 });
 
