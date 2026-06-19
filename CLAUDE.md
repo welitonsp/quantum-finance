@@ -2,6 +2,31 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
+## Estado Consolidado — Reconciliação de Fases + FASE D-2A/E/H-0/H(fundação)/I-J-K (2026-06-19)
+
+> **Este bloco é a referência mais recente.** Em caso de divergência com blocos abaixo, prevalece este.
+> **Regra operacional:** Atualizar após cada PR mergeado ou marco relevante.
+
+### 0. Estado atual (2026-06-19)
+- Branch principal: `main` — HEAD `111deb5` (PR #256 mergeado).
+- **5 PRs ABERTOS (verdes no CI, aguardando merge):**
+  - **#257** `feature/purchase-simulator-effective-limit` — **FASE D-2A**: simulador de compra passa a usar o limite efetivo real do cartão (`cardEffectiveLimitCents`); seletor de cartão + `closingDay`/`committedFutureCents` reais. +7 testes.
+  - **#258** `docs/ai-agent-governance-h0` — **FASE H-0** (doc-only): governança do Agente Financeiro — `docs/AI_AGENT_GUARDRAILS.md`, `AI_TOOL_ROUTER.md`, `AI_RESPONSE_CONTRACT.md`, `AI_DECISION_JOURNAL.md` + reconciliação + seção README.
+  - **#259** `feature/debt-strategy-engine` — **FASE E**: motor puro `src/lib/debtStrategy.ts` (avalanche × bola-de-neve, rollover, economia de juros, viabilidade) + painel "Plano de Quitação" no `DebtModule.tsx`. +12 testes.
+  - **#260** `feature/ai-decisions-journal` — **FASE H (fundação)**: regras Firestore de `users/{uid}/decisions` (bloco N, 10 rules tests) + `src/shared/schemas/agentSchemas.ts` (`ActionProposal` Zod `.strict()`) + `src/lib/agentResponseRenderer.ts` (placeholders/pipes + rejeição de número literal do LLM). +27 testes unitários. **NÃO tocou `functions/`.**
+  - **#261** `docs/ijk-phase-closure` — **FASES I/J/K** (doc-only): `docs/RIPD.md`, `INCIDENT_RESPONSE.md`, `ARCHITECTURE_LAYERS.md`, `CHECKLISTS.md`.
+- Validação: typecheck/lint/build ✅; unit **1222** ✅; rules **182** ✅ (Java 21 + emulator).
+
+### 0.1 Correções de imprecisões do próprio CLAUDE.md (auditoria 2026-06-19)
+> Ver `docs/RECONCILIACAO_FASES_PENDENTES_2026-06-19.md`. Duas afirmações dos blocos abaixo estavam **incorretas** vs o código real:
+- **`src/lib/debtPlanner.ts` NUNCA existiu.** O plano de quitação por dívida vivia em `DebtModule.tsx` + `useDebts.ts` (`calcMonthlyPaymentCents`, amortização PV/r/n). O motor de **estratégia** (avalanche/bola-de-neve) só passou a existir como **`src/lib/debtStrategy.ts`** (PR #259). Onde os blocos antigos citam `debtPlanner.ts`, leia `debtStrategy.ts` (estratégia) / `useDebts.ts` (amortização). Não existe `debtPlanner.test.ts`; o teste é `src/lib/debtStrategy.test.ts`.
+- **FASE 7 / "Agente Conversacional auditável" estava superdimensionada.** O que existe é chat (`GeminiService`→callable `chatWithQuantumAI` + máscara PII + `ProactiveBriefing`), **sem** roteador de intenções, tool registry, contrato de placeholders, `ActionProposal` ou `/decisions`. A governança (H-0) e a fundação (H) chegaram em #258/#260; a **camada de ação server-trusted permanece pendente** (toca `functions/` — zona proibida não autorizada).
+
+### 0.2 Coleção Firestore nova (PR #260)
+- `users/{uid}/decisions/{decisionId}` — Diário de Decisões do Agente (append-mostly): create owner-only com whitelist + enum de `intent`; update restrito à transição de status; delete client-side bloqueado. Ver `docs/AI_DECISION_JOURNAL.md`.
+
+---
+
 ## Estado Consolidado — Pós-ROADMAP-MESTRE-v2 + FASES 9–25 + Trilha Monetária + Auditoria Cartões (2026-06-17)
 
 > Blocos anteriores substituídos. Em caso de divergência, **este bloco é a referência**.
@@ -104,10 +129,10 @@
 | FASE 2.3 | `useInsightsEngine` unificado (7 widgets → motor puro testável) | #200 | ✅ |
 | FASE 2.5 | Quick wins UX: undo 10s, edição em lote, memória categorização, drill-down | #201 | ✅ |
 | FASE 3 | Simulador de Decisão de Compra (`purchaseSimulator.ts`) | #202 | ✅ |
-| FASE 4 | Plano de Quitação de Dívidas (`debtPlanner.ts`, coleção `debts`) | #203 | ✅ |
+| FASE 4 | Plano de Quitação de Dívidas (coleção `debts` + `DebtModule`/`useDebts`; estratégia avalanche/snowball em `debtStrategy.ts` — PR #259) | #203 | ✅ |
 | FASE 5 | Reserva de emergência + orçamento vs real + projeção de metas | #204 | ✅ |
 | FASE 6 | Timeline financeira 90 dias + recorrências inteligentes + alertas | #205 | ✅ |
-| FASE 7 | Agente Financeiro Conversacional auditável (refs por referência, tool registry) | #206 | ✅ |
+| FASE 7 | Agente Financeiro Conversacional — **apenas chat** (`GeminiService`+`chatWithQuantumAI`+PII mask). Governança H-0 (#258) e fundação H (#260) à parte; ação server-trusted ainda pendente | #206 | 🟡 |
 | FASE 8 | LGPD compliance + MFA + rate limiting + Secret Manager + backups | #207 | ✅ |
 | FASE 9 | Compras Inteligentes: listas, itens, check-off, histórico de preços | #218 | ✅ |
 | FASE 10 | TTL automático `idempotency/{key}`: campo `expireAt` + Firestore TTL policy (`fieldOverrides`) | #219 | ✅ |
@@ -259,7 +284,8 @@ npm run test:e2e
 | `src/hooks/useRecurringAutoExecute.ts` | Scaffold client-side → server-side após FASE 1.4 |
 | `src/utils/exportCSV.ts` | `computeMonthlyReport` + `generateMonthlyReportCSV` |
 | `src/lib/purchaseSimulator.ts` | Motor puro de simulação de compra (zero I/O, zero float) |
-| `src/lib/debtPlanner.ts` | Motor de plano de quitação de dívidas |
+| `src/lib/debtStrategy.ts` | Motor de estratégia de quitação (avalanche/bola-de-neve) — PR #259. **Não existe `debtPlanner.ts`** |
+| `src/hooks/useDebts.ts` | CRUD de `debts` + `calcMonthlyPaymentCents` (amortização PV/r/n) |
 | `src/lib/insightsEngine.ts` | Motor unificado de insights (7 widgets, FASE 2.3) |
 | `src/features/debts/DebtModule.tsx` | Módulo de dívidas — coleção `debts` |
 | `src/features/simulation/PurchaseSimulator.tsx` | UI do simulador de compra com veredito |
@@ -292,14 +318,14 @@ npm run test:e2e
 - `src/__tests__/consoleLoggingPolicy.test.ts` — guarda automática contra `console.*` cru em `src/`
 - `src/__tests__/firestoreRules.audit.test.ts` — cobertura de regras Firestore (roda com emulator)
 - `src/lib/purchaseSimulator.test.ts` — motor de simulação de compra
-- `src/lib/debtPlanner.test.ts` — motor de plano de dívidas
+- `src/lib/debtStrategy.test.ts` — motor de estratégia de quitação (avalanche/bola-de-neve, PR #259)
 - `src/features/shopping/__tests__/shoppingSchemas.test.ts` — schemas Zod de Compras Inteligentes (22 testes)
 
 ### Arquivos de teste chave
 - `src/__tests__/consoleLoggingPolicy.test.ts` — guarda automática contra `console.*` cru em `src/`
 - `src/__tests__/firestoreRules.audit.test.ts` — cobertura de regras Firestore (roda com emulator)
 - `src/lib/purchaseSimulator.test.ts` — motor de simulação de compra
-- `src/lib/debtPlanner.test.ts` — motor de plano de dívidas
+- `src/lib/debtStrategy.test.ts` — motor de estratégia de quitação (avalanche/bola-de-neve, PR #259)
 - `src/features/shopping/__tests__/shoppingSchemas.test.ts` — schemas de Compras Inteligentes
 
 ## Estado Consolidado — Política de Observabilidade e Logging (FASE 9F/9G) — 2026-05-15
