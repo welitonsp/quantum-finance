@@ -121,10 +121,16 @@ describe('Functions logging policy', () => {
       .map((line, index) => ({ line: lineNumber(index), text: line.trim() }))
       .filter(item => /\berror\.message\b/.test(item.text));
 
+    // error.message só pode vazar ao cliente pelos caminhos CONTROLADOS de erro de
+    // validação (mensagens curadas, sem PII/stack): CreateTransactionValidationError
+    // e AgentActionValidationError. Ambos produzem a mesma linha exata.
     assert.deepEqual(
       messageLines.map(item => item.text),
-      ["throw new HttpsError('invalid-argument', error.message);"],
-      'error.message is allowed only for the controlled CreateTransactionValidationError client response',
+      [
+        "throw new HttpsError('invalid-argument', error.message);",
+        "throw new HttpsError('invalid-argument', error.message);",
+      ],
+      'error.message is allowed only for controlled validation errors (CreateTransaction/AgentAction)',
     );
   });
 });
