@@ -109,6 +109,29 @@ Quantum Finance adota política restritiva de logging para reduzir risco de vaza
 - `useTransactions.ts` mantém exceção granular apenas para o log técnico conhecido: `[SyncQueue] operação descartada após tentativas`.
 - Mudanças em auditoria, Firestore Rules ou transações devem preservar o Modelo A: todo UPDATE de transaction exige `_lastOpId`, `history` deve ser pareado no mesmo batch e nenhuma política de logs pode enfraquecer a integridade financeira ou a trilha de auditoria.
 
+## Governança do Agente Financeiro
+
+O Agente Financeiro Pessoal (FASE H) opera sob um contrato de governança normativo
+(FASE H-0). Todo PR que toque o agente deve declarar conformidade com estes documentos:
+
+- [`docs/AI_AGENT_GUARDRAILS.md`](./docs/AI_AGENT_GUARDRAILS.md) — regra-mãe
+  **"LLM narra; motores puros calculam"**, classificação consulta/simulação/ação,
+  confirmação humana e dados sensíveis P0.
+- [`docs/AI_TOOL_ROUTER.md`](./docs/AI_TOOL_ROUTER.md) — fluxo
+  intenção → ferramenta → motor → renderizador → resposta; intenções permitidas;
+  tool registry read-only.
+- [`docs/AI_RESPONSE_CONTRACT.md`](./docs/AI_RESPONSE_CONTRACT.md) — estrutura de resposta
+  e placeholders/pipes (`|brl`, `|pct`, `|date`, `|mes`); proíbe número final literal do LLM.
+- [`docs/AI_DECISION_JOURNAL.md`](./docs/AI_DECISION_JOURNAL.md) — coleção
+  `users/{uid}/decisions` para auditoria de decisões mediadas por IA.
+
+Princípios inegociáveis:
+
+- Nenhum valor financeiro final é calculado pelo LLM — sempre vem de motor puro/hook/serviço.
+- Ferramentas da v1 são read-only (consulta e simulação); nenhuma ação executa sem
+  `ActionProposal` validada por Zod `.strict()` + confirmação humana explícita.
+- PII mascarada (`maskPII`) antes de qualquer envio ao LLM; chave Gemini só no backend.
+
 ## Firebase App Check
 
 Quantum Finance usa Firebase App Check com reCAPTCHA v3 para proteger os endpoints do Firebase contra abusos.

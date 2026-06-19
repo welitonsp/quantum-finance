@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Loader2, PlusCircle, Trash2, CheckCircle2, TrendingDown, AlertCircle, CreditCard } from 'lucide-react';
+import { Loader2, PlusCircle, Trash2, CheckCircle2, TrendingDown, AlertCircle, CreditCard, Target } from 'lucide-react';
 import { LoadingPage } from '../../shared/components/ui';
 import toast from 'react-hot-toast';
 
@@ -13,6 +13,12 @@ import {
 } from '../../hooks/useDebts';
 import { formatBRL, toCentavos } from '../../shared/types/money';
 import type { Centavos } from '../../shared/types/money';
+import {
+  compareDebtStrategies,
+  type DebtStrategyInput,
+  type DebtStrategyKind,
+  type DebtStrategyResult,
+} from '../../lib/debtStrategy';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -304,6 +310,138 @@ function DebtRow({ debt, onMarkPaid, onDelete, isProcessing }: DebtRowProps) {
   );
 }
 
+// ─── PayoffPlanner ──────────────────────────────────────────────────────────────
+const STRATEGY_LABELS: Record<DebtStrategyKind, string> = {
+  avalanche: 'Avalanche (maior juro primeiro)',
+  snowball:  'Bola de neve (menor saldo primeiro)',
+};
+
+function monthsLabel(months: number): string {
+  if (months <= 0) return '—';
+  const y = Math.floor(months / 12);
+  const m = months % 12;
+  if (y === 0) return `${m} ${m === 1 ? 'mês' : 'meses'}`;
+  if (m === 0) return `${y} ${y === 1 ? 'ano' : 'anos'}`;
+  return `${y}a ${m}m`;
+}
+
+function StrategyCard({ result, isRecommended }: { result: DebtStrategyResult; isRecommended: boolean }) {
+  return (
+    <div className={`rounded-2xl border p-4 space-y-2 ${isRecommended ? 'border-cyan-500/50 bg-cyan-500/5' : 'border-quantum-border bg-quantum-bg'}`}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-bold text-quantum-fg">{STRATEGY_LABELS[result.strategy]}</span>
+        {isRecommended && (
+          <span className="text-[10px] font-black px-2 py-0.5 rounded-full text-cyan-400 bg-cyan-500/10 uppercase tracking-wide">
+            Recomendada
+          </span>
+        )}
+      </div>
+      {result.feasible ? (
+        <>
+          <div className="flex items-baseline justify-between">
+            <span className="text-xs text-quantum-fgMuted">Prazo de quitação</span>
+            <span className="text-sm font-black text-quantum-fg">{monthsLabel(result.months)}</span>
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="text-xs text-quantum-fgMuted">Juros totais</span>
+            <span className="text-sm font-bold text-quantum-fg">{formatBRL(result.totalInterestCents)}</span>
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="text-xs text-quantum-fgMuted">Total desembolsado</span>
+            <span className="text-sm font-bold text-quantum-fg">{formatBRL(result.totalPaidCents)}</span>
+          </div>
+          {result.order.length > 0 && (
+            <p className="text-[11px] text-quantum-fgMuted pt-1 border-t border-quantum-border/60">
+              Ordem: {result.order.map(o => o.name).join(' → ')}
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="text-xs text-amber-400">{result.reason}</p>
+      )}
+    </div>
+  );
+}
+
+function PayoffPlanner({ debts, defaultBudgetCents }: { debts: Debt[]; defaultBudgetCents: Centavos }) {
+  const [budgetRaw, setBudgetRaw] = useState('');
+
+  const budgetCents = useMemo<Centavos>(() => {
+    if (!budgetRaw.trim()) return defaultBudgetCents;
+    try {
+      const c = toCentavos(budgetRaw);
+      return c > 0 ? c : defaultBudgetCents;
+    } catch {
+      return defaultBudgetCents;
+    }
+  }, [budgetRaw, defaultBudgetCents]);
+
+  const inputs = useMemo<DebtStrategyInput[]>(
+    () => debts.map(d => {
+      const remainingInst = Math.max(1, d.installments - d.paidInstallments);
+      return {
+        id: d.id,
+        name: d.name,
+        remainingCents: d.remainingCents,
+        monthlyInterestRate: d.interestRate,
+        minPaymentCents: calcMonthlyPaymentCents(d.remainingCents, d.interestRate, remainingInst),
+      };
+    }),
+    [debts],
+  );
+
+  const comparison = useMemo(() => compareDebtStrategies(inputs, budgetCents), [inputs, budgetCents]);
+
+  const bothFeasible = comparison.avalanche.feasible && comparison.snowball.feasible;
+
+  return (
+    <div className="bg-quantum-card border border-quantum-border rounded-2xl p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <Target className="w-4 h-4 text-cyan-400" />
+        <span className="text-xs font-black text-quantum-fg uppercase tracking-widest">Plano de Quitação</span>
+      </div>
+
+      <div className="space-y-1.5">
+        <label htmlFor="payoff-budget" className="block text-xs font-bold text-quantum-fgMuted">
+          Orçamento mensal para dívidas (R$)
+        </label>
+        <input
+          id="payoff-budget"
+          type="text"
+          inputMode="decimal"
+          placeholder={formatBRL(defaultBudgetCents).replace('R$', '').trim()}
+          value={budgetRaw}
+          onChange={e => setBudgetRaw(e.target.value)}
+          className="w-full bg-quantum-bg border border-quantum-border rounded-xl px-3 py-2 text-sm text-quantum-fg placeholder-quantum-fgMuted focus:outline-none focus:border-cyan-500/50"
+        />
+        <p className="text-[11px] text-quantum-fgMuted">
+          Vazio usa o mínimo estimado ({formatBRL(defaultBudgetCents)}). Aumente para acelerar a quitação.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <StrategyCard result={comparison.avalanche} isRecommended={comparison.recommended === 'avalanche'} />
+        <StrategyCard result={comparison.snowball} isRecommended={comparison.recommended === 'snowball'} />
+      </div>
+
+      {bothFeasible && comparison.interestSavingsCents > 0 && (
+        <div className="flex items-start gap-2 text-xs bg-cyan-500/5 border border-cyan-500/20 rounded-xl p-3">
+          <TrendingDown className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+          <span className="text-quantum-fg">
+            A estratégia <span className="font-bold">avalanche</span> economiza{' '}
+            <span className="font-black text-cyan-400">{formatBRL(comparison.interestSavingsCents)}</span> em juros
+            {comparison.monthsDifference !== 0 && (
+              <> e {comparison.monthsDifference > 0 ? 'antecipa' : 'atrasa'} a quitação em{' '}
+                {Math.abs(comparison.monthsDifference)} {Math.abs(comparison.monthsDifference) === 1 ? 'mês' : 'meses'}</>
+            )}
+            {' '}em relação à bola de neve.
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── DebtModule ───────────────────────────────────────────────────────────────
 export default function DebtModule({ uid }: Props) {
   const { debts, loading, addDebt, updateDebt, deleteDebt } = useDebts(uid);
@@ -409,6 +547,11 @@ export default function DebtModule({ uid }: Props) {
           sub={debts.length > activeDebts.length ? `${debts.length - activeDebts.length} quitada(s)` : 'Todas ativas'}
         />
       </div>
+
+      {/* Plano de quitação (avalanche × bola de neve) */}
+      {activeDebts.length > 0 && (
+        <PayoffPlanner debts={activeDebts} defaultBudgetCents={totalMonthlyPaymentCents} />
+      )}
 
       {/* Debt list */}
       {activeDebts.length === 0 ? (

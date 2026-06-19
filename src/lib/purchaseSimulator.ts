@@ -30,6 +30,10 @@ export interface PurchaseSimulatorInput {
 
   /** Taxa CDI mensal, ex: 0.0083 = 0,83% a.m. (default 0.0083) */
   cdiMonthlyRate?: number;
+
+  /** Limite efetivo real do cartão em centavos (FASE D-2).
+   * Quando fornecido, substitui currentBalanceCents no critério do veredito. */
+  cardEffectiveLimitCents?: Centavos;
 }
 
 export type VerdictColor = 'green' | 'yellow' | 'red';
@@ -82,6 +86,7 @@ export function simulatePurchase(input: PurchaseSimulatorInput): PurchaseSimulat
     commitmentLimitPct = 0.30,
     currentCommittedCents = 0 as Centavos,
     cdiMonthlyRate = 0.0083,
+    cardEffectiveLimitCents,
   } = input;
 
   // ── 1. Parcelas (divisão inteira; restante na última) ──────────────────────
@@ -108,9 +113,11 @@ export function simulatePurchase(input: PurchaseSimulatorInput): PurchaseSimulat
       ? newCommittedCents / monthlyIncomeCents
       : 0;
 
-  const effectiveLimitAfterCents = monthlyIncomeCents
-    ? (Math.max(0, Math.floor(monthlyIncomeCents * commitmentLimitPct) - newCommittedCents) as Centavos)
-    : (Math.max(0, currentBalanceCents - priceCents) as Centavos);
+  const effectiveLimitAfterCents = cardEffectiveLimitCents !== undefined
+    ? (Math.max(0, cardEffectiveLimitCents - priceCents) as Centavos)
+    : monthlyIncomeCents
+      ? (Math.max(0, Math.floor(monthlyIncomeCents * commitmentLimitPct) - newCommittedCents) as Centavos)
+      : (Math.max(0, currentBalanceCents - priceCents) as Centavos);
 
   // ── 4. Comparação CDI (parcelar vs pagar à vista e investir) ───────────────
   let investmentGainCents: Centavos | undefined;
@@ -128,14 +135,26 @@ export function simulatePurchase(input: PurchaseSimulatorInput): PurchaseSimulat
   const reasons: string[] = [];
   let verdict: VerdictColor = 'green';
 
-  if (priceCents > currentBalanceCents) {
-    verdict = 'red';
-    reasons.push('Compra supera o saldo disponível');
-  } else if (monthlyIncomeCents && limitUsagePct > commitmentLimitPct) {
-    verdict = 'yellow';
-    reasons.push(
-      `Comprometimento chegaria a ${(limitUsagePct * 100).toFixed(0)}% da renda mensal`,
-    );
+  if (cardEffectiveLimitCents !== undefined) {
+    if (priceCents > cardEffectiveLimitCents) {
+      verdict = 'red';
+      reasons.push('Compra excede o limite efetivo disponível do cartão');
+    } else if (monthlyIncomeCents && limitUsagePct > commitmentLimitPct) {
+      verdict = 'yellow';
+      reasons.push(
+        `Comprometimento chegaria a ${(limitUsagePct * 100).toFixed(0)}% da renda mensal`,
+      );
+    }
+  } else {
+    if (priceCents > currentBalanceCents) {
+      verdict = 'red';
+      reasons.push('Compra supera o saldo disponível');
+    } else if (monthlyIncomeCents && limitUsagePct > commitmentLimitPct) {
+      verdict = 'yellow';
+      reasons.push(
+        `Comprometimento chegaria a ${(limitUsagePct * 100).toFixed(0)}% da renda mensal`,
+      );
+    }
   }
 
   if (n > 1 && investmentGainCents !== undefined && investmentGainCents > 0) {
