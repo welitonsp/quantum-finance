@@ -18,6 +18,10 @@ import {
   CreateTransactionValidationError,
   validateCreateTransactionPayload,
 } from './createTransactionValidation';
+import {
+  AgentActionValidationError,
+  validateAgentActionRequest,
+} from './agentActionValidation';
 import { maskPII } from './lib/piiMasker';
 import {
   centsToReais,
@@ -374,6 +378,149 @@ export const createTransaction = onCall(
     });
 
     return { id: opResult.id };
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNÇÃO 0B — executeAgentAction (FASE H — ação confirmada do Agente Financeiro)
+//
+// Materializa, server-trusted, uma ActionProposal JÁ confirmada pelo humano e grava
+// a decisão em users/{uid}/decisions. Núcleo de governança: NÃO há escrita sem
+// proposal.status === 'confirmed'. Ver docs/AI_AGENT_GUARDRAILS.md e AI_DECISION_JOURNAL.md.
+//
+// Increment 1: executa apenas `register_purchase` (transação única à vista) +
+// registro de decisão. installments>1 e os demais kinds retornam 'unimplemented'
+// até fase própria que defina o split de parcelas / shapes de budget/goal/debt.
+// ═══════════════════════════════════════════════════════════════════════════════
+export const executeAgentAction = onCall(
+  {
+    region: REGION,
+    timeoutSeconds: 30,
+    enforceAppCheck: true,
+    consumeAppCheckToken: true,
+    cors: CORS_ORIGINS,
+  },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
+    if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
+
+    const uid        = request.auth.uid;
+    const rawPayload = request.data as Record<string, unknown>;
+
+    const idempotencyKey =
+      rawPayload && typeof rawPayload['idempotencyKey'] === 'string' &&
+      IDEM_KEY_RE.test(rawPayload['idempotencyKey'] as string)
+        ? (rawPayload['idempotencyKey'] as string)
+        : null;
+
+    let action: ReturnType<typeof validateAgentActionRequest>;
+    try {
+      action = validateAgentActionRequest(rawPayload);
+    } catch (error) {
+      if (error instanceof AgentActionValidationError) {
+        throw new HttpsError('invalid-argument', error.message);
+      }
+      throw error;
+    }
+
+    // Increment 1: somente register_purchase à vista.
+    if (action.kind !== 'register_purchase') {
+      throw new HttpsError('unimplemented', `Execução de "${action.kind}" ainda não habilitada nesta fase.`);
+    }
+    const p = action.payload as {
+      description: string; amountCents: number; date: string; category: string;
+      installments?: number; cardId?: string;
+    };
+    if (p.installments !== undefined && p.installments > 1) {
+      throw new HttpsError('unimplemented', 'Compra parcelada ainda não habilitada nesta fase (apenas à vista).');
+    }
+
+    // Fast-path idempotência.
+    if (idempotencyKey) {
+      const idemRef  = adminDb.doc(`users/${uid}/idempotency/${idempotencyKey}`);
+      const idemSnap = await idemRef.get();
+      if (idemSnap.exists) {
+        return {
+          id: idemSnap.data()!['txId'] as string,
+          decisionId: (idemSnap.data()!['decisionId'] as string) ?? null,
+        };
+      }
+    }
+
+    const descriptionLower = p.description.trim().toLowerCase();
+    const txRef   = adminDb.collection(`users/${uid}/transactions`).doc();
+    const histRef = adminDb.collection(`users/${uid}/transactions`).doc(txRef.id).collection('history').doc();
+    const decisionRef = adminDb.collection(`users/${uid}/decisions`).doc();
+
+    const afterSnapshot: Record<string, unknown> = {
+      description:   p.description,
+      descriptionLower,
+      value_cents:   p.amountCents,
+      schemaVersion: 2,
+      type:          'saida',
+      category:      p.category,
+      date:          p.date,
+      source:        'manual',
+      isRecurring:   false,
+      ...(p.cardId !== undefined ? { cardId: p.cardId } : {}),
+    };
+
+    const txPayload = {
+      ...afterSnapshot,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    const histPayload = {
+      action:        'CREATE',
+      txId:          txRef.id,
+      createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+      schemaVersion: 1,
+      origin:        'ai',
+      amount_cents:  p.amountCents,
+      category:      p.category,
+      after:         afterSnapshot,
+      changedFields: Object.keys(afterSnapshot),
+    };
+
+    const decisionPayload = {
+      userId:       uid,
+      createdAt:    admin.firestore.FieldValue.serverTimestamp(),
+      intent:       action.intent,
+      question:     action.question,
+      toolsUsed:    action.toolsUsed,
+      userDecision: 'confirmed',
+      outcomeStatus: 'applied',
+      proposedAction: { kind: action.kind, payload: action.payload },
+      ...(action.snapshotRef      !== undefined ? { snapshotRef:      action.snapshotRef }      : {}),
+      ...(action.simulationResult !== undefined ? { simulationResult: action.simulationResult } : {}),
+    };
+
+    const opResult = await adminDb.runTransaction(async (t) => {
+      if (idempotencyKey) {
+        const idemRef  = adminDb.doc(`users/${uid}/idempotency/${idempotencyKey}`);
+        const idemSnap = await t.get(idemRef);
+        if (idemSnap.exists) {
+          return {
+            id: idemSnap.data()!['txId'] as string,
+            decisionId: (idemSnap.data()!['decisionId'] as string) ?? null,
+          };
+        }
+        const expireAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        t.set(idemRef, {
+          txId:       txRef.id,
+          decisionId: decisionRef.id,
+          createdAt:  admin.firestore.FieldValue.serverTimestamp(),
+          expireAt,
+        });
+      }
+      t.set(txRef,       txPayload);
+      t.set(histRef,     histPayload);
+      t.set(decisionRef, decisionPayload);
+      return { id: txRef.id, decisionId: decisionRef.id };
+    });
+
+    return opResult;
   },
 );
 
