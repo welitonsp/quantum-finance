@@ -54,6 +54,59 @@ jobs:
             firebase deploy --only firestore:rules --project quantum-finance-39235 --non-interactive
           rm -f /tmp/sa.json
 
+  deploy_functions:
+    name: ⚙️ Deploy Cloud Functions
+    runs-on: ubuntu-latest
+    needs: wait_for_ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install Firebase Tools
+        run: npm install -g firebase-tools
+
+      - name: Install & build functions
+        # Instala e compila o codebase de functions (TS -> functions/lib) antes do deploy.
+        # Não toca em src/ nem em firestore.rules.
+        run: |
+          npm --prefix functions ci
+          npm --prefix functions run build
+
+      - name: Deploy Cloud Functions
+        # Publica SOMENTE as Cloud Functions — nunca hosting ou firestore.rules.
+        # Roda após o gate de CI (wait_for_ci), em paralelo aos jobs de rules/hosting,
+        # como job separado para deixar claro o que falhou em caso de erro.
+        #
+        # Reutiliza o MESMO service account já confiável para hosting/rules
+        # (secret FIREBASE_SERVICE_ACCOUNT_QUANTUM_FINANCE_39235). NÃO cria secret novo.
+        #
+        # IAM necessário no service account (gen-2 / Node 24) — se faltar, o deploy
+        # falha explicitamente abaixo e o gap NÃO deve ser contornado:
+        #   - roles/cloudfunctions.developer  (Cloud Functions Developer)
+        #   - roles/iam.serviceAccountUser    (Service Account User — atuar como SA de runtime)
+        #   - roles/firebase.admin            (Firebase Admin — ou equivalente)
+        #   2nd gen também costuma exigir: roles/run.admin, roles/artifactregistry.writer,
+        #   roles/cloudbuild.builds.editor.
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_QUANTUM_FINANCE_39235 }}
+        run: |
+          if [ -z "$GOOGLE_APPLICATION_CREDENTIALS_JSON" ]; then
+            echo "::error::Secret FIREBASE_SERVICE_ACCOUNT_QUANTUM_FINANCE_39235 ausente — deploy de functions abortado."
+            exit 1
+          fi
+          echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > /tmp/sa.json
+          # Garante remoção da credencial mesmo se o deploy falhar (set -e do runner).
+          trap 'rm -f /tmp/sa.json' EXIT
+          GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json \
+            firebase deploy --only functions --project quantum-finance-39235 --non-interactive || {
+              echo "::error::Deploy de functions falhou. Verifique permissões IAM do service account (ver comentário acima: cloudfunctions.developer + iam.serviceAccountUser + firebase.admin). NÃO contornar o gap de IAM."
+              exit 1
+            }
+
   build_and_deploy:
     name: 🚀 Deploy to Firebase Hosting
     runs-on: ubuntu-latest
