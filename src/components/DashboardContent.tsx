@@ -405,6 +405,16 @@ export default function DashboardContent({
         <KPICards transactions={transactions} />
       </motion.div>
 
+      {/* ── ALERTAS DE ORÇAMENTO (acima da dobra — decisão agora) ── */}
+      <motion.div variants={itemVariants}>
+        <BudgetAlertsPanel
+          alerts={budgetAlerts}
+          budgetsCount={budgets.length}
+          loading={budgetsLoading}
+          hasTransactions={txSet.length > 0}
+        />
+      </motion.div>
+
       {/* ── SAÚDE FINANCEIRA & INSIGHTS (recolhível — Command Center) ── */}
       <DashboardSection title="Saúde Financeira & Insights" icon={Activity} collapsible defaultCollapsed>
         <div className="space-y-6 pt-2">
@@ -449,16 +459,6 @@ export default function DashboardContent({
 
       <motion.div variants={itemVariants}>
         <AnomalyAlerts transactions={allTransactions} />
-      </motion.div>
-
-      {/* ── ALERTAS DE ORÇAMENTO — read-only ─────────────────── */}
-      <motion.div variants={itemVariants}>
-        <BudgetAlertsPanel
-          alerts={budgetAlerts}
-          budgetsCount={budgets.length}
-          loading={budgetsLoading}
-          hasTransactions={txSet.length > 0}
-        />
       </motion.div>
 
       {/* ── BRIEFING IA — acima dos gráficos ──────────────────── */}
