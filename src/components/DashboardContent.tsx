@@ -44,6 +44,7 @@ import EconomyChallengeWidget from './EconomyChallengeWidget';
 import GoalsPanel from './GoalsPanel';
 import AnomalyAlerts from './AnomalyAlerts';
 import CentroComandoWidget from './CentroComandoWidget';
+import { DashboardSection } from '../shared/components/ui';
 import toast from 'react-hot-toast';
 import { useRecurringAutoExecute } from '../hooks/useRecurringAutoExecute';
 import type { TimeRange } from '../hooks/useFinancialData';
@@ -404,6 +405,9 @@ export default function DashboardContent({
         <KPICards transactions={transactions} />
       </motion.div>
 
+      {/* ── SAÚDE FINANCEIRA & INSIGHTS (recolhível — Command Center) ── */}
+      <DashboardSection title="Saúde Financeira & Insights" icon={Activity} collapsible defaultCollapsed>
+        <div className="space-y-6 pt-2">
       <QuantumInsights metrics={metrics} loading={loadingMetrics} />
 
       <motion.div variants={itemVariants}>
@@ -477,6 +481,13 @@ export default function DashboardContent({
         />
       </motion.div>
 
+        </div>
+      </DashboardSection>
+
+      {/* ── ANÁLISES & PROJEÇÕES (recolhível — Command Center) ── */}
+      <DashboardSection title="Análises & Projeções" icon={Landmark} collapsible defaultCollapsed>
+        <div className="space-y-6 pt-2">
+
       {/* ── KPIs + GRÁFICOS (dados reais com filtro de tempo) ─── */}
       <motion.div variants={itemVariants} className="space-y-4">
         {/* Seletor de período */}
@@ -542,6 +553,9 @@ export default function DashboardContent({
           currentBalanceCents={toBalanceCents(saldo)}
         />
       </motion.div>
+
+        </div>
+      </DashboardSection>
 
       {/* ── FAB MOBILE ────────────────────────────────────────── */}
       <button
