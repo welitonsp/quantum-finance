@@ -415,6 +415,17 @@ export default function DashboardContent({
         />
       </motion.div>
 
+      {/* ── METAS DE POUPANÇA (acima da dobra — objetivos visíveis) ── */}
+      <motion.div variants={itemVariants}>
+        <GoalsPanel
+          uid={user?.uid ?? ''}
+          {...(metrics ? { ativosCents: metrics.ativosCents } : {})}
+          {...(metrics && metrics.despesa > 0
+            ? { monthlyExpensesCents: toCentavos(metrics.despesa) as Centavos }
+            : {})}
+        />
+      </motion.div>
+
       {/* ── SAÚDE FINANCEIRA & INSIGHTS (recolhível — Command Center) ── */}
       <DashboardSection title="Saúde Financeira & Insights" icon={Activity} collapsible defaultCollapsed>
         <div className="space-y-6 pt-2">
@@ -429,16 +440,6 @@ export default function DashboardContent({
           weeks={cashflowWeeks}
           futureEvents={futureEvents}
           loading={loading}
-        />
-      </motion.div>
-
-      <motion.div variants={itemVariants}>
-        <GoalsPanel
-          uid={user?.uid ?? ''}
-          {...(metrics ? { ativosCents: metrics.ativosCents } : {})}
-          {...(metrics && metrics.despesa > 0
-            ? { monthlyExpensesCents: toCentavos(metrics.despesa) as Centavos }
-            : {})}
         />
       </motion.div>
 
