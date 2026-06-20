@@ -22,6 +22,7 @@ import type { Centavos } from './shared/types/money';
 
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
+import { AppShell } from './shared/components/layout/AppShell';
 import OfflineIndicator from './shared/components/OfflineIndicator';
 import LoginScreen from './components/LoginScreen';
 import QuantumBackground from './components/QuantumBackground';
@@ -250,8 +251,8 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
       />
       <QuantumBackground />
 
-      <div className="relative z-10 flex w-full h-full pointer-events-none">
-        <div className="pointer-events-auto">
+      <AppShell
+        sidebar={
           <Sidebar
             user={user}
             isMobileMenuOpen={isMobileMenuOpen}
@@ -260,9 +261,8 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
             setIsSettingsOpen={setIsSettingsOpen}
             handleLogout={handleLogout}
           />
-        </div>
-
-        <div className="flex-1 flex flex-col w-full overflow-hidden pointer-events-auto bg-quantum-bg/80 backdrop-blur-sm">
+        }
+        header={
           <Header
             currentPage={currentPage}
             currentMonth={currentMonth}
@@ -285,10 +285,10 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
             userRules={userCategoryRules}
             onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
           />
-
-          <main className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 lg:p-12">
-            <ErrorBoundary>
-              <Suspense fallback={<QuantumLoader />}>
+        }
+      >
+        <ErrorBoundary>
+          <Suspense fallback={<QuantumLoader />}>
                 {currentPage === 'dashboard' && (
                   <DashboardContent
                     user={user}
@@ -420,11 +420,9 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                 {currentPage === 'calendar' && (
                   <CalendarPage uid={safeUID} />
                 )}
-              </Suspense>
-            </ErrorBoundary>
-          </main>
-        </div>
-      </div>
+          </Suspense>
+        </ErrorBoundary>
+      </AppShell>
 
       <button
         onClick={() => setIsAIChatOpen(true)}
