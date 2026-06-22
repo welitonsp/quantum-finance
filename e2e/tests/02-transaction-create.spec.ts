@@ -61,8 +61,11 @@ test.describe('Criação manual de transação', () => {
       ).first()
     ).toBeVisible({ timeout: 8_000 })
       .catch(async () => {
-        // alternativa: o formulário fecha (dialog some)
-        await expect(page.getByPlaceholder('Ex: Supermercado Extra')).not.toBeVisible({ timeout: 5_000 });
+        // alternativa: o formulário fecha (dialog some).
+        // O save manual (Spark sync-queue → emulator) pode levar ~15s sob carga de CI;
+        // toleramos isso aqui para evitar flake (o teste já falhava intermitentemente na main,
+        // passando só via retry do Playwright). Ver investigação em roadmap_checklist.
+        await expect(page.getByPlaceholder('Ex: Supermercado Extra')).not.toBeVisible({ timeout: 20_000 });
       });
   });
 
