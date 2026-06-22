@@ -388,9 +388,10 @@ export const createTransaction = onCall(
 // a decisão em users/{uid}/decisions. Núcleo de governança: NÃO há escrita sem
 // proposal.status === 'confirmed'. Ver docs/AI_AGENT_GUARDRAILS.md e AI_DECISION_JOURNAL.md.
 //
-// Executa `register_purchase` (transação única à vista) e `contribute_to_goal`
-// (incrementa currentCents da meta). `register_debt_payment` e `create_budget` ainda
-// retornam 'unimplemented'; installments>1 também (split de parcelas pendente).
+// Executa `register_purchase` (transação única à vista), `contribute_to_goal`
+// (incrementa currentCents da meta) e `register_debt_payment` (abate parcela/saldo da
+// dívida). `create_budget` ainda retorna 'unimplemented'; installments>1 também
+// (split de parcelas pendente).
 // ═══════════════════════════════════════════════════════════════════════════════
 export const executeAgentAction = onCall(
   {
@@ -481,7 +482,72 @@ export const executeAgentAction = onCall(
       });
     }
 
-    // Increment 1: register_purchase à vista. (register_debt_payment e create_budget pendentes.)
+    // ── register_debt_payment: registra pagamento de parcela da dívida ──
+    // Espelha DebtModule.handleMarkPaid: remainingCents -= amount (clamp 0),
+    // paidInstallments += 1, active = !quitada. Idempotente.
+    if (action.kind === 'register_debt_payment') {
+      const d = action.payload as { debtId: string; amountCents: number; date: string };
+      const debtRef     = adminDb.doc(`users/${uid}/debts/${d.debtId}`);
+      const decisionRef = adminDb.collection(`users/${uid}/decisions`).doc();
+      const idemRef     = idempotencyKey ? adminDb.doc(`users/${uid}/idempotency/${idempotencyKey}`) : null;
+
+      if (idemRef) {
+        const snap = await idemRef.get();
+        if (snap.exists) {
+          return { debtId: d.debtId, decisionId: (snap.data()!['decisionId'] as string) ?? null };
+        }
+      }
+
+      const debtDecision = {
+        userId:        uid,
+        createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+        intent:        action.intent,
+        question:      action.question,
+        toolsUsed:     action.toolsUsed,
+        userDecision:  'confirmed',
+        outcomeStatus: 'applied',
+        proposedAction: { kind: action.kind, payload: action.payload },
+        ...(action.snapshotRef      !== undefined ? { snapshotRef:      action.snapshotRef }      : {}),
+        ...(action.simulationResult !== undefined ? { simulationResult: action.simulationResult } : {}),
+      };
+
+      return adminDb.runTransaction(async (t) => {
+        if (idemRef) {
+          const idemSnap = await t.get(idemRef);
+          if (idemSnap.exists) {
+            return { debtId: d.debtId, decisionId: (idemSnap.data()!['decisionId'] as string) ?? null };
+          }
+        }
+        const debtSnap = await t.get(debtRef);
+        if (!debtSnap.exists) throw new HttpsError('not-found', 'Dívida não encontrada.');
+        const data = debtSnap.data()!;
+        const remaining    = typeof data['remainingCents']   === 'number' ? (data['remainingCents']   as number) : 0;
+        const installments = typeof data['installments']     === 'number' ? (data['installments']     as number) : 1;
+        const paid         = typeof data['paidInstallments'] === 'number' ? (data['paidInstallments'] as number) : 0;
+
+        const newRemaining = Math.max(0, remaining - d.amountCents);
+        const newPaid      = Math.min(installments, paid + 1);
+        const isNowPaid    = newPaid >= installments || newRemaining === 0;
+
+        t.update(debtRef, {
+          remainingCents:   newRemaining,
+          paidInstallments: newPaid,
+          active:           !isNowPaid,
+          updatedAt:        admin.firestore.FieldValue.serverTimestamp(),
+        });
+        if (idemRef) {
+          t.set(idemRef, {
+            decisionId: decisionRef.id,
+            createdAt:  admin.firestore.FieldValue.serverTimestamp(),
+            expireAt:   new Date(Date.now() + 24 * 60 * 60 * 1000),
+          });
+        }
+        t.set(decisionRef, debtDecision);
+        return { debtId: d.debtId, remainingCents: newRemaining, paidInstallments: newPaid, decisionId: decisionRef.id };
+      });
+    }
+
+    // register_purchase à vista. (create_budget pendente.)
     if (action.kind !== 'register_purchase') {
       throw new HttpsError('unimplemented', `Execução de "${action.kind}" ainda não habilitada nesta fase.`);
     }
