@@ -23,6 +23,7 @@ import type { Centavos } from './shared/types/money';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import { AppShell } from './shared/components/layout/AppShell';
+import { MobileBottomNav } from './shared/components/layout/MobileBottomNav';
 import OfflineIndicator from './shared/components/OfflineIndicator';
 import LoginScreen from './components/LoginScreen';
 import QuantumBackground from './components/QuantumBackground';
@@ -148,7 +149,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   const { theme, resolvedTheme, toggleTheme } = useTheme();
   const { togglePrivacy }        = usePrivacy();
   const {
-    currentPage, currentMonth, currentYear,
+    currentPage, setCurrentPage, currentMonth, currentYear,
     activeModule, setActiveModule,
     handlePrevMonth, handleNextMonth,
   } = useNavigation();
@@ -284,6 +285,13 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
             handleImport={handleImport}
             userRules={userCategoryRules}
             onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+          />
+        }
+        bottomNav={
+          <MobileBottomNav
+            currentPage={currentPage}
+            onNavigate={setCurrentPage}
+            onOpenMenu={() => setIsMobileMenuOpen(true)}
           />
         }
       >
@@ -426,7 +434,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
 
       <button
         onClick={() => setIsAIChatOpen(true)}
-        className="fixed bottom-6 right-6 md:bottom-8 md:right-8 w-14 h-14 bg-cyan-600 hover:bg-cyan-500 rounded-2xl flex items-center justify-center shadow-lg z-50 group border border-white/20"
+        className="fixed bottom-20 right-6 lg:bottom-8 lg:right-8 w-14 h-14 bg-cyan-600 hover:bg-cyan-500 rounded-2xl flex items-center justify-center shadow-lg z-50 group border border-white/20"
       >
         <BrainCircuit className="w-7 h-7 text-quantum-fg group-hover:animate-pulse" />
       </button>
