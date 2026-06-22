@@ -8,6 +8,7 @@ import { getTransactionAbsCentavos, isExpense, isInvoicePayment } from '../../ut
 import { fromCentavos } from '../../shared/types/money';
 import { calcPareto, calcPatrimonyEvolution } from '../../utils/reportEngine';
 import { normalizeCategoryName, type UserCategory } from '../../shared/schemas/categorySchemas';
+import { TopTabs } from '../../shared/components/ui';
 
 interface Props {
   transactions: Transaction[];
@@ -129,20 +130,18 @@ export default function ReportsContent({ transactions, accounts, categories = []
         </div>
       </div>
 
-      <div className="flex gap-4 md:gap-8 border-b border-quantum-border overflow-x-auto custom-scrollbar">
-        {(['pareto', 'tendencias'] as const).map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-4 text-sm font-bold tracking-widest uppercase transition-all border-b-2 whitespace-nowrap ${
-            activeTab === tab
-              ? tab === 'pareto' ? 'border-quantum-accent text-quantum-accent' : 'border-cyan-500 text-cyan-400'
-              : 'border-transparent text-quantum-fgMuted hover:text-quantum-fg'
-          }`}>
-            {tab === 'pareto' ? 'Análise Pareto (80/20)' : 'Tendências'}
-          </button>
-        ))}
-      </div>
+      <TopTabs
+        ariaLabel="Análises"
+        activeId={activeTab}
+        onChange={(id) => setActiveTab(id as 'pareto' | 'tendencias')}
+        tabs={[
+          { id: 'pareto',     label: 'Análise Pareto (80/20)' },
+          { id: 'tendencias', label: 'Tendências' },
+        ]}
+      />
 
       {activeTab === 'pareto' && (
-        <div className="space-y-6 animate-in slide-in-from-bottom-4">
+        <div role="tabpanel" id="tabpanel-pareto" aria-labelledby="tab-pareto" className="space-y-6 animate-in slide-in-from-bottom-4">
           <div className="bg-quantum-card border border-quantum-border rounded-3xl p-6 shadow-lg relative overflow-hidden">
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 mb-8">
               <div className="flex items-start gap-4">
@@ -258,7 +257,7 @@ export default function ReportsContent({ transactions, accounts, categories = []
       )}
 
       {activeTab === 'tendencias' && (
-        <div className="space-y-6 animate-in slide-in-from-bottom-4">
+        <div role="tabpanel" id="tabpanel-tendencias" aria-labelledby="tab-tendencias" className="space-y-6 animate-in slide-in-from-bottom-4">
           <div className="bg-quantum-card p-5 rounded-2xl border border-quantum-border">
             <h3 className="text-sm font-bold uppercase tracking-wider text-quantum-fgMuted mb-4">
               Evolução Patrimonial (6 meses)
