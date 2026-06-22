@@ -44,6 +44,7 @@ import EconomyChallengeWidget from './EconomyChallengeWidget';
 import GoalsPanel from './GoalsPanel';
 import AnomalyAlerts from './AnomalyAlerts';
 import CentroComandoWidget from './CentroComandoWidget';
+import { DashboardSection } from '../shared/components/ui';
 import toast from 'react-hot-toast';
 import { useRecurringAutoExecute } from '../hooks/useRecurringAutoExecute';
 import type { TimeRange } from '../hooks/useFinancialData';
@@ -404,6 +405,30 @@ export default function DashboardContent({
         <KPICards transactions={transactions} />
       </motion.div>
 
+      {/* ── ALERTAS DE ORÇAMENTO (acima da dobra — decisão agora) ── */}
+      <motion.div variants={itemVariants}>
+        <BudgetAlertsPanel
+          alerts={budgetAlerts}
+          budgetsCount={budgets.length}
+          loading={budgetsLoading}
+          hasTransactions={txSet.length > 0}
+        />
+      </motion.div>
+
+      {/* ── METAS DE POUPANÇA (acima da dobra — objetivos visíveis) ── */}
+      <motion.div variants={itemVariants}>
+        <GoalsPanel
+          uid={user?.uid ?? ''}
+          {...(metrics ? { ativosCents: metrics.ativosCents } : {})}
+          {...(metrics && metrics.despesa > 0
+            ? { monthlyExpensesCents: toCentavos(metrics.despesa) as Centavos }
+            : {})}
+        />
+      </motion.div>
+
+      {/* ── SAÚDE FINANCEIRA & INSIGHTS (recolhível — Command Center) ── */}
+      <DashboardSection title="Saúde Financeira & Insights" icon={Activity} collapsible defaultCollapsed>
+        <div className="space-y-6 pt-2">
       <QuantumInsights metrics={metrics} loading={loadingMetrics} />
 
       <motion.div variants={itemVariants}>
@@ -415,16 +440,6 @@ export default function DashboardContent({
           weeks={cashflowWeeks}
           futureEvents={futureEvents}
           loading={loading}
-        />
-      </motion.div>
-
-      <motion.div variants={itemVariants}>
-        <GoalsPanel
-          uid={user?.uid ?? ''}
-          {...(metrics ? { ativosCents: metrics.ativosCents } : {})}
-          {...(metrics && metrics.despesa > 0
-            ? { monthlyExpensesCents: toCentavos(metrics.despesa) as Centavos }
-            : {})}
         />
       </motion.div>
 
@@ -447,16 +462,6 @@ export default function DashboardContent({
         <AnomalyAlerts transactions={allTransactions} />
       </motion.div>
 
-      {/* ── ALERTAS DE ORÇAMENTO — read-only ─────────────────── */}
-      <motion.div variants={itemVariants}>
-        <BudgetAlertsPanel
-          alerts={budgetAlerts}
-          budgetsCount={budgets.length}
-          loading={budgetsLoading}
-          hasTransactions={txSet.length > 0}
-        />
-      </motion.div>
-
       {/* ── BRIEFING IA — acima dos gráficos ──────────────────── */}
       <motion.div variants={itemVariants}>
         <ProactiveBriefing
@@ -476,6 +481,13 @@ export default function DashboardContent({
           }}
         />
       </motion.div>
+
+        </div>
+      </DashboardSection>
+
+      {/* ── ANÁLISES & PROJEÇÕES (recolhível — Command Center) ── */}
+      <DashboardSection title="Análises & Projeções" icon={Landmark} collapsible defaultCollapsed>
+        <div className="space-y-6 pt-2">
 
       {/* ── KPIs + GRÁFICOS (dados reais com filtro de tempo) ─── */}
       <motion.div variants={itemVariants} className="space-y-4">
@@ -542,6 +554,9 @@ export default function DashboardContent({
           currentBalanceCents={toBalanceCents(saldo)}
         />
       </motion.div>
+
+        </div>
+      </DashboardSection>
 
       {/* ── FAB MOBILE ────────────────────────────────────────── */}
       <button
