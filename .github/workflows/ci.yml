@@ -104,6 +104,10 @@ jobs:
       VITE_FIREBASE_MESSAGING_SENDER_ID: "123456789"
       VITE_FIREBASE_APP_ID: "1:123456789:web:fake"
       VITE_USE_EMULATOR: "true"
+      # Valor dummy só para o emulador de functions não bloquear pedindo o secret
+      # (defineSecret('GEMINI_API_KEY')). Nenhuma function invocada no E2E usa o valor;
+      # `createTransaction` (callable do fluxo de criação) não lê o secret.
+      GEMINI_API_KEY: "emulator-dummy-secret"
 
     steps:
       - uses: actions/checkout@v4
@@ -124,6 +128,11 @@ jobs:
       - name: Install Firebase Tools
         run: npm install -g firebase-tools
 
+      - name: Build Cloud Functions (for functions emulator)
+        run: |
+          npm --prefix functions ci
+          npm --prefix functions run build
+
       - name: Cache Firebase emulator binaries
         uses: actions/cache@v4
         with:
@@ -138,7 +147,10 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run E2E tests
-        run: firebase emulators:exec --only auth,firestore --project demo-quantum-finance "npm run test:e2e"
+        # Inclui o emulador de functions: o fluxo de criação de transação usa a callable
+        # server-trusted `createTransaction`. Sem o emulador de functions o client batia
+        # em 127.0.0.1:5001 com ERR_CONNECTION_REFUSED, tornando 02-transaction-create flaky.
+        run: firebase emulators:exec --only auth,firestore,functions --project demo-quantum-finance "npm run test:e2e"
 
       - name: Upload Playwright report
         if: failure()
