@@ -388,9 +388,9 @@ export const createTransaction = onCall(
 // a decisão em users/{uid}/decisions. Núcleo de governança: NÃO há escrita sem
 // proposal.status === 'confirmed'. Ver docs/AI_AGENT_GUARDRAILS.md e AI_DECISION_JOURNAL.md.
 //
-// Increment 1: executa apenas `register_purchase` (transação única à vista) +
-// registro de decisão. installments>1 e os demais kinds retornam 'unimplemented'
-// até fase própria que defina o split de parcelas / shapes de budget/goal/debt.
+// Executa `register_purchase` (transação única à vista) e `contribute_to_goal`
+// (incrementa currentCents da meta). `register_debt_payment` e `create_budget` ainda
+// retornam 'unimplemented'; installments>1 também (split de parcelas pendente).
 // ═══════════════════════════════════════════════════════════════════════════════
 export const executeAgentAction = onCall(
   {
@@ -423,7 +423,65 @@ export const executeAgentAction = onCall(
       throw error;
     }
 
-    // Increment 1: somente register_purchase à vista.
+    // ── contribute_to_goal: incrementa currentCents da meta (server-trusted) ──
+    // Espelha useGoals.setProgress; aditivo (savings podem exceder o alvo). Idempotente.
+    if (action.kind === 'contribute_to_goal') {
+      const g = action.payload as { goalId: string; amountCents: number; date: string };
+      const goalRef     = adminDb.doc(`users/${uid}/goals/${g.goalId}`);
+      const decisionRef = adminDb.collection(`users/${uid}/decisions`).doc();
+      const idemRef     = idempotencyKey ? adminDb.doc(`users/${uid}/idempotency/${idempotencyKey}`) : null;
+
+      if (idemRef) {
+        const snap = await idemRef.get();
+        if (snap.exists) {
+          return { goalId: g.goalId, decisionId: (snap.data()!['decisionId'] as string) ?? null };
+        }
+      }
+
+      const goalDecision = {
+        userId:        uid,
+        createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+        intent:        action.intent,
+        question:      action.question,
+        toolsUsed:     action.toolsUsed,
+        userDecision:  'confirmed',
+        outcomeStatus: 'applied',
+        proposedAction: { kind: action.kind, payload: action.payload },
+        ...(action.snapshotRef      !== undefined ? { snapshotRef:      action.snapshotRef }      : {}),
+        ...(action.simulationResult !== undefined ? { simulationResult: action.simulationResult } : {}),
+      };
+
+      return adminDb.runTransaction(async (t) => {
+        // Reads antes de writes (regra de transação do Firestore).
+        if (idemRef) {
+          const idemSnap = await t.get(idemRef);
+          if (idemSnap.exists) {
+            return { goalId: g.goalId, decisionId: (idemSnap.data()!['decisionId'] as string) ?? null };
+          }
+        }
+        const goalSnap = await t.get(goalRef);
+        if (!goalSnap.exists) throw new HttpsError('not-found', 'Meta não encontrada.');
+        const cur = typeof goalSnap.data()!['currentCents'] === 'number'
+          ? (goalSnap.data()!['currentCents'] as number) : 0;
+        const newCurrent = cur + g.amountCents;
+
+        t.update(goalRef, {
+          currentCents: newCurrent,
+          updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
+        });
+        if (idemRef) {
+          t.set(idemRef, {
+            decisionId: decisionRef.id,
+            createdAt:  admin.firestore.FieldValue.serverTimestamp(),
+            expireAt:   new Date(Date.now() + 24 * 60 * 60 * 1000),
+          });
+        }
+        t.set(decisionRef, goalDecision);
+        return { goalId: g.goalId, currentCents: newCurrent, decisionId: decisionRef.id };
+      });
+    }
+
+    // Increment 1: register_purchase à vista. (register_debt_payment e create_budget pendentes.)
     if (action.kind !== 'register_purchase') {
       throw new HttpsError('unimplemented', `Execução de "${action.kind}" ainda não habilitada nesta fase.`);
     }
