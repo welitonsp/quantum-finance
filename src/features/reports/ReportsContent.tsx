@@ -1,14 +1,14 @@
 // src/features/reports/ReportsContent.tsx
 import { useState, useMemo } from 'react';
 import { ComposedChart, BarChart, Bar, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Filter, AlertCircle, Calendar, Scissors, Sparkles, AlertTriangle } from 'lucide-react';
+import { Filter, AlertCircle, Calendar, Scissors, AlertTriangle } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 import type { Transaction, Account } from '../../shared/types/transaction';
 import { getTransactionAbsCentavos, isExpense, isInvoicePayment } from '../../utils/transactionUtils';
 import { fromCentavos } from '../../shared/types/money';
 import { calcPareto, calcPatrimonyEvolution } from '../../utils/reportEngine';
 import { normalizeCategoryName, type UserCategory } from '../../shared/schemas/categorySchemas';
-import { TopTabs } from '../../shared/components/ui';
+import { TopTabs, ContextualAIButton } from '../../shared/components/ui';
 
 interface Props {
   transactions: Transaction[];
@@ -58,7 +58,6 @@ export default function ReportsContent({ transactions, accounts, categories = []
   const [activeTab,      setActiveTab]      = useState<'pareto' | 'tendencias'>('pareto');
   const [timeFilter,     setTimeFilter]     = useState<TimeFilter>('30d');
   const [expenseFilter,  setExpenseFilter]  = useState<ExpenseFilter>('all');
-  const [showAIInsights, setShowAIInsights] = useState(false);
 
   const paretoData = useMemo<ParetoItem[]>(() => {
     if (!transactions || transactions.length === 0) return [];
@@ -175,12 +174,16 @@ export default function ReportsContent({ transactions, accounts, categories = []
             {paretoData.length > 0 ? (
               <>
                 <div className="flex justify-end mb-4">
-                  <button
-                    onClick={() => setShowAIInsights(!showAIInsights)}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-xl text-sm font-bold text-indigo-400 transition-all"
-                  >
-                    <Sparkles className="w-4 h-4" /> Ver Dicas da IA
-                  </button>
+                  <ContextualAIButton label="Ver Dicas da IA" title="Recomendações Quânticas da IA" variant="solid">
+                    <ul className="space-y-3 text-sm text-quantum-fg">
+                      {aiInsights.map((insight, i) => (
+                        <li key={i} className="flex gap-3">
+                          <span className="text-violet-400 mt-0.5">•</span>
+                          <span>{insight}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </ContextualAIButton>
                 </div>
 
                 <div className="h-[400px] w-full mb-8">
@@ -206,23 +209,6 @@ export default function ReportsContent({ transactions, accounts, categories = []
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
-
-                {showAIInsights && (
-                  <div className="mb-8 p-6 bg-quantum-card/80 border border-indigo-500/30 rounded-2xl animate-in slide-in-from-top-4">
-                    <div className="flex items-center gap-3 mb-4">
-                      <Sparkles className="w-5 h-5 text-indigo-400" />
-                      <h4 className="font-bold text-indigo-400">Recomendações Quânticas da IA</h4>
-                    </div>
-                    <ul className="space-y-3 text-sm text-quantum-fg">
-                      {aiInsights.map((insight, i) => (
-                        <li key={i} className="flex gap-3">
-                          <span className="text-indigo-500 mt-0.5">•</span>
-                          <span>{insight}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
 
                 <div>
                   <h4 className="text-sm font-bold text-quantum-fg mb-4 flex items-center gap-2">
