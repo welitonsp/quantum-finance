@@ -20,3 +20,4 @@ export type { ChartOption } from './ChartSelector';
 export { TopTabs }          from './TopTabs';
 export type { TabItem }     from './TopTabs';
 export { BottomSheet }      from './BottomSheet';
+export { ContextualAIButton } from './ContextualAIButton';

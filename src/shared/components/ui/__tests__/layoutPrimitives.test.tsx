@@ -9,6 +9,7 @@ import {
   ChartSelector,
   TopTabs,
   BottomSheet,
+  ContextualAIButton,
 } from '../index';
 import type { Centavos } from '../../../types/money';
 
@@ -87,6 +88,19 @@ describe('PR 2 — primitivos de layout', () => {
     expect(tabs[0]!.getAttribute('aria-selected')).toBe('true');
     fireEvent.keyDown(tabs[0]!, { key: 'ArrowRight' });
     expect(onChange).toHaveBeenCalledWith('y');
+  });
+
+  it('ContextualAIButton abre um BottomSheet com o conteúdo de IA ao clicar', () => {
+    render(
+      <ContextualAIButton label="Explicar com IA" title="Insights">
+        <p>conteúdo gerado pela IA</p>
+      </ContextualAIButton>,
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Explicar com IA/i }));
+    const dialog = screen.getByRole('dialog', { name: 'Insights' });
+    expect(dialog).toBeTruthy();
+    expect(screen.getByText('conteúdo gerado pela IA')).toBeTruthy();
   });
 
   it('BottomSheet não renderiza fechado e renderiza como dialog aberto', () => {
