@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import CountUp from 'react-countup';
 import {
@@ -9,11 +9,13 @@ import {
 import { useNavigation } from '../contexts/NavigationContext';
 import { formatCurrency } from '../utils/formatters';
 import { useDashboardData } from '../hooks/useFinancialData';
-import ForecastWidget from './ForecastWidget';
 import ProactiveBriefing from './ProactiveBriefing';
-import SurvivalHeatmap from './SurvivalHeatmap';
-import WealthKPIs from './WealthKPIs';
-import DashboardCharts from './DashboardCharts';
+// Widgets analíticos pesados (gráficos) — code-split via lazy; só carregam ao expandir
+// as seções recolhíveis "Saúde Financeira & Insights" / "Análises & Projeções" (PR 8).
+const ForecastWidget   = lazy(() => import('./ForecastWidget'));
+const SurvivalHeatmap  = lazy(() => import('./SurvivalHeatmap'));
+const WealthKPIs       = lazy(() => import('./WealthKPIs'));
+const DashboardCharts  = lazy(() => import('./DashboardCharts'));
 import {
   calcStatus,
   calculateBudgetAlerts,
@@ -22,7 +24,7 @@ import {
 } from '../utils/dashboardUtils';
 import { useForecast } from '../hooks/useForecast';
 import { useBudgets } from '../hooks/useBudgets';
-import BudgetWidget from './BudgetWidget';
+const BudgetWidget     = lazy(() => import('./BudgetWidget'));
 import { HealthGauge } from './HealthGauge';
 import { SparkLine } from './SparkLine';
 import { IntelStrip } from './IntelStrip';
@@ -35,16 +37,16 @@ import QuantumInsights from './QuantumInsights';
 import QuantumCopilotCards from './QuantumCopilotCards';
 import { useQuantumCopilot } from '../hooks/useQuantumCopilot';
 import { useScoreHistory } from '../hooks/useScoreHistory';
-import FinancialHealthScore from './FinancialHealthScore';
+const FinancialHealthScore = lazy(() => import('./FinancialHealthScore'));
 import WeeklyCashflowWidget from './WeeklyCashflowWidget';
 import { useWeeklyCashflow } from '../hooks/useWeeklyCashflow';
-import TimelineWidget from './TimelineWidget';
+const TimelineWidget   = lazy(() => import('./TimelineWidget'));
 import { toCentavos as toBalanceCents } from '../shared/schemas/financialSchemas';
 import EconomyChallengeWidget from './EconomyChallengeWidget';
 import GoalsPanel from './GoalsPanel';
 import AnomalyAlerts from './AnomalyAlerts';
 import CentroComandoWidget from './CentroComandoWidget';
-import { DashboardSection } from '../shared/components/ui';
+import { DashboardSection, Spinner } from '../shared/components/ui';
 import toast from 'react-hot-toast';
 import { useRecurringAutoExecute } from '../hooks/useRecurringAutoExecute';
 import type { TimeRange } from '../hooks/useFinancialData';
@@ -429,6 +431,7 @@ export default function DashboardContent({
       {/* ── SAÚDE FINANCEIRA & INSIGHTS (recolhível — Command Center) ── */}
       <DashboardSection title="Saúde Financeira & Insights" icon={Activity} collapsible defaultCollapsed>
         <div className="space-y-6 pt-2">
+        <Suspense fallback={<div className="py-10 flex justify-center"><Spinner /></div>}>
       <QuantumInsights metrics={metrics} loading={loadingMetrics} />
 
       <motion.div variants={itemVariants}>
@@ -482,12 +485,14 @@ export default function DashboardContent({
         />
       </motion.div>
 
+        </Suspense>
         </div>
       </DashboardSection>
 
       {/* ── ANÁLISES & PROJEÇÕES (recolhível — Command Center) ── */}
       <DashboardSection title="Análises & Projeções" icon={Landmark} collapsible defaultCollapsed>
         <div className="space-y-6 pt-2">
+        <Suspense fallback={<div className="py-10 flex justify-center"><Spinner /></div>}>
 
       {/* ── KPIs + GRÁFICOS (dados reais com filtro de tempo) ─── */}
       <motion.div variants={itemVariants} className="space-y-4">
@@ -555,6 +560,7 @@ export default function DashboardContent({
         />
       </motion.div>
 
+        </Suspense>
         </div>
       </DashboardSection>
 
