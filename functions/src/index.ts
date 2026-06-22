@@ -388,10 +388,10 @@ export const createTransaction = onCall(
 // a decisão em users/{uid}/decisions. Núcleo de governança: NÃO há escrita sem
 // proposal.status === 'confirmed'. Ver docs/AI_AGENT_GUARDRAILS.md e AI_DECISION_JOURNAL.md.
 //
-// Executa `register_purchase` (transação única à vista), `contribute_to_goal`
-// (incrementa currentCents da meta) e `register_debt_payment` (abate parcela/saldo da
-// dívida). `create_budget` ainda retorna 'unimplemented'; installments>1 também
-// (split de parcelas pendente).
+// Executa os 4 kinds de ação v1: `register_purchase` (transação única à vista),
+// `contribute_to_goal` (incrementa currentCents), `register_debt_payment` (abate
+// parcela/saldo) e `create_budget` (cria orçamento mensal). Ainda pendente:
+// installments>1 no register_purchase (split de parcelas) e o intent router no LLM.
 // ═══════════════════════════════════════════════════════════════════════════════
 export const executeAgentAction = onCall(
   {
@@ -547,7 +547,64 @@ export const executeAgentAction = onCall(
       });
     }
 
-    // register_purchase à vista. (create_budget pendente.)
+    // ── create_budget: cria orçamento mensal por categoria ──
+    // Mapeia {category, limitCents, competencia} → shape de budget (targetAmount em
+    // centavos, period 'monthly', month YYYY-MM, schemaVersion 2), conforme isValidBudget.
+    if (action.kind === 'create_budget') {
+      const b = action.payload as { category: string; limitCents: number; competencia: string };
+      const budgetRef   = adminDb.collection(`users/${uid}/budgets`).doc();
+      const decisionRef = adminDb.collection(`users/${uid}/decisions`).doc();
+      const idemRef     = idempotencyKey ? adminDb.doc(`users/${uid}/idempotency/${idempotencyKey}`) : null;
+
+      if (idemRef) {
+        const snap = await idemRef.get();
+        if (snap.exists) {
+          return { budgetId: (snap.data()!['budgetId'] as string) ?? null, decisionId: (snap.data()!['decisionId'] as string) ?? null };
+        }
+      }
+
+      const budgetPayload = {
+        category:      b.category,
+        targetAmount:  b.limitCents, // armazenado em centavos (igual ao addBudget client)
+        period:        'monthly',
+        month:         b.competencia,
+        schemaVersion: 2,
+        createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt:     admin.firestore.FieldValue.serverTimestamp(),
+      };
+      const budgetDecision = {
+        userId:        uid,
+        createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+        intent:        action.intent,
+        question:      action.question,
+        toolsUsed:     action.toolsUsed,
+        userDecision:  'confirmed',
+        outcomeStatus: 'applied',
+        proposedAction: { kind: action.kind, payload: action.payload },
+        ...(action.snapshotRef      !== undefined ? { snapshotRef:      action.snapshotRef }      : {}),
+        ...(action.simulationResult !== undefined ? { simulationResult: action.simulationResult } : {}),
+      };
+
+      return adminDb.runTransaction(async (t) => {
+        if (idemRef) {
+          const idemSnap = await t.get(idemRef);
+          if (idemSnap.exists) {
+            return { budgetId: (idemSnap.data()!['budgetId'] as string) ?? null, decisionId: (idemSnap.data()!['decisionId'] as string) ?? null };
+          }
+          t.set(idemRef, {
+            budgetId:   budgetRef.id,
+            decisionId: decisionRef.id,
+            createdAt:  admin.firestore.FieldValue.serverTimestamp(),
+            expireAt:   new Date(Date.now() + 24 * 60 * 60 * 1000),
+          });
+        }
+        t.set(budgetRef,   budgetPayload);
+        t.set(decisionRef, budgetDecision);
+        return { budgetId: budgetRef.id, decisionId: decisionRef.id };
+      });
+    }
+
+    // register_purchase à vista. (todos os 4 kinds de ação agora cobertos.)
     if (action.kind !== 'register_purchase') {
       throw new HttpsError('unimplemented', `Execução de "${action.kind}" ainda não habilitada nesta fase.`);
     }
