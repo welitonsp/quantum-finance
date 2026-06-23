@@ -2,9 +2,54 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — Reconciliação de Fases + FASE D-2A/E/H-0/H(fundação)/I-J-K (2026-06-19)
+## Estado Consolidado — Trilha UI/UX Premium (8 PRs) + Backlog do Agente (3 kinds) (2026-06-23)
 
 > **Este bloco é a referência mais recente.** Em caso de divergência com blocos abaixo, prevalece este.
+> **Regra operacional:** Atualizar após cada PR mergeado ou marco relevante.
+
+### 0. Estado atual (2026-06-23)
+- Branch principal: `main` — HEAD `8cfc0e9` (PR #280 mergeado). Working tree limpo.
+- **Sem PR de feature aberto.** Único PR aberto: **#271** Dependabot (`@types/node` 25.9.3→25.9.4, grupo `frontend-development`).
+- **Deploy automático de Cloud Functions: ATIVO** (IAM corrigido e verificado em 2026-06-20). Todo push na `main` redeploya **rules + hosting + functions** (workflow `Deploy to Firebase Hosting on merge`, jobs `deploy_rules`/`deploy_functions`/`build_and_deploy`). Não é mais necessário deploy manual de functions.
+
+### 0.1 Trilha UI/UX Premium — 8 PRs ✅ COMPLETA (`main @ 747dcb7`)
+Plano canônico: `docs/UI_UX_ARCHITECTURE.md` (consolida auditorias Gemini+Codex+Claude). Decisões fixadas: **sem `react-router`** (navegação por `currentPage`/`NavigationContext` + switch em `App.tsx`); **não migrar biblioteca de gráficos** (Chart.js + Recharts coexistem, padronizados via `ChartCard`); reusar telas existentes; **nenhuma regra financeira na UI**.
+
+| PR | Escopo | Status |
+|---|---|---|
+| #266 | doc canônico `docs/UI_UX_ARCHITECTURE.md` | ✅ |
+| — | Gate DevOps: IAM do deploy de functions (least-privilege, 3 blockers 403) | ✅ |
+| #267 | 8 primitivos de layout em `src/shared/components/ui/` (`PageHeader`, `DashboardSection`, `MetricCard`, `FinancialCard`, `ChartCard`, `ChartSelector`, `TopTabs`, `BottomSheet`) + barrel + smoke tests | ✅ |
+| #268 | `src/shared/components/layout/AppShell.tsx` (rail+topbar+main, slot `bottomNav`) envolvendo o switch `currentPage` | ✅ |
+| #269 | `DashboardContent` enxuto: Command Center acima da dobra + 2 `DashboardSection` recolhíveis | ✅ |
+| #274 | `TopTabs` acessível em `ReportsContent` (Análises) | ✅ |
+| #275 | `MobileBottomNav` (slot `bottomNav`) + padding no main + FAB acima da barra no mobile | ✅ |
+| #276 | `ContextualAIButton` (✨ + `BottomSheet`) usado em `ReportsContent` | ✅ |
+| #277 | code-split: 7 widgets analíticos → `React.lazy` + Suspense por seção (~52KB / gzip ~18KB fora do bundle inicial) | ✅ |
+| #270/#272/#273 | infra: doc de status; timeout E2E; **emulador de functions no E2E** (raiz do flake `02-transaction-create`: callable `createTransaction` sem `--only ...,functions`) | ✅ |
+
+### 0.2 Backlog do Agente — 3 kinds de ação agora EXECUTAM server-trusted
+`executeAgentAction` (`functions/src/index.ts`) executa os 4 kinds, todos idempotentes, com gate de confirmação humana (`status==='confirmed'`) + App Check enforce/consume e gravação em `/decisions` (`outcomeStatus: 'applied'`):
+- ✅ **register_purchase** à vista — transação única + history Modelo A (origin `ai`) (#264).
+- ✅ **contribute_to_goal** — `currentCents += amount` na meta (#278).
+- ✅ **register_debt_payment** — `remaining -= amount`, `paidInstallments + 1`, recalcula `active` (#279).
+- ✅ **create_budget** — cria orçamento mensal por categoria (mapeia `limitCents`→`targetAmount`) (#280).
+- **Cloud Functions permanecem 6** (a execução dos kinds não criou callables novas).
+
+### 0.3 Pendentes do backlog do agente — PARADO em checkpoint do owner (risco de fazer às cegas)
+1. **Split de parcelas** no `register_purchase` (`installments>1` → hoje `unimplemented`). **ALTO RISCO / decisão de produto:** exigiria replicar no Admin SDK a lógica monetária canônica de `src/shared/services/installmentRepo.ts` (divisão modulo-safe + `addMonthsToDate` + competência + lookup `closingDay` + N transações com history Modelo A). `functions/` **não importa** `src/`. Recomendação: **NÃO duplicar lógica monetária** (colide com Zonas Proibidas — regra dos centavos / Cloud Functions); manter `unimplemented` e rotear compra parcelada pelo formulário/`installmentRepo` existente.
+2. **Intent router no LLM** dentro do `chatWithQuantumAI` (classifica intenção e roteia p/ tools/`ActionProposal`). Médio risco; **não validável às cegas** (precisa Gemini + emulator). Precisa de steer de escopo do owner.
+
+### 0.4 Bloqueios estruturais (não iniciar sem decisão)
+- **NFC-e** — bloqueado até gate SSRF completo.
+- **Open Finance / BACEN** — bloqueado por mTLS/orçamento.
+- **FCM background push** — requer migrar `vite.config.ts` para `injectManifest`.
+
+---
+
+## Estado Consolidado — Reconciliação de Fases + FASE D-2A/E/H-0/H(fundação)/I-J-K (2026-06-19)
+
+> Bloco anterior — superado pelo bloco de 2026-06-23 acima. Mantido para histórico.
 > **Regra operacional:** Atualizar após cada PR mergeado ou marco relevante.
 
 ### 0. Estado atual (2026-06-19)
