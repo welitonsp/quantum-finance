@@ -4,9 +4,10 @@
  */
 import { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 import {
   ShoppingCart, CheckCircle2, AlertTriangle, XCircle,
-  TrendingUp, CalendarDays, CreditCard, Info,
+  TrendingUp, CalendarDays, CreditCard, Info, Sparkles,
 } from 'lucide-react';
 import { toCentavos, formatBRL } from '../../shared/types/money';
 import type { Centavos } from '../../shared/types/money';
@@ -14,6 +15,9 @@ import { simulatePurchase } from '../../lib/purchaseSimulator';
 import type { PurchaseSimulatorResult, VerdictColor } from '../../lib/purchaseSimulator';
 import { usePrivacy } from '../../contexts/PrivacyContext';
 import type { Transaction, ModuleBalances, CreditCardWithMetrics } from '../../shared/types/transaction';
+import { useAgentAction } from '../../hooks/useAgentAction';
+import { ActionConfirmationSheet } from '../ai-agent/ActionConfirmationSheet';
+import type { ActionProposal } from '../../shared/schemas/agentSchemas';
 
 // ─── Helper de formatação ──────────────────────────────────────────────────────
 const MONTH_NAMES_PT = [
@@ -91,6 +95,12 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
   const [cdiRateStr, setCdiRateStr]       = useState('0.83');
   const [commitLimitPct, setCommitLimitPct] = useState(30);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [description, setDescription]       = useState('');
+  const [category, setCategory]             = useState('Outros');
+
+  // Confirmação humana da ação do agente (FASE H)
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const { status: agentStatus, error: agentError, runAction, reset: resetAgent } = useAgentAction();
 
   // Saldo vem do contexto financeiro
   const balanceCents = useMemo<Centavos>(() => {
@@ -133,18 +143,68 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
     });
   }, [priceRaw, installments, closingDay, purchaseDate, balanceCents, incomeRaw, committedRaw, cdiRateStr, commitLimitPct, selectedCard]);
 
-  const handleRegister = useCallback(() => {
+  // Caminho FORMULÁRIO: pré-preenche e abre o TransactionForm (parcelado e fallback).
+  const handleRegisterViaForm = useCallback(() => {
     const price = parseBrlInput(priceRaw);
     if (!price || !onRegisterPurchase) return;
+    setConfirmOpen(false);
     onRegisterPurchase({
-      description: 'Compra simulada',
+      description: description.trim() || 'Compra simulada',
       type: 'saida',
       value_cents: price,
+      category,
       date: purchaseDate,
       source: 'manual',
       ...(installments > 1 ? { installmentCount: installments } : {}),
     });
-  }, [priceRaw, purchaseDate, installments, onRegisterPurchase]);
+  }, [priceRaw, description, category, purchaseDate, installments, onRegisterPurchase]);
+
+  // Caminho ASSISTENTE: à vista, server-trusted, com confirmação humana + trilha de auditoria.
+  const canUseAgent = !!result && !!parseBrlInput(priceRaw) && description.trim().length > 0;
+
+  const openAgentConfirm = useCallback(() => {
+    // Parcelado é decisão de produto do servidor: roteia direto ao formulário (sem round-trip).
+    if (installments > 1) {
+      handleRegisterViaForm();
+      return;
+    }
+    resetAgent();
+    setConfirmOpen(true);
+  }, [installments, handleRegisterViaForm, resetAgent]);
+
+  const confirmAgentAction = useCallback(async () => {
+    const price = parseBrlInput(priceRaw);
+    if (!price || !result) return;
+    const proposal: ActionProposal = {
+      kind: 'register_purchase',
+      status: 'pending',
+      payload: {
+        description: description.trim(),
+        amountCents: price,
+        date: purchaseDate,
+        category: category.trim() || 'Outros',
+        ...(selectedCardId ? { cardId: selectedCardId } : {}),
+      },
+    };
+    try {
+      await runAction(proposal, {
+        intent: 'simulate_purchase',
+        question: `Registrar a compra "${description.trim()}" de ${formatBRL(price)} à vista?`,
+        toolsUsed: ['purchaseSimulator'],
+        simulationResult: {
+          verdict: result.verdict,
+          totalCostCents: result.totalCostCents,
+          effectiveLimitAfterCents: result.effectiveLimitAfterCents,
+        },
+      });
+      toast.success('Compra registrada pelo assistente.', { icon: '✨' });
+      setConfirmOpen(false);
+      setPriceRaw('');
+      setDescription('');
+    } catch {
+      // Erro fica visível no sheet (com rota ao formulário quando aplicável).
+    }
+  }, [priceRaw, result, description, category, purchaseDate, selectedCardId, runAction]);
 
   const mask = '•••••';
   const showValue = (cents: number) =>
@@ -215,6 +275,30 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
               onChange={e => setPriceRaw(e.target.value)}
               className="w-full bg-quantum-card/60 border border-quantum-border rounded-xl px-3 py-2.5 text-sm text-quantum-fg placeholder-quantum-fgMuted focus:outline-none focus:border-violet-500/60 transition-colors"
             />
+          </div>
+
+          {/* Descrição e categoria (usados ao registrar) */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-quantum-fg">Descrição</label>
+              <input
+                type="text"
+                placeholder="ex: Notebook"
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                className="w-full bg-quantum-card/60 border border-quantum-border rounded-xl px-3 py-2.5 text-sm text-quantum-fg placeholder-quantum-fgMuted focus:outline-none focus:border-violet-500/60 transition-colors"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-quantum-fg">Categoria</label>
+              <input
+                type="text"
+                placeholder="Outros"
+                value={category}
+                onChange={e => setCategory(e.target.value)}
+                className="w-full bg-quantum-card/60 border border-quantum-border rounded-xl px-3 py-2.5 text-sm text-quantum-fg placeholder-quantum-fgMuted focus:outline-none focus:border-violet-500/60 transition-colors"
+              />
+            </div>
           </div>
 
           {/* Parcelas */}
@@ -455,16 +539,32 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
                   </div>
                 )}
 
-                {/* Botão Registrar */}
+                {/* Registrar — assistente (à vista) + formulário */}
                 {onRegisterPurchase && (
-                  <button
-                    type="button"
-                    onClick={handleRegister}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 text-violet-300 font-bold text-sm transition-all"
-                  >
-                    <ShoppingCart className="w-4 h-4" />
-                    Registrar esta compra
-                  </button>
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={openAgentConfirm}
+                      disabled={!canUseAgent}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/40 text-violet-200 font-bold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      {installments > 1 ? 'Registrar compra parcelada' : 'Registrar com o Assistente'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRegisterViaForm}
+                      className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-transparent hover:bg-white/5 border border-quantum-border text-quantum-fgMuted hover:text-quantum-fg font-medium text-xs transition-all"
+                    >
+                      <ShoppingCart className="w-3.5 h-3.5" />
+                      Registrar pelo formulário
+                    </button>
+                    {!canUseAgent && installments === 1 && (
+                      <p className="text-[10px] text-quantum-fgMuted text-center">
+                        Informe uma descrição para registrar com o assistente.
+                      </p>
+                    )}
+                  </div>
                 )}
               </motion.div>
             )}
@@ -476,6 +576,30 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
         Simulação baseada nos dados inseridos · Não constitui aconselhamento financeiro.
         CDI estimado em {cdiRateStr}% a.m. · Saldo via dados do sistema.
       </p>
+
+      {/* Confirmação humana da ação do assistente (FASE H) */}
+      <ActionConfirmationSheet
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={() => void confirmAgentAction()}
+        title="Registrar compra"
+        question={`Confirmar o registro de "${description.trim() || 'compra'}" à vista?`}
+        rows={[
+          { label: 'Valor', value: formatBRL(parseBrlInput(priceRaw) ?? 0), emphasis: true },
+          { label: 'Data', value: purchaseDate.split('-').reverse().join('/') },
+          { label: 'Categoria', value: category.trim() || 'Outros' },
+          { label: 'Cartão', value: selectedCard?.name ?? 'Sem cartão' },
+        ]}
+        status={agentStatus}
+        error={agentError}
+        confirmLabel="Registrar compra"
+        successMessage="Compra registrada pelo assistente."
+        route={{
+          reason: 'use_installment_form',
+          label: 'Abrir formulário de compra parcelada',
+          onClick: handleRegisterViaForm,
+        }}
+      />
     </motion.div>
   );
 }
