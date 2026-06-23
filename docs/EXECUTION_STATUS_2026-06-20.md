@@ -1,9 +1,7 @@
-# Quantum Finance — Status de Execução (atualizado 2026-06-23)
+# Quantum Finance — Status de Execução (histórico: 2026-06-20)
 
-> Documento de **continuidade**: o que foi executado e o que falta, para retomar nos
-> próximos dias sem perda de contexto. Snapshot vivo — atualizar a cada PR mergeado.
-> Referência de plano UI: [`UI_UX_ARCHITECTURE.md`](./UI_UX_ARCHITECTURE.md).
-> Histórico de criação: 2026-06-20.
+> ⚠️ **SUPERADO.** O ponto de retomada atual é [`EXECUTION_STATUS_2026-06-23.md`](./EXECUTION_STATUS_2026-06-23.md).
+> Mantido como histórico da trilha UI/UX. Referência de plano UI: [`UI_UX_ARCHITECTURE.md`](./UI_UX_ARCHITECTURE.md).
 
 ---
 
