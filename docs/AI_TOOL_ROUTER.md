@@ -109,17 +109,28 @@ Critérios de aceite atendidos pelo núcleo: enum fechado ✅ · `action` nunca 
 `ActionProposal`) ✅ · Zod `.strict()` ✅ · fora do enum → `unknown_intent` ✅ · baixa
 confiança → `low_confidence` ✅.
 
-### 7.2 Adaptador de classificação — contrato e plano de validação (PENDENTE)
+### 7.2 Adaptador de classificação — IMPLEMENTADO (`geminiIntentClassifier.ts`)
 A classificação `mensagem → {intent, slots, confidence}` é um `IntentClassifier`
-(interface em `intentRouter.ts`). Há um `heuristicIntentClassifier` determinístico
-(palavras-chave) como **fallback/teste** — ele classifica a intenção mas **não extrai
-slots** (valores/ids), então intenções de ação caem em `need_more_info` (honesto).
+(interface em `intentRouter.ts`). Implementações:
+- `heuristicIntentClassifier` — determinístico (palavras-chave), fallback/teste; não extrai slots.
+- **`geminiIntentClassifier`** — produção: reusa o callable **`chatWithQuantumAI`** como transporte
+  (chave no servidor, App Check, PII mascarada). `createGeminiIntentClassifier(transport)` é
+  injetável/testável. Garantias:
+  - **O LLM nunca calcula centavos.** Informa o valor em **reais** (`amount`/`limit`); a conversão
+    para centavos inteiros é feita aqui por `toCentavos` (Decimal.js). Centavos canônicos.
+  - Saída estritamente validada (intenção ∈ enum, confiança 0..1, slots coeridos); qualquer falha
+    (sem JSON / intenção inválida / transporte caído) → confiança 0 → `low_confidence` → chat normal.
+  - 11 testes (`geminiIntentClassifier.test.ts`), incluindo conversão monetária e integração com `routeIntent`.
 
-**Adaptador de produção (Gemini) — ainda NÃO implementado.** Requisitos antes de ir a produção:
-1. Prompt restrito ao enum fechado de intenções + extração de slots tipados; saída JSON validada.
-2. Classificação logada de forma **sanitizada** (só o rótulo da intenção; nunca conteúdo financeiro).
-3. **Validação com emulator** (Auth+Firestore+Functions) — comportamento do LLM não é validável em CI unitário.
-4. Wiring no `AIAssistantChat`: `routeIntent` → `answer` (responde) / `proposal` (abre `ActionConfirmationSheet` → `useAgentAction`) / `need_more_info` (pede o slot) / `low_confidence` (fallback).
+**Passos restantes (gate de produção) — exigem rodar o emulator (NÃO validáveis em CI unitário):**
+1. **Validar com emulator** (Auth+Firestore+Functions): rodar `firebase emulators:start` + abrir o
+   chat e conferir a qualidade da classificação/extração do Gemini em mensagens reais. Ajustar o
+   prompt de `buildClassificationPrompt` se necessário.
+2. **Wiring no `AIAssistantChat`** (atrás de flag OFF por padrão): em `submitMessage`, `routeIntent` →
+   `answer` (segue chat) / `proposal` (abre `ActionConfirmationSheet` → `useAgentAction`) /
+   `need_more_info` (pede o slot que falta) / `low_confidence` (segue chat). Requer passar
+   `creditCards`/contexto e montar o sheet no componente.
 
-Enquanto o adaptador Gemini não for validado, o núcleo determinístico já habilita o fluxo
-ponta-a-ponta com slots fornecidos pela UI (ex.: o `PurchaseSimulator`, FASE H).
+Segurança do gate: mesmo com prompt não ajustado, uma classificação errada **não escreve nada** —
+a cadeia (limiar de confiança → confirmação humana → revalidação server + App Check) protege; o
+pior caso é uma proposta que o usuário recusa no sheet.
