@@ -42,7 +42,9 @@ Plano canônico: `docs/UI_UX_ARCHITECTURE.md` (consolida auditorias Gemini+Codex
 
 ### 0.4 Camada de ação do Agente — ACESA no frontend (ciclo simular→confirmar→agir)
 - **`executeAgentAction` agora tem consumidor real.** Fundação reutilizável: `src/hooks/useAgentAction.ts` (ponte client→callable: sela proposta como `confirmed`, revalida Zod strict, idempotencyKey UUID v4, mapeia `details.reason`) + `src/features/ai-agent/ActionConfirmationSheet.tsx` (confirmação humana sobre `BottomSheet`, com nota de auditoria e rota alternativa por `reason`). Primeiro consumidor: **`PurchaseSimulator`** — CTA "Registrar com o Assistente" (à vista) → sheet → `executeAgentAction`; **parcelado roteia direto ao formulário** (sem round-trip). Schema cliente `registerPurchasePayloadSchema` ganhou `category` opcional (alinha com o validador servidor). +21 testes (5 hook + 6 sheet + 4 simulador + contrato).
-- **Pendente — intent router no LLM** dentro do `chatWithQuantumAI` (classifica intenção e roteia p/ tools/`ActionProposal`). Médio risco; **não validável às cegas** (precisa Gemini + emulator). Único item restante do backlog do agente.
+### 0.5 Intent router — núcleo determinístico ENTREGUE; falta só o adaptador LLM
+- **Núcleo puro e testável (`src/features/ai-agent/`):** `intentRegistry.ts` (8 intenções, enum fechado → ferramentas read-only + `kind` de ação + `requiredSlots`), `proposalBuilders.ts` (slots → `ActionProposal` pending, Zod strict, defaults date/competência), `intentRouter.ts` (`routeIntent` → `answer`/`proposal`+pergunta/`need_more_info`/`low_confidence`/`unknown_intent`; `heuristicIntentClassifier` determinístico p/ fallback/teste). `AGENT_INTENTS`/`AgentIntent` no `agentSchemas.ts`. +16 testes. Ver `docs/AI_TOOL_ROUTER.md` §7.
+- **Pendente — adaptador de classificação Gemini** (`IntentClassifier`): prompt restrito ao enum + extração de slots tipados + log sanitizado + **validação com emulator** + wiring no `AIAssistantChat` (`routeIntent`→sheet/answer). Único item restante do backlog do agente; não validável em CI unitário.
 
 ### 0.5 Bloqueios estruturais (não iniciar sem decisão)
 - **NFC-e** — bloqueado até gate SSRF completo.

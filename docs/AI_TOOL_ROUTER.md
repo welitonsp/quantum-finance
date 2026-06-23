@@ -87,3 +87,39 @@ Regra: o LLM atua nas **pontas** (classificar intenção, narrar). O **miolo**
 - [ ] Inputs/outputs validados por Zod `.strict()`.
 - [ ] Log de intenção sanitizado; nenhum conteúdo financeiro bruto.
 - [ ] Pergunta fora do enum cai em fallback seguro.
+
+---
+
+## 7. Implementação — estado real (2026-06-23)
+
+### 7.1 Núcleo determinístico ENTREGUE (`src/features/ai-agent/`)
+O "miolo" do §1 (tool registry → builder de proposta → orquestração) está implementado,
+puro e testável, **sem dependência do LLM**:
+
+| Módulo | Responsabilidade |
+|---|---|
+| `intentRegistry.ts` | `INTENT_REGISTRY`: catálogo das 8 intenções (enum fechado) → ferramentas read-only (`AGENT_TOOLS`) + `kind` de ação quando aplicável + `requiredSlots`. `isActionIntent()`. |
+| `proposalBuilders.ts` | Construtores puros slots → `ActionProposal` (status `pending`), validados por `safeParseActionProposal` (Zod `.strict()`). Reporta `issues` quando faltam slots. Defaults: `date`=hoje, `competencia`=mês atual. |
+| `intentRouter.ts` | `routeIntent(classification)` puro → `answer` \| `proposal` (+pergunta de confirmação) \| `need_more_info` \| `low_confidence` (< `0.6`) \| `unknown_intent`. `buildActionQuestion()` por kind. |
+| `agentSchemas.ts` | `AGENT_INTENTS`/`AgentIntent` (espelha o enum server). |
+
+Cobertura: `proposalBuilders.test.ts` + `intentRouter.test.ts` (16 testes).
+
+Critérios de aceite atendidos pelo núcleo: enum fechado ✅ · `action` nunca escreve (só
+`ActionProposal`) ✅ · Zod `.strict()` ✅ · fora do enum → `unknown_intent` ✅ · baixa
+confiança → `low_confidence` ✅.
+
+### 7.2 Adaptador de classificação — contrato e plano de validação (PENDENTE)
+A classificação `mensagem → {intent, slots, confidence}` é um `IntentClassifier`
+(interface em `intentRouter.ts`). Há um `heuristicIntentClassifier` determinístico
+(palavras-chave) como **fallback/teste** — ele classifica a intenção mas **não extrai
+slots** (valores/ids), então intenções de ação caem em `need_more_info` (honesto).
+
+**Adaptador de produção (Gemini) — ainda NÃO implementado.** Requisitos antes de ir a produção:
+1. Prompt restrito ao enum fechado de intenções + extração de slots tipados; saída JSON validada.
+2. Classificação logada de forma **sanitizada** (só o rótulo da intenção; nunca conteúdo financeiro).
+3. **Validação com emulator** (Auth+Firestore+Functions) — comportamento do LLM não é validável em CI unitário.
+4. Wiring no `AIAssistantChat`: `routeIntent` → `answer` (responde) / `proposal` (abre `ActionConfirmationSheet` → `useAgentAction`) / `need_more_info` (pede o slot) / `low_confidence` (fallback).
+
+Enquanto o adaptador Gemini não for validado, o núcleo determinístico já habilita o fluxo
+ponta-a-ponta com slots fornecidos pela UI (ex.: o `PurchaseSimulator`, FASE H).

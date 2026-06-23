@@ -35,6 +35,24 @@ export const ACTION_KINDS = [
 
 export type ActionKind = (typeof ACTION_KINDS)[number];
 
+/**
+ * Intenções do Agente (espelha o enum server `AGENT_INTENTS` em
+ * functions/src/agentActionValidation.ts). As 4 primeiras são apenas-resposta
+ * (read-only); as 4 últimas culminam numa `ActionProposal` (ver INTENT_REGISTRY).
+ */
+export const AGENT_INTENTS = [
+  'get_balances',
+  'get_invoice',
+  'explain_month',
+  'cashflow_briefing',
+  'simulate_purchase',
+  'plan_debt_payment',
+  'create_budget_proposal',
+  'contribute_to_goal_proposal',
+] as const;
+
+export type AgentIntent = (typeof AGENT_INTENTS)[number];
+
 // ─── Payloads por tipo de ação ───────────────────────────────────────────────────
 
 export const registerPurchasePayloadSchema = z
