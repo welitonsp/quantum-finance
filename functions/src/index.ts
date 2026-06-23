@@ -390,8 +390,10 @@ export const createTransaction = onCall(
 //
 // Executa os 4 kinds de ação v1: `register_purchase` (transação única à vista),
 // `contribute_to_goal` (incrementa currentCents), `register_debt_payment` (abate
-// parcela/saldo) e `create_budget` (cria orçamento mensal). Ainda pendente:
-// installments>1 no register_purchase (split de parcelas) e o intent router no LLM.
+// parcela/saldo) e `create_budget` (cria orçamento mensal). Por DESIGN o Agente só
+// registra compras à vista — parcelado (installments>1) é recusado no validador com
+// `reason: 'use_installment_form'` e pertence ao formulário/installmentRepo (não se
+// duplica lógica monetária no Admin SDK). Pendente: intent router no LLM.
 // ═══════════════════════════════════════════════════════════════════════════════
 export const executeAgentAction = onCall(
   {
@@ -419,7 +421,10 @@ export const executeAgentAction = onCall(
       action = validateAgentActionRequest(rawPayload);
     } catch (error) {
       if (error instanceof AgentActionValidationError) {
-        throw new HttpsError('invalid-argument', error.message);
+        // Contrato de erro estruturado: a UI usa `details.reason` (estável) para rotear
+        // (ex.: 'use_installment_form' → abrir o formulário de compra parcelada).
+        const code = error.code === 'failed-precondition' ? 'failed-precondition' : 'invalid-argument';
+        throw new HttpsError(code, error.message, error.reason ? { reason: error.reason } : undefined);
       }
       throw error;
     }
@@ -604,17 +609,16 @@ export const executeAgentAction = onCall(
       });
     }
 
-    // register_purchase à vista. (todos os 4 kinds de ação agora cobertos.)
+    // register_purchase À VISTA (parcelado já foi recusado no validador com
+    // reason 'use_installment_form'). Guarda defensiva de exaustividade: os outros
+    // 3 kinds retornaram acima; reaching aqui com outro kind é erro de lógica.
     if (action.kind !== 'register_purchase') {
-      throw new HttpsError('unimplemented', `Execução de "${action.kind}" ainda não habilitada nesta fase.`);
+      throw new HttpsError('internal', `Tipo de ação não roteado: "${action.kind}".`);
     }
     const p = action.payload as {
       description: string; amountCents: number; date: string; category: string;
       installments?: number; cardId?: string;
     };
-    if (p.installments !== undefined && p.installments > 1) {
-      throw new HttpsError('unimplemented', 'Compra parcelada ainda não habilitada nesta fase (apenas à vista).');
-    }
 
     // Fast-path idempotência.
     if (idempotencyKey) {

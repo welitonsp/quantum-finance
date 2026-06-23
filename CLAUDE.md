@@ -36,11 +36,15 @@ Plano canônico: `docs/UI_UX_ARCHITECTURE.md` (consolida auditorias Gemini+Codex
 - ✅ **create_budget** — cria orçamento mensal por categoria (mapeia `limitCents`→`targetAmount`) (#280).
 - **Cloud Functions permanecem 6** (a execução dos kinds não criou callables novas).
 
-### 0.3 Pendentes do backlog do agente — PARADO em checkpoint do owner (risco de fazer às cegas)
-1. **Split de parcelas** no `register_purchase` (`installments>1` → hoje `unimplemented`). **ALTO RISCO / decisão de produto:** exigiria replicar no Admin SDK a lógica monetária canônica de `src/shared/services/installmentRepo.ts` (divisão modulo-safe + `addMonthsToDate` + competência + lookup `closingDay` + N transações com history Modelo A). `functions/` **não importa** `src/`. Recomendação: **NÃO duplicar lógica monetária** (colide com Zonas Proibidas — regra dos centavos / Cloud Functions); manter `unimplemented` e rotear compra parcelada pelo formulário/`installmentRepo` existente.
-2. **Intent router no LLM** dentro do `chatWithQuantumAI` (classifica intenção e roteia p/ tools/`ActionProposal`). Médio risco; **não validável às cegas** (precisa Gemini + emulator). Precisa de steer de escopo do owner.
+### 0.3 Decisão de produto FIXADA — Agente registra só compras à vista (parcelado → formulário)
+- **Split de parcelas é decisão de produto, não pendência de fase.** O Agente registra **apenas compras à vista**; parcelamento pertence ao fluxo próprio (formulário/`installmentRepo`: divisão modulo-safe + `addMonthsToDate` + competência por cartão + N transações com history Modelo A). **NÃO se duplica lógica monetária no Admin SDK** (`functions/` não importa `src/`; colide com Zonas Proibidas).
+- **Encodado na fronteira de autoridade (validador puro):** `functions/src/agentActionValidation.ts` recusa `installments>1` em `register_purchase` com **erro estruturado** `code: 'failed-precondition'` + `reason: 'use_installment_form'`. `executeAgentAction` propaga `reason` em `HttpsError(...).details` para a UI rotear ao formulário **sem parsear prosa** (sem linguagem de roadmap no erro). Coberto por `node --test` (**147** testes). Schema cliente (`agentSchemas.ts`) permanece permissivo (forma do envelope); a regra de negócio é server-trusted.
 
-### 0.4 Bloqueios estruturais (não iniciar sem decisão)
+### 0.4 Pendente do backlog do agente — PARADO em checkpoint do owner
+- **Intent router no LLM** dentro do `chatWithQuantumAI` (classifica intenção e roteia p/ tools/`ActionProposal`). Médio risco; **não validável às cegas** (precisa Gemini + emulator). Precisa de steer de escopo do owner.
+- **Nota de produto (visionário):** `executeAgentAction` ainda **não tem chamador no frontend**. O próximo salto de valor é a **UI de confirmação humana** (card Confirmar/Recusar) ligada a um primeiro consumidor determinístico — ex.: CTA "Registrar compra" no `PurchaseSimulator` → `register_purchase` à vista — fechando o ciclo simular→confirmar→agir sem depender do LLM. Requer design/UX sign-off do owner antes de implementar.
+
+### 0.5 Bloqueios estruturais (não iniciar sem decisão)
 - **NFC-e** — bloqueado até gate SSRF completo.
 - **Open Finance / BACEN** — bloqueado por mTLS/orçamento.
 - **FCM background push** — requer migrar `vite.config.ts` para `injectManifest`.
