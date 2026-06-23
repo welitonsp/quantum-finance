@@ -42,6 +42,9 @@ export const registerPurchasePayloadSchema = z
     description: z.string().min(1).max(140),
     amountCents: safeCentsSchema('Valor da compra'),
     date: ymdSchema,
+    // Espelha o validador servidor (agentActionValidation.ts): category 1..120,
+    // default 'Outros' quando ausente. Opcional no contrato cliente.
+    category: z.string().min(1).max(120).optional(),
     installments: z.number().int().min(1).max(120).optional(),
     cardId: z.string().min(1).optional(),
   })
