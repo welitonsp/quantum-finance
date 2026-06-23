@@ -131,13 +131,31 @@ describe('validateAgentActionRequest (FASE H)', () => {
     assert.strictEqual(debt.kind, 'register_debt_payment');
   });
 
-  it('aceita installments válido e snapshotRef/simulationResult opcionais', () => {
+  it('aceita installments=1 (à vista) e snapshotRef/simulationResult opcionais', () => {
     const env = validEnvelope({ snapshotRef: 'snap-1', simulationResult: { effectiveLimitAfterCents: 120000 } });
-    env.proposal.payload.installments = 10;
+    env.proposal.payload.installments = 1;
     const r = validateAgentActionRequest(env);
-    assert.strictEqual(r.payload.installments, 10);
+    assert.strictEqual(r.payload.installments, 1);
     assert.strictEqual(r.snapshotRef, 'snap-1');
     assert.deepStrictEqual(r.simulationResult, { effectiveLimitAfterCents: 120000 });
+  });
+
+  it('REJEITA compra parcelada (installments>1) com erro estruturado p/ rotear ao formulário', () => {
+    const env = validEnvelope();
+    env.proposal.payload.installments = 10;
+    assert.throws(
+      () => validateAgentActionRequest(env),
+      (err) =>
+        err instanceof AgentActionValidationError &&
+        err.code === 'failed-precondition' &&
+        err.reason === 'use_installment_form',
+    );
+  });
+
+  it('rejeita installments fora de 1..120', () => {
+    const env = validEnvelope();
+    env.proposal.payload.installments = 0;
+    assert.throws(() => validateAgentActionRequest(env), AgentActionValidationError);
   });
 
   it('expõe os 4 kinds v1', () => {

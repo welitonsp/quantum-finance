@@ -32,11 +32,15 @@ export const AGENT_INTENTS = [
 ] as const;
 
 export class AgentActionValidationError extends Error {
+  /** Código de erro HTTPS Callable (default 'invalid-argument'). */
   code: string;
-  constructor(message: string) {
+  /** Sinal estável, legível por máquina, para a UI rotear sem parsear prosa. */
+  reason?: string;
+  constructor(message: string, options?: { code?: string; reason?: string }) {
     super(message);
     this.name = 'AgentActionValidationError';
-    this.code = 'invalid-argument';
+    this.code = options?.code ?? 'invalid-argument';
+    if (options?.reason) this.reason = options.reason;
   }
 }
 
@@ -105,6 +109,16 @@ function validateRegisterPurchase(p: Record<string, unknown>): RegisterPurchaseP
   if (p['installments'] !== undefined) {
     if (!Number.isSafeInteger(p['installments']) || (p['installments'] as number) < 1 || (p['installments'] as number) > 120) {
       invalid('installments deve ser inteiro entre 1 e 120.');
+    }
+    // Decisão de produto (CLAUDE.md): o Agente registra apenas compras À VISTA.
+    // Parcelamento é um fluxo próprio (formulário/installmentRepo: divisão modulo-safe
+    // + competência por cartão + N transações com history Modelo A). NÃO duplicar lógica
+    // monetária no Admin SDK (Zonas Proibidas). A UI roteia pelo `reason` estruturado.
+    if ((p['installments'] as number) > 1) {
+      throw new AgentActionValidationError(
+        'O assistente registra apenas compras à vista. Para parcelar, use o formulário de compra.',
+        { code: 'failed-precondition', reason: 'use_installment_form' },
+      );
     }
     out.installments = p['installments'] as number;
   }
