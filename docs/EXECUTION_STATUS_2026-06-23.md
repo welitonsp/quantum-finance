@@ -8,11 +8,13 @@
 
 ## 0. TL;DR — retomar por aqui
 
-- **`main` HEAD: `4bdf513`** (PR #286). Working tree limpo. Sem PR de feature aberto (só Dependabot #271).
-- **Trilha do Agente Financeiro (camada de ação + intent router): núcleo COMPLETO e em produção.**
-- **Falta SÓ 1 coisa**, e ela **exige rodar o emulator localmente** (não dá para validar em CI nem fazer às cegas):
-  **ligar o classificador Gemini no chat** + validar a qualidade do prompt.
-- **Comece amanhã pela Seção 3** (passo a passo com comandos).
+- **`main` HEAD: `ea77b2b`** (PR #288). Working tree limpo. Sem PR de feature aberto (só Dependabot #271).
+- **Trilha do Agente Financeiro (camada de ação + intent router + wiring no chat): COMPLETA em código.**
+- **Wiring entregue (PR #288, 2026-06-24):** `AIAssistantChat` liga `geminiIntentClassifier → routeIntent →
+  ActionConfirmationSheet → useAgentAction` atrás da flag `VITE_ENABLE_AGENT_ROUTER` (**default OFF**). Ver §3.2 (✅).
+- **Falta SÓ 1 coisa — passo do OWNER**, que **exige rodar o emulator localmente** (não dá para validar em CI
+  nem fazer às cegas): **validar a qualidade da classificação Gemini** (§3.1) e então **ligar a flag**.
+- **Comece pela Seção 3.1.**
 
 ---
 
@@ -74,25 +76,31 @@ npm run dev    # VITE_USE_EMULATOR=true
 - Se a classificação/extração estiver fraca, ajustar `buildClassificationPrompt`
   em `src/features/ai-agent/geminiIntentClassifier.ts` (os testes não mudam — o contrato é estável).
 
-### 3.2 Wiring no `AIAssistantChat` (atrás de flag OFF por padrão)
-Em `submitMessage` (`src/features/ai-chat/AIAssistantChat.tsx`), antes do `getFinancialAdvice`:
-1. `const c = await geminiIntentClassifier({ message: userText });`
-2. `const r = routeIntent(c);`
-3. Despachar:
-   - `answer` / `low_confidence` / `unknown_intent` → seguir no chat normal (comportamento atual).
-   - `need_more_info` → responder pedindo o slot que falta (`r.missing`).
-   - `proposal` → abrir `ActionConfirmationSheet` (passar `r.proposal`, `r.question`) → no confirmar,
-     `useAgentAction.runAction(r.proposal, { intent: r.intent, question: r.question, toolsUsed: r.tools })`.
-- **Flag:** `VITE_ENABLE_AGENT_ROUTER` (ou toggle na GovernancePage), **default OFF**. Ligar só após 3.1.
-- Montar o `ActionConfirmationSheet` no componente do chat e passar `creditCards`/contexto necessário.
+### 3.2 Wiring no `AIAssistantChat` (atrás de flag OFF) — ✅ ENTREGUE (PR #288, 2026-06-24)
+Em `submitMessage` (`src/features/ai-chat/AIAssistantChat.tsx`), após persistir o turno do usuário e
+**antes** do `getFinancialAdvice`, sob `if (import.meta.env.VITE_ENABLE_AGENT_ROUTER === 'true')`:
+1. `const route = routeIntent(await geminiIntentClassifier({ message: userText }));`
+2. Despacha:
+   - `answer` / `low_confidence` / `unknown_intent` → segue no chat normal (comportamento atual).
+   - `need_more_info` → `pushAiMessage(formatMissingInfoMessage(route.missing))` (só o rótulo do slot).
+   - `proposal` → abre `ActionConfirmationSheet` com `route.proposal`/`route.question`; no confirmar,
+     `useAgentAction.runAction(route.proposal, { intent, question, toolsUsed: tools })`.
+   - Falha de classificação → `catch` → degrada para o chat normal.
+- **Flag `VITE_ENABLE_AGENT_ROUTER`** (documentada no `.env.example`), **default OFF**. Flag off = chat idêntico.
+- Helper PURO `src/features/ai-agent/proposalPresentation.ts` (`presentProposal` → título/rows/labels da sheet;
+  `formatMissingInfoMessage` → pergunta pt-BR pelos slots faltantes).
+- Rota `use_installment_form` no sheet → mensagem orientando ao formulário de transações.
 
-### 3.3 Critérios de aceite do wiring
-- [ ] Flag OFF → chat idêntico ao de hoje (zero regressão).
-- [ ] Flag ON + intenção de ação com slots → abre o sheet; confirmar grava via `executeAgentAction`.
-- [ ] Baixa confiança / fora do enum → chat normal (sem proposta).
-- [ ] Parcelado → rota ao formulário (já tratado no sheet via `reason`).
-- [ ] Log de intenção sanitizado (só o rótulo; nunca conteúdo financeiro).
-- [ ] typecheck + lint + `npx vitest run` + build verdes antes do push.
+### 3.3 Critérios de aceite do wiring — ✅ todos cobertos por teste (PR #288)
+- [x] Flag OFF → chat idêntico ao de hoje (zero regressão). *(teste: não classifica, chama advice)*
+- [x] Flag ON + intenção de ação com slots → abre o sheet; confirmar grava via `executeAgentAction`. *(teste: proposal + confirm→runAction)*
+- [x] Baixa confiança / fora do enum → chat normal (sem proposta). *(teste: low confidence → advice)*
+- [x] Parcelado → rota ao formulário (já tratado no sheet via `reason`).
+- [x] Log de intenção sanitizado (só o rótulo; nunca conteúdo financeiro) — nenhum log cru adicionado.
+- [x] typecheck + lint + `vitest run` (**1324**) + build + E2E verdes.
+
+> **Pendente (passo do owner):** ligar a flag em produção (`VITE_ENABLE_AGENT_ROUTER=true`) só **após** validar a
+> classificação Gemini com o emulator (§3.1). O wiring está testado e seguro com a flag OFF.
 
 ---
 

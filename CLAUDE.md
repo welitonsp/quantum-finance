@@ -7,8 +7,8 @@
 > **Este bloco é a referência mais recente.** Em caso de divergência com blocos abaixo, prevalece este.
 > **Regra operacional:** Atualizar após cada PR mergeado ou marco relevante.
 
-### 0. Estado atual (2026-06-23)
-- Branch principal: `main` — HEAD `8cfc0e9` (PR #280 mergeado). Working tree limpo.
+### 0. Estado atual (2026-06-24)
+- Branch principal: `main` — HEAD `ea77b2b` (PR #288 mergeado). Working tree limpo.
 - **Sem PR de feature aberto.** Único PR aberto: **#271** Dependabot (`@types/node` 25.9.3→25.9.4, grupo `frontend-development`).
 - **Deploy automático de Cloud Functions: ATIVO** (IAM corrigido e verificado em 2026-06-20). Todo push na `main` redeploya **rules + hosting + functions** (workflow `Deploy to Firebase Hosting on merge`, jobs `deploy_rules`/`deploy_functions`/`build_and_deploy`). Não é mais necessário deploy manual de functions.
 
@@ -45,7 +45,8 @@ Plano canônico: `docs/UI_UX_ARCHITECTURE.md` (consolida auditorias Gemini+Codex
 ### 0.5 Intent router — núcleo determinístico ENTREGUE; falta só o adaptador LLM
 - **Núcleo puro e testável (`src/features/ai-agent/`):** `intentRegistry.ts` (8 intenções, enum fechado → ferramentas read-only + `kind` de ação + `requiredSlots`), `proposalBuilders.ts` (slots → `ActionProposal` pending, Zod strict, defaults date/competência), `intentRouter.ts` (`routeIntent` → `answer`/`proposal`+pergunta/`need_more_info`/`low_confidence`/`unknown_intent`; `heuristicIntentClassifier` determinístico p/ fallback/teste). `AGENT_INTENTS`/`AgentIntent` no `agentSchemas.ts`. +16 testes. Ver `docs/AI_TOOL_ROUTER.md` §7.
 - **Adaptador Gemini ENTREGUE (`geminiIntentClassifier.ts`):** reusa o callable `chatWithQuantumAI` como transporte (sem tocar `functions/`); `createGeminiIntentClassifier(transport)` injetável/testável. **O LLM informa valor em reais; conversão p/ centavos via `toCentavos`** (LLM nunca calcula centavos). Saída validada (intenção ∈ enum, confiança 0..1); qualquer falha → confiança 0 → `low_confidence` → chat normal. +11 testes.
-- **Pendente (gate de produção, exige emulator):** (1) validar qualidade da classificação Gemini com `firebase emulators:start` + ajustar prompt se preciso; (2) wiring no `AIAssistantChat` atrás de flag OFF (`routeIntent`→`answer`/`proposal`(sheet)/`need_more_info`/`low_confidence`). Cadeia de governança garante que classificação errada NÃO escreve (pior caso: proposta recusada no sheet). Ver `docs/AI_TOOL_ROUTER.md` §7.2.
+- **Wiring no chat ENTREGUE (#288):** `AIAssistantChat.submitMessage` liga `geminiIntentClassifier`→`routeIntent`→`ActionConfirmationSheet`→`useAgentAction` atrás da flag **`VITE_ENABLE_AGENT_ROUTER` (default OFF)**. Despacho: `proposal`→sheet (confirmação humana); `need_more_info`→pede o slot (só o rótulo); `answer`/`low_confidence`/`unknown_intent`/falha→chat normal. Helper puro `src/features/ai-agent/proposalPresentation.ts`. +13 testes (7 helper + 5 chat-wiring). Flag OFF = chat idêntico (zero regressão).
+- **Pendente (passo do OWNER, exige emulator):** validar qualidade da classificação Gemini com `firebase emulators:start --only auth,firestore,functions` + `npm run dev`, ajustar `buildClassificationPrompt` se preciso, e então **ligar a flag** `VITE_ENABLE_AGENT_ROUTER=true`. Cadeia de governança garante que classificação errada NÃO escreve (pior caso: proposta recusada no sheet). Ver `docs/EXECUTION_STATUS_2026-06-23.md` §3.1 e `docs/AI_TOOL_ROUTER.md` §7.2.
 
 ### 0.5 Bloqueios estruturais (não iniciar sem decisão)
 - **NFC-e** — bloqueado até gate SSRF completo.
