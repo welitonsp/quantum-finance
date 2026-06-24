@@ -14,6 +14,10 @@ const PRECONDITION_MESSAGE =
   'Não foi possível concluir a operação porque os dados precisam ser atualizados antes de salvar. Recarregue as movimentações e tente novamente.';
 const UNAVAILABLE_MESSAGE =
   'Serviço temporariamente indisponível. Verifique sua conexão e tente novamente em instantes.';
+const UNAUTHENTICATED_MESSAGE =
+  'Não foi possível autenticar a solicitação. Recarregue a página e entre novamente.';
+const RESOURCE_EXHAUSTED_MESSAGE =
+  'Você atingiu o limite de uso temporário do assistente. Aguarde um pouco e tente novamente.';
 const UNKNOWN_MESSAGE =
   'Não foi possível concluir a operação. Tente novamente e, se o problema persistir, verifique sua conexão.';
 
@@ -38,8 +42,25 @@ describe('firebaseErrorHandling', () => {
     expect(getUserFriendlyErrorMessage({ code: 'unavailable' })).toBe(UNAVAILABLE_MESSAGE);
   });
 
+  it('retorna mensagem amigável para unauthenticated (auth/App Check) com prefixo de callable', () => {
+    expect(getUserFriendlyErrorMessage({ code: 'functions/unauthenticated' })).toBe(UNAUTHENTICATED_MESSAGE);
+  });
+
+  it('retorna mensagem amigável para resource-exhausted (limite de IA)', () => {
+    expect(getUserFriendlyErrorMessage({ code: 'functions/resource-exhausted' })).toBe(RESOURCE_EXHAUSTED_MESSAGE);
+  });
+
+  it('não colapsa unauthenticated/resource-exhausted na mensagem genérica unknown', () => {
+    expect(getUserFriendlyErrorMessage({ code: 'unauthenticated' })).not.toBe(UNKNOWN_MESSAGE);
+    expect(getUserFriendlyErrorMessage({ code: 'resource-exhausted' })).not.toBe(UNKNOWN_MESSAGE);
+  });
+
   it('retorna fallback amigável para unknown', () => {
     expect(getUserFriendlyErrorMessage({ code: 'unknown' })).toBe(UNKNOWN_MESSAGE);
+  });
+
+  it('mantém internal no fallback genérico (sem vazar detalhe)', () => {
+    expect(getUserFriendlyErrorMessage({ code: 'functions/internal' })).toBe(UNKNOWN_MESSAGE);
   });
 
   it('não quebra com erro desconhecido sem code', () => {
