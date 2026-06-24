@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { X, Send, BrainCircuit, User, ChevronDown, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GeminiService } from './GeminiService';
@@ -7,6 +7,13 @@ import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandlin
 import { fromCentavos } from '../../shared/types/money';
 import { getTransactionAbsCentavos } from '../../utils/transactionUtils';
 import type { Transaction, ModuleBalances } from '../../shared/types/transaction';
+import { geminiIntentClassifier } from '../ai-agent/geminiIntentClassifier';
+import { routeIntent } from '../ai-agent/intentRouter';
+import { presentProposal, formatMissingInfoMessage } from '../ai-agent/proposalPresentation';
+import { ActionConfirmationSheet } from '../ai-agent/ActionConfirmationSheet';
+import { useAgentAction } from '../../hooks/useAgentAction';
+import type { ActionProposal, AgentIntent } from '../../shared/schemas/agentSchemas';
+import type { AgentTool } from '../ai-agent/intentRegistry';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -166,6 +173,17 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
   const [isLoading,    setIsLoading]    = useState(false);
   const [callCount,    setCallCount]    = useState(0);
 
+  // ── Intent router → confirmação humana de ação (FASE H, atrás de flag) ─────────
+  interface PendingAction {
+    proposal: ActionProposal;
+    intent:   AgentIntent;
+    tools:    AgentTool[];
+    question: string;
+  }
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [confirmOpen,   setConfirmOpen]   = useState(false);
+  const { status: agentStatus, error: agentError, runAction, reset: resetAgent } = useAgentAction();
+
   const RATE_LIMIT_MAX  = 20;
   const RATE_LIMIT_WARN = 18;
   const RATE_LIMIT_KEY  = `qf_rate_${uid}`;
@@ -212,6 +230,41 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
     [transactions, balances]
   );
 
+  // Acrescenta uma fala do assistente ao chat e à memória de conversa.
+  const pushAiMessage = useCallback((text: string) => {
+    memory.append({ role: 'assistant', content: text, timestamp: new Date().toISOString() });
+    setMessages(prev => [...prev, { role: 'ai', text }]);
+  }, [memory]);
+
+  // Confirmação humana: só aqui a ação proposta vira escrita server-trusted.
+  const confirmAgentAction = useCallback(async () => {
+    if (!pendingAction) return;
+    try {
+      await runAction(pendingAction.proposal, {
+        intent:    pendingAction.intent,
+        question:  pendingAction.question,
+        toolsUsed: pendingAction.tools,
+      });
+      setConfirmOpen(false);
+      pushAiMessage(presentProposal(pendingAction.proposal).successMessage);
+      setPendingAction(null);
+    } catch {
+      // Erro fica visível no sheet (com rota alternativa quando aplicável).
+    }
+  }, [pendingAction, runAction, pushAiMessage]);
+
+  const dismissProposal = useCallback(() => {
+    setConfirmOpen(false);
+    setPendingAction(null);
+  }, []);
+
+  // Rota para o `reason` server-trusted `use_installment_form` (compra parcelada).
+  const handleInstallmentRoute = useCallback(() => {
+    setConfirmOpen(false);
+    setPendingAction(null);
+    pushAiMessage('Compras parceladas são registradas pelo formulário de transações, não pelo assistente.');
+  }, [pushAiMessage]);
+
   const submitMessage = async (text: string) => {
     const userText = text.trim();
     if (!userText || rateLimitReached) return;
@@ -223,6 +276,39 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
 
     // Persist user turn to memory
     memory.append({ role: 'user', content: userText, timestamp: new Date().toISOString() });
+
+    // ── Intent router (atrás de flag; OFF por padrão) ────────────────────────────
+    // Mesmo com a flag ON, NADA é gravado sem confirmação humana no sheet — o pior
+    // caso de uma classificação ruim é uma proposta recusada. Read-only / baixa
+    // confiança / intenção desconhecida caem no chat normal abaixo.
+    if (import.meta.env.VITE_ENABLE_AGENT_ROUTER === 'true') {
+      try {
+        const route = routeIntent(await geminiIntentClassifier({ message: userText }));
+
+        if (route.type === 'proposal') {
+          setPendingAction({
+            proposal: route.proposal,
+            intent:   route.intent,
+            tools:    route.tools,
+            question: route.question,
+          });
+          resetAgent();
+          setConfirmOpen(true);
+          pushAiMessage(route.question);
+          setIsLoading(false);
+          return;
+        }
+
+        if (route.type === 'need_more_info') {
+          pushAiMessage(formatMissingInfoMessage(route.missing));
+          setIsLoading(false);
+          return;
+        }
+        // answer | low_confidence | unknown_intent → segue no chat normal.
+      } catch {
+        // Falha de classificação degrada com segurança para o chat normal.
+      }
+    }
 
     // Build history context string from memory
     const history = memory.getHistory().slice(-6); // last 3 pairs
@@ -278,6 +364,7 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
   };
 
   return (
+    <>
     <AnimatePresence>
       {isOpen && (
         <motion.div
@@ -423,6 +510,25 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
         </motion.div>
       )}
     </AnimatePresence>
+
+    {/* Confirmação humana de ação proposta pelo Agente (FASE H) */}
+    {pendingAction && (
+      <ActionConfirmationSheet
+        open={confirmOpen}
+        onClose={dismissProposal}
+        onConfirm={() => void confirmAgentAction()}
+        question={pendingAction.question}
+        status={agentStatus}
+        error={agentError}
+        route={{
+          reason: 'use_installment_form',
+          label: 'Abrir formulário de transações',
+          onClick: handleInstallmentRoute,
+        }}
+        {...presentProposal(pendingAction.proposal)}
+      />
+    )}
+    </>
   );
 };
 
