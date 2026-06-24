@@ -37,6 +37,9 @@ const adminDb = admin.firestore();
 // ─── Shared constants ─────────────────────────────────────────────────────────
 const REGION         = 'southamerica-east1';
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
+// Modelo atual do Gemini. `gemini-1.5-flash` foi descontinuado (404 na API),
+// derrubando todas as funções de IA. Manter num modelo GA vigente.
+const GEMINI_MODEL   = 'gemini-2.5-flash';
 const DAILY_AI_LIMIT = 50;
 const MAX_BATCH_SIZE = 100;
 const MAX_PROMPT_LEN = 4_000;
@@ -154,7 +157,7 @@ async function callGemini(
 ): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: GEMINI_MODEL,
     generationConfig: options.jsonMode
       ? { temperature: 0.1, responseMimeType: 'application/json' }
       : { temperature: 0.7 },
