@@ -98,6 +98,8 @@ const USER_FRIENDLY_MESSAGES = {
   'permission-denied': 'Não foi possível concluir a operação porque as regras de segurança bloquearam a alteração. Atualize a página e tente novamente.',
   'failed-precondition': 'Não foi possível concluir a operação porque os dados precisam ser atualizados antes de salvar. Recarregue as movimentações e tente novamente.',
   unavailable: 'Serviço temporariamente indisponível. Verifique sua conexão e tente novamente em instantes.',
+  unauthenticated: 'Não foi possível autenticar a solicitação. Recarregue a página e entre novamente.',
+  'resource-exhausted': 'Você atingiu o limite de uso temporário do assistente. Aguarde um pouco e tente novamente.',
   unknown: 'Não foi possível concluir a operação. Tente novamente e, se o problema persistir, verifique sua conexão.',
 } as const;
 
@@ -168,6 +170,11 @@ export function getUserFriendlyErrorMessage(
   if (code.includes('permission-denied')) return USER_FRIENDLY_MESSAGES['permission-denied'];
   if (code.includes('failed-precondition')) return USER_FRIENDLY_MESSAGES['failed-precondition'];
   if (code.includes('unavailable')) return USER_FRIENDLY_MESSAGES.unavailable;
+  // `unauthenticated` cobre sessão expirada E App Check ausente/inválido (callable rejeita
+  // com esse código). `resource-exhausted` é o limite diário de IA. Mensagens distintas
+  // evitam que esses casos colem na genérica `unknown` e mascarem o diagnóstico.
+  if (code.includes('unauthenticated')) return USER_FRIENDLY_MESSAGES.unauthenticated;
+  if (code.includes('resource-exhausted')) return USER_FRIENDLY_MESSAGES['resource-exhausted'];
   return USER_FRIENDLY_MESSAGES.unknown;
 }
 
