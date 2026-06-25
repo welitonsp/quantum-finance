@@ -152,3 +152,90 @@ describe('AIAssistantChat — intent router wiring', () => {
     await waitFor(() => expect(screen.getByText('Compra registrada pelo assistente.')).toBeTruthy());
   });
 });
+
+describe('AIAssistantChat — confirmação determinística de mutação (flag ON)', () => {
+  it('comando "registre despesa" PROPÕE e não executa nem cai no chat freeform', async () => {
+    vi.stubEnv('VITE_ENABLE_AGENT_ROUTER', 'true');
+    const { container } = renderChat();
+    sendMessage(container, 'Registre uma despesa de 35 reais no mercado hoje.');
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('heading', { name: 'Registrar compra' })).toBeTruthy();
+    // A pergunta aparece no chat e também dentro do sheet de confirmação.
+    expect(
+      screen.getAllByText(/Detectei uma despesa de R\$\s?35,00 em Mercado para hoje/).length,
+    ).toBeGreaterThan(0);
+    // Determinístico: nem LLM, nem chat freeform, nem escrita.
+    expect(h.classifyMock).not.toHaveBeenCalled();
+    expect(h.adviceMock).not.toHaveBeenCalled();
+    expect(h.runActionMock).not.toHaveBeenCalled();
+  });
+
+  it('responder "confirmar" por texto executa a ação', async () => {
+    vi.stubEnv('VITE_ENABLE_AGENT_ROUTER', 'true');
+    const { container } = renderChat();
+    sendMessage(container, 'Registre uma despesa de 35 reais no mercado hoje.');
+    await screen.findByRole('dialog');
+
+    sendMessage(container, 'confirmar');
+    await waitFor(() => expect(h.runActionMock).toHaveBeenCalledTimes(1));
+    const [proposalArg, ctxArg] = h.runActionMock.mock.calls[0]!;
+    expect(proposalArg.kind).toBe('register_purchase');
+    expect(proposalArg.status).toBe('pending'); // o hook é quem sela como confirmed
+    expect(ctxArg.intent).toBe('simulate_purchase');
+  });
+
+  it('responder "cancelar" por texto descarta sem executar', async () => {
+    vi.stubEnv('VITE_ENABLE_AGENT_ROUTER', 'true');
+    const { container } = renderChat();
+    sendMessage(container, 'Registre uma despesa de 35 reais no mercado hoje.');
+    await screen.findByRole('dialog');
+
+    sendMessage(container, 'cancelar');
+    await waitFor(() => expect(screen.getByText('Ok, cancelei. Nada foi registrado.')).toBeTruthy());
+    expect(h.runActionMock).not.toHaveBeenCalled();
+  });
+
+  it('comando de RECEITA é recusado com segurança (sem execução, sem chat freeform)', async () => {
+    vi.stubEnv('VITE_ENABLE_AGENT_ROUTER', 'true');
+    const { container } = renderChat();
+    sendMessage(container, 'Registre uma receita de 100 reais de teste hoje.');
+
+    await waitFor(() => expect(screen.getByText(/só registro despesas/i)).toBeTruthy());
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(h.runActionMock).not.toHaveBeenCalled();
+    expect(h.adviceMock).not.toHaveBeenCalled();
+  });
+
+  it('chama onActionExecuted após a execução confirmada', async () => {
+    vi.stubEnv('VITE_ENABLE_AGENT_ROUTER', 'true');
+    const onExec = vi.fn();
+    const { container } = render(
+      <AIAssistantChat
+        uid="u1"
+        transactions={[]}
+        balances={null}
+        isOpen
+        onClose={() => {}}
+        onActionExecuted={onExec}
+      />,
+    );
+    sendMessage(container, 'Registre uma despesa de 35 reais no mercado hoje.');
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Registrar compra' }));
+
+    await waitFor(() => expect(onExec).toHaveBeenCalledWith({ id: 'tx1', decisionId: null }));
+  });
+
+  it('NÃO afirma "registrada" quando a callable falha', async () => {
+    vi.stubEnv('VITE_ENABLE_AGENT_ROUTER', 'true');
+    h.runActionMock.mockRejectedValueOnce({ code: 'internal', message: 'falha' });
+    const { container } = renderChat();
+    sendMessage(container, 'Registre uma despesa de 35 reais no mercado hoje.');
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Registrar compra' }));
+
+    await waitFor(() => expect(h.runActionMock).toHaveBeenCalled());
+    expect(screen.queryByText('Compra registrada pelo assistente.')).toBeNull();
+  });
+});

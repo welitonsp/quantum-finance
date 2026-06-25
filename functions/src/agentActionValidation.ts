@@ -182,8 +182,13 @@ export function validateAgentActionRequest(raw: unknown): ValidatedAgentAction {
   }
 
   // Gate de confirmação humana — núcleo da governança (AI_AGENT_GUARDRAILS §4).
+  // Falha de PRÉ-CONDIÇÃO (não de forma do argumento): a UI roteia pelo `reason`
+  // estável `confirmation_required`, nunca pela prosa da mensagem.
   if (proposal['status'] !== 'confirmed') {
-    invalid('Ação só pode ser executada com proposal.status === "confirmed".');
+    throw new AgentActionValidationError(
+      'Ação só pode ser executada após confirmação humana explícita (status "confirmed").',
+      { code: 'failed-precondition', reason: 'confirmation_required' },
+    );
   }
 
   const rawPayload = asObject(proposal['payload'], 'proposal.payload');

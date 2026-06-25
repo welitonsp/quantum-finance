@@ -11,9 +11,10 @@ import { geminiIntentClassifier } from '../ai-agent/geminiIntentClassifier';
 import { routeIntent } from '../ai-agent/intentRouter';
 import { presentProposal, formatMissingInfoMessage } from '../ai-agent/proposalPresentation';
 import { ActionConfirmationSheet } from '../ai-agent/ActionConfirmationSheet';
-import { useAgentAction } from '../../hooks/useAgentAction';
+import { interpretMutationCommand, parseConfirmationReply } from '../ai-agent/mutationCommandGuard';
+import { useAgentAction, type AgentActionResult } from '../../hooks/useAgentAction';
 import type { ActionProposal, AgentIntent } from '../../shared/schemas/agentSchemas';
-import type { AgentTool } from '../ai-agent/intentRegistry';
+import { INTENT_REGISTRY, type AgentTool } from '../ai-agent/intentRegistry';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -38,12 +39,26 @@ interface Props {
   balances:     Partial<ModuleBalances> | null;
   isOpen:       boolean;
   onClose:      () => void;
+  /**
+   * Notificação após uma ação do agente ser executada com sucesso (callable retornou).
+   * A lista de Movimentações e o Dashboard já refletem a escrita via listener realtime
+   * (`onSnapshot`), mas este hook permite invalidação/refresh explícito por consumidores
+   * que não sejam realtime.
+   */
+  onActionExecuted?: (result: AgentActionResult) => void;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtBRL(cents: number): string {
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+/** Log de auditoria do fluxo do agente — somente DEV, sem PII/secrets (apenas ids/paths). */
+function agentLog(event: string, data?: Record<string, unknown>): void {
+  if (import.meta.env.DEV) {
+    console.info(`[agent] ${event}`, data ?? {});
+  }
 }
 
 function isExpenseTx(tx: Transaction): boolean {
@@ -160,7 +175,7 @@ function CitationDisclosure({ citations }: { citations: CitationTransaction[] })
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onClose }: Props) => {
+export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onClose, onActionExecuted }: Props) => {
   const memory = useMemo(() => new ConversationMemory(uid), [uid]);
 
   const [messages, setMessages] = useState<Message[]>([
@@ -239,24 +254,47 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
   // Confirmação humana: só aqui a ação proposta vira escrita server-trusted.
   const confirmAgentAction = useCallback(async () => {
     if (!pendingAction) return;
+    agentLog('action confirmed', { kind: pendingAction.proposal.kind, intent: pendingAction.intent });
     try {
-      await runAction(pendingAction.proposal, {
+      const result = await runAction(pendingAction.proposal, {
         intent:    pendingAction.intent,
         question:  pendingAction.question,
         toolsUsed: pendingAction.tools,
       });
       setConfirmOpen(false);
+      // Path com UID mascarado (sem PII): registra que a escrita foi materializada no
+      // caminho canônico lido por Movimentações/Dashboard.
+      agentLog('action executed', {
+        kind:       pendingAction.proposal.kind,
+        txId:       result.id,
+        path:       `users/<uid>/transactions/${result.id}`,
+        decisionId: result.decisionId,
+      });
+      // A UI já reflete a escrita via onSnapshot; notifica consumidores para refresh explícito.
+      onActionExecuted?.(result);
+      agentLog('data refetch requested', { txId: result.id });
+      // Só após sucesso real da callable o chat confirma o registro.
       pushAiMessage(presentProposal(pendingAction.proposal).successMessage);
       setPendingAction(null);
     } catch {
       // Erro fica visível no sheet (com rota alternativa quando aplicável).
+      // O chat NÃO afirma "registrada" quando a callable falha.
     }
-  }, [pendingAction, runAction, pushAiMessage]);
+  }, [pendingAction, runAction, pushAiMessage, onActionExecuted]);
 
   const dismissProposal = useCallback(() => {
     setConfirmOpen(false);
     setPendingAction(null);
   }, []);
+
+  // Cancelamento explícito por texto: descarta a proposta sem qualquer escrita.
+  const cancelPendingAction = useCallback(() => {
+    if (!pendingAction) return;
+    agentLog('action cancelled', { kind: pendingAction.proposal.kind });
+    setConfirmOpen(false);
+    setPendingAction(null);
+    pushAiMessage('Ok, cancelei. Nada foi registrado.');
+  }, [pendingAction, pushAiMessage]);
 
   // Rota para o `reason` server-trusted `use_installment_form` (compra parcelada).
   const handleInstallmentRoute = useCallback(() => {
@@ -277,11 +315,62 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
     // Persist user turn to memory
     memory.append({ role: 'user', content: userText, timestamp: new Date().toISOString() });
 
-    // ── Intent router (atrás de flag; OFF por padrão) ────────────────────────────
-    // Mesmo com a flag ON, NADA é gravado sem confirmação humana no sheet — o pior
-    // caso de uma classificação ruim é uma proposta recusada. Read-only / baixa
-    // confiança / intenção desconhecida caem no chat normal abaixo.
-    if (import.meta.env.VITE_ENABLE_AGENT_ROUTER === 'true') {
+    const routerEnabled = import.meta.env.VITE_ENABLE_AGENT_ROUTER === 'true';
+
+    // ── (1) Confirmação humana POR TEXTO de uma ação pendente ────────────────────
+    // Enquanto houver uma proposta aguardando confirmação, a próxima mensagem é
+    // interpretada como confirmar/cancelar. NUNCA cai no chat normal nem executa
+    // sem um "confirmar" explícito.
+    if (routerEnabled && pendingAction) {
+      const reply = parseConfirmationReply(userText);
+      if (reply === 'confirm') {
+        setIsLoading(false);
+        await confirmAgentAction();
+        return;
+      }
+      if (reply === 'cancel') {
+        cancelPendingAction();
+        setIsLoading(false);
+        return;
+      }
+      pushAiMessage('Só para confirmar: responda "confirmar" para registrar ou "cancelar" para descartar.');
+      setIsLoading(false);
+      return;
+    }
+
+    // ── (2) Guarda determinística de comando de mutação imperativo ───────────────
+    // "Registre uma despesa…" vira uma PROPOSTA pendente (confirmação obrigatória),
+    // jamais uma escrita imediata e jamais um texto alucinado do chat freeform.
+    if (routerEnabled) {
+      const guard = interpretMutationCommand(userText);
+      if (guard.type === 'expense_proposal') {
+        setPendingAction({
+          proposal: guard.proposal,
+          intent:   'simulate_purchase',
+          tools:    INTENT_REGISTRY['simulate_purchase'].tools,
+          question: guard.question,
+        });
+        resetAgent();
+        setConfirmOpen(true);
+        agentLog('action proposed', { kind: guard.proposal.kind });
+        agentLog('action confirmation required', { kind: guard.proposal.kind });
+        pushAiMessage(guard.question);
+        setIsLoading(false);
+        return;
+      }
+      if (guard.type === 'income_unsupported' || guard.type === 'needs_details') {
+        pushAiMessage(guard.message);
+        setIsLoading(false);
+        return;
+      }
+      // not_mutation → segue para o classificador LLM abaixo.
+    }
+
+    // ── (3) Intent router LLM (atrás de flag; OFF por padrão) ────────────────────
+    // Mesmo com a flag ON, NADA é gravado sem confirmação humana — o pior caso de uma
+    // classificação ruim é uma proposta recusada. Read-only / baixa confiança /
+    // intenção desconhecida caem no chat normal abaixo.
+    if (routerEnabled) {
       try {
         const route = routeIntent(await geminiIntentClassifier({ message: userText }));
 
@@ -294,6 +383,8 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
           });
           resetAgent();
           setConfirmOpen(true);
+          agentLog('action proposed', { kind: route.proposal.kind });
+          agentLog('action confirmation required', { kind: route.proposal.kind });
           pushAiMessage(route.question);
           setIsLoading(false);
           return;
