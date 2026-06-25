@@ -61,13 +61,22 @@ const CORS_ORIGINS: (string | RegExp)[] = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function checkAndIncrementRateLimit(uid: string): Promise<boolean> {
+// Resultado discriminado do gate de rate limit. CRÍTICO: um erro interno do
+// Firestore/transaction (`error`) NUNCA pode ser confundido com limite atingido
+// (`limited`) — antes, o catch retornava `false` e os consumidores lançavam
+// `resource-exhausted`, mascarando falhas internas como "limite diário".
+type RateLimitResult =
+  | { status: 'allowed' }
+  | { status: 'limited' }
+  | { status: 'error' };
+
+export async function checkAndIncrementRateLimit(uid: string): Promise<RateLimitResult> {
   const ref   = adminDb.doc(`users/${uid}/usage/ai_calls`);
   const nowMs = Date.now();
   const dayMs = 24 * 60 * 60 * 1000;
 
   try {
-    return await adminDb.runTransaction(async (tx) => {
+    return await adminDb.runTransaction(async (tx): Promise<RateLimitResult> => {
       const snap = await tx.get(ref);
 
       if (!snap.exists) {
@@ -75,7 +84,7 @@ async function checkAndIncrementRateLimit(uid: string): Promise<boolean> {
           count:     1,
           lastReset: admin.firestore.FieldValue.serverTimestamp(),
         });
-        return true;
+        return { status: 'allowed' };
       }
 
       const data        = snap.data()!;
@@ -86,18 +95,37 @@ async function checkAndIncrementRateLimit(uid: string): Promise<boolean> {
           count:     1,
           lastReset: admin.firestore.FieldValue.serverTimestamp(),
         });
-        return true;
+        return { status: 'allowed' };
       }
 
-      if ((data['count'] as number ?? 0) >= DAILY_AI_LIMIT) return false;
+      if ((data['count'] as number ?? 0) >= DAILY_AI_LIMIT) return { status: 'limited' };
 
       tx.update(ref, { count: admin.firestore.FieldValue.increment(1) });
-      return true;
+      return { status: 'allowed' };
     });
   } catch (e) {
+    // Erro interno — sob o emulator, sanitizeFunctionError anexa detail/env seguros
+    // (sem PII) para diagnóstico. Em produção, só o resumo curado é logado.
     console.error('[FunctionError]', sanitizeFunctionError('rate_limit_check', e));
-    return false;
+    return { status: 'error' };
   }
+}
+
+// Aplica o gate de rate limit a uma callable de IA, traduzindo o resultado em
+// HttpsError. Centraliza o despacho dos 3 consumidores e impede regressão do
+// bug "erro interno → resource-exhausted".
+async function assertAiRateLimit(uid: string, limitedDetail: string): Promise<void> {
+  const result = await checkAndIncrementRateLimit(uid);
+  if (result.status === 'allowed') return;
+
+  if (result.status === 'limited') {
+    void writeStructuredLog(uid, 'ERROR', limitedDetail);
+    throw new HttpsError('resource-exhausted', `Limite diário de ${DAILY_AI_LIMIT} chamadas de IA atingido.`);
+  }
+
+  // status === 'error' — falha interna ao validar o limite. NUNCA resource-exhausted.
+  void writeStructuredLog(uid, 'ERROR', 'rate limit validation failed');
+  throw new HttpsError('internal', 'Não foi possível validar o limite de uso da IA. Tente novamente em instantes.');
 }
 
 async function writeStructuredLog(uid: string, type: string, detail: string): Promise<void> {
@@ -768,11 +796,7 @@ export const categorizeTransactionsBatch = onCall(
       throw new HttpsError('invalid-argument', `Máximo ${MAX_BATCH_SIZE} transações por lote.`);
     }
 
-    const allowed = await checkAndIncrementRateLimit(uid);
-    if (!allowed) {
-      void writeStructuredLog(uid, 'ERROR', `daily AI limit reached (${DAILY_AI_LIMIT}/day) — categorization blocked`);
-      throw new HttpsError('resource-exhausted', `Limite diário de ${DAILY_AI_LIMIT} chamadas de IA atingido.`);
-    }
+    await assertAiRateLimit(uid, `daily AI limit reached (${DAILY_AI_LIMIT}/day) — categorization blocked`);
 
     type RawTx = { id?: unknown; description?: unknown; value_cents?: unknown; value?: unknown; type?: unknown; category?: unknown };
     const safeRows = (transactions as RawTx[])
@@ -837,12 +861,8 @@ export const chatWithQuantumAI = onCall(
     if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
     if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
 
-    const uid     = request.auth.uid;
-    const allowed = await checkAndIncrementRateLimit(uid);
-    if (!allowed) {
-      void writeStructuredLog(uid, 'ERROR', 'daily AI limit reached — chat blocked');
-      throw new HttpsError('resource-exhausted', `Limite diário de ${DAILY_AI_LIMIT} chamadas de IA atingido.`);
-    }
+    const uid = request.auth.uid;
+    await assertAiRateLimit(uid, 'daily AI limit reached — chat blocked');
 
     const { prompt: userMessage, financialContext: rawContext } =
       (request.data ?? {}) as { prompt?: unknown; financialContext?: unknown };
@@ -885,12 +905,8 @@ export const generateAuditReport = onCall(
     if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
     if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
 
-    const uid     = request.auth.uid;
-    const allowed = await checkAndIncrementRateLimit(uid);
-    if (!allowed) {
-      void writeStructuredLog(uid, 'ERROR', 'daily AI limit reached — audit blocked');
-      throw new HttpsError('resource-exhausted', `Limite diário de ${DAILY_AI_LIMIT} chamadas de IA atingido.`);
-    }
+    const uid = request.auth.uid;
+    await assertAiRateLimit(uid, 'daily AI limit reached — audit blocked');
 
     const { financialContext: rawContext } =
       (request.data ?? {}) as { financialContext?: unknown };
