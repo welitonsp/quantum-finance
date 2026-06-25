@@ -1,4 +1,6 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { after, beforeEach, describe, it } = require('node:test');
 
 const firebaseFunctionsTest = require('firebase-functions-test');
@@ -92,6 +94,28 @@ require.cache[adminModulePath] = {
   exports: mockAdmin,
 };
 
+// index.ts importa FieldValue/Timestamp do subpath modular `firebase-admin/firestore`
+// (não mais de `admin.firestore.FieldValue`). Espelhamos o sentinel para manter as
+// asserções de payload determinísticas.
+const adminFirestoreModulePath = require.resolve('firebase-admin/firestore');
+const originalAdminFirestoreModule = require.cache[adminFirestoreModulePath];
+require.cache[adminFirestoreModulePath] = {
+  id: adminFirestoreModulePath,
+  filename: adminFirestoreModulePath,
+  loaded: true,
+  exports: {
+    FieldValue: {
+      serverTimestamp() {
+        return { __op: 'serverTimestamp' };
+      },
+      increment(value) {
+        return { __op: 'increment', value };
+      },
+    },
+    Timestamp: {},
+  },
+};
+
 const { createTransaction } = require('../lib/index');
 const wrappedCreateTransaction = testEnv.wrap(createTransaction);
 
@@ -102,6 +126,12 @@ after(() => {
     require.cache[adminModulePath] = originalAdminModule;
   } else {
     delete require.cache[adminModulePath];
+  }
+
+  if (originalAdminFirestoreModule) {
+    require.cache[adminFirestoreModulePath] = originalAdminFirestoreModule;
+  } else {
+    delete require.cache[adminFirestoreModulePath];
   }
 });
 
@@ -142,6 +172,37 @@ function assertNoForbiddenFields(value) {
     }
   }
 }
+
+describe('Firestore FieldValue import guardrail', () => {
+  // Regression guard: `admin.firestore.FieldValue` resolves to undefined in the
+  // emulator/CI runtime (firebase-admin v13 + Node 24), crashing createTransaction
+  // with "Cannot read properties of undefined (reading 'serverTimestamp')". Use the
+  // modular `firebase-admin/firestore` import instead.
+  const indexSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.ts'), 'utf8');
+
+  it('imports FieldValue/Timestamp from the modular firebase-admin/firestore subpath', () => {
+    assert.match(
+      indexSource,
+      /import\s*\{[^}]*\bFieldValue\b[^}]*\}\s*from\s*'firebase-admin\/firestore'/,
+      'index.ts must import FieldValue from firebase-admin/firestore',
+    );
+  });
+
+  it('never references admin.firestore.FieldValue / admin.firestore.Timestamp in executable code', () => {
+    const offending = indexSource
+      .split(/\r?\n/)
+      .map((line, i) => ({ line: i + 1, text: line }))
+      .filter(({ text }) => /admin\.firestore\.(FieldValue|Timestamp)\b/.test(text))
+      // Allow mentions inside comments (explaining the bug we fixed).
+      .filter(({ text }) => !/^\s*(\/\/|\*)/.test(text));
+
+    assert.deepEqual(
+      offending,
+      [],
+      `admin.firestore.FieldValue/Timestamp is forbidden:\n${offending.map(o => `${o.line}: ${o.text}`).join('\n')}`,
+    );
+  });
+});
 
 describe('createTransaction callable', () => {
   beforeEach(() => resetFirestoreMock());

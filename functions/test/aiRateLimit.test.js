@@ -76,6 +76,26 @@ require.cache[adminModulePath] = {
   exports: mockAdmin,
 };
 
+// index.ts importa FieldValue do subpath modular `firebase-admin/firestore`.
+const adminFirestoreModulePath = require.resolve('firebase-admin/firestore');
+const originalAdminFirestoreModule = require.cache[adminFirestoreModulePath];
+require.cache[adminFirestoreModulePath] = {
+  id: adminFirestoreModulePath,
+  filename: adminFirestoreModulePath,
+  loaded: true,
+  exports: {
+    FieldValue: {
+      serverTimestamp() {
+        return { __op: 'serverTimestamp' };
+      },
+      increment(value) {
+        return { __op: 'increment', value };
+      },
+    },
+    Timestamp: {},
+  },
+};
+
 const { checkAndIncrementRateLimit, chatWithQuantumAI } = require('../lib/index');
 const wrappedChat = testEnv.wrap(chatWithQuantumAI);
 
@@ -85,6 +105,12 @@ after(() => {
     require.cache[adminModulePath] = originalAdminModule;
   } else {
     delete require.cache[adminModulePath];
+  }
+
+  if (originalAdminFirestoreModule) {
+    require.cache[adminFirestoreModulePath] = originalAdminFirestoreModule;
+  } else {
+    delete require.cache[adminFirestoreModulePath];
   }
 });
 

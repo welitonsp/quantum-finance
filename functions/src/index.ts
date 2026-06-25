@@ -14,6 +14,11 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as admin from 'firebase-admin';
+// Importar FieldValue/Timestamp do subpath modular evita depender de
+// `admin.firestore.FieldValue`, que pode ser `undefined` no runtime do emulator/CI
+// (firebase-admin v13 + Node 24) e quebrava createTransaction com
+// "Cannot read properties of undefined (reading 'serverTimestamp')".
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import {
   CreateTransactionValidationError,
   validateCreateTransactionPayload,
@@ -82,25 +87,25 @@ export async function checkAndIncrementRateLimit(uid: string): Promise<RateLimit
       if (!snap.exists) {
         tx.set(ref, {
           count:     1,
-          lastReset: admin.firestore.FieldValue.serverTimestamp(),
+          lastReset: FieldValue.serverTimestamp(),
         });
         return { status: 'allowed' };
       }
 
       const data        = snap.data()!;
-      const lastResetMs = (data['lastReset'] as admin.firestore.Timestamp | undefined)?.toMillis?.() ?? 0;
+      const lastResetMs = (data['lastReset'] as Timestamp | undefined)?.toMillis?.() ?? 0;
 
       if (nowMs - lastResetMs > dayMs) {
         tx.update(ref, {
           count:     1,
-          lastReset: admin.firestore.FieldValue.serverTimestamp(),
+          lastReset: FieldValue.serverTimestamp(),
         });
         return { status: 'allowed' };
       }
 
       if ((data['count'] as number ?? 0) >= DAILY_AI_LIMIT) return { status: 'limited' };
 
-      tx.update(ref, { count: admin.firestore.FieldValue.increment(1) });
+      tx.update(ref, { count: FieldValue.increment(1) });
       return { status: 'allowed' };
     });
   } catch (e) {
@@ -133,7 +138,7 @@ async function writeStructuredLog(uid: string, type: string, detail: string): Pr
     await adminDb.collection(`users/${uid}/system_logs`).add({
       type,
       detail,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
   } catch (e) {
     console.warn('[FunctionWarning]', sanitizeFunctionError('structured_log_write', e));
@@ -356,8 +361,8 @@ export const createTransaction = onCall(
       fitId:         data.fitId,
       tags:          data.tags,
       isRecurring:   data.isRecurring,
-      createdAt:     admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt:     admin.firestore.FieldValue.serverTimestamp(),
+      createdAt:     FieldValue.serverTimestamp(),
+      updatedAt:     FieldValue.serverTimestamp(),
       ...(data.account   !== undefined ? { account:   data.account   } : {}),
       ...(data.accountId !== undefined ? { accountId: data.accountId } : {}),
       ...(data.cardId    !== undefined ? { cardId:    data.cardId    } : {}),
@@ -385,7 +390,7 @@ export const createTransaction = onCall(
     const histPayload = {
       action:        'CREATE',
       txId:          txRef.id,
-      createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+      createdAt:     FieldValue.serverTimestamp(),
       schemaVersion: 1,
       origin:        'manual',
       amount_cents:  data.value_cents,
@@ -405,7 +410,7 @@ export const createTransaction = onCall(
         const expireAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
         t.set(idemRef, {
           txId:      txRef.id,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
           expireAt,
         });
       }
@@ -483,7 +488,7 @@ export const executeAgentAction = onCall(
 
       const goalDecision = {
         userId:        uid,
-        createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+        createdAt:     FieldValue.serverTimestamp(),
         intent:        action.intent,
         question:      action.question,
         toolsUsed:     action.toolsUsed,
@@ -510,12 +515,12 @@ export const executeAgentAction = onCall(
 
         t.update(goalRef, {
           currentCents: newCurrent,
-          updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt:    FieldValue.serverTimestamp(),
         });
         if (idemRef) {
           t.set(idemRef, {
             decisionId: decisionRef.id,
-            createdAt:  admin.firestore.FieldValue.serverTimestamp(),
+            createdAt:  FieldValue.serverTimestamp(),
             expireAt:   new Date(Date.now() + 24 * 60 * 60 * 1000),
           });
         }
@@ -542,7 +547,7 @@ export const executeAgentAction = onCall(
 
       const debtDecision = {
         userId:        uid,
-        createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+        createdAt:     FieldValue.serverTimestamp(),
         intent:        action.intent,
         question:      action.question,
         toolsUsed:     action.toolsUsed,
@@ -575,12 +580,12 @@ export const executeAgentAction = onCall(
           remainingCents:   newRemaining,
           paidInstallments: newPaid,
           active:           !isNowPaid,
-          updatedAt:        admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt:        FieldValue.serverTimestamp(),
         });
         if (idemRef) {
           t.set(idemRef, {
             decisionId: decisionRef.id,
-            createdAt:  admin.firestore.FieldValue.serverTimestamp(),
+            createdAt:  FieldValue.serverTimestamp(),
             expireAt:   new Date(Date.now() + 24 * 60 * 60 * 1000),
           });
         }
@@ -611,12 +616,12 @@ export const executeAgentAction = onCall(
         period:        'monthly',
         month:         b.competencia,
         schemaVersion: 2,
-        createdAt:     admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt:     admin.firestore.FieldValue.serverTimestamp(),
+        createdAt:     FieldValue.serverTimestamp(),
+        updatedAt:     FieldValue.serverTimestamp(),
       };
       const budgetDecision = {
         userId:        uid,
-        createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+        createdAt:     FieldValue.serverTimestamp(),
         intent:        action.intent,
         question:      action.question,
         toolsUsed:     action.toolsUsed,
@@ -636,7 +641,7 @@ export const executeAgentAction = onCall(
           t.set(idemRef, {
             budgetId:   budgetRef.id,
             decisionId: decisionRef.id,
-            createdAt:  admin.firestore.FieldValue.serverTimestamp(),
+            createdAt:  FieldValue.serverTimestamp(),
             expireAt:   new Date(Date.now() + 24 * 60 * 60 * 1000),
           });
         }
@@ -689,14 +694,14 @@ export const executeAgentAction = onCall(
 
     const txPayload = {
       ...afterSnapshot,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     };
 
     const histPayload = {
       action:        'CREATE',
       txId:          txRef.id,
-      createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+      createdAt:     FieldValue.serverTimestamp(),
       schemaVersion: 1,
       origin:        'ai',
       amount_cents:  p.amountCents,
@@ -707,7 +712,7 @@ export const executeAgentAction = onCall(
 
     const decisionPayload = {
       userId:       uid,
-      createdAt:    admin.firestore.FieldValue.serverTimestamp(),
+      createdAt:    FieldValue.serverTimestamp(),
       intent:       action.intent,
       question:     action.question,
       toolsUsed:    action.toolsUsed,
@@ -732,7 +737,7 @@ export const executeAgentAction = onCall(
         t.set(idemRef, {
           txId:       txRef.id,
           decisionId: decisionRef.id,
-          createdAt:  admin.firestore.FieldValue.serverTimestamp(),
+          createdAt:  FieldValue.serverTimestamp(),
           expireAt,
         });
       }
@@ -1039,14 +1044,14 @@ export const executeScheduledRecurrents = onSchedule(
             source:           'manual',
             schemaVersion:    2,
             isRecurring:      true,
-            createdAt:        admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt:        admin.firestore.FieldValue.serverTimestamp(),
+            createdAt:        FieldValue.serverTimestamp(),
+            updatedAt:        FieldValue.serverTimestamp(),
           };
 
           const histPayload = {
             action:        'CREATE',
             txId:          txRef.id,
-            createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+            createdAt:     FieldValue.serverTimestamp(),
             schemaVersion: 1,
             origin:        'recurring',
             amount_cents:  task['value_cents'] as number,
@@ -1069,7 +1074,7 @@ export const executeScheduledRecurrents = onSchedule(
           txn.set(histRef, histPayload);
           txn.update(taskDoc.ref, {
             lastExecutedMonth: yearMonth,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
           });
         });
         executed++;
