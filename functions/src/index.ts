@@ -14,6 +14,11 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as admin from 'firebase-admin';
+// Importar FieldValue/Timestamp do subpath modular evita depender de
+// `admin.firestore.FieldValue`, que pode ser `undefined` no runtime do emulator/CI
+// (firebase-admin v13 + Node 24) e quebrava createTransaction com
+// "Cannot read properties of undefined (reading 'serverTimestamp')".
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import {
   CreateTransactionValidationError,
   validateCreateTransactionPayload,
@@ -61,43 +66,71 @@ const CORS_ORIGINS: (string | RegExp)[] = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function checkAndIncrementRateLimit(uid: string): Promise<boolean> {
+// Resultado discriminado do gate de rate limit. CRÍTICO: um erro interno do
+// Firestore/transaction (`error`) NUNCA pode ser confundido com limite atingido
+// (`limited`) — antes, o catch retornava `false` e os consumidores lançavam
+// `resource-exhausted`, mascarando falhas internas como "limite diário".
+type RateLimitResult =
+  | { status: 'allowed' }
+  | { status: 'limited' }
+  | { status: 'error' };
+
+export async function checkAndIncrementRateLimit(uid: string): Promise<RateLimitResult> {
   const ref   = adminDb.doc(`users/${uid}/usage/ai_calls`);
   const nowMs = Date.now();
   const dayMs = 24 * 60 * 60 * 1000;
 
   try {
-    return await adminDb.runTransaction(async (tx) => {
+    return await adminDb.runTransaction(async (tx): Promise<RateLimitResult> => {
       const snap = await tx.get(ref);
 
       if (!snap.exists) {
         tx.set(ref, {
           count:     1,
-          lastReset: admin.firestore.FieldValue.serverTimestamp(),
+          lastReset: FieldValue.serverTimestamp(),
         });
-        return true;
+        return { status: 'allowed' };
       }
 
       const data        = snap.data()!;
-      const lastResetMs = (data['lastReset'] as admin.firestore.Timestamp | undefined)?.toMillis?.() ?? 0;
+      const lastResetMs = (data['lastReset'] as Timestamp | undefined)?.toMillis?.() ?? 0;
 
       if (nowMs - lastResetMs > dayMs) {
         tx.update(ref, {
           count:     1,
-          lastReset: admin.firestore.FieldValue.serverTimestamp(),
+          lastReset: FieldValue.serverTimestamp(),
         });
-        return true;
+        return { status: 'allowed' };
       }
 
-      if ((data['count'] as number ?? 0) >= DAILY_AI_LIMIT) return false;
+      if ((data['count'] as number ?? 0) >= DAILY_AI_LIMIT) return { status: 'limited' };
 
-      tx.update(ref, { count: admin.firestore.FieldValue.increment(1) });
-      return true;
+      tx.update(ref, { count: FieldValue.increment(1) });
+      return { status: 'allowed' };
     });
   } catch (e) {
+    // Erro interno — sob o emulator, sanitizeFunctionError anexa detail/env seguros
+    // (sem PII) para diagnóstico. Em produção, só o resumo curado é logado.
     console.error('[FunctionError]', sanitizeFunctionError('rate_limit_check', e));
-    return false;
+    return { status: 'error' };
   }
+}
+
+// Aplica o gate de rate limit a uma callable de IA, traduzindo o resultado em
+// HttpsError. Centraliza o despacho dos 3 consumidores e impede regressão do
+// bug "erro interno → resource-exhausted".
+async function assertAiRateLimit(uid: string, limitedDetail: string): Promise<void> {
+  const result = await checkAndIncrementRateLimit(uid);
+  if (result.status === 'allowed') return;
+
+  if (result.status === 'limited') {
+    void writeStructuredLog(uid, 'ERROR', limitedDetail);
+    throw new HttpsError('resource-exhausted', `Limite diário de ${DAILY_AI_LIMIT} chamadas de IA atingido.`);
+  }
+
+  // status === 'error' — falha interna ao validar o limite. NUNCA resource-exhausted.
+  void writeStructuredLog(uid, 'ERROR', 'rate limit validation failed');
+  throw new HttpsError('internal', 'Não foi possível validar o limite de uso da IA. Tente novamente em instantes.');
 }
 
 async function writeStructuredLog(uid: string, type: string, detail: string): Promise<void> {
@@ -105,7 +138,7 @@ async function writeStructuredLog(uid: string, type: string, detail: string): Pr
     await adminDb.collection(`users/${uid}/system_logs`).add({
       type,
       detail,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
   } catch (e) {
     console.warn('[FunctionWarning]', sanitizeFunctionError('structured_log_write', e));
@@ -328,8 +361,8 @@ export const createTransaction = onCall(
       fitId:         data.fitId,
       tags:          data.tags,
       isRecurring:   data.isRecurring,
-      createdAt:     admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt:     admin.firestore.FieldValue.serverTimestamp(),
+      createdAt:     FieldValue.serverTimestamp(),
+      updatedAt:     FieldValue.serverTimestamp(),
       ...(data.account   !== undefined ? { account:   data.account   } : {}),
       ...(data.accountId !== undefined ? { accountId: data.accountId } : {}),
       ...(data.cardId    !== undefined ? { cardId:    data.cardId    } : {}),
@@ -357,7 +390,7 @@ export const createTransaction = onCall(
     const histPayload = {
       action:        'CREATE',
       txId:          txRef.id,
-      createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+      createdAt:     FieldValue.serverTimestamp(),
       schemaVersion: 1,
       origin:        'manual',
       amount_cents:  data.value_cents,
@@ -377,7 +410,7 @@ export const createTransaction = onCall(
         const expireAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
         t.set(idemRef, {
           txId:      txRef.id,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
           expireAt,
         });
       }
@@ -455,7 +488,7 @@ export const executeAgentAction = onCall(
 
       const goalDecision = {
         userId:        uid,
-        createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+        createdAt:     FieldValue.serverTimestamp(),
         intent:        action.intent,
         question:      action.question,
         toolsUsed:     action.toolsUsed,
@@ -482,12 +515,12 @@ export const executeAgentAction = onCall(
 
         t.update(goalRef, {
           currentCents: newCurrent,
-          updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt:    FieldValue.serverTimestamp(),
         });
         if (idemRef) {
           t.set(idemRef, {
             decisionId: decisionRef.id,
-            createdAt:  admin.firestore.FieldValue.serverTimestamp(),
+            createdAt:  FieldValue.serverTimestamp(),
             expireAt:   new Date(Date.now() + 24 * 60 * 60 * 1000),
           });
         }
@@ -514,7 +547,7 @@ export const executeAgentAction = onCall(
 
       const debtDecision = {
         userId:        uid,
-        createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+        createdAt:     FieldValue.serverTimestamp(),
         intent:        action.intent,
         question:      action.question,
         toolsUsed:     action.toolsUsed,
@@ -547,12 +580,12 @@ export const executeAgentAction = onCall(
           remainingCents:   newRemaining,
           paidInstallments: newPaid,
           active:           !isNowPaid,
-          updatedAt:        admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt:        FieldValue.serverTimestamp(),
         });
         if (idemRef) {
           t.set(idemRef, {
             decisionId: decisionRef.id,
-            createdAt:  admin.firestore.FieldValue.serverTimestamp(),
+            createdAt:  FieldValue.serverTimestamp(),
             expireAt:   new Date(Date.now() + 24 * 60 * 60 * 1000),
           });
         }
@@ -583,12 +616,12 @@ export const executeAgentAction = onCall(
         period:        'monthly',
         month:         b.competencia,
         schemaVersion: 2,
-        createdAt:     admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt:     admin.firestore.FieldValue.serverTimestamp(),
+        createdAt:     FieldValue.serverTimestamp(),
+        updatedAt:     FieldValue.serverTimestamp(),
       };
       const budgetDecision = {
         userId:        uid,
-        createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+        createdAt:     FieldValue.serverTimestamp(),
         intent:        action.intent,
         question:      action.question,
         toolsUsed:     action.toolsUsed,
@@ -608,7 +641,7 @@ export const executeAgentAction = onCall(
           t.set(idemRef, {
             budgetId:   budgetRef.id,
             decisionId: decisionRef.id,
-            createdAt:  admin.firestore.FieldValue.serverTimestamp(),
+            createdAt:  FieldValue.serverTimestamp(),
             expireAt:   new Date(Date.now() + 24 * 60 * 60 * 1000),
           });
         }
@@ -661,14 +694,14 @@ export const executeAgentAction = onCall(
 
     const txPayload = {
       ...afterSnapshot,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     };
 
     const histPayload = {
       action:        'CREATE',
       txId:          txRef.id,
-      createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+      createdAt:     FieldValue.serverTimestamp(),
       schemaVersion: 1,
       origin:        'ai',
       amount_cents:  p.amountCents,
@@ -679,7 +712,7 @@ export const executeAgentAction = onCall(
 
     const decisionPayload = {
       userId:       uid,
-      createdAt:    admin.firestore.FieldValue.serverTimestamp(),
+      createdAt:    FieldValue.serverTimestamp(),
       intent:       action.intent,
       question:     action.question,
       toolsUsed:    action.toolsUsed,
@@ -704,7 +737,7 @@ export const executeAgentAction = onCall(
         t.set(idemRef, {
           txId:       txRef.id,
           decisionId: decisionRef.id,
-          createdAt:  admin.firestore.FieldValue.serverTimestamp(),
+          createdAt:  FieldValue.serverTimestamp(),
           expireAt,
         });
       }
@@ -768,11 +801,7 @@ export const categorizeTransactionsBatch = onCall(
       throw new HttpsError('invalid-argument', `Máximo ${MAX_BATCH_SIZE} transações por lote.`);
     }
 
-    const allowed = await checkAndIncrementRateLimit(uid);
-    if (!allowed) {
-      void writeStructuredLog(uid, 'ERROR', `daily AI limit reached (${DAILY_AI_LIMIT}/day) — categorization blocked`);
-      throw new HttpsError('resource-exhausted', `Limite diário de ${DAILY_AI_LIMIT} chamadas de IA atingido.`);
-    }
+    await assertAiRateLimit(uid, `daily AI limit reached (${DAILY_AI_LIMIT}/day) — categorization blocked`);
 
     type RawTx = { id?: unknown; description?: unknown; value_cents?: unknown; value?: unknown; type?: unknown; category?: unknown };
     const safeRows = (transactions as RawTx[])
@@ -837,12 +866,8 @@ export const chatWithQuantumAI = onCall(
     if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
     if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
 
-    const uid     = request.auth.uid;
-    const allowed = await checkAndIncrementRateLimit(uid);
-    if (!allowed) {
-      void writeStructuredLog(uid, 'ERROR', 'daily AI limit reached — chat blocked');
-      throw new HttpsError('resource-exhausted', `Limite diário de ${DAILY_AI_LIMIT} chamadas de IA atingido.`);
-    }
+    const uid = request.auth.uid;
+    await assertAiRateLimit(uid, 'daily AI limit reached — chat blocked');
 
     const { prompt: userMessage, financialContext: rawContext } =
       (request.data ?? {}) as { prompt?: unknown; financialContext?: unknown };
@@ -885,12 +910,8 @@ export const generateAuditReport = onCall(
     if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
     if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
 
-    const uid     = request.auth.uid;
-    const allowed = await checkAndIncrementRateLimit(uid);
-    if (!allowed) {
-      void writeStructuredLog(uid, 'ERROR', 'daily AI limit reached — audit blocked');
-      throw new HttpsError('resource-exhausted', `Limite diário de ${DAILY_AI_LIMIT} chamadas de IA atingido.`);
-    }
+    const uid = request.auth.uid;
+    await assertAiRateLimit(uid, 'daily AI limit reached — audit blocked');
 
     const { financialContext: rawContext } =
       (request.data ?? {}) as { financialContext?: unknown };
@@ -1023,14 +1044,14 @@ export const executeScheduledRecurrents = onSchedule(
             source:           'manual',
             schemaVersion:    2,
             isRecurring:      true,
-            createdAt:        admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt:        admin.firestore.FieldValue.serverTimestamp(),
+            createdAt:        FieldValue.serverTimestamp(),
+            updatedAt:        FieldValue.serverTimestamp(),
           };
 
           const histPayload = {
             action:        'CREATE',
             txId:          txRef.id,
-            createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+            createdAt:     FieldValue.serverTimestamp(),
             schemaVersion: 1,
             origin:        'recurring',
             amount_cents:  task['value_cents'] as number,
@@ -1053,7 +1074,7 @@ export const executeScheduledRecurrents = onSchedule(
           txn.set(histRef, histPayload);
           txn.update(taskDoc.ref, {
             lastExecutedMonth: yearMonth,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
           });
         });
         executed++;
