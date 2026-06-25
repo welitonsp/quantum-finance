@@ -22,12 +22,23 @@ function callableOptions(exportName) {
 }
 
 describe('App Check guardrails — full enforcement', () => {
+  // App Check is gated through ENFORCE_APP_CHECK so the Firebase Emulator (which the
+  // client cannot supply an App Check token to) is not blocked. The gate MUST resolve
+  // to `true` outside the emulator, so production enforcement is unchanged.
+  it('derives the App Check gate from the emulator environment (production stays enforced)', () => {
+    assert.match(
+      source,
+      /const\s+ENFORCE_APP_CHECK\s*=\s*process\.env\.FUNCTIONS_EMULATOR\s*!==\s*'true'/,
+      'ENFORCE_APP_CHECK must be true unless running under the Functions emulator',
+    );
+  });
+
   it('enforces App Check on all callables', () => {
     for (const callableName of ALL_CALLABLES_WITH_APP_CHECK_ENFORCEMENT) {
       assert.match(
         callableOptions(callableName),
-        /\benforceAppCheck\s*:\s*true\b/,
-        `${callableName} must enforce App Check`,
+        /\benforceAppCheck\s*:\s*ENFORCE_APP_CHECK\b/,
+        `${callableName} must enforce App Check (gated)`,
       );
     }
   });
@@ -36,8 +47,8 @@ describe('App Check guardrails — full enforcement', () => {
     for (const callableName of ALL_CALLABLES_WITH_APP_CHECK_ENFORCEMENT) {
       assert.match(
         callableOptions(callableName),
-        /\bconsumeAppCheckToken\s*:\s*true\b/,
-        `${callableName} must consume App Check token for replay protection`,
+        /\bconsumeAppCheckToken\s*:\s*ENFORCE_APP_CHECK\b/,
+        `${callableName} must consume App Check token for replay protection (gated)`,
       );
     }
   });
