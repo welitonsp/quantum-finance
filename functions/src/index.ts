@@ -45,6 +45,12 @@ const MAX_BATCH_SIZE = 100;
 const MAX_PROMPT_LEN = 4_000;
 const IDEM_KEY_RE    = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+// App Check enforcement gate. Em produção `FUNCTIONS_EMULATOR` é undefined → enforce
+// total (inalterado). No Firebase Emulator local o cliente não inicializa App Check
+// (ver src/shared/api/firebase/index.ts), então sem este gate toda callable retorna 401.
+// NÃO enfraquece produção: vale somente quando rodando sob o emulator.
+const ENFORCE_APP_CHECK = process.env.FUNCTIONS_EMULATOR !== 'true';
+
 const CORS_ORIGINS: (string | RegExp)[] = [
   'http://localhost:5173',
   'http://localhost:5174',
@@ -260,8 +266,8 @@ export const createTransaction = onCall(
   {
     region: REGION,
     timeoutSeconds: 30,
-    enforceAppCheck: true,
-    consumeAppCheckToken: true,
+    enforceAppCheck: ENFORCE_APP_CHECK,
+    consumeAppCheckToken: ENFORCE_APP_CHECK,
     cors: CORS_ORIGINS,
   },
   async (request) => {
@@ -402,8 +408,8 @@ export const executeAgentAction = onCall(
   {
     region: REGION,
     timeoutSeconds: 30,
-    enforceAppCheck: true,
-    consumeAppCheckToken: true,
+    enforceAppCheck: ENFORCE_APP_CHECK,
+    consumeAppCheckToken: ENFORCE_APP_CHECK,
     cors: CORS_ORIGINS,
   },
   async (request) => {
@@ -719,8 +725,8 @@ export const deleteUserData = onCall(
   {
     region: REGION,
     timeoutSeconds: 120,
-    enforceAppCheck: true,
-    consumeAppCheckToken: true,
+    enforceAppCheck: ENFORCE_APP_CHECK,
+    consumeAppCheckToken: ENFORCE_APP_CHECK,
     cors: CORS_ORIGINS,
   },
   async (request) => {
@@ -744,8 +750,8 @@ export const categorizeTransactionsBatch = onCall(
     secrets: [GEMINI_API_KEY],
     region: REGION,
     timeoutSeconds: 30,
-    enforceAppCheck: true,
-    consumeAppCheckToken: true,
+    enforceAppCheck: ENFORCE_APP_CHECK,
+    consumeAppCheckToken: ENFORCE_APP_CHECK,
   },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
@@ -824,8 +830,8 @@ export const chatWithQuantumAI = onCall(
     secrets: [GEMINI_API_KEY],
     region: REGION,
     timeoutSeconds: 60,
-    enforceAppCheck: true,
-    consumeAppCheckToken: true,
+    enforceAppCheck: ENFORCE_APP_CHECK,
+    consumeAppCheckToken: ENFORCE_APP_CHECK,
   },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
@@ -872,8 +878,8 @@ export const generateAuditReport = onCall(
     secrets: [GEMINI_API_KEY],
     region: REGION,
     timeoutSeconds: 60,
-    enforceAppCheck: true,
-    consumeAppCheckToken: true,
+    enforceAppCheck: ENFORCE_APP_CHECK,
+    consumeAppCheckToken: ENFORCE_APP_CHECK,
   },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
