@@ -452,6 +452,10 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
             balances={moduleBalances}
             isOpen={isAIChatOpen}
             onClose={() => setIsAIChatOpen(false)}
+            // Movimentações/Dashboard derivam do listener realtime (`useTransactions`
+            // → onSnapshot), então a escrita do agente já aparece automaticamente.
+            // Hook explícito mantido para futura invalidação de caches não-realtime.
+            onActionExecuted={() => {}}
           />
         </Suspense>
       </ErrorBoundary>

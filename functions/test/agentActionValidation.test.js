@@ -36,16 +36,28 @@ describe('validateAgentActionRequest (FASE H)', () => {
     assert.strictEqual(r.payload.category, 'Outros');
   });
 
-  it('REJEITA proposta não confirmada (gate de confirmação humana)', () => {
+  it('REJEITA proposta não confirmada com failed-precondition + reason confirmation_required', () => {
     const env = validEnvelope();
     env.proposal.status = 'pending';
-    assert.throws(() => validateAgentActionRequest(env), AgentActionValidationError);
+    assert.throws(
+      () => validateAgentActionRequest(env),
+      (err) =>
+        err instanceof AgentActionValidationError &&
+        err.code === 'failed-precondition' &&
+        err.reason === 'confirmation_required',
+    );
   });
 
-  it('REJEITA status arbitrário', () => {
+  it('REJEITA status arbitrário (não confirmado)', () => {
     const env = validEnvelope();
     env.proposal.status = 'auto-approved';
-    assert.throws(() => validateAgentActionRequest(env), AgentActionValidationError);
+    assert.throws(
+      () => validateAgentActionRequest(env),
+      (err) =>
+        err instanceof AgentActionValidationError &&
+        err.code === 'failed-precondition' &&
+        err.reason === 'confirmation_required',
+    );
   });
 
   it('rejeita amountCents não-inteiro', () => {
