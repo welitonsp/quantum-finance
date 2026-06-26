@@ -38,7 +38,13 @@ jobs:
         run: npm run build
 
       - name: Install Firebase Tools
-        run: npm install -g firebase-tools
+        # Versão PINADA. O firebase-tools "latest" passou a retornar HTTP 409
+        # ("Channel ... already exists") até para canais únicos por run — regressão
+        # de comportamento da CLI/API de Hosting. Fixar uma versão estável conhecida
+        # evita essa regressão sem voltar para action-hosting-deploy@v0.
+        run: |
+          npm install -g firebase-tools@14.25.0
+          firebase --version
 
       - name: Deploy preview channel
         # Reuses the SAME service account already trusted for hosting/rules/functions
@@ -60,15 +66,16 @@ jobs:
           trap 'rm -f "$RUNNER_TEMP/sa.json"' EXIT
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
 
-          # Canal de preview ÚNICO por execução: "pr-<n>-<run_id>".
+          # Canal de preview ÚNICO por execução: "pr-<n>-<run_id>-<run_attempt>".
           # Um id fixo "pr-<n>" colide em re-runs (HTTP 409 "Channel already exists"),
-          # e o delete-antes-do-deploy não resolve de forma confiável (a API pode
-          # responder 404 no delete e 409 no deploy por inconsistência). Incluir o
-          # GITHUB_RUN_ID garante um id novo a cada execução, eliminando o 409.
-          # O TTL de 3d expira os canais antigos automaticamente, evitando acúmulo
-          # permanente e estouro da cota de canais. É sempre um canal de PREVIEW
-          # efêmero — nunca o canal "live".
-          CHANNEL_ID="pr-${PR_NUMBER}-${GITHUB_RUN_ID}"
+          # e o delete-antes-do-deploy não resolve de forma confiável. Incluir
+          # GITHUB_RUN_ID + GITHUB_RUN_ATTEMPT garante id novo a cada execução E a cada
+          # re-run da MESMA execução (o run_id se mantém entre re-runs; o run_attempt
+          # incrementa), eliminando o 409. O firebase-tools fica pinado (ver step de
+          # instalação) para evitar a regressão de "latest". O TTL de 3d expira os
+          # canais antigos automaticamente, evitando acúmulo permanente e estouro da
+          # cota de canais. É sempre um canal de PREVIEW efêmero — nunca o "live".
+          CHANNEL_ID="pr-${PR_NUMBER}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           firebase hosting:channel:deploy "$CHANNEL_ID" \
             --project quantum-finance-39235 \
             --expires 3d \
