@@ -63,6 +63,13 @@ Thumbs.db
 .idea/
 
 # =========================
+# E2E / PLAYWRIGHT (artefatos gerados)
+# =========================
+e2e-report/
+test-results/
+playwright-report/
+
+# =========================
 # OUTROS
 # =========================
 *.local
