@@ -2,17 +2,17 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — Hardening do Agente/IA + CI Firebase Preview (#289–#298) (2026-06-26)
+## Estado Consolidado — Hardening do Agente/IA + CI Firebase Preview + E2E/doc do fluxo de mutação (#289–#301) (2026-06-26)
 
 > **Este bloco é a referência mais recente.** Em caso de divergência com blocos abaixo, prevalece este.
 > **Regra operacional:** Atualizar após cada PR mergeado ou marco relevante.
 
 ### 0. Estado atual (2026-06-26)
-- Branch principal: `main` — HEAD `cba7e81` (PR #298 mergeado). Working tree limpo. Sem PR de feature aberto.
-- **Trilha #289–#298 (hardening do Agente/IA + correção de CI): mergeada.** Sem mudança estrutural de arquitetura — endurecimento de erros, modelo Gemini, App Check no emulador, confirmação do Agente e autenticação do CI de preview.
-- **Cloud Functions permanecem 6.** Flag `VITE_ENABLE_AGENT_ROUTER` continua **default OFF** (validação Gemini com emulator segue pendente do OWNER — ver bloco 2026-06-23 §0.5).
+- Branch principal: `main` — HEAD `59415bd` (PR #300 mergeado). Working tree limpo. Sem PR de feature aberto.
+- **Trilha #289–#300 (hardening do Agente/IA + correção de CI + E2E do fluxo de mutação): mergeada.** Sem mudança estrutural de arquitetura — endurecimento de erros, modelo Gemini, App Check no emulador, confirmação do Agente, autenticação do CI de preview e cobertura E2E do ciclo propor→confirmar→gravar.
+- **Cloud Functions permanecem 6.** Flag `VITE_ENABLE_AGENT_ROUTER` continua **default OFF** em produção (ligada só no webServer do E2E; validação Gemini com emulator segue pendente do OWNER — ver bloco 2026-06-23 §0.5).
 
-### 0.1 PRs #289–#298 (cronologia)
+### 0.1 PRs #289–#300 (cronologia)
 | PR | Escopo | Tipo |
 |---|---|---|
 | #289 | sync deste CLAUDE.md com o wiring do chat agent-router (PR #288) | doc-only |
@@ -24,7 +24,20 @@
 | #295 | `fix(functions)`: App Check enforce **gated** sob o emulador de Functions (permite chamadas locais sem token real) | fix |
 | #296 | `fix(functions)`: distingue falhas de **rate limit** da IA (erro próprio, não genérico) | fix |
 | #297 | `fix(agent)`: exige confirmação humana e sincroniza mutações com o estado do app | fix |
-| #298 | `fix(ci)`: **repara autenticação do Firebase Hosting Preview** (este PR) | fix/CI |
+| #298 | `fix(ci)`: **repara autenticação do Firebase Hosting Preview** | fix/CI |
+| #299 | `docs(project)`: sync deste CLAUDE.md para #289–#298 | doc-only |
+| #300 | `test(agent)`: **E2E do fluxo de mutação confirmada** (propor→confirmar→gravar) | test |
+
+### 0.3 Agente — fluxo seguro de mutação confirmada (doc + E2E #300)
+- **Contrato:** o LLM/chat **nunca** grava; toda mutação atravessa **proposta estruturada** (`ActionProposal` Zod `.strict()`) → **confirmação humana** → callable **`executeAgentAction`** (revalida `status==='confirmed'`, grava `users/{uid}/transactions` + history origin `ai` + `/decisions`, idempotente). UI reflete via `onSnapshot` (`useTransactions`). Texto de sucesso só após a callable retornar; **cancelar é terminal** (nenhuma escrita).
+- **E2E #300** (`e2e/tests/06-agent-confirmed-mutation.spec.ts`): proposta sem gravação imediata · cancelar sem gravar · confirmar grava exatamente 1 · UI reflete · receita recusada com segurança. Determinístico (guarda pura `interpretMutationCommand`, **sem LLM real**) atrás da flag `VITE_ENABLE_AGENT_ROUTER` (ligada só no webServer do E2E); roda sob emuladores **auth+firestore+functions**; App Check segue gated só no emulador.
+- **Doc normativo:** `docs/AI_AGENT_CONFIRMED_MUTATION_FLOW.md` (fluxo end-to-end, mapa de arquivos, flags e **regras para novas ações** — receitas/transferências/cartões só com proposta + validação backend + E2E equivalente). Complementa `docs/AI_AGENT_GUARDRAILS.md` §4.
+
+### 0.2 CI — Firebase Hosting Preview reparado (#298)
+- **Problema (3 camadas, descobertas pelos logs reais):** (1) a action `FirebaseExtended/action-hosting-deploy@v0` falhava no oauth2 (`Failed to authenticate ... premature close`); (2) canal fixo `pr-<n>` colidia em re-runs (HTTP 409); (3) **causa-raiz final:** a rede do runner corta a resposta da API de Hosting (*premature close*) **depois** de o deploy já ter sido aplicado no servidor — a CLI então reporta 409 (no create) ou 400 (`is the current active version`, no release) mesmo com o canal **publicado**.
+- **Correção (só `.github/workflows/firebase-hosting-pull-request.yml`):** migrado da action para **CLI `firebase` + `GOOGLE_APPLICATION_CREDENTIALS`** (mesmo padrão já confiável do workflow de merge `deploy_rules`/`deploy_functions`); canal de preview **único por execução** `pr-<n>-<run_id>-<run_attempt>` (TTL 3d, efêmero, **nunca** `live`); e, após erro no deploy, o passo consulta `firebase hosting:channel:list` e **trata canal já publicado como sucesso** (retry até 3x caso realmente não tenha publicado).
+- **Secret:** reusa o existente **`FIREBASE_SERVICE_ACCOUNT_QUANTUM_FINANCE_39235`** (projeto `quantum-finance-39235`) — **nenhum secret novo**. `firebase-tools` fica em **`latest`** (o pin `@14.25.0` foi testado e **reintroduziu a falha de auth** no CI → revertido).
+- **Não tocar para "consertar" preview:** `.env`, `.env.local`, `firebase.json`, `.agents`, `skills-lock.json`. O deploy de **hosting `live` no merge** segue via action `action-hosting-deploy@v0` (não reportado quebrado) — não foi alterado.
 
 ### 0.2 CI — Firebase Hosting Preview reparado (#298)
 - **Problema (3 camadas, descobertas pelos logs reais):** (1) a action `FirebaseExtended/action-hosting-deploy@v0` falhava no oauth2 (`Failed to authenticate ... premature close`); (2) canal fixo `pr-<n>` colidia em re-runs (HTTP 409); (3) **causa-raiz final:** a rede do runner corta a resposta da API de Hosting (*premature close*) **depois** de o deploy já ter sido aplicado no servidor — a CLI então reporta 409 (no create) ou 400 (`is the current active version`, no release) mesmo com o canal **publicado**.

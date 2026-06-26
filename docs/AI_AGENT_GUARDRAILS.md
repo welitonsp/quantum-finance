@@ -73,6 +73,9 @@
 - A escrita resultante de uma ação confirmada segue o **Modelo A** (UPDATE com
   `_lastOpId` + `history` no mesmo `writeBatch`) e, no caminho Blaze, a callable
   server-trusted `createTransaction` com App Check.
+- O **fluxo end-to-end** (comando → proposta → confirmação → `executeAgentAction` →
+  `onSnapshot`), o que o E2E #300 protege e as regras para novas ações estão em
+  [`AI_AGENT_CONFIRMED_MUTATION_FLOW.md`](./AI_AGENT_CONFIRMED_MUTATION_FLOW.md).
 
 ---
 
