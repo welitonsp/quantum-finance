@@ -60,18 +60,16 @@ jobs:
           trap 'rm -f "$RUNNER_TEMP/sa.json"' EXIT
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
 
-          # Delete idempotente do canal antes do deploy.
-          # Em re-runs do mesmo PR o canal "pr-<n>" já existe, e a API responde
-          # HTTP 409 (Channel ... already exists). Apagar primeiro é SEGURO porque
-          # este é um canal de PREVIEW de PR (efêmero, TTL 3d, recriado a cada run),
-          # nunca o canal "live". O "|| true" garante sucesso quando o canal ainda
-          # não existe (primeiro run), tornando o passo idempotente.
-          firebase hosting:channel:delete "pr-${PR_NUMBER}" \
-            --project quantum-finance-39235 \
-            --force \
-            --non-interactive || true
-
-          firebase hosting:channel:deploy "pr-${PR_NUMBER}" \
+          # Canal de preview ÚNICO por execução: "pr-<n>-<run_id>".
+          # Um id fixo "pr-<n>" colide em re-runs (HTTP 409 "Channel already exists"),
+          # e o delete-antes-do-deploy não resolve de forma confiável (a API pode
+          # responder 404 no delete e 409 no deploy por inconsistência). Incluir o
+          # GITHUB_RUN_ID garante um id novo a cada execução, eliminando o 409.
+          # O TTL de 3d expira os canais antigos automaticamente, evitando acúmulo
+          # permanente e estouro da cota de canais. É sempre um canal de PREVIEW
+          # efêmero — nunca o canal "live".
+          CHANNEL_ID="pr-${PR_NUMBER}-${GITHUB_RUN_ID}"
+          firebase hosting:channel:deploy "$CHANNEL_ID" \
             --project quantum-finance-39235 \
             --expires 3d \
             --non-interactive
