@@ -76,12 +76,22 @@ jobs:
           # É sempre um canal de PREVIEW efêmero — nunca o "live".
           CHANNEL_ID="pr-${PR_NUMBER}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 
-          # Retry da causa-raiz real: a rede do runner às vezes corta a resposta da
-          # API de Hosting ("premature close"). Quando isso ocorre no create do canal,
-          # o servidor cria o canal mas o cliente aborta; uma 2ª tentativa no MESMO id
-          # encontra o canal já existente e apenas publica a versão (sem novo create),
-          # então o 409 não se repete. O mesmo retry também absorve o "premature close"
-          # na troca do token oauth2. Até 3 tentativas com espera curta.
+          # Causa-raiz real (confirmada nos logs): a rede do runner corta a resposta
+          # da API de Hosting ("premature close") DEPOIS de o deploy já ter sido
+          # aplicado no servidor. A CLI então retorna erro mesmo com o canal publicado:
+          #   - 409 no create do canal ("already exists"), ou
+          #   - 400 no release ("supplied version ... is the current active version").
+          # Ambos PROVAM que o canal foi publicado. Por isso, após um erro no deploy,
+          # consultamos a listagem de canais: se o canal existir, o deploy efetivamente
+          # funcionou e tratamos como sucesso. Caso contrário, retentamos. Até 3
+          # tentativas com espera curta. É sempre canal de PREVIEW efêmero (TTL 3d),
+          # nunca o "live".
+          channel_is_live() {
+            firebase hosting:channel:list \
+              --project quantum-finance-39235 --json 2>/dev/null \
+              | grep -q "/channels/${CHANNEL_ID}\""
+          }
+
           attempt=1
           max_attempts=3
           while true; do
@@ -92,11 +102,15 @@ jobs:
               echo "Preview channel deploy bem-sucedido na tentativa $attempt."
               break
             fi
+            if channel_is_live; then
+              echo "Deploy reportou erro, mas o canal $CHANNEL_ID está publicado — tratando como sucesso (premature close pós-deploy)."
+              break
+            fi
             if [ "$attempt" -ge "$max_attempts" ]; then
-              echo "::error::Deploy do canal de preview falhou após $max_attempts tentativas."
+              echo "::error::Deploy do canal de preview falhou após $max_attempts tentativas e o canal não está publicado."
               exit 1
             fi
-            echo "Tentativa $attempt falhou; aguardando 10s e tentando novamente..."
+            echo "Tentativa $attempt falhou e o canal não está publicado; aguardando 10s e tentando novamente..."
             attempt=$((attempt + 1))
             sleep 10
           done
