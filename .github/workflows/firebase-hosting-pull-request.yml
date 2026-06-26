@@ -58,8 +58,20 @@ jobs:
           echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > "$RUNNER_TEMP/sa.json"
           # Garante remoção da credencial mesmo se o deploy falhar (set -e do runner).
           trap 'rm -f "$RUNNER_TEMP/sa.json"' EXIT
-          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" \
-            firebase hosting:channel:deploy "pr-${PR_NUMBER}" \
-              --project quantum-finance-39235 \
-              --expires 3d \
-              --non-interactive
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+
+          # Delete idempotente do canal antes do deploy.
+          # Em re-runs do mesmo PR o canal "pr-<n>" já existe, e a API responde
+          # HTTP 409 (Channel ... already exists). Apagar primeiro é SEGURO porque
+          # este é um canal de PREVIEW de PR (efêmero, TTL 3d, recriado a cada run),
+          # nunca o canal "live". O "|| true" garante sucesso quando o canal ainda
+          # não existe (primeiro run), tornando o passo idempotente.
+          firebase hosting:channel:delete "pr-${PR_NUMBER}" \
+            --project quantum-finance-39235 \
+            --force \
+            --non-interactive || true
+
+          firebase hosting:channel:deploy "pr-${PR_NUMBER}" \
+            --project quantum-finance-39235 \
+            --expires 3d \
+            --non-interactive
