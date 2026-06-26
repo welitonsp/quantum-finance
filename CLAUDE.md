@@ -2,9 +2,39 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — Trilha UI/UX Premium (8 PRs) + Backlog do Agente (3 kinds) (2026-06-23)
+## Estado Consolidado — Hardening do Agente/IA + CI Firebase Preview (#289–#298) (2026-06-26)
 
 > **Este bloco é a referência mais recente.** Em caso de divergência com blocos abaixo, prevalece este.
+> **Regra operacional:** Atualizar após cada PR mergeado ou marco relevante.
+
+### 0. Estado atual (2026-06-26)
+- Branch principal: `main` — HEAD `cba7e81` (PR #298 mergeado). Working tree limpo. Sem PR de feature aberto.
+- **Trilha #289–#298 (hardening do Agente/IA + correção de CI): mergeada.** Sem mudança estrutural de arquitetura — endurecimento de erros, modelo Gemini, App Check no emulador, confirmação do Agente e autenticação do CI de preview.
+- **Cloud Functions permanecem 6.** Flag `VITE_ENABLE_AGENT_ROUTER` continua **default OFF** (validação Gemini com emulator segue pendente do OWNER — ver bloco 2026-06-23 §0.5).
+
+### 0.1 PRs #289–#298 (cronologia)
+| PR | Escopo | Tipo |
+|---|---|---|
+| #289 | sync deste CLAUDE.md com o wiring do chat agent-router (PR #288) | doc-only |
+| #290 | `feat(ai-agent)`: prompt de classificação Gemini reforçado (few-shot + regras) | feature |
+| #291 | `chore(security)`: gitignore `functions/.secret.local` (chave Gemini do emulador) | infra/seg |
+| #292 | `fix(functions)`: substitui modelo aposentado `gemini-1.5-flash` | fix |
+| #293 | `docs(audit)`: pedido de auditoria do 401 do chat IA no emulador + achados correlatos | doc-only |
+| #294 | `fix(errors)`: mensagens distintas ao usuário para `unauthenticated` × `resource-exhausted` (`firebaseErrorHandling.ts`) | fix |
+| #295 | `fix(functions)`: App Check enforce **gated** sob o emulador de Functions (permite chamadas locais sem token real) | fix |
+| #296 | `fix(functions)`: distingue falhas de **rate limit** da IA (erro próprio, não genérico) | fix |
+| #297 | `fix(agent)`: exige confirmação humana e sincroniza mutações com o estado do app | fix |
+| #298 | `fix(ci)`: **repara autenticação do Firebase Hosting Preview** (este PR) | fix/CI |
+
+### 0.2 CI — Firebase Hosting Preview reparado (#298)
+- **Problema (3 camadas, descobertas pelos logs reais):** (1) a action `FirebaseExtended/action-hosting-deploy@v0` falhava no oauth2 (`Failed to authenticate ... premature close`); (2) canal fixo `pr-<n>` colidia em re-runs (HTTP 409); (3) **causa-raiz final:** a rede do runner corta a resposta da API de Hosting (*premature close*) **depois** de o deploy já ter sido aplicado no servidor — a CLI então reporta 409 (no create) ou 400 (`is the current active version`, no release) mesmo com o canal **publicado**.
+- **Correção (só `.github/workflows/firebase-hosting-pull-request.yml`):** migrado da action para **CLI `firebase` + `GOOGLE_APPLICATION_CREDENTIALS`** (mesmo padrão já confiável do workflow de merge `deploy_rules`/`deploy_functions`); canal de preview **único por execução** `pr-<n>-<run_id>-<run_attempt>` (TTL 3d, efêmero, **nunca** `live`); e, após erro no deploy, o passo consulta `firebase hosting:channel:list` e **trata canal já publicado como sucesso** (retry até 3x caso realmente não tenha publicado).
+- **Secret:** reusa o existente **`FIREBASE_SERVICE_ACCOUNT_QUANTUM_FINANCE_39235`** (projeto `quantum-finance-39235`) — **nenhum secret novo**. `firebase-tools` fica em **`latest`** (o pin `@14.25.0` foi testado e **reintroduziu a falha de auth** no CI → revertido).
+- **Não tocar para "consertar" preview:** `.env`, `.env.local`, `firebase.json`, `.agents`, `skills-lock.json`. O deploy de **hosting `live` no merge** segue via action `action-hosting-deploy@v0` (não reportado quebrado) — não foi alterado.
+
+## Estado Consolidado — Trilha UI/UX Premium (8 PRs) + Backlog do Agente (3 kinds) (2026-06-23)
+
+> Bloco anterior — superado pelo bloco de 2026-06-26 acima. Mantido para histórico (referência da arquitetura do Agente/intent router e UI/UX).
 > **Regra operacional:** Atualizar após cada PR mergeado ou marco relevante.
 
 ### 0. Estado atual (2026-06-24)
