@@ -23,7 +23,10 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'cross-env VITE_USE_EMULATOR=true npm run dev',
+    // VITE_ENABLE_AGENT_ROUTER=true habilita o roteador de intenções/guarda de mutação
+    // do Agente (default OFF em produção) para que o E2E 06 exerça o ciclo
+    // propor→confirmar→executar. Afeta apenas o chat; nenhum outro fluxo E2E o usa.
+    command: 'cross-env VITE_USE_EMULATOR=true VITE_ENABLE_AGENT_ROUTER=true npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,

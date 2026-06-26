@@ -434,6 +434,8 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
 
       <button
         onClick={() => setIsAIChatOpen(true)}
+        aria-label="Abrir assistente Quantum AI"
+        data-testid="ai-chat-fab"
         className="fixed bottom-20 right-6 lg:bottom-8 lg:right-8 w-14 h-14 bg-cyan-600 hover:bg-cyan-500 rounded-2xl flex items-center justify-center shadow-lg z-50 group border border-white/20"
       >
         <BrainCircuit className="w-7 h-7 text-quantum-fg group-hover:animate-pulse" />
