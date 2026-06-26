@@ -38,12 +38,14 @@ jobs:
         run: npm run build
 
       - name: Install Firebase Tools
-        # Versão PINADA. O firebase-tools "latest" passou a retornar HTTP 409
-        # ("Channel ... already exists") até para canais únicos por run — regressão
-        # de comportamento da CLI/API de Hosting. Fixar uma versão estável conhecida
-        # evita essa regressão sem voltar para action-hosting-deploy@v0.
+        # Usa "latest" (mesmo do workflow de merge, que autentica de forma confiável).
+        # NÃO pinar 14.25.0: nessa versão a auth via GOOGLE_APPLICATION_CREDENTIALS
+        # falhou no CI ("Failed to authenticate, have you run firebase login?").
+        # Com "latest" a auth funciona; a instabilidade restante (rede do runner que
+        # corta respostas — "premature close" — e leva a 409 no create do canal) é
+        # absorvida pelo retry do passo de deploy.
         run: |
-          npm install -g firebase-tools@14.25.0
+          npm install -g firebase-tools
           firebase --version
 
       - name: Deploy preview channel
@@ -67,16 +69,34 @@ jobs:
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
 
           # Canal de preview ÚNICO por execução: "pr-<n>-<run_id>-<run_attempt>".
-          # Um id fixo "pr-<n>" colide em re-runs (HTTP 409 "Channel already exists"),
-          # e o delete-antes-do-deploy não resolve de forma confiável. Incluir
-          # GITHUB_RUN_ID + GITHUB_RUN_ATTEMPT garante id novo a cada execução E a cada
-          # re-run da MESMA execução (o run_id se mantém entre re-runs; o run_attempt
-          # incrementa), eliminando o 409. O firebase-tools fica pinado (ver step de
-          # instalação) para evitar a regressão de "latest". O TTL de 3d expira os
-          # canais antigos automaticamente, evitando acúmulo permanente e estouro da
-          # cota de canais. É sempre um canal de PREVIEW efêmero — nunca o "live".
+          # Um id fixo "pr-<n>" colide em re-runs (HTTP 409 "Channel already exists").
+          # GITHUB_RUN_ID + GITHUB_RUN_ATTEMPT dão um id novo a cada execução E a cada
+          # re-run da mesma execução. O TTL de 3d expira os canais antigos
+          # automaticamente, evitando acúmulo permanente e estouro da cota de canais.
+          # É sempre um canal de PREVIEW efêmero — nunca o "live".
           CHANNEL_ID="pr-${PR_NUMBER}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          firebase hosting:channel:deploy "$CHANNEL_ID" \
-            --project quantum-finance-39235 \
-            --expires 3d \
-            --non-interactive
+
+          # Retry da causa-raiz real: a rede do runner às vezes corta a resposta da
+          # API de Hosting ("premature close"). Quando isso ocorre no create do canal,
+          # o servidor cria o canal mas o cliente aborta; uma 2ª tentativa no MESMO id
+          # encontra o canal já existente e apenas publica a versão (sem novo create),
+          # então o 409 não se repete. O mesmo retry também absorve o "premature close"
+          # na troca do token oauth2. Até 3 tentativas com espera curta.
+          attempt=1
+          max_attempts=3
+          while true; do
+            if firebase hosting:channel:deploy "$CHANNEL_ID" \
+                 --project quantum-finance-39235 \
+                 --expires 3d \
+                 --non-interactive; then
+              echo "Preview channel deploy bem-sucedido na tentativa $attempt."
+              break
+            fi
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "::error::Deploy do canal de preview falhou após $max_attempts tentativas."
+              exit 1
+            fi
+            echo "Tentativa $attempt falhou; aguardando 10s e tentando novamente..."
+            attempt=$((attempt + 1))
+            sleep 10
+          done
