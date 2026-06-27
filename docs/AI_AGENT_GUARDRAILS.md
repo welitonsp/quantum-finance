@@ -42,7 +42,7 @@
 |---|---|---|---|
 | **Consulta** | Read-only | Não | `get_balances`, `get_invoice`, `explain_month`, `cashflow_briefing` |
 | **Simulação** | Read-only, hipotética | Não | `simulate_purchase`, `plan_debt_payment` |
-| **Ação** | **Escreve** no Firestore | **Sim, sempre** | `register_purchase`, `register_debt_payment`, `create_budget`, `contribute_to_goal` |
+| **Ação** | **Escreve** no Firestore | **Sim, sempre** | `register_purchase`, `register_income`, `register_debt_payment`, `create_budget`, `contribute_to_goal` |
 
 - Ferramentas da **primeira versão são read-only** (consulta e simulação).
 - **Nenhuma ação financeira** é executada sem confirmação humana explícita via
@@ -68,11 +68,11 @@
 - A execução só ocorre **após confirmação explícita** do usuário (clique/confirmação),
   nunca pela simples conversa.
 - Propostas têm ciclo de vida: `pending` → `confirmed` | `rejected` | `expired`.
-- Ações permitidas na v1: `register_purchase`, `register_debt_payment`, `create_budget`,
-  `contribute_to_goal`.
+- Ações permitidas na v1: `register_purchase`, `register_income`, `register_debt_payment`,
+  `create_budget`, `contribute_to_goal`.
 - A escrita resultante de uma ação confirmada segue o **Modelo A** (UPDATE com
-  `_lastOpId` + `history` no mesmo `writeBatch`) e, no caminho Blaze, a callable
-  server-trusted `createTransaction` com App Check.
+  `_lastOpId` + `history`, quando aplicável) e, para ações do agente, a callable
+  server-trusted `executeAgentAction` com App Check enforce/consume em produção.
 - O **fluxo end-to-end** (comando → proposta → confirmação → `executeAgentAction` →
   `onSnapshot`), o que o E2E #300 protege e as regras para novas ações estão em
   [`AI_AGENT_CONFIRMED_MUTATION_FLOW.md`](./AI_AGENT_CONFIRMED_MUTATION_FLOW.md).

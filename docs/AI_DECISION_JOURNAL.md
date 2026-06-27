@@ -55,13 +55,14 @@
 
 ---
 
-## 4. Firestore Rules (a implementar na FASE H — ZONA AUTORIZADA)
+## 4. Firestore Rules (implementado na FASE H)
 
-> ⚠️ `firestore.rules` é **zona proibida fora de fase autorizada** (ver `CLAUDE.md` §1.2).
-> A regra abaixo é o **contrato de design**; sua implementação real exige fase H
-> explicitamente autorizada pelo owner e cobertura em `npm run test:rules`.
+`users/{uid}/decisions/{decisionId}` está coberto em `firestore.rules` e em
+`src/__tests__/firestoreRules.audit.test.ts` (bloco "N. decisions collection").
+`firestore.rules` continua sendo zona sensível: qualquer alteração futura exige fase
+explicitamente autorizada pelo owner e `npm run test:rules`.
 
-Contrato pretendido para `users/{uid}/decisions/{decisionId}`:
+Contrato implementado para `users/{uid}/decisions/{decisionId}`:
 
 - `create`: somente owner; `userId == uid`; `createdAt == request.time`;
   `intent` no enum; sem campos fora da whitelist; sem PII/valores brutos proibidos;
@@ -78,5 +79,5 @@ Contrato pretendido para `users/{uid}/decisions/{decisionId}`:
 - [ ] `question` mascarada; nenhum conteúdo bruto/PII persistido.
 - [ ] `simulationResult` em centavos inteiros.
 - [ ] Incluída em export e delete LGPD.
-- [ ] Rules cobertas por `test:rules` (na fase H autorizada).
+- [x] Rules cobertas por `test:rules` (bloco N da auditoria de rules).
 - [ ] Ciclo registrado: snapshot → simulação → proposta → decisão → resultado.

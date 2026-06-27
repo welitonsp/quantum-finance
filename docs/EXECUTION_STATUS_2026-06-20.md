@@ -1,6 +1,7 @@
 # Quantum Finance — Status de Execução (histórico: 2026-06-20)
 
-> ⚠️ **SUPERADO.** O ponto de retomada atual é [`EXECUTION_STATUS_2026-06-23.md`](./EXECUTION_STATUS_2026-06-23.md).
+> ⚠️ **SUPERADO.** O estado canônico atual está no bloco de topo do [`../CLAUDE.md`](../CLAUDE.md)
+> e em [`PROJECT_KNOWLEDGE_SYNC_2026-06-27.md`](./PROJECT_KNOWLEDGE_SYNC_2026-06-27.md).
 > Mantido como histórico da trilha UI/UX. Referência de plano UI: [`UI_UX_ARCHITECTURE.md`](./UI_UX_ARCHITECTURE.md).
 
 ---

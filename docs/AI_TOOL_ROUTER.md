@@ -36,6 +36,7 @@ Regra: o LLM atua nas **pontas** (classificar intenção, narrar). O **miolo**
 | `plan_debt_payment` | Simulação | `debtStrategy.ts` (FASE E) + `useDebts` | read-only |
 | `create_budget_proposal` | Ação (proposta) | `useBudgets` | requer confirmação |
 | `contribute_to_goal_proposal` | Ação (proposta) | `useGoals` | requer confirmação |
+| `register_income_proposal` | Ação (proposta) | guarda determinística / `executeAgentAction` | requer confirmação |
 
 - Pergunta fora do enum → **fallback**: o agente responde que não cobre o tema e não
   inventa cálculo (ver §5).
@@ -90,7 +91,7 @@ Regra: o LLM atua nas **pontas** (classificar intenção, narrar). O **miolo**
 
 ---
 
-## 7. Implementação — estado real (2026-06-23)
+## 7. Implementação — estado real (2026-06-27)
 
 ### 7.1 Núcleo determinístico ENTREGUE (`src/features/ai-agent/`)
 O "miolo" do §1 (tool registry → builder de proposta → orquestração) está implementado,
@@ -98,7 +99,7 @@ puro e testável, **sem dependência do LLM**:
 
 | Módulo | Responsabilidade |
 |---|---|
-| `intentRegistry.ts` | `INTENT_REGISTRY`: catálogo das 8 intenções (enum fechado) → ferramentas read-only (`AGENT_TOOLS`) + `kind` de ação quando aplicável + `requiredSlots`. `isActionIntent()`. |
+| `intentRegistry.ts` | `INTENT_REGISTRY`: catálogo das intenções (enum fechado) → ferramentas read-only (`AGENT_TOOLS`) + `kind` de ação quando aplicável + `requiredSlots`. `isActionIntent()`. |
 | `proposalBuilders.ts` | Construtores puros slots → `ActionProposal` (status `pending`), validados por `safeParseActionProposal` (Zod `.strict()`). Reporta `issues` quando faltam slots. Defaults: `date`=hoje, `competencia`=mês atual. |
 | `intentRouter.ts` | `routeIntent(classification)` puro → `answer` \| `proposal` (+pergunta de confirmação) \| `need_more_info` \| `low_confidence` (< `0.6`) \| `unknown_intent`. `buildActionQuestion()` por kind. |
 | `agentSchemas.ts` | `AGENT_INTENTS`/`AgentIntent` (espelha o enum server). |
@@ -122,15 +123,16 @@ A classificação `mensagem → {intent, slots, confidence}` é um `IntentClassi
     (sem JSON / intenção inválida / transporte caído) → confiança 0 → `low_confidence` → chat normal.
   - 11 testes (`geminiIntentClassifier.test.ts`), incluindo conversão monetária e integração com `routeIntent`.
 
-**Passos restantes (gate de produção) — exigem rodar o emulator (NÃO validáveis em CI unitário):**
-1. **Validar com emulator** (Auth+Firestore+Functions): rodar `firebase emulators:start` + abrir o
-   chat e conferir a qualidade da classificação/extração do Gemini em mensagens reais. Ajustar o
-   prompt de `buildClassificationPrompt` se necessário.
-2. **Wiring no `AIAssistantChat`** (atrás de flag OFF por padrão): em `submitMessage`, `routeIntent` →
-   `answer` (segue chat) / `proposal` (abre `ActionConfirmationSheet` → `useAgentAction`) /
-   `need_more_info` (pede o slot que falta) / `low_confidence` (segue chat). Requer passar
-   `creditCards`/contexto e montar o sheet no componente.
+**Estado do wiring no chat:** entregue no PR #288. `AIAssistantChat.submitMessage` liga
+`geminiIntentClassifier -> routeIntent -> ActionConfirmationSheet -> useAgentAction`
+atrás da flag `VITE_ENABLE_AGENT_ROUTER` (default OFF). A guarda determinística
+`interpretMutationCommand` intercepta comandos imperativos de despesa e receita e gera
+proposta `pending` sem LLM real.
 
-Segurança do gate: mesmo com prompt não ajustado, uma classificação errada **não escreve nada** —
-a cadeia (limiar de confiança → confirmação humana → revalidação server + App Check) protege; o
-pior caso é uma proposta que o usuário recusa no sheet.
+**Passo restante de operação (exige owner + emulator):** validar a qualidade da
+classificação Gemini em mensagens reais antes de considerar ligar `VITE_ENABLE_AGENT_ROUTER`
+fora do E2E. Ajustar `buildClassificationPrompt` se necessário.
+
+Segurança do gate: mesmo com prompt imperfeito, uma classificação errada **não escreve nada**
+sem confirmação humana. A cadeia (limiar de confiança -> proposta `pending` -> confirmação
+humana -> revalidação server + App Check) protege; o pior caso é uma proposta recusável no sheet.

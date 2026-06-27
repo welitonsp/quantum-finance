@@ -2,17 +2,19 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — Hardening do Agente/IA + CI Firebase Preview + E2E/doc do fluxo de mutação (#289–#301) (2026-06-26)
+## Estado Consolidado — Agente com mutação confirmada + receita confirmada (#289–#302) (2026-06-27)
 
 > **Este bloco é a referência mais recente.** Em caso de divergência com blocos abaixo, prevalece este.
 > **Regra operacional:** Atualizar após cada PR mergeado ou marco relevante.
 
-### 0. Estado atual (2026-06-26)
-- Branch principal: `main` — HEAD `59415bd` (PR #300 mergeado). Working tree limpo. Sem PR de feature aberto.
-- **Trilha #289–#300 (hardening do Agente/IA + correção de CI + E2E do fluxo de mutação): mergeada.** Sem mudança estrutural de arquitetura — endurecimento de erros, modelo Gemini, App Check no emulador, confirmação do Agente, autenticação do CI de preview e cobertura E2E do ciclo propor→confirmar→gravar.
-- **Cloud Functions permanecem 6.** Flag `VITE_ENABLE_AGENT_ROUTER` continua **default OFF** em produção (ligada só no webServer do E2E; validação Gemini com emulator segue pendente do OWNER — ver bloco 2026-06-23 §0.5).
+### 0. Estado atual (2026-06-27)
+- Branch principal: `main` — HEAD `f0a7330` (`origin/main`, PR #302 mergeado). Working tree esperado: limpo.
+- **Trilha #289–#302 mergeada:** hardening do Agente/IA, App Check gated no emulador, confirmação humana obrigatória, CI Firebase Hosting Preview reparado, cobertura E2E do fluxo confirmado e **receita confirmada**.
+- **Cloud Functions permanecem 6.** A callable `executeAgentAction` materializa ações confirmadas e segue como fronteira server-trusted.
+- PRs abertos conhecidos: **#287** doc de retomada antigo (superseded; recomendar fechar sem merge) e **#271** Dependabot `@types/node`.
+- Stashes locais podem existir e não fazem parte do estado canônico da `main`; revisar antes de qualquer limpeza.
 
-### 0.1 PRs #289–#300 (cronologia)
+### 0.1 PRs #289–#302 (cronologia)
 | PR | Escopo | Tipo |
 |---|---|---|
 | #289 | sync deste CLAUDE.md com o wiring do chat agent-router (PR #288) | doc-only |
@@ -27,23 +29,33 @@
 | #298 | `fix(ci)`: **repara autenticação do Firebase Hosting Preview** | fix/CI |
 | #299 | `docs(project)`: sync deste CLAUDE.md para #289–#298 | doc-only |
 | #300 | `test(agent)`: **E2E do fluxo de mutação confirmada** (propor→confirmar→gravar) | test |
+| #301 | `docs(agent)`: documenta o fluxo seguro de mutação confirmada | doc-only |
+| #302 | `feat(agent)`: **suporte a registro confirmado de receita** (`register_income`) | feature/test |
 
-### 0.3 Agente — fluxo seguro de mutação confirmada (doc + E2E #300)
-- **Contrato:** o LLM/chat **nunca** grava; toda mutação atravessa **proposta estruturada** (`ActionProposal` Zod `.strict()`) → **confirmação humana** → callable **`executeAgentAction`** (revalida `status==='confirmed'`, grava `users/{uid}/transactions` + history origin `ai` + `/decisions`, idempotente). UI reflete via `onSnapshot` (`useTransactions`). Texto de sucesso só após a callable retornar; **cancelar é terminal** (nenhuma escrita).
-- **E2E #300** (`e2e/tests/06-agent-confirmed-mutation.spec.ts`): proposta sem gravação imediata · cancelar sem gravar · confirmar grava exatamente 1 · UI reflete · receita recusada com segurança. Determinístico (guarda pura `interpretMutationCommand`, **sem LLM real**) atrás da flag `VITE_ENABLE_AGENT_ROUTER` (ligada só no webServer do E2E); roda sob emuladores **auth+firestore+functions**; App Check segue gated só no emulador.
-- **Doc normativo:** `docs/AI_AGENT_CONFIRMED_MUTATION_FLOW.md` (fluxo end-to-end, mapa de arquivos, flags e **regras para novas ações** — receitas/transferências/cartões só com proposta + validação backend + E2E equivalente). Complementa `docs/AI_AGENT_GUARDRAILS.md` §4.
+### 0.2 Agente — fluxo seguro de mutação confirmada (#300–#302)
+- **Contrato:** o LLM/chat **nunca** grava; toda mutação atravessa **proposta estruturada** (`ActionProposal` Zod `.strict()`) -> **confirmação humana** -> callable **`executeAgentAction`**. O backend revalida `status==='confirmed'`, grava em `users/{uid}/transactions` + history `origin: 'ai'` + `/decisions`, e mantém idempotência por `idempotencyKey`.
+- **Ações materializadas hoje:** `register_purchase` à vista (`type: 'saida'`), `register_income` à vista (`type: 'entrada'`), `contribute_to_goal`, `register_debt_payment` e `create_budget`. Parcelamento continua roteado ao formulário (`reason: 'use_installment_form'`).
+- **Receita confirmada (#302):** comandos como "registre uma receita de 1000 de salário", "lança entrada de 250 de reembolso" e "recebi 500 de pix" geram proposta `register_income` `pending`; só confirmada grava `type: 'entrada'`. Ambiguidade preserva precedência de despesa.
+- **E2E #300/#302** (`e2e/tests/06-agent-confirmed-mutation.spec.ts`): proposta sem gravação imediata; cancelar sem gravar; confirmar grava exatamente 1; UI reflete via `useTransactions`/`onSnapshot`; sucesso só após callable. A suíte cobre despesa e receita, determinística e sem LLM real.
+- **Doc normativo:** `docs/AI_AGENT_CONFIRMED_MUTATION_FLOW.md` e `docs/PROJECT_KNOWLEDGE_SYNC_2026-06-27.md`.
 
-### 0.2 CI — Firebase Hosting Preview reparado (#298)
+### 0.3 CI — Firebase Hosting Preview reparado (#298)
 - **Problema (3 camadas, descobertas pelos logs reais):** (1) a action `FirebaseExtended/action-hosting-deploy@v0` falhava no oauth2 (`Failed to authenticate ... premature close`); (2) canal fixo `pr-<n>` colidia em re-runs (HTTP 409); (3) **causa-raiz final:** a rede do runner corta a resposta da API de Hosting (*premature close*) **depois** de o deploy já ter sido aplicado no servidor — a CLI então reporta 409 (no create) ou 400 (`is the current active version`, no release) mesmo com o canal **publicado**.
 - **Correção (só `.github/workflows/firebase-hosting-pull-request.yml`):** migrado da action para **CLI `firebase` + `GOOGLE_APPLICATION_CREDENTIALS`** (mesmo padrão já confiável do workflow de merge `deploy_rules`/`deploy_functions`); canal de preview **único por execução** `pr-<n>-<run_id>-<run_attempt>` (TTL 3d, efêmero, **nunca** `live`); e, após erro no deploy, o passo consulta `firebase hosting:channel:list` e **trata canal já publicado como sucesso** (retry até 3x caso realmente não tenha publicado).
 - **Secret:** reusa o existente **`FIREBASE_SERVICE_ACCOUNT_QUANTUM_FINANCE_39235`** (projeto `quantum-finance-39235`) — **nenhum secret novo**. `firebase-tools` fica em **`latest`** (o pin `@14.25.0` foi testado e **reintroduziu a falha de auth** no CI → revertido).
 - **Não tocar para "consertar" preview:** `.env`, `.env.local`, `firebase.json`, `.agents`, `skills-lock.json`. O deploy de **hosting `live` no merge** segue via action `action-hosting-deploy@v0` (não reportado quebrado) — não foi alterado.
 
-### 0.2 CI — Firebase Hosting Preview reparado (#298)
-- **Problema (3 camadas, descobertas pelos logs reais):** (1) a action `FirebaseExtended/action-hosting-deploy@v0` falhava no oauth2 (`Failed to authenticate ... premature close`); (2) canal fixo `pr-<n>` colidia em re-runs (HTTP 409); (3) **causa-raiz final:** a rede do runner corta a resposta da API de Hosting (*premature close*) **depois** de o deploy já ter sido aplicado no servidor — a CLI então reporta 409 (no create) ou 400 (`is the current active version`, no release) mesmo com o canal **publicado**.
-- **Correção (só `.github/workflows/firebase-hosting-pull-request.yml`):** migrado da action para **CLI `firebase` + `GOOGLE_APPLICATION_CREDENTIALS`** (mesmo padrão já confiável do workflow de merge `deploy_rules`/`deploy_functions`); canal de preview **único por execução** `pr-<n>-<run_id>-<run_attempt>` (TTL 3d, efêmero, **nunca** `live`); e, após erro no deploy, o passo consulta `firebase hosting:channel:list` e **trata canal já publicado como sucesso** (retry até 3x caso realmente não tenha publicado).
-- **Secret:** reusa o existente **`FIREBASE_SERVICE_ACCOUNT_QUANTUM_FINANCE_39235`** (projeto `quantum-finance-39235`) — **nenhum secret novo**. `firebase-tools` fica em **`latest`** (o pin `@14.25.0` foi testado e **reintroduziu a falha de auth** no CI → revertido).
-- **Não tocar para "consertar" preview:** `.env`, `.env.local`, `firebase.json`, `.agents`, `skills-lock.json`. O deploy de **hosting `live` no merge** segue via action `action-hosting-deploy@v0` (não reportado quebrado) — não foi alterado.
+### 0.4 Segurança/App Check — estado real
+- `functions/src/index.ts` define `ENFORCE_APP_CHECK = process.env.FUNCTIONS_EMULATOR !== 'true'`.
+- Todas as callables usam `enforceAppCheck: ENFORCE_APP_CHECK` e `consumeAppCheckToken: ENFORCE_APP_CHECK`, inclusive `executeAgentAction`, `chatWithQuantumAI` e `generateAuditReport`.
+- Em produção, enforce/consume ficam ON. Sob Functions Emulator, ficam OFF para permitir E2E/local sem token real. O frontend também pula App Check quando `VITE_USE_EMULATOR=true` ou sem site key configurada.
+- Não imprimir nem copiar valores de `.env`, `.env.local`, `functions/.secret.local`, secrets GitHub, chaves Firebase/Gemini ou service accounts.
+
+### 0.5 Próximos PRs recomendados
+1. **Docs sync pós-#302:** atualizar `CLAUDE.md`, README e docs normativos para remover referências obsoletas a receita recusada/#300 como último marco.
+2. **Auditoria de comentário obsoleto:** em PR separado e autorizado, corrigir comentários internos que ainda falem em "4 kinds" ou "receita sem kind" se permanecerem no código após #302. Sem alterar comportamento.
+3. **Validação assistida do Gemini/router:** com emuladores e owner presente, validar qualidade do classificador real antes de considerar ligar `VITE_ENABLE_AGENT_ROUTER` fora do E2E.
+4. **Próxima ação funcional:** escolher explicitamente entre transferências, cartão/parcelado via formulário ou melhoria de UX do agente. Não duplicar lógica monetária de parcelas no Admin SDK.
 
 ## Estado Consolidado — Trilha UI/UX Premium (8 PRs) + Backlog do Agente (3 kinds) (2026-06-23)
 
@@ -627,9 +639,9 @@ npm run build
   - #82 enforceAppCheck ativo em createTransaction
 - Fase 5 Auditoria Forte: concluída
 - Fase 7B App Check (**ESTADO DESATUALIZADO — ver bloco 2026-06-03**):
-  - ~~enforceAppCheck ativo SOMENTE em createTransaction~~ → **ATUAL: enforce em TODAS as 4 callables**
-  - consumeAppCheckToken: NÃO ativo (ainda válido)
-  - ~~callables IA: SEM enforcement~~ → **ATUAL: todas com enforceAppCheck: true**
+  - ~~enforceAppCheck ativo SOMENTE em createTransaction~~ → **ATUAL: enforce/consume gated em todas as callables; ver bloco de topo 2026-06-27**
+  - ~~consumeAppCheckToken: NÃO ativo~~ → **ATUAL: replay protection ativo em produção; gated só sob Functions Emulator**
+  - ~~callables IA: SEM enforcement~~ → **ATUAL: todas com enforceAppCheck/consumeAppCheckToken em produção**
   - rollback original: remover enforceAppCheck da linha 30 de functions/index.js + deploy (obsoleto)
 - Testes: 200+ unitários + testes de rules com emulator + testes de callable
 - CI: typecheck + lint + test + functions test + rules test + build
@@ -638,15 +650,15 @@ npm run build
   - Teste da callable valida payloads seguros e ausência de uid, id, value legado e importHash
   - Teste negativo cobre chamada unauthenticated sem escrita
   - Validação strict cobre campos server-owned adicionais: uid, id, value, createdAt e updatedAt
-  - Guardrail estático garante enforceAppCheck somente em createTransaction e consumeAppCheckToken desativado
+  - Guardrail estático da época garantia enforceAppCheck somente em createTransaction e consumeAppCheckToken desativado (**obsoleto; ver bloco de topo 2026-06-27**)
   - Mensagem frontend para falha de App Check/failed-precondition ficou explícita
   - AuditTimeline ganhou paginação incremental com load more
   - AllowedCategory consolidado em um único export de schema
   - Estilos/metadados de categoria consolidados em helper compartilhado
   - Branches locais obsoletas soltas removidas, preservando main e a branch atual; branches presas a worktrees foram mantidas por segurança
 - Próximas pendências:
-  - App Check enforcement nas callables de IA (após observação)
-  - consumeAppCheckToken (replay protection)
+  - ~~App Check enforcement nas callables de IA~~ → **feito; ver bloco de topo 2026-06-27**
+  - ~~consumeAppCheckToken (replay protection)~~ → **feito em produção; gated só sob Functions Emulator**
   - Sentry/Crashlytics
   - E2E Playwright
   - P1-5 busca server-side
