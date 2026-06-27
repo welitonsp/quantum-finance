@@ -343,11 +343,15 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
     // jamais uma escrita imediata e jamais um texto alucinado do chat freeform.
     if (routerEnabled) {
       const guard = interpretMutationCommand(userText);
-      if (guard.type === 'expense_proposal') {
+      if (guard.type === 'expense_proposal' || guard.type === 'income_proposal') {
+        // Despesa e receita compartilham a mesma cadeia segura: proposta pendente →
+        // confirmação humana → callable validada. O intent só muda a auditoria/rotulagem.
+        const intent: AgentIntent =
+          guard.type === 'income_proposal' ? 'register_income_proposal' : 'simulate_purchase';
         setPendingAction({
           proposal: guard.proposal,
-          intent:   'simulate_purchase',
-          tools:    INTENT_REGISTRY['simulate_purchase'].tools,
+          intent,
+          tools:    INTENT_REGISTRY[intent].tools,
           question: guard.question,
         });
         resetAgent();
@@ -358,7 +362,7 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
         setIsLoading(false);
         return;
       }
-      if (guard.type === 'income_unsupported' || guard.type === 'needs_details') {
+      if (guard.type === 'needs_details') {
         pushAiMessage(guard.message);
         setIsLoading(false);
         return;

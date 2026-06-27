@@ -196,15 +196,22 @@ describe('AIAssistantChat — confirmação determinística de mutação (flag O
     expect(h.runActionMock).not.toHaveBeenCalled();
   });
 
-  it('comando de RECEITA é recusado com segurança (sem execução, sem chat freeform)', async () => {
+  it('comando de RECEITA gera proposta confirmável (sem execução, sem chat freeform)', async () => {
     vi.stubEnv('VITE_ENABLE_AGENT_ROUTER', 'true');
     const { container } = renderChat();
-    sendMessage(container, 'Registre uma receita de 100 reais de teste hoje.');
+    sendMessage(container, 'Registre uma receita de 1000 de salário hoje.');
 
-    await waitFor(() => expect(screen.getByText(/só registro despesas/i)).toBeTruthy());
-    expect(screen.queryByRole('dialog')).toBeNull();
+    // Mesma cadeia segura da despesa: abre a sheet de confirmação, nada executa ainda.
+    await screen.findByRole('dialog');
     expect(h.runActionMock).not.toHaveBeenCalled();
     expect(h.adviceMock).not.toHaveBeenCalled();
+
+    sendMessage(container, 'confirmar');
+    await waitFor(() => expect(h.runActionMock).toHaveBeenCalledTimes(1));
+    const [proposalArg, ctxArg] = h.runActionMock.mock.calls[0]!;
+    expect(proposalArg.kind).toBe('register_income');
+    expect(proposalArg.status).toBe('pending'); // o hook é quem sela como confirmed
+    expect(ctxArg.intent).toBe('register_income_proposal');
   });
 
   it('chama onActionExecuted após a execução confirmada', async () => {

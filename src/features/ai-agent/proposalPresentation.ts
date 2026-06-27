@@ -45,6 +45,20 @@ export function presentProposal(proposal: ActionProposal): ProposalPresentation 
         ],
       };
     }
+    case 'register_income': {
+      const { description, amountCents, date, category } = proposal.payload;
+      return {
+        title: 'Registrar receita',
+        confirmLabel: 'Registrar receita',
+        successMessage: 'Receita registrada pelo assistente.',
+        rows: [
+          { label: 'Descrição', value: description },
+          { label: 'Valor', value: formatBRL(amountCents), emphasis: true },
+          { label: 'Data', value: formatYmd(date) },
+          { label: 'Categoria', value: category ?? 'Outros' },
+        ],
+      };
+    }
     case 'register_debt_payment': {
       const { amountCents, date } = proposal.payload;
       return {

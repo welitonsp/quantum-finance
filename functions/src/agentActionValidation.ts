@@ -17,6 +17,7 @@ export const AGENT_ACTION_KINDS = [
   'register_debt_payment',
   'create_budget',
   'contribute_to_goal',
+  'register_income',
 ] as const;
 export type AgentActionKind = (typeof AGENT_ACTION_KINDS)[number];
 
@@ -29,6 +30,7 @@ export const AGENT_INTENTS = [
   'plan_debt_payment',
   'create_budget_proposal',
   'contribute_to_goal_proposal',
+  'register_income_proposal',
 ] as const;
 
 export class AgentActionValidationError extends Error {
@@ -126,6 +128,25 @@ function validateRegisterPurchase(p: Record<string, unknown>): RegisterPurchaseP
   return out;
 }
 
+export interface RegisterIncomePayload {
+  description: string;
+  amountCents: number;
+  date: string;
+  category: string;
+}
+
+// Receita à vista: espelha register_purchase sem parcelas/cartão. A escrita usa
+// type 'entrada' (ver functions/src/index.ts). category default 'Outros'.
+function validateRegisterIncome(p: Record<string, unknown>): RegisterIncomePayload {
+  assertOnlyKeys(p, ['description', 'amountCents', 'date', 'category'], 'register_income');
+  return {
+    description: asStringSized(p['description'], 'description', 1, 140),
+    amountCents: asSafePositiveCents(p['amountCents'], 'amountCents'),
+    date: asYmd(p['date'], 'date'),
+    category: p['category'] === undefined ? 'Outros' : asStringSized(p['category'], 'category', 1, 120),
+  };
+}
+
 function validateGenericMoneyAction(p: Record<string, unknown>, idField: string, kind: string): Record<string, unknown> {
   assertOnlyKeys(p, [idField, 'amountCents', 'date'], kind);
   return {
@@ -196,6 +217,9 @@ export function validateAgentActionRequest(raw: unknown): ValidatedAgentAction {
   switch (kind as AgentActionKind) {
     case 'register_purchase':
       payload = validateRegisterPurchase(rawPayload) as unknown as Record<string, unknown>;
+      break;
+    case 'register_income':
+      payload = validateRegisterIncome(rawPayload) as unknown as Record<string, unknown>;
       break;
     case 'register_debt_payment':
       payload = validateGenericMoneyAction(rawPayload, 'debtId', 'register_debt_payment');

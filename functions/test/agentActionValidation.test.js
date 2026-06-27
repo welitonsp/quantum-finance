@@ -129,6 +129,46 @@ describe('validateAgentActionRequest (FASE H)', () => {
     assert.throws(() => validateAgentActionRequest(env), AgentActionValidationError);
   });
 
+  it('valida register_income confirmado (type entrada no executor) e default de category', () => {
+    const env = validEnvelope({
+      intent: 'register_income_proposal',
+      proposal: {
+        kind: 'register_income', status: 'confirmed',
+        payload: { description: 'Salário', amountCents: 500000, date: '2026-06-19' },
+      },
+    });
+    const r = validateAgentActionRequest(env);
+    assert.strictEqual(r.kind, 'register_income');
+    assert.strictEqual(r.payload.amountCents, 500000);
+    assert.strictEqual(r.payload.category, 'Outros'); // default
+    assert.strictEqual(r.intent, 'register_income_proposal');
+  });
+
+  it('REJEITA register_income não confirmado (gate de confirmação humana)', () => {
+    const env = validEnvelope({
+      intent: 'register_income_proposal',
+      proposal: {
+        kind: 'register_income', status: 'pending',
+        payload: { description: 'Salário', amountCents: 500000, date: '2026-06-19' },
+      },
+    });
+    assert.throws(
+      () => validateAgentActionRequest(env),
+      (err) => err instanceof AgentActionValidationError && err.reason === 'confirmation_required',
+    );
+  });
+
+  it('REJEITA campo extra no payload de register_income (strict)', () => {
+    const env = validEnvelope({
+      intent: 'register_income_proposal',
+      proposal: {
+        kind: 'register_income', status: 'confirmed',
+        payload: { description: 'Salário', amountCents: 500000, date: '2026-06-19', installments: 2 },
+      },
+    });
+    assert.throws(() => validateAgentActionRequest(env), AgentActionValidationError);
+  });
+
   it('valida contribute_to_goal e register_debt_payment', () => {
     const goal = validateAgentActionRequest(validEnvelope({
       intent: 'contribute_to_goal_proposal',
@@ -170,10 +210,10 @@ describe('validateAgentActionRequest (FASE H)', () => {
     assert.throws(() => validateAgentActionRequest(env), AgentActionValidationError);
   });
 
-  it('expõe os 4 kinds v1', () => {
+  it('expõe os kinds suportados (inclui register_income)', () => {
     assert.deepStrictEqual(
       [...AGENT_ACTION_KINDS],
-      ['register_purchase', 'register_debt_payment', 'create_budget', 'contribute_to_goal'],
+      ['register_purchase', 'register_debt_payment', 'create_budget', 'contribute_to_goal', 'register_income'],
     );
   });
 });

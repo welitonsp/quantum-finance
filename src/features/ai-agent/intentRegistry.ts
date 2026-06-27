@@ -73,6 +73,13 @@ export const INTENT_REGISTRY: Record<AgentIntent, IntentDefinition> = {
     kind: 'contribute_to_goal',
     requiredSlots: ['goalId', 'amountCents'],
   },
+  register_income_proposal: {
+    id: 'register_income_proposal',
+    label: 'Registrar receita',
+    tools: ['getBalances'],
+    kind: 'register_income',
+    requiredSlots: ['description', 'amountCents'],
+  },
 };
 
 /** Intenções que produzem uma ação (vs. apenas-resposta). */
