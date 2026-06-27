@@ -1,13 +1,11 @@
 import { useMemo, useCallback, lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
-import CountUp from 'react-countup';
 import {
-  ArrowRightLeft, TrendingUp, TrendingDown, AlertTriangle,
-  CheckCircle2, Activity, Landmark, Info, Target,
+  ArrowRightLeft, AlertTriangle,
+  CheckCircle2, Activity, Landmark, Info,
 } from 'lucide-react';
 
 import { useNavigation } from '../contexts/NavigationContext';
-import { formatCurrency } from '../utils/formatters';
 import { useDashboardData } from '../hooks/useFinancialData';
 import ProactiveBriefing from './ProactiveBriefing';
 // Widgets analíticos pesados (gráficos) — code-split via lazy; só carregam ao expandir
@@ -20,13 +18,10 @@ import {
   calcStatus,
   calculateBudgetAlerts,
   resolveSavingsGoalPercent,
-  type DashboardBudgetAlert,
 } from '../utils/dashboardUtils';
 import { useForecast } from '../hooks/useForecast';
 import { useBudgets } from '../hooks/useBudgets';
 const BudgetWidget     = lazy(() => import('./BudgetWidget'));
-import { HealthGauge } from './HealthGauge';
-import { SparkLine } from './SparkLine';
 import { IntelStrip } from './IntelStrip';
 import KPICards from './KPICards';
 import type { Transaction, ModuleBalances, CategoryDataPoint, Account, RecurringTask } from '../shared/types/transaction';
@@ -51,6 +46,8 @@ import toast from 'react-hot-toast';
 import { useRecurringAutoExecute } from '../hooks/useRecurringAutoExecute';
 import type { TimeRange } from '../hooks/useFinancialData';
 import type { UserCategory } from '../shared/schemas/categorySchemas';
+import { BudgetAlertsPanel } from './dashboard/BudgetAlertsPanel';
+import { DashboardHero } from './dashboard/DashboardHero';
 
 interface Props {
   user: { uid: string } | null;
@@ -92,114 +89,6 @@ const TIME_RANGE_LABELS: { value: TimeRange; label: string }[] = [
   { value: '90d', label: '90 dias' },
   { value: 'all', label: 'Tudo'    },
 ];
-
-function BudgetAlertsPanel({
-  alerts,
-  budgetsCount,
-  loading,
-  hasTransactions,
-}: {
-  alerts: DashboardBudgetAlert[];
-  budgetsCount: number;
-  loading: boolean;
-  hasTransactions: boolean;
-}) {
-  const criticalCount = alerts.filter(alert => alert.status === 'critical').length;
-  const attentionCount = alerts.filter(alert => alert.status === 'attention').length;
-  const headerTone = criticalCount > 0
-    ? 'text-red-400 border-red-500/25 bg-red-500/10'
-    : attentionCount > 0
-    ? 'text-amber-400 border-amber-500/25 bg-amber-500/10'
-    : 'text-quantum-accent border-quantum-accent/20 bg-quantum-accent/10';
-
-  const emptyMessage = budgetsCount === 0
-    ? 'Nenhum orçamento cadastrado.'
-    : hasTransactions
-    ? 'Nenhum orçamento em atenção.'
-    : 'Sem gastos registrados para avaliar.';
-
-  return (
-    <section className="bg-quantum-card/40 border border-quantum-border backdrop-blur-sm rounded-3xl overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-quantum-border">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className={`w-8 h-8 rounded-xl border flex items-center justify-center shrink-0 ${headerTone}`}>
-            <Target className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-sm font-black text-quantum-fg">Alertas de orçamento</h2>
-            <p className="text-[10px] text-quantum-fgMuted">
-              {criticalCount > 0
-                ? `${criticalCount} limite${criticalCount > 1 ? 's' : ''} atingido${criticalCount > 1 ? 's' : ''}`
-                : attentionCount > 0
-                ? `${attentionCount} em atenção`
-                : 'Sem orçamento crítico'}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="p-5">
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {[0, 1, 2].map(item => (
-              <div key={item} className="h-24 rounded-2xl bg-quantum-bgSecondary animate-pulse" />
-            ))}
-          </div>
-        ) : alerts.length === 0 ? (
-          <div className="flex items-center gap-3 rounded-2xl border border-quantum-border bg-quantum-bgSecondary/50 px-4 py-4">
-            <CheckCircle2 className="w-5 h-5 text-quantum-accent shrink-0" />
-            <div>
-              <p className="text-sm font-bold text-quantum-fg">{emptyMessage}</p>
-              <p className="text-xs text-quantum-fgMuted">Categorias abaixo de 80% ficam fora deste painel.</p>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {alerts.map(alert => {
-              const isCritical = alert.status === 'critical';
-              const pctLabel = `${alert.percentUsed.toFixed(0)}%`;
-              const Icon = isCritical ? AlertTriangle : Activity;
-              const tone = isCritical
-                ? 'border-red-500/25 bg-red-500/8 text-red-400'
-                : 'border-amber-500/25 bg-amber-500/8 text-amber-400';
-
-              return (
-                <article key={alert.id} className={`rounded-2xl border p-4 ${tone}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-black text-quantum-fg truncate">{alert.category}</p>
-                      <p className="mt-0.5 text-[10px] font-mono text-quantum-fgMuted">{alert.month}</p>
-                    </div>
-                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${tone}`}>
-                      <Icon className="w-3 h-3" />
-                      {isCritical ? 'Limite atingido' : 'Atenção'}
-                    </span>
-                  </div>
-
-                  <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-quantum-border/50">
-                    <div
-                      className={`h-full rounded-full ${isCritical ? 'bg-red-400' : 'bg-amber-400'}`}
-                      style={{ width: `${Math.min(alert.percentUsed, 100)}%` }}
-                    />
-                  </div>
-
-                  <div className="mt-2 flex items-baseline justify-between gap-3 text-[11px]">
-                    <span className="font-mono font-bold text-quantum-fg">
-                      {formatCurrency(alert.spentCents, { cents: true })}
-                    </span>
-                    <span className="text-quantum-fgMuted">
-                      de {formatCurrency(alert.limitCents, { cents: true })} · {pctLabel}
-                    </span>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
 
 export default function DashboardContent({
   user,
@@ -327,70 +216,21 @@ export default function DashboardContent({
       </motion.div>
 
       {/* ── HERO ──────────────────────────────────────────────── */}
-      <motion.div variants={itemVariants} className="relative bg-quantum-card/40 backdrop-blur-xl border border-quantum-border rounded-3xl p-6 md:p-8 overflow-hidden transition-all hover:shadow-2xl">
-        <div className={`absolute top-0 right-0 w-[500px] h-[500px] blur-[100px] opacity-20 rounded-full ${glowColor} -translate-y-1/2 translate-x-1/3 animate-slow-rotate`} />
-
-        <div className="relative z-10 flex flex-col xl:flex-row gap-8">
-          <div className="flex items-start gap-6 flex-1">
-            <HealthGauge score={score} color={color} />
-            <div className="flex-1">
-              <p className="text-quantum-fgMuted font-bold uppercase text-xs tracking-wider mb-1">Saldo em Caixa</p>
-              <div className="flex flex-wrap items-baseline gap-3 mb-3">
-                <h1 className="text-4xl md:text-5xl font-black text-quantum-fg tracking-tighter font-mono">
-                  <CountUp end={saldo} duration={2} separator="." decimal="," decimals={2} prefix="R$ " />
-                </h1>
-                <div className={`flex items-center gap-1 text-sm font-bold px-3 py-1.5 rounded-xl ${incomeDelta >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
-                  {incomeDelta >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                  {Math.abs(incomeDelta).toFixed(1)}% retidos
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 mb-4">
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border ${badgeColor}`}>
-                  <StatusIcon className="w-4 h-4" />
-                  {status}
-                </div>
-              </div>
-
-              <div className={`p-3 bg-quantum-bg/80 border border-quantum-border rounded-xl border-l-4 ${color === 'emerald' ? 'border-l-emerald-500' : color === 'amber' ? 'border-l-amber-500' : 'border-l-red-500'}`}>
-                <span className="font-bold text-quantum-fg uppercase text-[10px] tracking-wider mr-2">Status Operacional:</span>
-                <span className="text-quantum-fg text-sm">{rec}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-col items-end gap-3 xl:min-w-[260px]">
-            <div className="flex flex-col items-end gap-1">
-              <span className="text-[9px] font-bold text-quantum-fgMuted uppercase tracking-wider">Tendência 6M</span>
-              <SparkLine transactions={txSet} />
-            </div>
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setIsFormOpen(true)}
-              aria-label="Nova transação"
-              className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 rounded-xl font-bold text-white text-sm transition-shadow focus:outline-none focus:ring-2 focus:ring-cyan-500/50 shadow-lg shadow-cyan-500/20"
-            >
-              <ArrowRightLeft className="w-4 h-4" />
-              Nova Movimentação
-            </motion.button>
-            <div className="grid grid-cols-2 gap-3 w-full">
-              <div className="bg-quantum-card border border-quantum-border rounded-xl p-3 text-center">
-                <p className="text-[9px] uppercase text-quantum-fgMuted mb-1">Entradas (Mês)</p>
-                <p className="text-sm font-bold text-emerald-400 font-mono">
-                  <CountUp end={receitas} duration={2} separator="." decimal="," decimals={2} prefix="R$ " />
-                </p>
-              </div>
-              <div className="bg-quantum-card border border-quantum-border rounded-xl p-3 text-center">
-                <p className="text-[9px] uppercase text-quantum-fgMuted mb-1">Saídas (Mês)</p>
-                <p className="text-sm font-bold text-red-400 font-mono">
-                  <CountUp end={despesas} duration={2} separator="." decimal="," decimals={2} prefix="R$ " />
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </motion.div>
+      <DashboardHero
+        saldo={saldo}
+        receitas={receitas}
+        despesas={despesas}
+        incomeDelta={incomeDelta}
+        score={score}
+        color={color}
+        status={status}
+        rec={rec}
+        glowColor={glowColor}
+        badgeColor={badgeColor}
+        StatusIcon={StatusIcon}
+        txSet={txSet}
+        onNewTransaction={() => setIsFormOpen(true)}
+      />
 
       {/* ── INTEL STRIP ───────────────────────────────────────── */}
       <motion.div variants={itemVariants}>
