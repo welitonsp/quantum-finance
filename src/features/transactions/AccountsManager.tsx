@@ -43,7 +43,10 @@ export default function AccountsManager({ uid }: Props) {
       return;
     }
     try {
-      await updateAccount(acc.id, { name: editName.trim(), balance: parsedBalance });
+      const finalBalance = ['cartao', 'divida'].includes(acc.type) && parsedBalance > 0
+        ? -parsedBalance
+        : parsedBalance;
+      await updateAccount(acc.id, { name: editName.trim(), balance: finalBalance });
     } catch (err) {
       logSanitizedFirebaseError('credit_card_update', err);
     } finally {
