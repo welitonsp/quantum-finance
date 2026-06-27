@@ -10,8 +10,8 @@
 > [`AI_RESPONSE_CONTRACT.md`](./AI_RESPONSE_CONTRACT.md) ·
 > [`AI_DECISION_JOURNAL.md`](./AI_DECISION_JOURNAL.md).
 >
-> Entregue/validado nas trilhas **#295 → #300** (App Check gated no emulador, fluxo de
-> confirmação humana, e cobertura E2E).
+> Entregue/validado nas trilhas **#295 -> #302** (App Check gated no emulador, fluxo de
+> confirmação humana, cobertura E2E e receita confirmada).
 
 ---
 
@@ -36,6 +36,7 @@ Isto é a aplicação operacional da regra-mãe de [`AI_AGENT_GUARDRAILS.md`](./
 ```
 Usuário (comando imperativo)
    │  "registre uma despesa de R$ 42 no mercado hoje"
+   │  "registre uma receita de 1000 de salário hoje"
    ▼
 [1] Guarda determinística / intent router            (frontend, puro, sem I/O)
    │   interpretMutationCommand(...)  →  ActionProposal (status: 'pending')
@@ -46,7 +47,7 @@ Usuário (comando imperativo)
    │   O chat NÃO afirma "registrado".
    ├──────────────► [Cancelar]  → descarta a proposta. TERMINAL. Nenhuma escrita.
    ▼
-[3] Usuário confirma (clique "Registrar compra" ou "confirmar")
+[3] Usuário confirma (clique "Registrar compra"/"Registrar receita" ou "confirmar")
    │   useAgentAction.runAction(proposal): sela status='confirmed', revalida Zod,
    │   gera idempotencyKey (UUID v4), chama a callable.
    ▼
@@ -63,7 +64,8 @@ Usuário (comando imperativo)
    │   useTransactions (listener realtime) atualiza Movimentações/Dashboard.
    ▼
 [6] Só ENTÃO o chat confirma sucesso
-       "Compra registrada pelo assistente." (após a callable retornar com sucesso)
+       "Compra registrada pelo assistente." / "Receita registrada pelo assistente."
+       (após a callable retornar com sucesso)
 ```
 
 Pontos invioláveis do fluxo:
@@ -77,7 +79,7 @@ Pontos invioláveis do fluxo:
 
 ---
 
-## 3. O que o E2E (#300) protege
+## 3. O que o E2E (#300/#302) protege
 
 Spec: [`e2e/tests/06-agent-confirmed-mutation.spec.ts`](../e2e/tests/06-agent-confirmed-mutation.spec.ts).
 Verificação de banco via `collectionGroup('transactions')` no Firestore Emulator
@@ -89,7 +91,9 @@ Verificação de banco via `collectionGroup('transactions')` no Firestore Emulat
 | **Cancelar sem gravar** | após Cancelar, **0** transações no Firestore e nenhuma linha na lista de Movimentações; sem texto de sucesso. |
 | **Confirmar grava exatamente uma** | após Confirmar, **exatamente 1** transação em `users/{uid}/transactions`. |
 | **UI reflete a transação** | a descrição aparece na **lista** de Movimentações (escopo `<main>`, via `onSnapshot`). |
-| **Receita recusada com segurança** | comando de receita devolve recusa segura, **sem proposta e sem escrita** (comportamento atual — ver §5). |
+| **Receita sem gravação imediata** | comando de receita gera proposta `register_income` `pending`; banco segue com **0** transações antes da confirmação. |
+| **Receita cancelada não grava** | cancelar proposta de receita é terminal e mantém **0** transações no Firestore. |
+| **Receita confirmada grava exatamente uma** | confirmar grava uma transação em `users/{uid}/transactions` com `type: 'entrada'`; UI reflete via `onSnapshot`. |
 
 ---
 
@@ -119,13 +123,16 @@ Qualquer nova ação financeira do agente **deve** seguir o mesmo contrato:
 2. **Nunca afirmar “registrado/salvo/concluído” antes da callable retornar sucesso.** O
    texto de sucesso é consequência do `then` da callable, nunca da emissão da proposta.
 3. **Cancelamento é terminal** e **não pode** disparar qualquer escrita.
-4. **Receitas, transferências e cartões só podem ser liberados** quando tiverem, juntos:
+4. **Transferências, cartões e novos tipos de ação só podem ser liberados** quando tiverem, juntos:
    (a) **proposta estruturada**, (b) **validação no backend** em `executeAgentAction` /
    `agentActionValidation.ts`, e (c) **E2E equivalente** ao #300. Sem os três, permanecem
    **não suportados**.
-5. **Ação não suportada ⇒ recusa segura.** Devolver mensagem clara (sem alucinação, sem
-   escrita) — como a recusa atual de **receita** pelo agente (decisão de produto: o agente
-   registra apenas **despesas à vista**; parcelado e receita roteiam ao formulário).
+5. **Receita à vista está suportada desde #302.** Deve continuar espelhando o contrato de
+   despesa: proposta `pending`, confirmação humana, `executeAgentAction`, transação
+   `type: 'entrada'`, history `origin: 'ai'`, `/decisions` e E2E equivalente.
+6. **Ação não suportada => recusa segura.** Devolver mensagem clara (sem alucinação, sem
+   escrita). Compra parcelada segue decisão de produto: o agente não duplica a lógica de
+   parcelas no Admin SDK; deve rotear ao formulário.
 
 ---
 
@@ -134,7 +141,7 @@ Qualquer nova ação financeira do agente **deve** seguir o mesmo contrato:
 | Camada | Arquivo | Papel |
 |---|---|---|
 | Chat / orquestração | `src/features/ai-chat/AIAssistantChat.tsx` | `submitMessage` despacha guarda→proposta→sheet; `confirmAgentAction`/`cancelPendingAction`; sucesso só após callable |
-| Guarda determinística | `src/features/ai-agent/mutationCommandGuard.ts` | `interpretMutationCommand` (comando→proposta `pending`); `parseConfirmationReply` (confirmar/cancelar por texto); recusa segura de receita |
+| Guarda determinística | `src/features/ai-agent/mutationCommandGuard.ts` | `interpretMutationCommand` (comando→proposta `pending` para despesa/receita); `parseConfirmationReply` (confirmar/cancelar por texto); recusa segura de ação sem dados |
 | Intent router (flag) | `src/features/ai-agent/intentRouter.ts`, `geminiIntentClassifier.ts` | `routeIntent`; classificação Gemini → mesma saída estruturada (nunca grava) |
 | Construção da proposta | `src/features/ai-agent/proposalBuilders.ts`, `proposalPresentation.ts` | slots→`ActionProposal` (Zod strict); resumo legível da sheet |
 | Confirmação (UI) | `src/features/ai-agent/ActionConfirmationSheet.tsx` | confirmação humana; estados running/success/error; rota alternativa por `reason` |

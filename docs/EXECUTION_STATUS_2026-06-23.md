@@ -1,8 +1,9 @@
-# Quantum Finance — Ponto de Retomada (2026-06-23 → continuar 2026-06-24)
+# Quantum Finance — Ponto de Retomada (histórico: 2026-06-23)
 
-> Snapshot de **continuidade**: onde paramos hoje e exatamente para onde ir amanhã.
-> Supera o `EXECUTION_STATUS_2026-06-20.md`. Referências: `CLAUDE.md` (bloco de topo),
-> `docs/AI_TOOL_ROUTER.md` §7, memória `roadmap_checklist`.
+> ⚠️ **SUPERADO.** Mantido como histórico da trilha do agente em 2026-06-23.
+> O estado canônico atual está no bloco de topo do `CLAUDE.md` e em
+> `docs/PROJECT_KNOWLEDGE_SYNC_2026-06-27.md`. Desde então, #288-#302 foram mergeados,
+> incluindo wiring no chat, fluxo confirmado, E2E e receita confirmada.
 
 ---
 
