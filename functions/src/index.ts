@@ -651,9 +651,90 @@ export const executeAgentAction = onCall(
       });
     }
 
+    // ── register_income: receita à vista (espelha register_purchase, type 'entrada') ──
+    // Mesmo contrato de governança: status='confirmed' já validado, escrita atômica
+    // tx + history (origin 'ai', Modelo A) + /decisions, idempotente por idempotencyKey.
+    if (action.kind === 'register_income') {
+      const inc = action.payload as { description: string; amountCents: number; date: string; category: string };
+      const incDescriptionLower = inc.description.trim().toLowerCase();
+      const incTxRef   = adminDb.collection(`users/${uid}/transactions`).doc();
+      const incHistRef = adminDb.collection(`users/${uid}/transactions`).doc(incTxRef.id).collection('history').doc();
+      const incDecisionRef = adminDb.collection(`users/${uid}/decisions`).doc();
+
+      if (idempotencyKey) {
+        const idemRef  = adminDb.doc(`users/${uid}/idempotency/${idempotencyKey}`);
+        const idemSnap = await idemRef.get();
+        if (idemSnap.exists) {
+          return {
+            id: idemSnap.data()!['txId'] as string,
+            decisionId: (idemSnap.data()!['decisionId'] as string) ?? null,
+          };
+        }
+      }
+
+      const incAfter: Record<string, unknown> = {
+        description:   inc.description,
+        descriptionLower: incDescriptionLower,
+        value_cents:   inc.amountCents,
+        schemaVersion: 2,
+        type:          'entrada',
+        category:      inc.category,
+        date:          inc.date,
+        source:        'manual',
+        isRecurring:   false,
+      };
+      const incTxPayload = { ...incAfter, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() };
+      const incHistPayload = {
+        action:        'CREATE',
+        txId:          incTxRef.id,
+        createdAt:     FieldValue.serverTimestamp(),
+        schemaVersion: 1,
+        origin:        'ai',
+        amount_cents:  inc.amountCents,
+        category:      inc.category,
+        after:         incAfter,
+        changedFields: Object.keys(incAfter),
+      };
+      const incDecisionPayload = {
+        userId:       uid,
+        createdAt:    FieldValue.serverTimestamp(),
+        intent:       action.intent,
+        question:     action.question,
+        toolsUsed:    action.toolsUsed,
+        userDecision: 'confirmed',
+        outcomeStatus: 'applied',
+        proposedAction: { kind: action.kind, payload: action.payload },
+        ...(action.snapshotRef      !== undefined ? { snapshotRef:      action.snapshotRef }      : {}),
+        ...(action.simulationResult !== undefined ? { simulationResult: action.simulationResult } : {}),
+      };
+
+      return adminDb.runTransaction(async (t) => {
+        if (idempotencyKey) {
+          const idemRef  = adminDb.doc(`users/${uid}/idempotency/${idempotencyKey}`);
+          const idemSnap = await t.get(idemRef);
+          if (idemSnap.exists) {
+            return {
+              id: idemSnap.data()!['txId'] as string,
+              decisionId: (idemSnap.data()!['decisionId'] as string) ?? null,
+            };
+          }
+          t.set(idemRef, {
+            txId:       incTxRef.id,
+            decisionId: incDecisionRef.id,
+            createdAt:  FieldValue.serverTimestamp(),
+            expireAt:   new Date(Date.now() + 24 * 60 * 60 * 1000),
+          });
+        }
+        t.set(incTxRef,       incTxPayload);
+        t.set(incHistRef,     incHistPayload);
+        t.set(incDecisionRef, incDecisionPayload);
+        return { id: incTxRef.id, decisionId: incDecisionRef.id };
+      });
+    }
+
     // register_purchase À VISTA (parcelado já foi recusado no validador com
     // reason 'use_installment_form'). Guarda defensiva de exaustividade: os outros
-    // 3 kinds retornaram acima; reaching aqui com outro kind é erro de lógica.
+    // kinds retornaram acima; reaching aqui com outro kind é erro de lógica.
     if (action.kind !== 'register_purchase') {
       throw new HttpsError('internal', `Tipo de ação não roteado: "${action.kind}".`);
     }

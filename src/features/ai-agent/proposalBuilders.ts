@@ -68,6 +68,27 @@ export function buildRegisterPurchase(slots: Slots): BuildResult {
   });
 }
 
+export function buildRegisterIncome(slots: Slots): BuildResult {
+  const issues: string[] = [];
+  const description = nonEmptyString(slots['description']);
+  const amountCents = posIntCents(slots['amountCents']);
+  if (!description) issues.push('description');
+  if (amountCents === null) issues.push('amountCents');
+  if (issues.length) return { ok: false, issues };
+
+  const category = nonEmptyString(slots['category']);
+  return finalize({
+    kind: 'register_income',
+    status: 'pending',
+    payload: {
+      description,
+      amountCents: amountCents as Centavos,
+      date: ymdOr(slots['date'], today()),
+      ...(category ? { category } : {}),
+    },
+  });
+}
+
 export function buildRegisterDebtPayment(slots: Slots): BuildResult {
   const issues: string[] = [];
   const debtId = nonEmptyString(slots['debtId']);
@@ -118,6 +139,7 @@ export function buildCreateBudget(slots: Slots): BuildResult {
 export function buildProposal(kind: ActionKind, slots: Slots): BuildResult {
   switch (kind) {
     case 'register_purchase':     return buildRegisterPurchase(slots);
+    case 'register_income':       return buildRegisterIncome(slots);
     case 'register_debt_payment': return buildRegisterDebtPayment(slots);
     case 'contribute_to_goal':    return buildContributeToGoal(slots);
     case 'create_budget':         return buildCreateBudget(slots);

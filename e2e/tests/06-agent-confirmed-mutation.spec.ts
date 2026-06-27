@@ -116,18 +116,72 @@ test.describe('Agente — mutação confirmada (propor → confirmar → gravar)
       .toBeVisible({ timeout: 10_000 });
   });
 
-  test('comando de receita é recusado com segurança e NÃO grava', async ({ page }) => {
-    // Decisão de produto: o Agente registra apenas DESPESAS; receita roteia ao formulário.
-    // Aqui apenas documentamos a recusa segura (sem proposta, sem escrita).
+});
+
+// Comando imperativo de RECEITA (caminho determinístico, sem LLM). A guarda extrai
+// descrição "FreelancerQuantumE2E" e valor R$ 500,00 (sem âncora R$, número puro).
+const INCOME_COMMAND = 'recebi 500 de FreelancerQuantumE2E hoje';
+const INCOME_DESCRIPTION = 'FreelancerQuantumE2E';
+const INCOME_SUCCESS_TEXT = 'Receita registrada pelo assistente.';
+const INCOME_SHEET_TITLE = 'Registrar receita';
+
+test.describe('Agente — mutação confirmada de RECEITA (propor → confirmar → gravar)', () => {
+  test.beforeEach(async () => {
+    await clearEmulatorData();
+  });
+
+  test('comando de receita gera proposta e NÃO grava imediatamente', async ({ page }) => {
+    await bootApp(page);
+    expect(await countAgentTransactions()).toBe(0);
+
+    await openChatAndSend(page, INCOME_COMMAND);
+
+    const sheet = page.getByRole('dialog', { name: INCOME_SHEET_TITLE });
+    await expect(sheet).toBeVisible({ timeout: 10_000 });
+    await expect(sheet.getByRole('button', { name: 'Registrar receita' })).toBeVisible();
+
+    // Sem gravação antes de confirmar; sem texto de sucesso.
+    expect(await countAgentTransactions()).toBe(0);
+    await expect(page.getByText(INCOME_SUCCESS_TEXT)).toHaveCount(0);
+  });
+
+  test('cancelar a proposta de receita descarta e NÃO cria transação', async ({ page }) => {
     await bootApp(page);
 
-    await openChatAndSend(page, 'registre uma receita de R$ 100 de salário hoje');
+    await openChatAndSend(page, INCOME_COMMAND);
 
-    // Mensagem de recusa segura no chat; nenhuma sheet de confirmação.
-    await expect(page.getByText(/só registro despesas pelo assistente/i).first())
-      .toBeVisible({ timeout: 10_000 });
-    await expect(page.getByRole('dialog', { name: SHEET_TITLE })).toHaveCount(0);
+    const sheet = page.getByRole('dialog', { name: INCOME_SHEET_TITLE });
+    await expect(sheet).toBeVisible({ timeout: 10_000 });
+
+    await sheet.getByRole('button', { name: 'Cancelar' }).click();
+    await expect(sheet).toBeHidden({ timeout: 5_000 });
 
     expect(await countAgentTransactions()).toBe(0);
+    await expect(page.getByText(INCOME_SUCCESS_TEXT)).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Movimentações' }).first().click();
+    await expect(page.getByRole('main').getByText(INCOME_DESCRIPTION)).toHaveCount(0);
+  });
+
+  test('confirmar a proposta de receita cria a transação e a UI reflete', async ({ page }) => {
+    await bootApp(page);
+
+    await openChatAndSend(page, INCOME_COMMAND);
+
+    const sheet = page.getByRole('dialog', { name: INCOME_SHEET_TITLE });
+    await expect(sheet).toBeVisible({ timeout: 10_000 });
+
+    await sheet.getByRole('button', { name: 'Registrar receita' }).click();
+
+    // Texto de sucesso só após a callable retornar com sucesso.
+    await expect(page.getByText(INCOME_SUCCESS_TEXT)).toBeVisible({ timeout: 15_000 });
+
+    // Exatamente uma transação (de receita) materializada.
+    await expect.poll(async () => countAgentTransactions(), { timeout: 10_000 }).toBe(1);
+
+    // A receita aparece na lista de Movimentações (via onSnapshot).
+    await page.getByRole('button', { name: 'Movimentações' }).first().click();
+    await expect(page.getByRole('main').getByText(INCOME_DESCRIPTION).first())
+      .toBeVisible({ timeout: 10_000 });
   });
 });

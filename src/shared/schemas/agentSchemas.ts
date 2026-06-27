@@ -31,6 +31,7 @@ export const ACTION_KINDS = [
   'register_debt_payment',
   'create_budget',
   'contribute_to_goal',
+  'register_income',
 ] as const;
 
 export type ActionKind = (typeof ACTION_KINDS)[number];
@@ -49,6 +50,7 @@ export const AGENT_INTENTS = [
   'plan_debt_payment',
   'create_budget_proposal',
   'contribute_to_goal_proposal',
+  'register_income_proposal',
 ] as const;
 
 export type AgentIntent = (typeof AGENT_INTENTS)[number];
@@ -92,6 +94,17 @@ export const contributeToGoalPayloadSchema = z
   })
   .strict();
 
+// Receita à vista: espelha register_purchase (sem parcelas/cartão). A escrita
+// resultante usa type 'entrada' (ver functions/src/index.ts).
+export const registerIncomePayloadSchema = z
+  .object({
+    description: z.string().min(1).max(140),
+    amountCents: safeCentsSchema('Valor da receita'),
+    date: ymdSchema,
+    category: z.string().min(1).max(120).optional(),
+  })
+  .strict();
+
 // ─── ActionProposal (discriminated union) ─────────────────────────────────────────
 
 export const PROPOSAL_STATUSES = ['pending', 'confirmed', 'rejected', 'expired'] as const;
@@ -121,6 +134,11 @@ export const actionProposalSchema = z.discriminatedUnion('kind', [
     kind: z.literal('contribute_to_goal'),
     status: z.enum(PROPOSAL_STATUSES),
     payload: contributeToGoalPayloadSchema,
+  }).strict(),
+  z.object({
+    kind: z.literal('register_income'),
+    status: z.enum(PROPOSAL_STATUSES),
+    payload: registerIncomePayloadSchema,
   }).strict(),
 ]);
 

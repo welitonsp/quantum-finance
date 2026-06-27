@@ -52,6 +52,8 @@ export function buildActionQuestion(proposal: ActionProposal): string {
       const parcela = installments && installments > 1 ? `em ${installments}x` : 'à vista';
       return `Registrar a compra "${description}" de ${formatBRL(amountCents)} ${parcela}?`;
     }
+    case 'register_income':
+      return `Registrar a receita "${proposal.payload.description}" de ${formatBRL(proposal.payload.amountCents)}?`;
     case 'register_debt_payment':
       return `Registrar um pagamento de ${formatBRL(proposal.payload.amountCents)} nesta dívida?`;
     case 'contribute_to_goal':
