@@ -125,9 +125,38 @@ jobs:
       - name: Build production
         run: npm run build
 
-      - uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_QUANTUM_FINANCE_39235 }}
-          channelId: live
-          projectId: quantum-finance-39235
+      - name: Install Firebase Tools
+        run: npm install -g firebase-tools
+
+      - name: Deploy Firebase Hosting live
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_QUANTUM_FINANCE_39235 }}
+        run: |
+          if [ -z "$GOOGLE_APPLICATION_CREDENTIALS_JSON" ]; then
+            echo "::error::Secret FIREBASE_SERVICE_ACCOUNT_QUANTUM_FINANCE_39235 missing - live hosting deploy aborted."
+            exit 1
+          fi
+
+          echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > /tmp/sa.json
+          deploy_output="$(mktemp)"
+          trap 'rm -f /tmp/sa.json "$deploy_output"' EXIT
+
+          set +e
+          GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json \
+            firebase deploy --only hosting --project quantum-finance-39235 --non-interactive >"$deploy_output" 2>&1
+          deploy_code=$?
+          set -e
+
+          if [ "$deploy_code" -eq 0 ]; then
+            cat "$deploy_output"
+            exit 0
+          fi
+
+          if grep -q "is the current active version" "$deploy_output"; then
+            cat "$deploy_output"
+            echo "::warning::Firebase Hosting live already activated this version; treating idempotent FAILED_PRECONDITION as operational success."
+            exit 0
+          fi
+
+          cat "$deploy_output"
+          exit "$deploy_code"
