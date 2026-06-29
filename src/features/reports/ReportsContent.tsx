@@ -71,6 +71,12 @@ export default function ReportsContent({ transactions, accounts, categories = []
         const txDate = new Date(t.date ?? (t as Transaction & { createdAt?: string }).createdAt ?? '');
         const diffDias = (agora.getTime() - txDate.getTime()) / (1000 * 60 * 60 * 24);
 
+        // Transação sem data válida produz `diffDias = NaN`. Como `NaN > limite` é
+        // sempre `false`, ela escaparia silenciosamente dos filtros temporais e
+        // poluiria os relatórios de 30/90/180 dias. Descarta explicitamente nas
+        // janelas datadas; em 'all' (sem recorte temporal) ela permanece.
+        if (timeFilter !== 'all' && Number.isNaN(diffDias)) return;
+
         if (timeFilter === '30d'  && diffDias > 30)  return;
         if (timeFilter === '90d'  && diffDias > 90)  return;
         if (timeFilter === '180d' && diffDias > 180) return;
