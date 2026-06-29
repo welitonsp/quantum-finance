@@ -2,18 +2,18 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — Agente com mutação confirmada + receita confirmada + UI/correções (#289–#307) (2026-06-27)
+## Estado Consolidado — Agente com mutação confirmada + receita confirmada + UI/correções (#289–#310) (2026-06-29)
 
 > **Este bloco é a referência mais recente.** Em caso de divergência com blocos abaixo, prevalece este.
 > **Regra operacional:** Atualizar após cada PR mergeado ou marco relevante.
 
-### 0. Estado atual (2026-06-27)
-- Branch principal: `main` — HEAD `e6ff8e2` (`origin/main`, PR #306 mergeado). Working tree esperado: limpo.
+### 0. Estado atual (2026-06-29)
+- Branch principal: `main` — HEAD `67a4b7f` (`origin/main`, PR #310 mergeado). Working tree esperado: limpo. **ZERO PR aberto.**
 - **Trilha #289–#302 mergeada:** hardening do Agente/IA, App Check gated no emulador, confirmação humana obrigatória, CI Firebase Hosting Preview reparado, cobertura E2E do fluxo confirmado e **receita confirmada**.
 - **Pós-#302 mergeado (#303–#306):** sync da base de conhecimento (#303), extração de painéis presentacionais do dashboard (#304), deploy `live` idempotente no merge (#305) e **correção do sinal de saldo passivo na edição inline de contas** (#306, antes apontado como P1).
-- **PR aberto: #307** `fix(reports): ignore invalid dates in Pareto time filter` — guard `Number.isNaN(diffDias)` no filtro temporal do Pareto + teste de componente (P3 validado em convergência Gemini-QA/Claude/Codex). Não toca Zonas Proibidas.
+- **Sessão 2026-06-29 (#307–#310 mergeados):** guard de data inválida no filtro temporal do Pareto (#307), sync da base após #303–#307 (#308) e dois grupos Dependabot — `frontend-production` (#309: @tanstack/react-query, react-virtual, framer-motion, recharts 3.8→3.9) e `frontend-development` (#310: @playwright/test, autoprefixer, postcss, typescript-eslint, vite).
 - **Cloud Functions permanecem 6.** A callable `executeAgentAction` materializa ações confirmadas e segue como fronteira server-trusted.
-- Outros PRs abertos conhecidos: **#271** Dependabot `@types/node`. (#287 doc de retomada antigo permanece superseded; recomendar fechar sem merge.)
+- **#271** Dependabot `@types/node` JÁ estava mergeado (commit `ba43fbf`); blocos antigos que o listavam como aberto estavam incorretos. (#287 doc de retomada antigo permanece superseded; recomendar fechar sem merge.)
 - Stashes locais podem existir e não fazem parte do estado canônico da `main`; revisar antes de qualquer limpeza.
 
 ### 0.1 PRs #289–#302 (cronologia)
@@ -37,7 +37,10 @@
 | #304 | `refactor(ui)`: extrai painéis presentacionais do dashboard | refactor |
 | #305 | `ci(hosting)`: torna o deploy `live` idempotente no merge | fix/CI |
 | #306 | `fix(accounts)`: **preserva o sinal do saldo passivo na edição inline** (era P1) | fix/test |
-| #307 | `fix(reports)`: ignora datas inválidas no filtro temporal do Pareto (`NaN` guard) — **aberto** | fix/test |
+| #307 | `fix(reports)`: ignora datas inválidas no filtro temporal do Pareto (`NaN` guard) | fix/test |
+| #308 | `docs(project)`: sync da base de conhecimento após #303–#307 | doc-only |
+| #309 | `chore(deps)`: Dependabot grupo `frontend-production` (4 pacotes) | deps |
+| #310 | `chore(deps-dev)`: Dependabot grupo `frontend-development` (5 pacotes) | deps |
 
 ### 0.2 Agente — fluxo seguro de mutação confirmada (#300–#302)
 - **Contrato:** o LLM/chat **nunca** grava; toda mutação atravessa **proposta estruturada** (`ActionProposal` Zod `.strict()`) -> **confirmação humana** -> callable **`executeAgentAction`**. O backend revalida `status==='confirmed'`, grava em `users/{uid}/transactions` + history `origin: 'ai'` + `/decisions`, e mantém idempotência por `idempotencyKey`.
