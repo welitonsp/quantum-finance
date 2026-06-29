@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { interpretMutationCommand, parseConfirmationReply } from './mutationCommandGuard';
+import type { AccountRef } from './accountResolution';
 
 const NOW = new Date('2026-06-25T12:00:00Z');
+const ACCOUNTS: AccountRef[] = [
+  { id: 'acc-poup', name: 'Poupança' },
+  { id: 'acc-corr', name: 'Conta Corrente' },
+];
 
 describe('interpretMutationCommand', () => {
   it('builds a PENDING expense proposal from an imperative command (never executes)', () => {
@@ -75,6 +80,58 @@ describe('interpretMutationCommand', () => {
   it('asks for details when the amount cannot be extracted', () => {
     const r = interpretMutationCommand('registre uma despesa no mercado', NOW);
     expect(r.type).toBe('needs_details');
+  });
+
+  it('builds a PENDING transfer proposal resolving account names to IDs', () => {
+    const r = interpretMutationCommand('transfere 500 da poupança para a corrente', NOW, ACCOUNTS);
+    expect(r.type).toBe('transfer_proposal');
+    if (r.type !== 'transfer_proposal') return;
+    expect(r.proposal.status).toBe('pending'); // never pre-confirmed
+    if (r.proposal.kind !== 'register_transfer') throw new Error('expected register_transfer');
+    expect(r.proposal.payload.fromAccountId).toBe('acc-poup');
+    expect(r.proposal.payload.toAccountId).toBe('acc-corr');
+    expect(r.proposal.payload.amountCents).toBe(50000); // "500" → R$ 500,00
+    expect(r.fromAccountName).toBe('Poupança');
+    expect(r.toAccountName).toBe('Conta Corrente');
+    expect(r.question.replace(/\s/g, ' ')).toBe(
+      'Detectei uma transferência de R$ 500,00 de Poupança para Conta Corrente para hoje. Deseja confirmar?',
+    );
+  });
+
+  it('transfer: parses "R$" amount and account in either order', () => {
+    const r = interpretMutationCommand('transferir R$ 200 da conta corrente pra poupança', NOW, ACCOUNTS);
+    expect(r.type).toBe('transfer_proposal');
+    if (r.type !== 'transfer_proposal') return;
+    if (r.proposal.kind !== 'register_transfer') throw new Error('expected register_transfer');
+    expect(r.proposal.payload.fromAccountId).toBe('acc-corr');
+    expect(r.proposal.payload.toAccountId).toBe('acc-poup');
+    expect(r.proposal.payload.amountCents).toBe(20000);
+  });
+
+  it('transfer: needs_details when there are no accounts', () => {
+    const r = interpretMutationCommand('transfere 500 da poupança para a corrente', NOW, []);
+    expect(r.type).toBe('needs_details');
+    if (r.type !== 'needs_details') return;
+    expect(r.message).toMatch(/não tem contas/i);
+  });
+
+  it('transfer: needs_details when amount is missing', () => {
+    const r = interpretMutationCommand('transfere da poupança para a corrente', NOW, ACCOUNTS);
+    expect(r.type).toBe('needs_details');
+  });
+
+  it('transfer: needs_details when an account cannot be resolved', () => {
+    const r = interpretMutationCommand('transfere 500 da poupança para investimentos', NOW, ACCOUNTS);
+    expect(r.type).toBe('needs_details');
+    if (r.type !== 'needs_details') return;
+    expect(r.message).toMatch(/conta de destino/i);
+  });
+
+  it('transfer: needs_details when origin equals destination', () => {
+    const r = interpretMutationCommand('transfere 500 da poupança para poupança', NOW, ACCOUNTS);
+    expect(r.type).toBe('needs_details');
+    if (r.type !== 'needs_details') return;
+    expect(r.message).toMatch(/mesma conta/i);
   });
 
   it('ignores non-mutation phrasing (handled by the LLM classifier)', () => {

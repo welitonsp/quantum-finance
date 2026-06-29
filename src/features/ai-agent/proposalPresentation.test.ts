@@ -75,6 +75,17 @@ describe('presentProposal', () => {
     expect(p.rows.map(r => r.label)).toEqual(['De', 'Para', 'Valor', 'Data']);
   });
 
+  it('register_transfer: display hints substituem os IDs por nomes legíveis', () => {
+    const proposal: ActionProposal = {
+      kind: 'register_transfer',
+      status: 'pending',
+      payload: { fromAccountId: 'acc-a', toAccountId: 'acc-b', amountCents: cents(50000), date: '2026-06-29' },
+    };
+    const p = presentProposal(proposal, { fromAccountName: 'Poupança', toAccountName: 'Conta Corrente' });
+    expect(p.rows.find(r => r.label === 'De')?.value).toBe('Poupança');
+    expect(p.rows.find(r => r.label === 'Para')?.value).toBe('Conta Corrente');
+  });
+
   it('formata contribute_to_goal e register_debt_payment', () => {
     const goalProposal: ActionProposal = {
       kind: 'contribute_to_goal',
