@@ -210,10 +210,85 @@ describe('validateAgentActionRequest (FASE H)', () => {
     assert.throws(() => validateAgentActionRequest(env), AgentActionValidationError);
   });
 
-  it('expõe os kinds suportados (inclui register_income)', () => {
+  it('valida register_transfer confirmado e normaliza (description opcional)', () => {
+    const env = validEnvelope({
+      intent: 'register_transfer_proposal',
+      proposal: {
+        kind: 'register_transfer', status: 'confirmed',
+        payload: { fromAccountId: 'acc-a', toAccountId: 'acc-b', amountCents: 50000, date: '2026-06-29' },
+      },
+    });
+    const r = validateAgentActionRequest(env);
+    assert.strictEqual(r.kind, 'register_transfer');
+    assert.strictEqual(r.payload.fromAccountId, 'acc-a');
+    assert.strictEqual(r.payload.toAccountId, 'acc-b');
+    assert.strictEqual(r.payload.amountCents, 50000);
+    assert.strictEqual(r.payload.description, undefined);
+    assert.strictEqual(r.intent, 'register_transfer_proposal');
+  });
+
+  it('register_transfer: preserva description quando presente', () => {
+    const env = validEnvelope({
+      intent: 'register_transfer_proposal',
+      proposal: {
+        kind: 'register_transfer', status: 'confirmed',
+        payload: { fromAccountId: 'acc-a', toAccountId: 'acc-b', amountCents: 50000, date: '2026-06-29', description: 'Reserva' },
+      },
+    });
+    assert.strictEqual(validateAgentActionRequest(env).payload.description, 'Reserva');
+  });
+
+  it('REJEITA register_transfer com origem igual ao destino', () => {
+    const env = validEnvelope({
+      intent: 'register_transfer_proposal',
+      proposal: {
+        kind: 'register_transfer', status: 'confirmed',
+        payload: { fromAccountId: 'acc-a', toAccountId: 'acc-a', amountCents: 50000, date: '2026-06-29' },
+      },
+    });
+    assert.throws(() => validateAgentActionRequest(env), AgentActionValidationError);
+  });
+
+  it('REJEITA register_transfer não confirmado (gate de confirmação humana)', () => {
+    const env = validEnvelope({
+      intent: 'register_transfer_proposal',
+      proposal: {
+        kind: 'register_transfer', status: 'pending',
+        payload: { fromAccountId: 'acc-a', toAccountId: 'acc-b', amountCents: 50000, date: '2026-06-29' },
+      },
+    });
+    assert.throws(
+      () => validateAgentActionRequest(env),
+      (err) => err instanceof AgentActionValidationError && err.reason === 'confirmation_required',
+    );
+  });
+
+  it('REJEITA campo extra no payload de register_transfer (strict)', () => {
+    const env = validEnvelope({
+      intent: 'register_transfer_proposal',
+      proposal: {
+        kind: 'register_transfer', status: 'confirmed',
+        payload: { fromAccountId: 'acc-a', toAccountId: 'acc-b', amountCents: 50000, date: '2026-06-29', cardId: 'x' },
+      },
+    });
+    assert.throws(() => validateAgentActionRequest(env), AgentActionValidationError);
+  });
+
+  it('REJEITA register_transfer com amountCents inválido', () => {
+    const env = validEnvelope({
+      intent: 'register_transfer_proposal',
+      proposal: {
+        kind: 'register_transfer', status: 'confirmed',
+        payload: { fromAccountId: 'acc-a', toAccountId: 'acc-b', amountCents: 0, date: '2026-06-29' },
+      },
+    });
+    assert.throws(() => validateAgentActionRequest(env), AgentActionValidationError);
+  });
+
+  it('expõe os kinds suportados (inclui register_income e register_transfer)', () => {
     assert.deepStrictEqual(
       [...AGENT_ACTION_KINDS],
-      ['register_purchase', 'register_debt_payment', 'create_budget', 'contribute_to_goal', 'register_income'],
+      ['register_purchase', 'register_debt_payment', 'create_budget', 'contribute_to_goal', 'register_income', 'register_transfer'],
     );
   });
 });

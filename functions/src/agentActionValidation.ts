@@ -18,6 +18,7 @@ export const AGENT_ACTION_KINDS = [
   'create_budget',
   'contribute_to_goal',
   'register_income',
+  'register_transfer',
 ] as const;
 export type AgentActionKind = (typeof AGENT_ACTION_KINDS)[number];
 
@@ -31,6 +32,7 @@ export const AGENT_INTENTS = [
   'create_budget_proposal',
   'contribute_to_goal_proposal',
   'register_income_proposal',
+  'register_transfer_proposal',
 ] as const;
 
 export class AgentActionValidationError extends Error {
@@ -147,6 +149,35 @@ function validateRegisterIncome(p: Record<string, unknown>): RegisterIncomePaylo
   };
 }
 
+export interface RegisterTransferPayload {
+  fromAccountId: string;
+  toAccountId: string;
+  amountCents: number;
+  date: string;
+  description?: string;
+}
+
+// Transferência entre contas próprias: espelha o modelo do app (transferRepo) —
+// UMA transação `type: 'transferencia'` com fromAccountId/toAccountId (NÃO duas
+// pernas). A existência das contas é verificada na camada de execução (index.ts).
+// from ≠ to é validado aqui (forma do argumento).
+function validateRegisterTransfer(p: Record<string, unknown>): RegisterTransferPayload {
+  assertOnlyKeys(p, ['fromAccountId', 'toAccountId', 'amountCents', 'date', 'description'], 'register_transfer');
+  const fromAccountId = asStringSized(p['fromAccountId'], 'fromAccountId', 1, 128);
+  const toAccountId = asStringSized(p['toAccountId'], 'toAccountId', 1, 128);
+  if (fromAccountId === toAccountId) {
+    invalid('fromAccountId e toAccountId devem ser contas diferentes.');
+  }
+  const out: RegisterTransferPayload = {
+    fromAccountId,
+    toAccountId,
+    amountCents: asSafePositiveCents(p['amountCents'], 'amountCents'),
+    date: asYmd(p['date'], 'date'),
+  };
+  if (p['description'] !== undefined) out.description = asStringSized(p['description'], 'description', 1, 160);
+  return out;
+}
+
 function validateGenericMoneyAction(p: Record<string, unknown>, idField: string, kind: string): Record<string, unknown> {
   assertOnlyKeys(p, [idField, 'amountCents', 'date'], kind);
   return {
@@ -220,6 +251,9 @@ export function validateAgentActionRequest(raw: unknown): ValidatedAgentAction {
       break;
     case 'register_income':
       payload = validateRegisterIncome(rawPayload) as unknown as Record<string, unknown>;
+      break;
+    case 'register_transfer':
+      payload = validateRegisterTransfer(rawPayload) as unknown as Record<string, unknown>;
       break;
     case 'register_debt_payment':
       payload = validateGenericMoneyAction(rawPayload, 'debtId', 'register_debt_payment');

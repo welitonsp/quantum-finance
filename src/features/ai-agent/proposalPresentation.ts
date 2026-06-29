@@ -59,6 +59,23 @@ export function presentProposal(proposal: ActionProposal): ProposalPresentation 
         ],
       };
     }
+    case 'register_transfer': {
+      // PR 1: a sheet exibe os IDs de conta crus; a resolução nome→ID (rótulos
+      // legíveis) chega no wiring do chat (PR 2, tool getAccounts).
+      const { fromAccountId, toAccountId, amountCents, date, description } = proposal.payload;
+      return {
+        title: 'Registrar transferência',
+        confirmLabel: 'Transferir',
+        successMessage: 'Transferência registrada pelo assistente.',
+        rows: [
+          { label: 'De', value: fromAccountId },
+          { label: 'Para', value: toAccountId },
+          { label: 'Valor', value: formatBRL(amountCents), emphasis: true },
+          { label: 'Data', value: formatYmd(date) },
+          ...(description ? [{ label: 'Descrição', value: description }] : []),
+        ],
+      };
+    }
     case 'register_debt_payment': {
       const { amountCents, date } = proposal.payload;
       return {
@@ -110,6 +127,8 @@ const SLOT_LABELS: Record<string, string> = {
   goalId: 'qual meta',
   cardId: 'qual cartão',
   installments: 'o número de parcelas',
+  fromAccountId: 'a conta de origem',
+  toAccountId: 'a conta de destino',
 };
 
 /**

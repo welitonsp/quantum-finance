@@ -430,10 +430,11 @@ export const createTransaction = onCall(
 // a decisão em users/{uid}/decisions. Núcleo de governança: NÃO há escrita sem
 // proposal.status === 'confirmed'. Ver docs/AI_AGENT_GUARDRAILS.md e AI_DECISION_JOURNAL.md.
 //
-// Executa os 5 kinds de ação: `register_purchase` (transação única à vista, saída),
-// `register_income` (transação única à vista, entrada), `contribute_to_goal`
-// (incrementa currentCents), `register_debt_payment` (abate parcela/saldo) e
-// `create_budget` (cria orçamento mensal). Por DESIGN o Agente só registra compras à
+// Executa os 6 kinds de ação: `register_purchase` (transação única à vista, saída),
+// `register_income` (transação única à vista, entrada), `register_transfer`
+// (transferência entre contas próprias — 1 transação 'transferencia'),
+// `contribute_to_goal` (incrementa currentCents), `register_debt_payment` (abate
+// parcela/saldo) e `create_budget` (cria orçamento mensal). Por DESIGN o Agente só registra compras à
 // vista — parcelado (installments>1) é recusado no validador com
 // `reason: 'use_installment_form'` e pertence ao formulário/installmentRepo (não se
 // duplica lógica monetária no Admin SDK). Pendente: intent router no LLM.
@@ -730,6 +731,105 @@ export const executeAgentAction = onCall(
         t.set(incHistRef,     incHistPayload);
         t.set(incDecisionRef, incDecisionPayload);
         return { id: incTxRef.id, decisionId: incDecisionRef.id };
+      });
+    }
+
+    // ── register_transfer: transferência entre contas próprias ──
+    // Espelha transferRepo.createTransferWithHistory: UMA transação
+    // type 'transferencia' (category 'Transferência') com fromAccountId/toAccountId —
+    // NÃO duas pernas, NÃO atualiza saldo (saldos são derivados das transações). A
+    // existência de AMBAS as contas é verificada na transação (not-found). history
+    // origin 'ai' (Modelo A) + /decisions. Idempotente por idempotencyKey.
+    if (action.kind === 'register_transfer') {
+      const tr = action.payload as {
+        fromAccountId: string; toAccountId: string; amountCents: number; date: string; description?: string;
+      };
+      const trDescription = (tr.description ?? 'Transferência').trim();
+      const trDescriptionLower = trDescription.toLowerCase();
+      const trTxRef       = adminDb.collection(`users/${uid}/transactions`).doc();
+      const trHistRef     = adminDb.collection(`users/${uid}/transactions`).doc(trTxRef.id).collection('history').doc();
+      const trDecisionRef = adminDb.collection(`users/${uid}/decisions`).doc();
+      const fromRef       = adminDb.doc(`users/${uid}/accounts/${tr.fromAccountId}`);
+      const toRef         = adminDb.doc(`users/${uid}/accounts/${tr.toAccountId}`);
+
+      if (idempotencyKey) {
+        const idemRef  = adminDb.doc(`users/${uid}/idempotency/${idempotencyKey}`);
+        const idemSnap = await idemRef.get();
+        if (idemSnap.exists) {
+          return {
+            id: idemSnap.data()!['txId'] as string,
+            decisionId: (idemSnap.data()!['decisionId'] as string) ?? null,
+          };
+        }
+      }
+
+      const trAfter: Record<string, unknown> = {
+        description:   trDescription,
+        descriptionLower: trDescriptionLower,
+        value_cents:   tr.amountCents,
+        schemaVersion: 2,
+        type:          'transferencia',
+        category:      'Transferência',
+        date:          tr.date,
+        source:        'manual',
+        fromAccountId: tr.fromAccountId,
+        toAccountId:   tr.toAccountId,
+        isRecurring:   false,
+      };
+      const trTxPayload = { ...trAfter, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() };
+      const trHistPayload = {
+        action:        'CREATE',
+        txId:          trTxRef.id,
+        createdAt:     FieldValue.serverTimestamp(),
+        schemaVersion: 1,
+        origin:        'ai',
+        amount_cents:  tr.amountCents,
+        category:      'Transferência',
+        after:         trAfter,
+        changedFields: Object.keys(trAfter),
+      };
+      const trDecisionPayload = {
+        userId:       uid,
+        createdAt:    FieldValue.serverTimestamp(),
+        intent:       action.intent,
+        question:     action.question,
+        toolsUsed:    action.toolsUsed,
+        userDecision: 'confirmed',
+        outcomeStatus: 'applied',
+        proposedAction: { kind: action.kind, payload: action.payload },
+        ...(action.snapshotRef      !== undefined ? { snapshotRef:      action.snapshotRef }      : {}),
+        ...(action.simulationResult !== undefined ? { simulationResult: action.simulationResult } : {}),
+      };
+
+      return adminDb.runTransaction(async (t) => {
+        if (idempotencyKey) {
+          const idemRef  = adminDb.doc(`users/${uid}/idempotency/${idempotencyKey}`);
+          const idemSnap = await t.get(idemRef);
+          if (idemSnap.exists) {
+            return {
+              id: idemSnap.data()!['txId'] as string,
+              decisionId: (idemSnap.data()!['decisionId'] as string) ?? null,
+            };
+          }
+        }
+        // Reads antes de writes: ambas as contas devem existir.
+        const [fromSnap, toSnap] = await Promise.all([t.get(fromRef), t.get(toRef)]);
+        if (!fromSnap.exists) throw new HttpsError('not-found', 'Conta de origem não encontrada.');
+        if (!toSnap.exists)   throw new HttpsError('not-found', 'Conta de destino não encontrada.');
+
+        if (idempotencyKey) {
+          const idemRef = adminDb.doc(`users/${uid}/idempotency/${idempotencyKey}`);
+          t.set(idemRef, {
+            txId:       trTxRef.id,
+            decisionId: trDecisionRef.id,
+            createdAt:  FieldValue.serverTimestamp(),
+            expireAt:   new Date(Date.now() + 24 * 60 * 60 * 1000),
+          });
+        }
+        t.set(trTxRef,       trTxPayload);
+        t.set(trHistRef,     trHistPayload);
+        t.set(trDecisionRef, trDecisionPayload);
+        return { id: trTxRef.id, decisionId: trDecisionRef.id };
       });
     }
 
