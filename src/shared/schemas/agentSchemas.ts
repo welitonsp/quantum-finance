@@ -32,6 +32,7 @@ export const ACTION_KINDS = [
   'create_budget',
   'contribute_to_goal',
   'register_income',
+  'register_transfer',
 ] as const;
 
 export type ActionKind = (typeof ACTION_KINDS)[number];
@@ -51,6 +52,7 @@ export const AGENT_INTENTS = [
   'create_budget_proposal',
   'contribute_to_goal_proposal',
   'register_income_proposal',
+  'register_transfer_proposal',
 ] as const;
 
 export type AgentIntent = (typeof AGENT_INTENTS)[number];
@@ -105,6 +107,23 @@ export const registerIncomePayloadSchema = z
   })
   .strict();
 
+// Transferência entre contas próprias: espelha o modelo do app (transferRepo) —
+// 1 transação 'transferencia' com fromAccountId/toAccountId. A regra from ≠ to é
+// server-trusted (agentActionValidation.ts) e reforçada aqui no cliente.
+export const registerTransferPayloadSchema = z
+  .object({
+    fromAccountId: z.string().min(1).max(128),
+    toAccountId: z.string().min(1).max(128),
+    amountCents: safeCentsSchema('Valor da transferência'),
+    date: ymdSchema,
+    description: z.string().min(1).max(160).optional(),
+  })
+  .strict()
+  .refine((p) => p.fromAccountId !== p.toAccountId, {
+    message: 'Origem e destino não podem ser iguais.',
+    path: ['toAccountId'],
+  });
+
 // ─── ActionProposal (discriminated union) ─────────────────────────────────────────
 
 export const PROPOSAL_STATUSES = ['pending', 'confirmed', 'rejected', 'expired'] as const;
@@ -139,6 +158,11 @@ export const actionProposalSchema = z.discriminatedUnion('kind', [
     kind: z.literal('register_income'),
     status: z.enum(PROPOSAL_STATUSES),
     payload: registerIncomePayloadSchema,
+  }).strict(),
+  z.object({
+    kind: z.literal('register_transfer'),
+    status: z.enum(PROPOSAL_STATUSES),
+    payload: registerTransferPayloadSchema,
   }).strict(),
 ]);
 

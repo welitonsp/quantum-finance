@@ -54,6 +54,8 @@ export function buildActionQuestion(proposal: ActionProposal): string {
     }
     case 'register_income':
       return `Registrar a receita "${proposal.payload.description}" de ${formatBRL(proposal.payload.amountCents)}?`;
+    case 'register_transfer':
+      return `Registrar uma transferência de ${formatBRL(proposal.payload.amountCents)} entre as contas selecionadas?`;
     case 'register_debt_payment':
       return `Registrar um pagamento de ${formatBRL(proposal.payload.amountCents)} nesta dívida?`;
     case 'contribute_to_goal':

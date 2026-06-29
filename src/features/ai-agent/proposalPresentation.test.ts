@@ -48,6 +48,33 @@ describe('presentProposal', () => {
     expect(p.rows.find(r => r.label === 'Competência')?.value).toBe('2026-06');
   });
 
+  it('formata register_transfer (De/Para/Valor/Data) e Descrição opcional', () => {
+    const proposal: ActionProposal = {
+      kind: 'register_transfer',
+      status: 'pending',
+      payload: { fromAccountId: 'acc-a', toAccountId: 'acc-b', amountCents: cents(50000), date: '2026-06-29', description: 'Reserva' },
+    };
+    const p = presentProposal(proposal);
+    expect(p.title).toBe('Registrar transferência');
+    expect(p.confirmLabel).toBe('Transferir');
+    expect(p.successMessage).toBe('Transferência registrada pelo assistente.');
+    expect(p.rows.map(r => r.label)).toEqual(['De', 'Para', 'Valor', 'Data', 'Descrição']);
+    expect(p.rows.find(r => r.label === 'De')?.value).toBe('acc-a');
+    expect(p.rows.find(r => r.label === 'Para')?.value).toBe('acc-b');
+    expect(p.rows.find(r => r.label === 'Valor')?.value).toContain('500,00');
+    expect(p.rows.find(r => r.label === 'Data')?.value).toBe('29/06/2026');
+  });
+
+  it('register_transfer sem descrição omite a linha Descrição', () => {
+    const proposal: ActionProposal = {
+      kind: 'register_transfer',
+      status: 'pending',
+      payload: { fromAccountId: 'acc-a', toAccountId: 'acc-b', amountCents: cents(50000), date: '2026-06-29' },
+    };
+    const p = presentProposal(proposal);
+    expect(p.rows.map(r => r.label)).toEqual(['De', 'Para', 'Valor', 'Data']);
+  });
+
   it('formata contribute_to_goal e register_debt_payment', () => {
     const goalProposal: ActionProposal = {
       kind: 'contribute_to_goal',

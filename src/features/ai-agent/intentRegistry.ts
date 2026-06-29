@@ -21,6 +21,7 @@ export const AGENT_TOOLS = [
   'getDebts',
   'getBudgets',
   'getGoals',
+  'getAccounts',
 ] as const;
 
 export type AgentTool = (typeof AGENT_TOOLS)[number];
@@ -79,6 +80,13 @@ export const INTENT_REGISTRY: Record<AgentIntent, IntentDefinition> = {
     tools: ['getBalances'],
     kind: 'register_income',
     requiredSlots: ['description', 'amountCents'],
+  },
+  register_transfer_proposal: {
+    id: 'register_transfer_proposal',
+    label: 'Transferir entre contas',
+    tools: ['getAccounts', 'getBalances'],
+    kind: 'register_transfer',
+    requiredSlots: ['fromAccountId', 'toAccountId', 'amountCents'],
   },
 };
 
