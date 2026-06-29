@@ -430,10 +430,11 @@ export const createTransaction = onCall(
 // a decisão em users/{uid}/decisions. Núcleo de governança: NÃO há escrita sem
 // proposal.status === 'confirmed'. Ver docs/AI_AGENT_GUARDRAILS.md e AI_DECISION_JOURNAL.md.
 //
-// Executa os 4 kinds de ação v1: `register_purchase` (transação única à vista),
-// `contribute_to_goal` (incrementa currentCents), `register_debt_payment` (abate
-// parcela/saldo) e `create_budget` (cria orçamento mensal). Por DESIGN o Agente só
-// registra compras à vista — parcelado (installments>1) é recusado no validador com
+// Executa os 5 kinds de ação: `register_purchase` (transação única à vista, saída),
+// `register_income` (transação única à vista, entrada), `contribute_to_goal`
+// (incrementa currentCents), `register_debt_payment` (abate parcela/saldo) e
+// `create_budget` (cria orçamento mensal). Por DESIGN o Agente só registra compras à
+// vista — parcelado (installments>1) é recusado no validador com
 // `reason: 'use_installment_form'` e pertence ao formulário/installmentRepo (não se
 // duplica lógica monetária no Admin SDK). Pendente: intent router no LLM.
 // ═══════════════════════════════════════════════════════════════════════════════
