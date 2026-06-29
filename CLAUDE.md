@@ -2,16 +2,18 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
-## Estado Consolidado — Agente com mutação confirmada + receita confirmada (#289–#302) (2026-06-27)
+## Estado Consolidado — Agente com mutação confirmada + receita confirmada + UI/correções (#289–#307) (2026-06-27)
 
 > **Este bloco é a referência mais recente.** Em caso de divergência com blocos abaixo, prevalece este.
 > **Regra operacional:** Atualizar após cada PR mergeado ou marco relevante.
 
 ### 0. Estado atual (2026-06-27)
-- Branch principal: `main` — HEAD `f0a7330` (`origin/main`, PR #302 mergeado). Working tree esperado: limpo.
+- Branch principal: `main` — HEAD `e6ff8e2` (`origin/main`, PR #306 mergeado). Working tree esperado: limpo.
 - **Trilha #289–#302 mergeada:** hardening do Agente/IA, App Check gated no emulador, confirmação humana obrigatória, CI Firebase Hosting Preview reparado, cobertura E2E do fluxo confirmado e **receita confirmada**.
+- **Pós-#302 mergeado (#303–#306):** sync da base de conhecimento (#303), extração de painéis presentacionais do dashboard (#304), deploy `live` idempotente no merge (#305) e **correção do sinal de saldo passivo na edição inline de contas** (#306, antes apontado como P1).
+- **PR aberto: #307** `fix(reports): ignore invalid dates in Pareto time filter` — guard `Number.isNaN(diffDias)` no filtro temporal do Pareto + teste de componente (P3 validado em convergência Gemini-QA/Claude/Codex). Não toca Zonas Proibidas.
 - **Cloud Functions permanecem 6.** A callable `executeAgentAction` materializa ações confirmadas e segue como fronteira server-trusted.
-- PRs abertos conhecidos: **#287** doc de retomada antigo (superseded; recomendar fechar sem merge) e **#271** Dependabot `@types/node`.
+- Outros PRs abertos conhecidos: **#271** Dependabot `@types/node`. (#287 doc de retomada antigo permanece superseded; recomendar fechar sem merge.)
 - Stashes locais podem existir e não fazem parte do estado canônico da `main`; revisar antes de qualquer limpeza.
 
 ### 0.1 PRs #289–#302 (cronologia)
@@ -31,6 +33,11 @@
 | #300 | `test(agent)`: **E2E do fluxo de mutação confirmada** (propor→confirmar→gravar) | test |
 | #301 | `docs(agent)`: documenta o fluxo seguro de mutação confirmada | doc-only |
 | #302 | `feat(agent)`: **suporte a registro confirmado de receita** (`register_income`) | feature/test |
+| #303 | `docs(project)`: sync da base de conhecimento após o fluxo de receita confirmada | doc-only |
+| #304 | `refactor(ui)`: extrai painéis presentacionais do dashboard | refactor |
+| #305 | `ci(hosting)`: torna o deploy `live` idempotente no merge | fix/CI |
+| #306 | `fix(accounts)`: **preserva o sinal do saldo passivo na edição inline** (era P1) | fix/test |
+| #307 | `fix(reports)`: ignora datas inválidas no filtro temporal do Pareto (`NaN` guard) — **aberto** | fix/test |
 
 ### 0.2 Agente — fluxo seguro de mutação confirmada (#300–#302)
 - **Contrato:** o LLM/chat **nunca** grava; toda mutação atravessa **proposta estruturada** (`ActionProposal` Zod `.strict()`) -> **confirmação humana** -> callable **`executeAgentAction`**. O backend revalida `status==='confirmed'`, grava em `users/{uid}/transactions` + history `origin: 'ai'` + `/decisions`, e mantém idempotência por `idempotencyKey`.
