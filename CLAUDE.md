@@ -2,9 +2,37 @@
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 
+## 🟡 EM ANDAMENTO — Transferência pelo Agente (`register_transfer`), PR 1–3 em branch (2026-06-29)
+
+> **Este bloco é a referência mais recente. HANDOFF DE SESSÃO — retomar daqui.**
+> **Trabalho NÃO mergeado:** vive na branch `feature/agent-register-transfer` (3 commits).
+
+### Onde paramos
+Nova ação confirmada do Agente: **`register_transfer`** (transferência entre contas próprias), seguindo a MESMA cadeia de governança de `register_income` (#302): proposta `pending` → confirmação humana → callable `executeAgentAction` revalida `status==='confirmed'` → escrita atômica (1 tx + history `origin:'ai'` + `/decisions`) → idempotente por `idempotencyKey`.
+
+**Decisão de arquitetura fixada:** transferência é **1 transação** `type:'transferencia'` (category `'Transferência'`) com `fromAccountId`/`toAccountId` — espelha `transferRepo`, **não tem duas pernas** e **não atualiza saldo** (saldos são derivados das transações). Logo, **sem duplicação de lógica monetária no Admin SDK** (Zonas Proibidas respeitadas). **Cloud Functions permanecem 6** (só mais um kind dentro de `executeAgentAction`).
+
+### Commits na branch (base `main` @ `8e324e9` / #312)
+| Commit | PR | Escopo | Validação |
+|---|---|---|---|
+| `d9e92dc` | PR 1 | Fundação server-trusted: kind+intent+`validateRegisterTransfer` (`agentActionValidation.ts`); executor valida existência das **2 contas** (`not-found`) e grava (`index.ts`); schema Zod `.strict()`+refine `from≠to` (`agentSchemas.ts`); `proposalBuilders`/`intentRegistry` (tool `getAccounts`)/`intentRouter`/`proposalPresentation` | functions **167**; vitest; typecheck/lint/build |
+| `6a0d11c` | PR 2 | Wiring no chat (caminho **determinístico**): `accountResolution.ts` (resolve nome→ID, exato>parcial, ambíguo/not_found); `mutationCommandGuard.ts` (verbo "transferir" + extração origem/destino + resolução; novo `transfer_proposal`); `PresentationHints` (sheet mostra **nomes**, não IDs); `AIAssistantChat.tsx`+`App.tsx` (prop `accounts`, atrás da flag `VITE_ENABLE_AGENT_ROUTER` OFF) | vitest **1374** (+16); typecheck/lint/build |
+| `a3649e2` | PR 3 | E2E do fluxo confirmado: `seedAccounts`/`getAnonUser` (`e2e/helpers/emulator.ts`) + 3 testes (propor/cancelar/confirmar) em `06-agent-confirmed-mutation.spec.ts` | **E2E 9/9 verde** sob `firebase emulators:exec` (auth+firestore+functions), validação real local |
+
+### ⚠️ Para retomar AMANHÃ na estação notebook
+1. **PRÉ-REQUISITO:** a branch precisa estar no GitHub (`git push -u origin feature/agent-register-transfer`). Se não foi feito push, os 3 commits estão SÓ na estação anterior. (Confirmar com o owner se o push foi feito ao encerrar esta sessão.)
+2. Na notebook: `git fetch origin && git checkout feature/agent-register-transfer && npm ci && npm --prefix functions ci`.
+3. **NÃO** commitar `firebase.json` (config local de emulador do owner — fica como modificação não rastreada em cada estação).
+4. Revalidar: `npm run typecheck && npm run lint && npm run test -- --run && npm run build && npm --prefix functions test && npm --prefix functions run build`. E2E: instalar browser (`npx playwright install chromium`) e `firebase emulators:exec --only auth,firestore,functions --project demo-quantum-finance "cross-env VITE_FIREBASE_PROJECT_ID=demo-quantum-finance VITE_USE_EMULATOR=true VITE_ENABLE_AGENT_ROUTER=true playwright test e2e/tests/06-agent-confirmed-mutation.spec.ts"`.
+
+### O que FALTA (próximo: PR 4 — caminho LLM da transferência)
+- Os 3 PRs cobrem só o caminho **determinístico** (guarda de mutação). O caminho **LLM** de transferência NÃO está ligado: estender `geminiIntentClassifier` (extrair `fromAccount`/`toAccount` como nomes) + integrar a resolução nome→ID no `intentRouter` (hoje puro, sem acesso às contas) + validar qualidade com emulador. Continua atrás de `VITE_ENABLE_AGENT_ROUTER` (OFF).
+- Decisão pendente de produto (igual `register_income`): transferência para destino **externo** (PIX a terceiros) foi descartada deste escopo — modelo atual é só entre contas próprias.
+- Abrir os PRs no GitHub (squash) quando o owner autorizar — hoje a entrega ficou em branch local por opção do owner.
+
 ## Estado Consolidado — Agente com mutação confirmada + receita confirmada + UI/correções (#289–#310) (2026-06-29)
 
-> **Este bloco é a referência mais recente.** Em caso de divergência com blocos abaixo, prevalece este.
+> Bloco anterior — superado pelo bloco 🟡 do topo (trilha register_transfer). Mantido como referência da arquitetura do Agente (mutação confirmada, App Check, CI).
 > **Regra operacional:** Atualizar após cada PR mergeado ou marco relevante.
 
 ### 0. Estado atual (2026-06-29)
