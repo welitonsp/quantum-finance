@@ -9,9 +9,10 @@ import { getTransactionAbsCentavos } from '../../utils/transactionUtils';
 import type { Transaction, ModuleBalances } from '../../shared/types/transaction';
 import { geminiIntentClassifier } from '../ai-agent/geminiIntentClassifier';
 import { routeIntent } from '../ai-agent/intentRouter';
-import { presentProposal, formatMissingInfoMessage } from '../ai-agent/proposalPresentation';
+import { presentProposal, formatMissingInfoMessage, type PresentationHints } from '../ai-agent/proposalPresentation';
 import { ActionConfirmationSheet } from '../ai-agent/ActionConfirmationSheet';
 import { interpretMutationCommand, parseConfirmationReply } from '../ai-agent/mutationCommandGuard';
+import type { AccountRef } from '../ai-agent/accountResolution';
 import { useAgentAction, type AgentActionResult } from '../../hooks/useAgentAction';
 import type { ActionProposal, AgentIntent } from '../../shared/schemas/agentSchemas';
 import { INTENT_REGISTRY, type AgentTool } from '../ai-agent/intentRegistry';
@@ -37,6 +38,8 @@ interface Props {
   uid?:         string;
   transactions: Transaction[];
   balances:     Partial<ModuleBalances> | null;
+  /** Contas do usuário — usadas para resolver nomes → IDs em transferências (read-only). */
+  accounts?:    AccountRef[];
   isOpen:       boolean;
   onClose:      () => void;
   /**
@@ -175,7 +178,7 @@ function CitationDisclosure({ citations }: { citations: CitationTransaction[] })
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onClose, onActionExecuted }: Props) => {
+export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [], isOpen, onClose, onActionExecuted }: Props) => {
   const memory = useMemo(() => new ConversationMemory(uid), [uid]);
 
   const [messages, setMessages] = useState<Message[]>([
@@ -194,6 +197,8 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
     intent:   AgentIntent;
     tools:    AgentTool[];
     question: string;
+    /** Dicas de exibição fora do payload (ex.: nomes de conta de uma transferência). */
+    displayHints?: PresentationHints;
   }
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [confirmOpen,   setConfirmOpen]   = useState(false);
@@ -342,7 +347,7 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
     // "Registre uma despesa…" vira uma PROPOSTA pendente (confirmação obrigatória),
     // jamais uma escrita imediata e jamais um texto alucinado do chat freeform.
     if (routerEnabled) {
-      const guard = interpretMutationCommand(userText);
+      const guard = interpretMutationCommand(userText, new Date(), accounts);
       if (guard.type === 'expense_proposal' || guard.type === 'income_proposal') {
         // Despesa e receita compartilham a mesma cadeia segura: proposta pendente →
         // confirmação humana → callable validada. O intent só muda a auditoria/rotulagem.
@@ -353,6 +358,25 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
           intent,
           tools:    INTENT_REGISTRY[intent].tools,
           question: guard.question,
+        });
+        resetAgent();
+        setConfirmOpen(true);
+        agentLog('action proposed', { kind: guard.proposal.kind });
+        agentLog('action confirmation required', { kind: guard.proposal.kind });
+        pushAiMessage(guard.question);
+        setIsLoading(false);
+        return;
+      }
+      if (guard.type === 'transfer_proposal') {
+        // Transferência: mesma cadeia segura. Os nomes de conta resolvidos viram
+        // display hints (a sheet mostra "Poupança"/"Corrente", não os IDs crus).
+        const intent: AgentIntent = 'register_transfer_proposal';
+        setPendingAction({
+          proposal: guard.proposal,
+          intent,
+          tools:    INTENT_REGISTRY[intent].tools,
+          question: guard.question,
+          displayHints: { fromAccountName: guard.fromAccountName, toAccountName: guard.toAccountName },
         });
         resetAgent();
         setConfirmOpen(true);
@@ -620,7 +644,7 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, isOpen, onCl
           label: 'Abrir formulário de transações',
           onClick: handleInstallmentRoute,
         }}
-        {...presentProposal(pendingAction.proposal)}
+        {...presentProposal(pendingAction.proposal, pendingAction.displayHints)}
       />
     )}
     </>
