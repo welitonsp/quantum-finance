@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { clearEmulatorData, countAgentTransactions } from '../helpers/emulator';
+import { clearEmulatorData, countAgentTransactions, seedAccounts } from '../helpers/emulator';
 
 /**
  * Fluxo crítico do Agente Financeiro: mutação CONFIRMADA (FASE H).
@@ -183,5 +183,84 @@ test.describe('Agente — mutação confirmada de RECEITA (propor → confirmar 
     await page.getByRole('button', { name: 'Movimentações' }).first().click();
     await expect(page.getByRole('main').getByText(INCOME_DESCRIPTION).first())
       .toBeVisible({ timeout: 10_000 });
+  });
+});
+
+// Comando imperativo de TRANSFERÊNCIA entre contas próprias (caminho determinístico,
+// sem LLM). A guarda resolve "Poupança"/"Corrente" → IDs reais via a lista de contas,
+// que é seedada no emulador (o executor server valida que ambas existem).
+const TRANSFER_COMMAND = 'transfere 500 da Poupança para a Corrente';
+const TRANSFER_SHEET_TITLE = 'Registrar transferência';
+const TRANSFER_SUCCESS_TEXT = 'Transferência registrada pelo assistente.';
+
+test.describe('Agente — transferência confirmada (propor → confirmar → gravar)', () => {
+  test.beforeEach(async () => {
+    await clearEmulatorData();
+  });
+
+  /**
+   * Boota o app e seeda 2 contas. Navega para "Contas" e aguarda os nomes para garantir
+   * que o `onSnapshot` de `useAccounts` já populou o estado do React (a guarda de
+   * transferência depende da lista de contas estar disponível ao chat) — sem reload,
+   * preservando a sessão/uid anônimo do seed.
+   */
+  async function bootWithAccounts(page: Page): Promise<void> {
+    await bootApp(page);
+    await seedAccounts([
+      { id: 'acc-poupanca-e2e', name: 'Poupança', type: 'poupanca' },
+      { id: 'acc-corrente-e2e', name: 'Corrente', type: 'corrente' },
+    ]);
+    await page.getByRole('button', { name: 'Contas' }).first().click();
+    await expect(page.getByRole('main').getByText('Poupança').first())
+      .toBeVisible({ timeout: 10_000 });
+  }
+
+  test('comando de transferência gera proposta (com nomes) e NÃO grava', async ({ page }) => {
+    await bootWithAccounts(page);
+    expect(await countAgentTransactions()).toBe(0);
+
+    await openChatAndSend(page, TRANSFER_COMMAND);
+
+    const sheet = page.getByRole('dialog', { name: TRANSFER_SHEET_TITLE });
+    await expect(sheet).toBeVisible({ timeout: 10_000 });
+    await expect(sheet.getByRole('button', { name: 'Transferir' })).toBeVisible();
+    // Display hints: a sheet mostra os NOMES das contas (não os IDs crus).
+    await expect(sheet.getByText('acc-poupanca-e2e')).toHaveCount(0);
+
+    // Sem gravação antes de confirmar; sem texto de sucesso.
+    expect(await countAgentTransactions()).toBe(0);
+    await expect(page.getByText(TRANSFER_SUCCESS_TEXT)).toHaveCount(0);
+  });
+
+  test('cancelar a transferência descarta e NÃO cria transação', async ({ page }) => {
+    await bootWithAccounts(page);
+
+    await openChatAndSend(page, TRANSFER_COMMAND);
+
+    const sheet = page.getByRole('dialog', { name: TRANSFER_SHEET_TITLE });
+    await expect(sheet).toBeVisible({ timeout: 10_000 });
+
+    await sheet.getByRole('button', { name: 'Cancelar' }).click();
+    await expect(sheet).toBeHidden({ timeout: 5_000 });
+
+    expect(await countAgentTransactions()).toBe(0);
+    await expect(page.getByText(TRANSFER_SUCCESS_TEXT)).toHaveCount(0);
+  });
+
+  test('confirmar a transferência cria exatamente 1 transação', async ({ page }) => {
+    await bootWithAccounts(page);
+
+    await openChatAndSend(page, TRANSFER_COMMAND);
+
+    const sheet = page.getByRole('dialog', { name: TRANSFER_SHEET_TITLE });
+    await expect(sheet).toBeVisible({ timeout: 10_000 });
+
+    await sheet.getByRole('button', { name: 'Transferir' }).click();
+
+    // Texto de sucesso só após a callable `executeAgentAction` retornar com sucesso.
+    await expect(page.getByText(TRANSFER_SUCCESS_TEXT)).toBeVisible({ timeout: 15_000 });
+
+    // Exatamente uma transação (de transferência) materializada no caminho canônico.
+    await expect.poll(async () => countAgentTransactions(), { timeout: 10_000 }).toBe(1);
   });
 });
