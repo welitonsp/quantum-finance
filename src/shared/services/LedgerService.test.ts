@@ -48,7 +48,7 @@ vi.mock('firebase/firestore', () => ({
   serverTimestamp: mockServerTimestamp,
 }));
 
-vi.mock('../api/firebase/index', () => ({ db: { _isMock: true } }));
+vi.mock('../api/firebase/index', () => ({ db: { _isMock: true }, functions: { _isMock: true } }));
 
 const baseInput = {
   description: '  Supermercado   ABC  ',

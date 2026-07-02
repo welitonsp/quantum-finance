@@ -26,6 +26,7 @@ vi.mock('firebase/firestore', () => ({
 
 vi.mock('../shared/api/firebase/index', () => ({
   db: { _isMock: true },
+  functions: { _isMock: true },
 }));
 
 import { useTransactionHistory } from './useTransactionHistory';

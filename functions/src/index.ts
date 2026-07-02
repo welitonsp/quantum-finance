@@ -27,6 +27,10 @@ import {
   AgentActionValidationError,
   validateAgentActionRequest,
 } from './agentActionValidation';
+import {
+  TransferValidationError,
+  validateTransferPayload,
+} from './transferValidation';
 import { maskPII } from './lib/piiMasker';
 import {
   centsToReais,
@@ -420,6 +424,216 @@ export const createTransaction = onCall(
     });
 
     return { id: opResult.id };
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNÇÃO 0C — createTransfer (server-trusted — transferência entre contas)
+//
+// Correção P1 F-01: transferências são SERVER-ONLY. Grava atomicamente:
+//   • transação `type: 'transferencia'` + history CREATE (Modelo A);
+//   • débito em accounts/{fromAccountId}.balance + history UPDATE da conta;
+//   • crédito em accounts/{toAccountId}.balance + history UPDATE da conta;
+//   • chave de idempotência (TTL 24 h) quando fornecida.
+// O create/update client-side de `transferencia` é negado nas Firestore Rules.
+// Saldo negativo na origem é permitido (contas `divida`/cheque especial).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Normaliza o balance de uma conta em CENTAVOS inteiros, espelhando
+ * `normalizeBalance` do cliente (src/hooks/useAccounts.ts):
+ *   • schemaVersion === 2 → balance JÁ é centavos → arredonda defensivo;
+ *   • legado (sem schemaVersion 2) → balance em REAIS float → converte.
+ * Preserva o sinal (contas passivas podem ser negativas).
+ */
+export function accountBalanceCents(data: Record<string, unknown>): number {
+  const raw = data['balance'];
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return 0;
+  if (data['schemaVersion'] === 2) return Math.floor(raw + 0.5);
+  return Math.floor(raw * 100 + 0.5);
+}
+
+const ACCOUNT_HISTORY_SNAPSHOT_FIELDS = [
+  'name', 'type', 'balance', 'schemaVersion', 'createdAt', 'updatedAt',
+] as const;
+
+function accountHistorySnapshot(data: Record<string, unknown>): Record<string, unknown> {
+  return ACCOUNT_HISTORY_SNAPSHOT_FIELDS.reduce<Record<string, unknown>>((snap, field) => {
+    if (data[field] !== undefined) snap[field] = data[field];
+    return snap;
+  }, {});
+}
+
+export const createTransfer = onCall(
+  {
+    region: REGION,
+    timeoutSeconds: 30,
+    enforceAppCheck: ENFORCE_APP_CHECK,
+    consumeAppCheckToken: ENFORCE_APP_CHECK,
+    cors: CORS_ORIGINS,
+  },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
+    if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
+
+    const uid        = request.auth.uid;
+    const rawPayload = request.data as Record<string, unknown>;
+    if (!rawPayload || typeof rawPayload !== 'object' || Array.isArray(rawPayload)) {
+      throw new HttpsError('invalid-argument', 'Payload deve ser um objeto JSON.');
+    }
+
+    const idempotencyKey =
+      typeof rawPayload['idempotencyKey'] === 'string' &&
+      IDEM_KEY_RE.test(rawPayload['idempotencyKey'] as string)
+        ? (rawPayload['idempotencyKey'] as string)
+        : null;
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { idempotencyKey: _stripped, ...transferPayload } = rawPayload;
+
+    let data: ReturnType<typeof validateTransferPayload>;
+    try {
+      data = validateTransferPayload(transferPayload);
+    } catch (error) {
+      if (error instanceof TransferValidationError) {
+        throw new HttpsError('invalid-argument', error.message);
+      }
+      throw error;
+    }
+
+    // Fast-path idempotência.
+    if (idempotencyKey) {
+      const idemRef  = adminDb.doc(`users/${uid}/idempotency/${idempotencyKey}`);
+      const idemSnap = await idemRef.get();
+      if (idemSnap.exists) {
+        return { id: idemSnap.data()!['txId'] as string };
+      }
+    }
+
+    const fromAccountRef = adminDb.doc(`users/${uid}/accounts/${data.fromAccountId}`);
+    const toAccountRef   = adminDb.doc(`users/${uid}/accounts/${data.toAccountId}`);
+    const txRef          = adminDb.collection(`users/${uid}/transactions`).doc();
+    const histRef        = txRef.collection('history').doc('create');
+
+    // CorrelationIds seguros ([A-Za-z0-9_-], 16–80 chars) no mesmo formato do cliente.
+    const fromOpId = `op_transfer_from_${txRef.id}`;
+    const toOpId   = `op_transfer_to_${txRef.id}`;
+
+    const descriptionLower = data.description.trim().toLowerCase();
+
+    const afterSnapshot: Record<string, unknown> = {
+      description:   data.description,
+      descriptionLower,
+      value_cents:   data.value_cents,
+      schemaVersion: 2,
+      type:          'transferencia',
+      category:      'Transferência',
+      date:          data.date,
+      source:        'manual',
+      fromAccountId: data.fromAccountId,
+      toAccountId:   data.toAccountId,
+      isRecurring:   false,
+    };
+
+    const txPayload = {
+      ...afterSnapshot,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+
+    const histPayload = {
+      action:        'CREATE',
+      txId:          txRef.id,
+      createdAt:     FieldValue.serverTimestamp(),
+      schemaVersion: 1,
+      origin:        'manual',
+      amount_cents:  data.value_cents,
+      category:      'Transferência',
+      after:         afterSnapshot,
+      changedFields: Object.keys(afterSnapshot),
+    };
+
+    const opResult = await adminDb.runTransaction(async (t) => {
+      // Reads antes de writes (regra de transação do Firestore).
+      const idemRef = idempotencyKey
+        ? adminDb.doc(`users/${uid}/idempotency/${idempotencyKey}`)
+        : null;
+      if (idemRef) {
+        const idemSnap = await t.get(idemRef);
+        if (idemSnap.exists) {
+          return { id: idemSnap.data()!['txId'] as string };
+        }
+      }
+
+      const [fromSnap, toSnap] = await Promise.all([t.get(fromAccountRef), t.get(toAccountRef)]);
+      if (!fromSnap.exists) throw new HttpsError('not-found', 'Conta de origem não encontrada.');
+      if (!toSnap.exists)   throw new HttpsError('not-found', 'Conta de destino não encontrada.');
+
+      if (idemRef) {
+        t.set(idemRef, {
+          txId:      txRef.id,
+          createdAt: FieldValue.serverTimestamp(),
+          expireAt:  new Date(Date.now() + 24 * 60 * 60 * 1000),
+        });
+      }
+
+      const fromData = fromSnap.data()!;
+      const toData   = toSnap.data()!;
+      const fromBalance = accountBalanceCents(fromData);
+      const toBalance   = accountBalanceCents(toData);
+      const newFrom = fromBalance - data.value_cents;
+      const newTo   = toBalance + data.value_cents;
+
+      // Transação + history (Modelo A).
+      t.set(txRef,   txPayload);
+      t.set(histRef, histPayload);
+
+      // Débito na origem + history da conta (upgrade silencioso p/ schemaVersion 2).
+      const fromBefore = accountHistorySnapshot(fromData);
+      const fromAfter  = { ...fromBefore, balance: newFrom, schemaVersion: 2, updatedAt: FieldValue.serverTimestamp() };
+      t.update(fromAccountRef, {
+        balance:       newFrom,
+        schemaVersion: 2,
+        updatedAt:     FieldValue.serverTimestamp(),
+        _lastOpId:     fromOpId,
+      });
+      t.set(fromAccountRef.collection('history').doc(fromOpId), {
+        action:        'UPDATE',
+        accountId:     data.fromAccountId,
+        origin:        'manual',
+        correlationId: fromOpId,
+        createdAt:     FieldValue.serverTimestamp(),
+        schemaVersion: 1,
+        before:        fromBefore,
+        after:         fromAfter,
+        changedFields: fromData['schemaVersion'] === 2 ? ['balance'] : ['balance', 'schemaVersion'],
+      });
+
+      // Crédito no destino + history da conta.
+      const toBefore = accountHistorySnapshot(toData);
+      const toAfter  = { ...toBefore, balance: newTo, schemaVersion: 2, updatedAt: FieldValue.serverTimestamp() };
+      t.update(toAccountRef, {
+        balance:       newTo,
+        schemaVersion: 2,
+        updatedAt:     FieldValue.serverTimestamp(),
+        _lastOpId:     toOpId,
+      });
+      t.set(toAccountRef.collection('history').doc(toOpId), {
+        action:        'UPDATE',
+        accountId:     data.toAccountId,
+        origin:        'manual',
+        correlationId: toOpId,
+        createdAt:     FieldValue.serverTimestamp(),
+        schemaVersion: 1,
+        before:        toBefore,
+        after:         toAfter,
+        changedFields: toData['schemaVersion'] === 2 ? ['balance'] : ['balance', 'schemaVersion'],
+      });
+
+      return { id: txRef.id };
+    });
+
+    return opResult;
   },
 );
 
