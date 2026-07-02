@@ -1361,10 +1361,96 @@ service cloud.firestore {
             && d.updatedAt == request.time;
       }
 
+      // isValidGroupOwnerUpdate: owner pode alterar nome/descrição e REMOVER membros,
+      // mas não pode adicionar UIDs arbitrários (use o fluxo de convite).
+      function isValidGroupOwnerUpdate() {
+        let before = resource.data;
+        let after  = request.resource.data;
+        return isMemberAfter()
+            && after.ownerUid      == before.ownerUid
+            && after.schemaVersion == before.schemaVersion
+            && after.createdAt     == before.createdAt
+            && before.memberUids.toSet().hasAll(after.memberUids.toSet());
+      }
+
+      // canAcceptGroupInvitation: o convidado adiciona APENAS a si mesmo após ter
+      // aceitado o convite (status=='accepted' já persistido antes desta escrita).
+      function canAcceptGroupInvitation() {
+        let uid    = request.auth.uid;
+        let email  = request.auth.token.email;
+        let before = resource.data;
+        let after  = request.resource.data;
+        let invId  = after.get('_lastAcceptedInviteId', '');
+        let inv    = get(/databases/$(database)/documents/groups/$(groupId)/invites/$(invId)).data;
+        return request.auth != null
+            && email != null
+            && invId.size() > 0
+            && !(uid in before.memberUids)
+            && uid in after.memberUids
+            && after.memberUids.size() == before.memberUids.size() + 1
+            && after.ownerUid      == before.ownerUid
+            && after.name          == before.name
+            && after.schemaVersion == before.schemaVersion
+            && after.createdAt     == before.createdAt
+            && inv.inviteeEmail    == email
+            && inv.status          == 'accepted';
+      }
+
       allow read:   if isMember();
       allow create: if request.auth != null && isValidGroupCreate();
-      allow update: if isGroupOwner() && isMemberAfter();
+      allow update: if (isGroupOwner() && isValidGroupOwnerUpdate())
+                    || canAcceptGroupInvitation();
       allow delete: if isGroupOwner();
+
+      // Convites: owner cria, convidado lê e atualiza status próprio.
+      match /invites/{inviteId} {
+        function isGroupOwnerForInvite() {
+          return request.auth != null
+              && get(/databases/$(database)/documents/groups/$(groupId)).data.ownerUid == request.auth.uid;
+        }
+
+        function isMemberOfGroup() {
+          return request.auth != null
+              && request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberUids;
+        }
+
+        function isInvitee() {
+          return request.auth != null
+              && request.auth.token.email != null
+              && resource.data.inviteeEmail == request.auth.token.email;
+        }
+
+        function isValidInviteCreate() {
+          let d = request.resource.data;
+          return d.keys().hasAll(['groupId', 'groupName', 'inviterUid', 'inviterDisplayName',
+                                  'inviteeEmail', 'status', 'createdAt', 'expiresAt', 'schemaVersion'])
+              && d.inviterUid        == request.auth.uid
+              && d.groupId           == groupId
+              && d.groupName         is string
+              && d.inviterDisplayName is string
+              && d.inviteeEmail      is string && d.inviteeEmail.size() >= 3
+              && d.status            == 'pending'
+              && d.schemaVersion     == 1
+              && d.createdAt         == request.time;
+        }
+
+        function isValidInviteStatusUpdate() {
+          let d    = request.resource.data;
+          let prev = resource.data;
+          return d.inviteeEmail == prev.inviteeEmail
+              && d.inviterUid   == prev.inviterUid
+              && d.groupId      == prev.groupId
+              && d.schemaVersion == prev.schemaVersion
+              && d.createdAt    == prev.createdAt
+              && prev.status    == 'pending'
+              && d.status in ['accepted', 'rejected'];
+        }
+
+        allow read:   if isGroupOwnerForInvite() || isMemberOfGroup() || isInvitee();
+        allow create: if isGroupOwnerForInvite() && isValidInviteCreate();
+        allow update: if isInvitee() && isValidInviteStatusUpdate();
+        allow delete: if isGroupOwnerForInvite();
+      }
 
       match /expenses/{expenseId} {
         function isGroupMemberForExpense() {

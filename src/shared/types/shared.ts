@@ -2,6 +2,21 @@ import type { Centavos } from './money';
 
 export type SplitMethod = 'igual' | 'proporcional' | 'personalizado';
 
+export type InviteStatus = 'pending' | 'accepted' | 'rejected';
+
+export interface GroupInvite {
+  id: string;
+  groupId: string;
+  groupName: string;
+  inviterUid: string;
+  inviterDisplayName: string;
+  inviteeEmail: string;
+  status: InviteStatus;
+  createdAt: unknown;
+  expiresAt: string;
+  schemaVersion: 1;
+}
+
 export interface GroupMember {
   uid: string;
   displayName: string;
