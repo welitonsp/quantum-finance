@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildRegisterPurchase,
+  buildRegisterTransfer,
   buildRegisterDebtPayment,
   buildContributeToGoal,
   buildCreateBudget,
@@ -50,6 +51,34 @@ describe('proposalBuilders', () => {
     expect(buildContributeToGoal({ goalId: 'g1', amountCents: 5000 }).ok).toBe(true);
     expect(buildRegisterDebtPayment({ amountCents: 5000 }).ok).toBe(false);
     expect(buildContributeToGoal({ goalId: 'g1' }).ok).toBe(false);
+  });
+
+  it('register_transfer: monta proposta pending com date default', () => {
+    const r = buildRegisterTransfer({ fromAccountId: 'a', toAccountId: 'b', amountCents: 50000 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.proposal.kind).toBe('register_transfer');
+    expect(r.proposal.status).toBe('pending');
+    expect(r.proposal.payload).toMatchObject({ fromAccountId: 'a', toAccountId: 'b', amountCents: 50000, date: today() });
+  });
+
+  it('register_transfer: preserva description opcional', () => {
+    const r = buildRegisterTransfer({ fromAccountId: 'a', toAccountId: 'b', amountCents: 50000, description: 'Reserva' });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.proposal.payload).toMatchObject({ description: 'Reserva' });
+  });
+
+  it('register_transfer: reporta slots faltantes', () => {
+    const r = buildRegisterTransfer({ fromAccountId: 'a' });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.issues).toEqual(expect.arrayContaining(['toAccountId', 'amountCents']));
+  });
+
+  it('register_transfer: rejeita origem igual ao destino (schema refine)', () => {
+    const r = buildRegisterTransfer({ fromAccountId: 'a', toAccountId: 'a', amountCents: 50000 });
+    expect(r.ok).toBe(false);
   });
 
   it('buildProposal despacha pelo kind', () => {

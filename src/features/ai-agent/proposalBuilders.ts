@@ -89,6 +89,30 @@ export function buildRegisterIncome(slots: Slots): BuildResult {
   });
 }
 
+export function buildRegisterTransfer(slots: Slots): BuildResult {
+  const issues: string[] = [];
+  const fromAccountId = nonEmptyString(slots['fromAccountId']);
+  const toAccountId = nonEmptyString(slots['toAccountId']);
+  const amountCents = posIntCents(slots['amountCents']);
+  if (!fromAccountId) issues.push('fromAccountId');
+  if (!toAccountId) issues.push('toAccountId');
+  if (amountCents === null) issues.push('amountCents');
+  if (issues.length) return { ok: false, issues };
+
+  const description = nonEmptyString(slots['description']);
+  return finalize({
+    kind: 'register_transfer',
+    status: 'pending',
+    payload: {
+      fromAccountId,
+      toAccountId,
+      amountCents: amountCents as Centavos,
+      date: ymdOr(slots['date'], today()),
+      ...(description ? { description } : {}),
+    },
+  });
+}
+
 export function buildRegisterDebtPayment(slots: Slots): BuildResult {
   const issues: string[] = [];
   const debtId = nonEmptyString(slots['debtId']);
@@ -140,6 +164,7 @@ export function buildProposal(kind: ActionKind, slots: Slots): BuildResult {
   switch (kind) {
     case 'register_purchase':     return buildRegisterPurchase(slots);
     case 'register_income':       return buildRegisterIncome(slots);
+    case 'register_transfer':     return buildRegisterTransfer(slots);
     case 'register_debt_payment': return buildRegisterDebtPayment(slots);
     case 'contribute_to_goal':    return buildContributeToGoal(slots);
     case 'create_budget':         return buildCreateBudget(slots);

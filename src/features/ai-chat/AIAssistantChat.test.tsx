@@ -245,4 +245,42 @@ describe('AIAssistantChat — confirmação determinística de mutação (flag O
     await waitFor(() => expect(h.runActionMock).toHaveBeenCalled());
     expect(screen.queryByText('Compra registrada pelo assistente.')).toBeNull();
   });
+
+  it('comando de TRANSFERÊNCIA resolve contas e propõe (nomes na sheet, sem executar)', async () => {
+    vi.stubEnv('VITE_ENABLE_AGENT_ROUTER', 'true');
+    const accounts = [
+      { id: 'acc-poup', name: 'Poupança' },
+      { id: 'acc-corr', name: 'Conta Corrente' },
+    ];
+    const { container } = render(
+      <AIAssistantChat
+        uid="u1"
+        transactions={[]}
+        balances={null}
+        accounts={accounts}
+        isOpen
+        onClose={() => {}}
+      />,
+    );
+    sendMessage(container, 'transfere 500 da poupança para a corrente');
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('heading', { name: 'Registrar transferência' })).toBeTruthy();
+    // Display hints: a sheet mostra os NOMES das contas, nunca os IDs crus.
+    expect(within(dialog).getAllByText('Poupança').length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText('Conta Corrente').length).toBeGreaterThan(0);
+    expect(within(dialog).queryByText('acc-poup')).toBeNull();
+    expect(within(dialog).queryByText('acc-corr')).toBeNull();
+    expect(h.classifyMock).not.toHaveBeenCalled();
+    expect(h.adviceMock).not.toHaveBeenCalled();
+    expect(h.runActionMock).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Transferir' }));
+    await waitFor(() => expect(h.runActionMock).toHaveBeenCalledTimes(1));
+    const [proposalArg, ctxArg] = h.runActionMock.mock.calls[0]!;
+    expect(proposalArg.kind).toBe('register_transfer');
+    expect(proposalArg.payload.fromAccountId).toBe('acc-poup');
+    expect(proposalArg.payload.toAccountId).toBe('acc-corr');
+    expect(ctxArg.intent).toBe('register_transfer_proposal');
+  });
 });

@@ -20,13 +20,22 @@ export interface ProposalPresentation {
   rows: ActionSummaryRow[];
 }
 
+/**
+ * Dicas opcionais de apresentação que não cabem no payload server-trusted (strict).
+ * Ex.: nomes legíveis das contas de uma transferência (o payload só carrega os IDs).
+ */
+export interface PresentationHints {
+  fromAccountName?: string;
+  toAccountName?: string;
+}
+
 /** YYYY-MM-DD → DD/MM/YYYY (apresentação). */
 function formatYmd(ymd: string): string {
   return ymd.split('-').reverse().join('/');
 }
 
 /** Mapeia uma proposta confirmável para o resumo legível da sheet. */
-export function presentProposal(proposal: ActionProposal): ProposalPresentation {
+export function presentProposal(proposal: ActionProposal, hints?: PresentationHints): ProposalPresentation {
   switch (proposal.kind) {
     case 'register_purchase': {
       const { description, amountCents, date, category, installments } = proposal.payload;
@@ -56,6 +65,23 @@ export function presentProposal(proposal: ActionProposal): ProposalPresentation 
           { label: 'Valor', value: formatBRL(amountCents), emphasis: true },
           { label: 'Data', value: formatYmd(date) },
           { label: 'Categoria', value: category ?? 'Outros' },
+        ],
+      };
+    }
+    case 'register_transfer': {
+      // O payload carrega só os IDs; os nomes legíveis chegam como display hints
+      // (resolvidos no wiring do chat). Sem hints, cai no ID cru (fallback seguro).
+      const { fromAccountId, toAccountId, amountCents, date, description } = proposal.payload;
+      return {
+        title: 'Registrar transferência',
+        confirmLabel: 'Transferir',
+        successMessage: 'Transferência registrada pelo assistente.',
+        rows: [
+          { label: 'De', value: hints?.fromAccountName ?? fromAccountId },
+          { label: 'Para', value: hints?.toAccountName ?? toAccountId },
+          { label: 'Valor', value: formatBRL(amountCents), emphasis: true },
+          { label: 'Data', value: formatYmd(date) },
+          ...(description ? [{ label: 'Descrição', value: description }] : []),
         ],
       };
     }
@@ -110,6 +136,8 @@ const SLOT_LABELS: Record<string, string> = {
   goalId: 'qual meta',
   cardId: 'qual cartão',
   installments: 'o número de parcelas',
+  fromAccountId: 'a conta de origem',
+  toAccountId: 'a conta de destino',
 };
 
 /**
