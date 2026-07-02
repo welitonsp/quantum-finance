@@ -6,7 +6,7 @@
 ## Estado Atual — 2026-07-02
 
 - Branch principal: `main` — HEAD `7fae16a` (PR #319 mergeado). Working tree esperado: limpo.
-- **Nenhum PR aberto.** PRs #314–#321 mergeados (backlog auditoria 2026-07-01 completo).
+- **PRs abertos:** #322 (CI indexes), #323 (grupos invite/accept), #324 (bundle: remove Chart.js).
 - **Cloud Functions: 7 callables** (`createTransaction`, `executeAgentAction`, `createTransfer`, `deleteUserData`, `categorizeTransactionsBatch`, `chatWithQuantumAI`, `generateAuditReport`).
 - **Transferências:** server-only via callable `createTransfer` (movimenta saldo das 2 contas atomicamente, idempotente com TTL 24h). Rules negam create/update client-side de `transferencia` e de `usage/ai_calls`.
 - **Índices:** `firestore.indexes.json` referenciado em `firebase.json` — deploy manual via `firebase deploy --only firestore:indexes`.
