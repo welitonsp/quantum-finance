@@ -902,7 +902,7 @@ service cloud.firestore {
       return unit in ['un', 'kg', 'g', 'L', 'mL', 'cx', 'pct', 'dz'];
     }
 
-    function isValidShoppingListCreate(data) {
+    function isValidShoppingListCreate(data, userId) {
       return data.keys().hasAll(['uid', 'name', 'estimatedTotalCents', 'status', 'items', 'createdAt', 'updatedAt', 'schemaVersion'])
           && data.keys().hasOnly(['uid', 'name', 'estimatedTotalCents', 'status', 'items', 'createdAt', 'updatedAt', 'schemaVersion', 'scheduledDate'])
           && data.uid == userId
@@ -1263,7 +1263,7 @@ service cloud.firestore {
       // Compras Inteligentes — listas de compras com itens embutidos.
       match /shoppingLists/{listId} {
         allow read:   if isOwner(userId);
-        allow create: if isOwner(userId) && isValidShoppingListCreate(request.resource.data);
+        allow create: if isOwner(userId) && isValidShoppingListCreate(request.resource.data, userId);
         allow update: if isOwner(userId) && isValidShoppingListUpdate(request.resource.data, resource.data);
         allow delete: if isOwner(userId);
       }
