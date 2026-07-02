@@ -5,17 +5,18 @@
 
 ## Estado Atual — 2026-07-02
 
-- Branch principal: `main` — HEAD `1dc7b14` (PR #313 mergeado). Working tree esperado: limpo.
-- **PR aberto:** #314 `fix(config): reference firestore.indexes.json in firebase.json (F-04)`.
+- Branch principal: `main` — HEAD `7fae16a` (PR #319 mergeado). Working tree esperado: limpo.
+- **Nenhum PR aberto.** PRs #314–#321 mergeados (backlog auditoria 2026-07-01 completo).
 - **Cloud Functions: 7 callables** (`createTransaction`, `executeAgentAction`, `createTransfer`, `deleteUserData`, `categorizeTransactionsBatch`, `chatWithQuantumAI`, `generateAuditReport`).
 - **Transferências:** server-only via callable `createTransfer` (movimenta saldo das 2 contas atomicamente, idempotente com TTL 24h). Rules negam create/update client-side de `transferencia` e de `usage/ai_calls`.
+- **Índices:** `firestore.indexes.json` referenciado em `firebase.json` — deploy manual via `firebase deploy --only firestore:indexes`.
 - Stashes locais podem existir; não são estado canônico da `main`.
-- Suíte atual: **~1352 unit tests + 190 rules tests + 6 suítes E2E Playwright**.
+- Suíte atual: **~1355 unit tests + 190 rules tests + 6 suítes E2E Playwright**.
 
 ## Agente — Contrato de Mutação Confirmada
 
 - **Contrato:** o LLM/chat **nunca** grava; toda mutação atravessa **proposta estruturada** (`ActionProposal` Zod `.strict()`) → **confirmação humana** → callable **`executeAgentAction`**. O backend revalida `status==='confirmed'`, grava em `users/{uid}/transactions` + history `origin: 'ai'` + `/decisions`, e mantém idempotência por `idempotencyKey`.
-- **Ações materializadas:** `register_purchase` à vista (`type: 'saida'`), `register_income` à vista (`type: 'entrada'`), `contribute_to_goal`, `register_debt_payment` e `create_budget`.
+- **Ações materializadas:** `register_purchase` à vista (`type: 'saida'`), `register_income` à vista (`type: 'entrada'`), `contribute_to_goal`, `register_debt_payment`, `create_budget` e `register_transfer` (movimenta saldo das 2 contas atomicamente, mesma semântica de `createTransfer`, atrás da flag `VITE_ENABLE_AGENT_ROUTER`).
 - **Parcelamento → formulário (decisão de produto fixada):** o Agente registra **apenas compras à vista**; `installments>1` em `register_purchase` é recusado pelo validador server-trusted (`functions/src/agentActionValidation.ts`) com `code: 'failed-precondition'` + `reason: 'use_installment_form'`. **NÃO duplicar lógica monetária de parcelas no Admin SDK.**
 - **Intent router:** `geminiIntentClassifier` → `routeIntent` → `ActionConfirmationSheet` → `useAgentAction`, atrás da flag **`VITE_ENABLE_AGENT_ROUTER` (default OFF)**. Falha no classificador → chat normal (zero regressão).
 - **E2E:** `e2e/tests/06-agent-confirmed-mutation.spec.ts` cobre despesa e receita, determinístico, sem LLM real.
@@ -26,7 +27,6 @@
 - **NFC-e** — bloqueado até gate SSRF completo com validação estrita de host/domínio.
 - **Open Finance / BACEN** — bloqueado por mTLS/orçamento.
 - **FCM background push** — requer migrar `vite.config.ts` para `injectManifest`.
-- **`register_transfer` no Agente** — branch `feature/agent-register-transfer` deve ser rebaseada sobre a semântica da nova `createTransfer` (que move saldo das 2 contas) antes de ser retomada.
 
 ## Zonas Proibidas de Alteração
 
