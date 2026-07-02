@@ -72,6 +72,7 @@ vi.mock('firebase/firestore', () => ({
 
 vi.mock('../shared/api/firebase/index', () => ({
   db: { _isMock: true },
+  functions: { _isMock: true },
 }));
 
 vi.mock('../shared/lib/operationTrace', () => ({

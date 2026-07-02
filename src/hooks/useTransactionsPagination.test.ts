@@ -10,6 +10,7 @@ import type { Centavos } from '../shared/types/money';
 vi.mock('../shared/api/firebase/index', () => ({
   db: {},
   auth: { currentUser: null },
+  functions: { _isMock: true },
 }));
 
 const mockGetDocs = vi.fn();

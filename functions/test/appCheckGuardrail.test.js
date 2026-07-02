@@ -8,6 +8,9 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.ts'), 'u
 // All callables now require App Check enforcement (rollout completed in security audit 2026-06-02).
 const ALL_CALLABLES_WITH_APP_CHECK_ENFORCEMENT = [
   'createTransaction',
+  'createTransfer',
+  'executeAgentAction',
+  'deleteUserData',
   'categorizeTransactionsBatch',
   'chatWithQuantumAI',
   'generateAuditReport',

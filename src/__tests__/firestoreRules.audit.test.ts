@@ -266,7 +266,10 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
         },
       );
     });
-  });
+    // Timeout estendido: o cold start do emulador Java + loadRuleset + seed pode
+    // exceder os 10s default do vitest em máquinas locais (o hook estourava e a
+    // suíte inteira aparecia como "190 skipped" com TypeError em cleanup).
+  }, 90_000);
 
   afterAll(async () => {
     await testEnv.cleanup();
@@ -2418,11 +2421,48 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       return batch.commit();
     };
 
-    // J1: o emulator atinge o limite de 1000 expressões ao avaliar o batch
-    // transaction-create + history-create para type='transferencia'.
-    // Em produção o limite é maior e a operação funciona (validada por unit tests).
-    it.skip('J1 — CREATE de transferência válida com history deve passar (emulator: expression limit)', async () => {
-      await assertSucceeds(commitTransferWithHistory(TX_TRANSFER));
+    // Transferências são SERVER-ONLY (correção P1 F-01): a callable `createTransfer`
+    // (Admin SDK) grava tx + history + movimenta os saldos das contas atomicamente,
+    // bypassando as Rules. O create client-side de type='transferencia' é negado
+    // explicitamente pelas Rules — este teste documenta essa negação.
+    it('J1 — CREATE client-side de transferência deve falhar (server-only via callable createTransfer)', async () => {
+      await assertFails(commitTransferWithHistory(TX_TRANSFER));
+    });
+
+    it('J1b — UPDATE client-side de transferência existente deve falhar (server-only)', async () => {
+      const existingTransferId = 'tx-transfer-existing-001';
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID_A, 'transactions', existingTransferId), {
+          description:   'Transferência',
+          value_cents:   50000,
+          schemaVersion: 2,
+          type:          'transferencia',
+          category:      'Transferência',
+          date:          '2026-06-01',
+          source:        'manual',
+          fromAccountId: 'acc-corrente',
+          toAccountId:   'acc-poupanca',
+          isRecurring:   false,
+          createdAt:     FIXED_TS,
+          updatedAt:     FIXED_TS,
+        });
+      });
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      const opId = 'op_transfer_upd_001';
+      batch.update(doc(db, 'users', UID_A, 'transactions', existingTransferId), {
+        description: 'Transferência editada',
+        descriptionLower: 'transferência editada',
+        updatedAt: serverTimestamp(),
+        _lastOpId: opId,
+      });
+      batch.set(doc(db, 'users', UID_A, 'transactions', existingTransferId, 'history', opId), {
+        action: 'UPDATE', txId: existingTransferId, createdAt: serverTimestamp(),
+        schemaVersion: 1, origin: 'manual',
+        changedFields: ['description'],
+      });
+      await assertFails(batch.commit());
     });
 
     it('J2 — fromAccountId == toAccountId deve falhar', async () => {
@@ -2983,6 +3023,70 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const ref = doc(alice.firestore(), 'users', UID_A, 'decisions', id);
       await assertFails(deleteDoc(ref));
+    });
+  });
+
+  // ── O. usage/ai_calls — rate limit de IA server-only (correção P1 F-02) ──────
+  // A escrita client-side permitia resetar o contador (`count <= 1`) e furar o
+  // teto diário de chamadas de IA. Agora só o Admin SDK escreve
+  // (checkAndIncrementRateLimit); o owner mantém leitura (export LGPD).
+
+  describe('O. usage/ai_calls server-only (P1 F-02)', () => {
+    it('O1 — CREATE client-side pelo owner deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertFails(setDoc(doc(alice.firestore(), 'users', UID_A, 'usage', 'ai_calls'), {
+        count: 1,
+        lastReset: serverTimestamp(),
+      }));
+    });
+
+    it('O2 — UPDATE incremental client-side deve falhar', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID_A, 'usage', 'ai_calls'), {
+          count: 10, lastReset: FIXED_TS,
+        });
+      });
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertFails(updateDoc(doc(alice.firestore(), 'users', UID_A, 'usage', 'ai_calls'), {
+        count: 11, lastReset: FIXED_TS,
+      }));
+    });
+
+    it('O3 — RESET do contador para count=1 deve falhar (caminho do bypass)', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID_A, 'usage', 'ai_calls'), {
+          count: 50, lastReset: FIXED_TS,
+        });
+      });
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertFails(updateDoc(doc(alice.firestore(), 'users', UID_A, 'usage', 'ai_calls'), {
+        count: 1, lastReset: serverTimestamp(),
+      }));
+    });
+
+    it('O4 — DELETE client-side deve falhar', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID_A, 'usage', 'ai_calls'), {
+          count: 5, lastReset: FIXED_TS,
+        });
+      });
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertFails(deleteDoc(doc(alice.firestore(), 'users', UID_A, 'usage', 'ai_calls')));
+    });
+
+    it('O5 — READ pelo owner deve passar (export LGPD)', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID_A, 'usage', 'ai_calls'), {
+          count: 5, lastReset: FIXED_TS,
+        });
+      });
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertSucceeds(getDoc(doc(alice.firestore(), 'users', UID_A, 'usage', 'ai_calls')));
+    });
+
+    it('O6 — READ por outro usuário deve falhar', async () => {
+      const bob = testEnv.authenticatedContext(UID_B);
+      await assertFails(getDoc(doc(bob.firestore(), 'users', UID_A, 'usage', 'ai_calls')));
     });
   });
 });

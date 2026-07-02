@@ -16,7 +16,7 @@ vi.mock('firebase/firestore', () => ({
   collection:      mockCollection,
 }));
 
-vi.mock('../api/firebase/index', () => ({ db: { _isMock: true } }));
+vi.mock('../api/firebase/index', () => ({ db: { _isMock: true }, functions: { _isMock: true } }));
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
