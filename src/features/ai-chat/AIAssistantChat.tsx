@@ -6,7 +6,7 @@ import { ConversationMemory } from './ConversationMemory';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 import { fromCentavos } from '../../shared/types/money';
 import { getTransactionAbsCentavos } from '../../utils/transactionUtils';
-import type { Transaction, ModuleBalances } from '../../shared/types/transaction';
+import type { Transaction, ModuleBalances, RecurringTask } from '../../shared/types/transaction';
 import { geminiIntentClassifier } from '../ai-agent/geminiIntentClassifier';
 import { routeIntent } from '../ai-agent/intentRouter';
 import { presentProposal, formatMissingInfoMessage, type PresentationHints } from '../ai-agent/proposalPresentation';
@@ -39,7 +39,9 @@ interface Props {
   transactions: Transaction[];
   balances:     Partial<ModuleBalances> | null;
   /** Contas do usuário — usadas para resolver nomes → IDs em transferências (read-only). */
-  accounts?:    AccountRef[];
+  accounts?:       AccountRef[];
+  /** Tarefas recorrentes — enriquece o contexto enviado ao Gemini. */
+  recurringTasks?: RecurringTask[];
   isOpen:       boolean;
   onClose:      () => void;
   /**
@@ -178,7 +180,7 @@ function CitationDisclosure({ citations }: { citations: CitationTransaction[] })
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [], isOpen, onClose, onActionExecuted }: Props) => {
+export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [], recurringTasks = [], isOpen, onClose, onActionExecuted }: Props) => {
   const memory = useMemo(() => new ConversationMemory(uid), [uid]);
 
   const [messages, setMessages] = useState<Message[]>([
@@ -446,10 +448,11 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [
 
     try {
       const aiResponse = await GeminiService.getFinancialAdvice(contextualPrompt, {
-        saldo:        balances?.geral?.saldo    ?? 0,
-        entradas:     balances?.geral?.receitas ?? 0,
-        saidas:       balances?.geral?.despesas ?? 0,
-        transactions: contextTxs,
+        saldo:          balances?.geral?.saldo    ?? 0,
+        entradas:       balances?.geral?.receitas ?? 0,
+        saidas:         balances?.geral?.despesas ?? 0,
+        transactions:   contextTxs,
+        recurringTasks,
       });
 
       // Derive citations from the top transactions relevant to the query

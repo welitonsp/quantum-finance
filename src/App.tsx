@@ -453,6 +453,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
             transactions={displayedTransactions}
             balances={moduleBalances}
             accounts={accounts}
+            recurringTasks={recurringTasks}
             isOpen={isAIChatOpen}
             onClose={() => setIsAIChatOpen(false)}
             // Movimentações/Dashboard derivam do listener realtime (`useTransactions`
