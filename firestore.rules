@@ -116,7 +116,7 @@ service cloud.firestore {
         'reconciledAt', 'reconciledBy', '_lastOpId',
         'fromAccountId', 'toAccountId',
         'installmentGroupId', 'installmentIndex', 'installmentCount', 'installmentTotalCents',
-        'descriptionLower', 'paidInvoiceMonth'
+        'descriptionLower', 'paidInvoiceMonth', 'competencia'
       ];
     }
 

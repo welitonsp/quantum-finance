@@ -3347,5 +3347,89 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       }));
     });
   });
+
+  // ── R. competencia field in Rules ─────────────────────────────────────────────
+  // Cobre a regressão descoberta na auditoria tripla 2026-07-02:
+  // installmentRepo.createInstallmentGroupWithHistory grava 'competencia' no txPayload
+  // mas o campo estava ausente de txAllowedKeys() → permission-denied ao criar parcelas.
+  //
+  // Abordagem: 'competencia' adicionado a txAllowedKeys() nas Rules. O afterSnapshot do
+  // history NÃO inclui 'competencia' (campo derivável, já removido de installmentRepo.ts:88)
+  // para não aumentar a contagem de expressões numa Rules file que já está perto do limite
+  // de 1000 expressões do avaliador Firestore.
+  //
+  // Os testes abaixo usam o mesmo padrão do D2 (campos obrigatórios + isRecurring) e
+  // acrescentam apenas 'competencia' no txPayload (não no after), espelhando o que
+  // installmentRepo.ts agora faz.
+
+  describe('R. campo competencia nas Rules (regressão auditoria 2026-07-02)', () => {
+    const txWithCompetencia = (txId: string, competencia: string | null = '2026-07') => ({
+      description:   'Parcela teste (1/3)',
+      value_cents:   50000,
+      schemaVersion: 2 as const,
+      type:          'saida' as const,
+      category:      'Eletrônicos',
+      date:          '2026-07-01',
+      source:        'manual' as const,
+      isRecurring:   false,
+      ...(competencia !== null ? { competencia } : {}),
+      createdAt:     serverTimestamp(),
+      updatedAt:     serverTimestamp(),
+    });
+
+    // after snapshot sem competencia — espelha o comportamento pós-fix de installmentRepo.ts
+    const afterWithoutCompetencia = () => ({
+      description:   'Parcela teste (1/3)',
+      value_cents:   50000,
+      schemaVersion: 2 as const,
+      type:          'saida' as const,
+      category:      'Eletrônicos',
+      date:          '2026-07-01',
+      source:        'manual' as const,
+      isRecurring:   false,
+    });
+
+    const historyFor = (txId: string) => ({
+      action:        'CREATE' as const,
+      txId,
+      createdAt:     serverTimestamp(),
+      schemaVersion: 1,
+      origin:        'manual',
+      amount_cents:  50000,
+      category:      'Eletrônicos',
+      changedFields: [
+        'description', 'value_cents', 'schemaVersion', 'type',
+        'category', 'date', 'source', 'isRecurring',
+      ],
+      after: afterWithoutCompetencia(),
+    });
+
+    const commitBatch = async (txId: string, txPayload: Record<string, unknown>) => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'users', UID_A, 'transactions', txId), txPayload);
+      batch.set(
+        doc(db, 'users', UID_A, 'transactions', txId, 'history', 'create'),
+        historyFor(txId),
+      );
+      return batch.commit();
+    };
+
+    it('R1 — CREATE com competencia no txPayload deve passar', async () => {
+      await assertSucceeds(commitBatch('tx-competencia-r1', txWithCompetencia('tx-competencia-r1')));
+    });
+
+    it('R2 — CREATE sem competencia deve passar (campo opcional)', async () => {
+      await assertSucceeds(commitBatch('tx-competencia-r2', txWithCompetencia('tx-competencia-r2', null)));
+    });
+
+    it('R3 — CREATE com campo não permitido deve falhar', async () => {
+      await assertFails(commitBatch('tx-competencia-r3', {
+        ...txWithCompetencia('tx-competencia-r3'),
+        campoDesconhecido: 'valor',
+      }));
+    });
+  });
 });
 
