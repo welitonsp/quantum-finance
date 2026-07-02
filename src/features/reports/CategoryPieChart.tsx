@@ -1,13 +1,9 @@
-// src/features/reports/CategoryPieChart.tsx
-import { Pie } from 'react-chartjs-2';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import Decimal from 'decimal.js';
 import type { Transaction } from '../../shared/types/transaction';
 import { getTransactionAbsCentavos } from '../../utils/transactionUtils';
 import { fromCentavos } from '../../shared/types/money';
 import { normalizeCategoryName, type UserCategory } from '../../shared/schemas/categorySchemas';
-
-ChartJS.register(ArcElement, Tooltip, Legend);
 
 interface Props {
   transactions: Transaction[];
@@ -39,20 +35,26 @@ export default function CategoryPieChart({ transactions, categories = [] }: Prop
     categoryTotals[category] = current.plus(new Decimal(fromCentavos(getTransactionAbsCentavos(t)))).toNumber();
   });
 
-  const data = {
-    labels: Object.keys(categoryTotals),
-    datasets: [
-      {
-        data:            Object.values(categoryTotals),
-        backgroundColor: Object.keys(categoryTotals).map((name, index) => categoryColor(name, categories, index)),
-      },
-    ],
-  };
+  const chartData = Object.entries(categoryTotals).map(([name, value], index) => ({
+    name,
+    value,
+    color: categoryColor(name, categories, index),
+  }));
 
   return (
     <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-4">
       <h2 className="text-lg font-semibold mb-4 text-center">Distribuição por Categoria</h2>
-      <Pie data={data} />
+      <ResponsiveContainer width="100%" height={260}>
+        <PieChart>
+          <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90}>
+            {chartData.map((entry, index) => (
+              <Cell key={index} fill={entry.color} />
+            ))}
+          </Pie>
+          <Tooltip formatter={(value) => typeof value === 'number' ? value.toFixed(2) : value} />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
     </div>
   );
 }
