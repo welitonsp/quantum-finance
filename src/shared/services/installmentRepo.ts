@@ -85,7 +85,6 @@ export const installmentRepo = {
         type:                 'saida',
         value_cents:          valueCents,
         date,
-        competencia,
         source:               'manual',
         category:             data.category,
         installmentGroupId:   groupId,
