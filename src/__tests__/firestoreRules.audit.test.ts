@@ -3194,5 +3194,158 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       }));
     });
   });
+
+  // ── Bloco Q — groups: invite/accept flow ──────────────────────────────────────
+  describe('Q — groups: convite e aceite de membros', () => {
+    const GROUP_ID  = 'group-q-001';
+    const INVITE_ID = 'invite-q-001';
+    const EMAIL_A   = 'alice@test.com';
+    const EMAIL_B   = 'bob@test.com';
+
+    const seedGroup = async (overrides: Record<string, unknown> = {}) => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'groups', GROUP_ID), {
+          name:          'Grupo Teste',
+          ownerUid:      UID_A,
+          memberUids:    [UID_A],
+          members:       [],
+          schemaVersion: 1,
+          createdAt:     FIXED_TS,
+          updatedAt:     FIXED_TS,
+          ...overrides,
+        });
+      });
+    };
+
+    const seedInvite = async (status = 'pending', overrides: Record<string, unknown> = {}) => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'groups', GROUP_ID, 'invites', INVITE_ID), {
+          groupId:             GROUP_ID,
+          groupName:           'Grupo Teste',
+          inviterUid:          UID_A,
+          inviterDisplayName:  'Alice',
+          inviteeEmail:        EMAIL_B,
+          status,
+          schemaVersion:       1,
+          createdAt:           FIXED_TS,
+          expiresAt:           '2030-01-01T00:00:00.000Z',
+          ...overrides,
+        });
+      });
+    };
+
+    it('Q1 — owner cria convite válido deve passar', async () => {
+      await seedGroup();
+      const alice = testEnv.authenticatedContext(UID_A, { email: EMAIL_A });
+      await assertSucceeds(addDoc(
+        collection(alice.firestore(), 'groups', GROUP_ID, 'invites'),
+        {
+          groupId:             GROUP_ID,
+          groupName:           'Grupo Teste',
+          inviterUid:          UID_A,
+          inviterDisplayName:  'Alice',
+          inviteeEmail:        EMAIL_B,
+          status:              'pending',
+          schemaVersion:       1,
+          createdAt:           serverTimestamp(),
+          expiresAt:           '2030-01-01T00:00:00.000Z',
+        },
+      ));
+    });
+
+    it('Q2 — não-owner não pode criar convite', async () => {
+      await seedGroup();
+      const bob = testEnv.authenticatedContext(UID_B, { email: EMAIL_B });
+      await assertFails(addDoc(
+        collection(bob.firestore(), 'groups', GROUP_ID, 'invites'),
+        {
+          groupId:             GROUP_ID,
+          groupName:           'Grupo Teste',
+          inviterUid:          UID_B,
+          inviterDisplayName:  'Bob',
+          inviteeEmail:        EMAIL_A,
+          status:              'pending',
+          schemaVersion:       1,
+          createdAt:           serverTimestamp(),
+          expiresAt:           '2030-01-01T00:00:00.000Z',
+        },
+      ));
+    });
+
+    it('Q3 — invitee lê o próprio convite (email match) deve passar', async () => {
+      await seedGroup();
+      await seedInvite();
+      const bob = testEnv.authenticatedContext(UID_B, { email: EMAIL_B });
+      await assertSucceeds(getDoc(doc(bob.firestore(), 'groups', GROUP_ID, 'invites', INVITE_ID)));
+    });
+
+    it('Q4 — terceiro não-relacionado não pode ler convite', async () => {
+      await seedGroup();
+      await seedInvite();
+      const stranger = testEnv.authenticatedContext('user-stranger');
+      await assertFails(getDoc(doc(stranger.firestore(), 'groups', GROUP_ID, 'invites', INVITE_ID)));
+    });
+
+    it('Q5 — owner não pode adicionar membro diretamente (sem invite flow) deve falhar', async () => {
+      await seedGroup();
+      const alice = testEnv.authenticatedContext(UID_A, { email: EMAIL_A });
+      await assertFails(updateDoc(doc(alice.firestore(), 'groups', GROUP_ID), {
+        memberUids: [UID_A, UID_B],
+        members:    [{ uid: UID_B, displayName: 'Bob', email: EMAIL_B }],
+        updatedAt:  serverTimestamp(),
+      }));
+    });
+
+    it('Q6 — owner pode atualizar nome do grupo', async () => {
+      await seedGroup();
+      const alice = testEnv.authenticatedContext(UID_A, { email: EMAIL_A });
+      await assertSucceeds(updateDoc(doc(alice.firestore(), 'groups', GROUP_ID), {
+        name:      'Novo Nome',
+        updatedAt: serverTimestamp(),
+      }));
+    });
+
+    it('Q7 — invitee aceita convite (status pending→accepted) deve passar', async () => {
+      await seedGroup();
+      await seedInvite('pending');
+      const bob = testEnv.authenticatedContext(UID_B, { email: EMAIL_B });
+      await assertSucceeds(updateDoc(
+        doc(bob.firestore(), 'groups', GROUP_ID, 'invites', INVITE_ID),
+        { status: 'accepted', acceptedAt: serverTimestamp() },
+      ));
+    });
+
+    it('Q8 — invitee rejeita convite (status pending→rejected) deve passar', async () => {
+      await seedGroup();
+      await seedInvite('pending');
+      const bob = testEnv.authenticatedContext(UID_B, { email: EMAIL_B });
+      await assertSucceeds(updateDoc(
+        doc(bob.firestore(), 'groups', GROUP_ID, 'invites', INVITE_ID),
+        { status: 'rejected' },
+      ));
+    });
+
+    it('Q9 — terceiro não pode alterar status do convite', async () => {
+      await seedGroup();
+      await seedInvite('pending');
+      const stranger = testEnv.authenticatedContext('user-stranger', { email: 'stranger@test.com' });
+      await assertFails(updateDoc(
+        doc(stranger.firestore(), 'groups', GROUP_ID, 'invites', INVITE_ID),
+        { status: 'accepted' },
+      ));
+    });
+
+    it('Q10 — invitee entra no grupo via convite aceito deve passar', async () => {
+      await seedGroup();
+      await seedInvite('accepted');
+      const bob = testEnv.authenticatedContext(UID_B, { email: EMAIL_B });
+      await assertSucceeds(updateDoc(doc(bob.firestore(), 'groups', GROUP_ID), {
+        memberUids:            [UID_A, UID_B],
+        members:               [{ uid: UID_B, displayName: 'Bob', email: EMAIL_B }],
+        updatedAt:             serverTimestamp(),
+        _lastAcceptedInviteId: INVITE_ID,
+      }));
+    });
+  });
 });
 
