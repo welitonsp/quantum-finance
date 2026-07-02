@@ -196,9 +196,13 @@ service cloud.firestore {
           ));
     }
 
+    // Transferências (type 'transferencia') são SERVER-ONLY: criadas exclusivamente
+    // pela callable `createTransfer` (Admin SDK), que também movimenta os saldos das
+    // contas atomicamente. Create/update client-side de transferência é negado.
     function isValidTransactionCreateBase(userId) {
       let data = request.resource.data;
       return isValidTransactionBase(data)
+          && data.type in ['entrada', 'saida']
           && data.createdAt == request.time
           && data.updatedAt == request.time
           && !('deletedAt' in data)
@@ -248,6 +252,9 @@ service cloud.firestore {
       let data = request.resource.data;
       let changed = request.resource.data.diff(resource.data).changedKeys();
       return isValidTransactionBase(data)
+          // Transferências são imutáveis pelo cliente (server-only via createTransfer).
+          && resource.data.type != 'transferencia'
+          && data.type in ['entrada', 'saida']
           && data.createdAt == resource.data.createdAt
           && data.updatedAt == request.time
           && !changed.hasAny(['createdAt', 'importHash'])
@@ -610,22 +617,6 @@ service cloud.firestore {
           && data.type in ['AI_CALL', 'ERROR', 'BATCH']
           && isStringSized(data.detail, 1, 500)
           && data.createdAt == request.time;
-    }
-
-    function isValidUsageCreate() {
-      return request.resource.data.keys().hasOnly(['count', 'lastReset'])
-          && request.resource.data.count is int
-          && request.resource.data.count >= 0
-          && request.resource.data.count <= 1
-          && request.resource.data.lastReset == request.time;
-    }
-
-    function isValidUsageUpdate() {
-      let c = request.resource.data.count;
-      return request.resource.data.keys().hasOnly(['count', 'lastReset'])
-          && c is int && c >= 0 && c <= 50
-          && request.resource.data.lastReset is timestamp
-          && (c == resource.data.count + 1 || c <= 1);
     }
 
     function isValidBudget(data) {
@@ -1123,11 +1114,13 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // Contador de rate limit de IA — escrito EXCLUSIVAMENTE pelo Admin SDK
+      // (checkAndIncrementRateLimit em functions/src/index.ts). Escrita client-side
+      // permitiria resetar o contador e furar o teto diário de chamadas de IA.
+      // Leitura permanece permitida (export LGPD via DataPrivacyService).
       match /usage/ai_calls {
         allow read: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidUsageCreate();
-        allow update: if isOwner(userId) && isValidUsageUpdate();
-        allow delete: if false;
+        allow write: if false;
       }
 
       match /budgets/{budgetId} {

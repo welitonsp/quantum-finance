@@ -11,6 +11,8 @@ const {
   mockCollection,
   mockDoc,
   mockGetDoc,
+  mockHttpsCallable,
+  mockHttpsCallableInvoke,
   mockLedgerImport,
   mockServerTimestamp,
   mockWriteBatch,
@@ -54,6 +56,8 @@ const {
   });
   const mockLedgerImport = vi.fn().mockResolvedValue({ added: 1, duplicates: 0, invalid: 0 });
   const mockServerTimestamp = vi.fn().mockReturnValue({ _serverTimestamp: true });
+  const mockHttpsCallableInvoke = vi.fn().mockResolvedValue({ data: { id: 'transfer-tx-id' } });
+  const mockHttpsCallable = vi.fn(() => mockHttpsCallableInvoke);
 
   return {
     mockAddDoc,
@@ -63,6 +67,8 @@ const {
     mockCollection,
     mockDoc,
     mockGetDoc,
+    mockHttpsCallable,
+    mockHttpsCallableInvoke,
     mockLedgerImport,
     mockServerTimestamp,
     mockWriteBatch,
@@ -83,7 +89,11 @@ vi.mock('firebase/firestore', () => ({
   deleteField: vi.fn().mockReturnValue({ _deleteField: true }),
 }));
 
-vi.mock('../api/firebase/index', () => ({ db: { _isMock: true } }));
+vi.mock('firebase/functions', () => ({
+  httpsCallable: mockHttpsCallable,
+}));
+
+vi.mock('../api/firebase/index', () => ({ db: { _isMock: true }, functions: { _isMock: true } }));
 
 vi.mock('./LedgerService', () => ({
   LedgerService: {
@@ -1475,30 +1485,18 @@ describe('FirestoreService.batchUndoBulkUpdateTransactionsWithHistory', () => {
   });
 });
 
-// ── FASE 11A-2: createTransferWithHistory ────────────────────────────────────
+// ── createTransferWithHistory — SERVER-ONLY via callable createTransfer (P1 F-01) ──
+
+const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 describe('FirestoreService.createTransferWithHistory', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockBatchCommit.mockResolvedValue(undefined);
+    mockHttpsCallableInvoke.mockResolvedValue({ data: { id: 'transfer-tx-id' } });
   });
 
-  it('chama writeBatch com exatamente 2 writes: transaction + history/create', async () => {
-    await FirestoreService.createTransferWithHistory('uid1', {
-      fromAccountId: 'acc-corrente',
-      toAccountId:   'acc-poupanca',
-      value_cents:   50000 as never,
-      date:          '2026-06-01',
-    });
-
-    expect(mockWriteBatch).toHaveBeenCalledTimes(1);
-    expect(mockBatchSet).toHaveBeenCalledTimes(2);
-    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
-    expect(mockBatchUpdate).not.toHaveBeenCalled();
-  });
-
-  it('payload da transaction tem type transferencia, fromAccountId, toAccountId e sem cardId', async () => {
-    await FirestoreService.createTransferWithHistory('uid1', {
+  it('invoca a callable createTransfer com o payload validado + idempotencyKey UUID v4', async () => {
+    const id = await FirestoreService.createTransferWithHistory('uid1', {
       fromAccountId: 'acc-corrente',
       toAccountId:   'acc-poupanca',
       value_cents:   50000 as never,
@@ -1506,20 +1504,23 @@ describe('FirestoreService.createTransferWithHistory', () => {
       description:   'Reserva de emergência',
     });
 
-    const [, txPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
-    expect(txPayload['type']).toBe('transferencia');
-    expect(txPayload['fromAccountId']).toBe('acc-corrente');
-    expect(txPayload['toAccountId']).toBe('acc-poupanca');
-    expect(txPayload['value_cents']).toBe(50000);
-    expect(txPayload['description']).toBe('Reserva de emergência');
-    expect(txPayload['schemaVersion']).toBe(2);
-    expect(txPayload['source']).toBe('manual');
-    expect(txPayload).not.toHaveProperty('cardId');
-    expect(txPayload).not.toHaveProperty('_lastOpId');
-    expect(txPayload).not.toHaveProperty('importHash');
+    expect(id).toBe('transfer-tx-id');
+    expect(mockHttpsCallable).toHaveBeenCalledTimes(1);
+    const callableCall = mockHttpsCallable.mock.calls[0] as unknown as [unknown, string];
+    expect(callableCall[1]).toBe('createTransfer');
+    expect(callableCall[0]).toEqual({ _isMock: true });
+
+    expect(mockHttpsCallableInvoke).toHaveBeenCalledTimes(1);
+    const payload = mockHttpsCallableInvoke.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload['fromAccountId']).toBe('acc-corrente');
+    expect(payload['toAccountId']).toBe('acc-poupanca');
+    expect(payload['value_cents']).toBe(50000);
+    expect(payload['date']).toBe('2026-06-01');
+    expect(payload['description']).toBe('Reserva de emergência');
+    expect(payload['idempotencyKey']).toMatch(UUID_V4_RE);
   });
 
-  it('history/create tem action CREATE, origin manual e after com campos da transferência', async () => {
+  it('NÃO escreve nada client-side (sem writeBatch/set/commit)', async () => {
     await FirestoreService.createTransferWithHistory('uid1', {
       fromAccountId: 'acc-corrente',
       toAccountId:   'acc-poupanca',
@@ -1527,22 +1528,13 @@ describe('FirestoreService.createTransferWithHistory', () => {
       date:          '2026-06-01',
     });
 
-    const [, histPayload] = mockBatchSet.mock.calls[1] as [Record<string, unknown>, Record<string, unknown>];
-    expect(histPayload['action']).toBe('CREATE');
-    expect(histPayload['origin']).toBe('manual');
-    expect(histPayload['schemaVersion']).toBe(1);
-    expect(histPayload['amount_cents']).toBe(50000);
-
-    const after = histPayload['after'] as Record<string, unknown>;
-    expect(after['type']).toBe('transferencia');
-    expect(after['fromAccountId']).toBe('acc-corrente');
-    expect(after['toAccountId']).toBe('acc-poupanca');
-    expect(after).not.toHaveProperty('id');
-    expect(after).not.toHaveProperty('uid');
-    expect(after).not.toHaveProperty('importHash');
+    expect(mockWriteBatch).not.toHaveBeenCalled();
+    expect(mockBatchSet).not.toHaveBeenCalled();
+    expect(mockBatchUpdate).not.toHaveBeenCalled();
+    expect(mockBatchCommit).not.toHaveBeenCalled();
   });
 
-  it('usa description padrão quando não fornecida', async () => {
+  it('omite description quando não fornecida (servidor aplica default)', async () => {
     await FirestoreService.createTransferWithHistory('uid1', {
       fromAccountId: 'acc-a',
       toAccountId:   'acc-b',
@@ -1550,48 +1542,58 @@ describe('FirestoreService.createTransferWithHistory', () => {
       date:          '2026-06-01',
     });
 
-    const [, txPayload] = mockBatchSet.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
-    expect(txPayload['description']).toBe('Transferência');
+    const payload = mockHttpsCallableInvoke.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('description');
   });
 
-  it('lança erro quando UID está ausente', async () => {
+  it('lança erro quando UID está ausente (sem chamar a callable)', async () => {
     await expect(FirestoreService.createTransferWithHistory('', {
       fromAccountId: 'acc-a',
       toAccountId:   'acc-b',
       value_cents:   1000 as never,
       date:          '2026-06-01',
     })).rejects.toThrow();
+    expect(mockHttpsCallableInvoke).not.toHaveBeenCalled();
   });
 
-  it('lança erro quando fromAccountId e toAccountId são iguais', async () => {
+  it('lança erro quando fromAccountId e toAccountId são iguais (Zod client-side)', async () => {
     await expect(FirestoreService.createTransferWithHistory('uid1', {
       fromAccountId: 'acc-a',
       toAccountId:   'acc-a',
       value_cents:   1000 as never,
       date:          '2026-06-01',
     })).rejects.toThrow();
+    expect(mockHttpsCallableInvoke).not.toHaveBeenCalled();
   });
 
-  it('lança erro quando fromAccountId está ausente', async () => {
+  it('lança erro quando fromAccountId está ausente (Zod client-side)', async () => {
     await expect(FirestoreService.createTransferWithHistory('uid1', {
       fromAccountId: '',
       toAccountId:   'acc-b',
       value_cents:   1000 as never,
       date:          '2026-06-01',
     })).rejects.toThrow();
+    expect(mockHttpsCallableInvoke).not.toHaveBeenCalled();
   });
 
-  it('aceita txId explícito para idempotência de retry', async () => {
-    await FirestoreService.createTransferWithHistory('uid1', {
+  it('lança erro quando a resposta do servidor não contém id', async () => {
+    mockHttpsCallableInvoke.mockResolvedValue({ data: {} });
+    await expect(FirestoreService.createTransferWithHistory('uid1', {
       fromAccountId: 'acc-a',
       toAccountId:   'acc-b',
       value_cents:   1000 as never,
       date:          '2026-06-01',
-    }, 'meu-tx-id-fixo');
+    })).rejects.toThrow(/Resposta inválida/);
+  });
 
-    const docCalls = mockDoc.mock.calls as Array<unknown[]>;
-    const txDocCall = docCalls.find(c => c.includes('meu-tx-id-fixo'));
-    expect(txDocCall).toBeDefined();
+  it('propaga erro da callable (ex.: not-found de conta inexistente)', async () => {
+    mockHttpsCallableInvoke.mockRejectedValue(new Error('not-found'));
+    await expect(FirestoreService.createTransferWithHistory('uid1', {
+      fromAccountId: 'acc-a',
+      toAccountId:   'acc-b',
+      value_cents:   1000 as never,
+      date:          '2026-06-01',
+    })).rejects.toThrow('not-found');
   });
 });
 

@@ -32,7 +32,7 @@ vi.mock('firebase/firestore', () => ({
   deleteField:     vi.fn(() => ({ _deleteField: true })),
 }));
 
-vi.mock('../../../shared/api/firebase/index', () => ({ db: { _isMock: true } }));
+vi.mock('../../../shared/api/firebase/index', () => ({ db: { _isMock: true }, functions: { _isMock: true } }));
 
 // Módulos com side effects que não são exercidos pelo path de teste
 vi.mock('../../../shared/lib/useParserWorker', () => ({ useParserWorker: vi.fn() }));
