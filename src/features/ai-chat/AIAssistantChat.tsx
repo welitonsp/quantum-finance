@@ -9,6 +9,7 @@ import { getTransactionAbsCentavos } from '../../utils/transactionUtils';
 import type { Transaction, ModuleBalances } from '../../shared/types/transaction';
 import { geminiIntentClassifier } from '../ai-agent/geminiIntentClassifier';
 import { routeIntent } from '../ai-agent/intentRouter';
+import { buildQueryContext } from '../ai-agent/queryContextBuilder';
 import { presentProposal, formatMissingInfoMessage, type PresentationHints } from '../ai-agent/proposalPresentation';
 import { ActionConfirmationSheet } from '../ai-agent/ActionConfirmationSheet';
 import { interpretMutationCommand, parseConfirmationReply } from '../ai-agent/mutationCommandGuard';
@@ -398,6 +399,7 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [
     // Mesmo com a flag ON, NADA é gravado sem confirmação humana — o pior caso de uma
     // classificação ruim é uma proposta recusada. Read-only / baixa confiança /
     // intenção desconhecida caem no chat normal abaixo.
+    let queryContextPrefix = '';
     if (routerEnabled) {
       try {
         const route = routeIntent(await geminiIntentClassifier({ message: userText }));
@@ -423,7 +425,12 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [
           setIsLoading(false);
           return;
         }
-        // answer | low_confidence | unknown_intent → segue no chat normal.
+
+        if (route.type === 'answer') {
+          // Enriquece o prompt com dados financeiros precisos para o intent detectado.
+          queryContextPrefix = buildQueryContext(route.intent, transactions, balances) ?? '';
+        }
+        // low_confidence | unknown_intent → sem enriquecimento, segue no chat normal.
       } catch {
         // Falha de classificação degrada com segurança para o chat normal.
       }
@@ -438,9 +445,12 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [
           .join('\n') + '\n\n'
       : '';
 
-    const contextualPrompt = historyPrefix
+    const basePrompt = historyPrefix
       ? `[CONTEXTO ANTERIOR DA CONVERSA]\n${historyPrefix}[NOVA PERGUNTA]\n${userText}`
       : userText;
+    const contextualPrompt = queryContextPrefix
+      ? `${queryContextPrefix}\n${basePrompt}`
+      : basePrompt;
 
     const contextTxs = transactions.slice(0, 50);
 
