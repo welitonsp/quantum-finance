@@ -123,6 +123,8 @@ jobs:
         run: npm ci --prefer-offline --no-audit
 
       - name: Build production
+        env:
+          VITE_ENABLE_AGENT_ROUTER: 'true'
         run: npm run build
 
       - name: Install Firebase Tools
