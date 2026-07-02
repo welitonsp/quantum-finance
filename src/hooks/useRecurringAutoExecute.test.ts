@@ -7,13 +7,25 @@ import type { Centavos } from '../shared/types/money';
 const mockCallable                   = vi.fn().mockResolvedValue({ data: { id: 'tx-new' } });
 const mockHttpsCallable              = vi.fn().mockReturnValue(mockCallable);
 const mockUpdateRecurringWithHistory = vi.fn().mockResolvedValue(undefined);
+const mockGetDocs                    = vi.fn();
+const mockCollection                 = vi.fn();
+const mockQuery                      = vi.fn();
+const mockWhere                      = vi.fn();
 
 vi.mock('firebase/functions', () => ({
   httpsCallable: mockHttpsCallable,
 }));
 
+vi.mock('firebase/firestore', () => ({
+  getDocs:    mockGetDocs,
+  collection: mockCollection,
+  query:      mockQuery,
+  where:      mockWhere,
+}));
+
 vi.mock('../shared/api/firebase/index', () => ({
   functions: { _isMock: true },
+  db:        { _isMock: true },
 }));
 
 vi.mock('../shared/lib/firebaseErrorHandling', () => ({
@@ -41,6 +53,16 @@ function task(overrides: Partial<RecurringTask>): RecurringTask {
   };
 }
 
+/** Monta um QuerySnapshot fake com os tasks fornecidos. */
+function fakeSnap(tasks: RecurringTask[]) {
+  return {
+    docs: tasks.map(t => {
+      const { id, ...data } = t;
+      return { id, data: () => data };
+    }),
+  };
+}
+
 const TODAY      = '2026-06-06';
 const YEARMONTH  = '2026-06';
 
@@ -50,6 +72,8 @@ beforeEach(() => {
   vi.setSystemTime(new Date(`${TODAY}T12:00:00.000Z`));
   mockHttpsCallable.mockReturnValue(mockCallable);
   mockCallable.mockResolvedValue({ data: { id: 'tx-new' } });
+  // Por padrão getDocs lança (simula offline): força fallback ao prop nos testes legados.
+  mockGetDocs.mockRejectedValue(new Error('offline'));
 });
 
 afterEach(() => {
@@ -207,6 +231,37 @@ describe('useRecurringAutoExecute', () => {
     renderHook(() => useRecurringAutoExecute('uid-1', [t], false));
     await Promise.resolve();
     expect(mockCallable).not.toHaveBeenCalled();
+  });
+
+  // ── Proteção anti-staleness (F-06) ──────────────────────────────────────────
+
+  it('usa snapshot fresco do Firestore e nao re-executa tarefa ja executada (staleness)', async () => {
+    // Prop chega com lastExecutedMonth ausente (cache local defasado)
+    const staleProp = [task({ dueDay: 1 })];
+    // getDocs retorna a versão atualizada do servidor com lastExecutedMonth definido
+    mockGetDocs.mockResolvedValueOnce(
+      fakeSnap([task({ dueDay: 1, lastExecutedMonth: YEARMONTH })]),
+    );
+    renderHook(() => useRecurringAutoExecute('uid-1', staleProp, false));
+    await vi.waitFor(() => expect(mockGetDocs).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(mockCallable).not.toHaveBeenCalled();
+  });
+
+  it('executa tarefa quando getDocs retorna snapshot fresco sem lastExecutedMonth', async () => {
+    const tasks = [task({ dueDay: 1 })];
+    mockGetDocs.mockResolvedValueOnce(fakeSnap([task({ dueDay: 1 })]));
+    const { unmount } = renderHook(() => useRecurringAutoExecute('uid-1', tasks, false));
+    await vi.waitFor(() => expect(mockCallable).toHaveBeenCalledTimes(1));
+    unmount();
+  });
+
+  it('usa prop como fallback quando getDocs lanca erro (offline)', async () => {
+    // getDocs já lança por padrão no beforeEach; confirma que execução continua via prop
+    const tasks = [task({ dueDay: 1 })];
+    const { unmount } = renderHook(() => useRecurringAutoExecute('uid-1', tasks, false));
+    await vi.waitFor(() => expect(mockCallable).toHaveBeenCalledTimes(1));
+    unmount();
   });
 });
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../shared/api/firebase/index';
+import { db, functions } from '../shared/api/firebase/index';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import { updateRecurringWithHistory } from './useRecurring';
 import type { RecurringTask } from '../shared/types/transaction';
@@ -59,14 +60,32 @@ export function useRecurringAutoExecute(
 
     const yearMonth = currentYearMonth();
     const today     = todayISO();
-    const pending   = pendingTasks(tasks, yearMonth, today);
-    if (pending.length === 0) return;
 
     const callCreate = httpsCallable<Record<string, unknown>, { id: string }>(
       functions, 'createTransaction'
     );
 
     void (async () => {
+      // Busca snapshot fresco para evitar staleness do cache local do Firestore.
+      // O onSnapshot inicial pode refletir lastExecutedMonth de sessões anteriores
+      // antes da sincronização com o servidor, causando reexecução indevida.
+      let freshTasks: RecurringTask[];
+      try {
+        const snap = await getDocs(
+          query(
+            collection(db, 'users', uid, 'recurringTasks'),
+            where('active', '==', true),
+          )
+        );
+        freshTasks = snap.docs.map(d => ({ id: d.id, ...d.data() } as RecurringTask));
+      } catch {
+        // Offline ou erro de auth: usa o snapshot do prop para não bloquear execução
+        freshTasks = tasks;
+      }
+
+      const pending = pendingTasks(freshTasks, yearMonth, today);
+      if (pending.length === 0) return;
+
       let successCount = 0;
       for (const task of pending) {
         try {
