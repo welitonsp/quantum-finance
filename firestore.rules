@@ -904,14 +904,31 @@ service cloud.firestore {
 
     function isValidShoppingListCreate(data) {
       return data.keys().hasAll(['uid', 'name', 'estimatedTotalCents', 'status', 'items', 'createdAt', 'updatedAt', 'schemaVersion'])
-          && data.uid is string
+          && data.keys().hasOnly(['uid', 'name', 'estimatedTotalCents', 'status', 'items', 'createdAt', 'updatedAt', 'schemaVersion', 'scheduledDate'])
+          && data.uid == userId
           && isStringSized(data.name, 1, 80)
           && isSafeInt(data.estimatedTotalCents) && data.estimatedTotalCents >= 0
           && data.status in ['open', 'in_progress', 'done']
           && data.items is list && data.items.size() <= 200
           && data.schemaVersion == 1
           && data.createdAt == request.time
-          && data.updatedAt == request.time;
+          && data.updatedAt == request.time
+          && (!('scheduledDate' in data) || (data.scheduledDate is string && data.scheduledDate.size() == 10));
+    }
+
+    function isValidShoppingListUpdate(data, prev) {
+      return data.uid == prev.uid
+          && data.createdAt == prev.createdAt
+          && data.name == prev.name
+          && data.schemaVersion == prev.schemaVersion
+          && data.keys().hasOnly(['uid', 'name', 'estimatedTotalCents', 'actualTotalCents', 'status', 'items', 'createdAt', 'updatedAt', 'schemaVersion', 'linkedTransactionId', 'scheduledDate'])
+          && data.updatedAt == request.time
+          && (!('estimatedTotalCents' in data) || (isSafeInt(data.estimatedTotalCents) && data.estimatedTotalCents >= 0))
+          && (!('actualTotalCents' in data) || (isSafeInt(data.actualTotalCents) && data.actualTotalCents >= 0))
+          && (!('status' in data) || data.status in ['open', 'in_progress', 'done'])
+          && (!('items' in data) || (data.items is list && data.items.size() <= 200))
+          && (!('linkedTransactionId' in data) || data.linkedTransactionId is string)
+          && (!('scheduledDate' in data) || (data.scheduledDate is string && data.scheduledDate.size() == 10));
     }
 
     function isValidPriceObservationCreate(data) {
@@ -1247,7 +1264,7 @@ service cloud.firestore {
       match /shoppingLists/{listId} {
         allow read:   if isOwner(userId);
         allow create: if isOwner(userId) && isValidShoppingListCreate(request.resource.data);
-        allow update: if isOwner(userId);
+        allow update: if isOwner(userId) && isValidShoppingListUpdate(request.resource.data, resource.data);
         allow delete: if isOwner(userId);
       }
 

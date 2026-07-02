@@ -3089,5 +3089,110 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       await assertFails(getDoc(doc(bob.firestore(), 'users', UID_A, 'usage', 'ai_calls')));
     });
   });
+
+  // ── Bloco P — shoppingLists: validação de create/update ──────────────────────
+  describe('P — shoppingLists: isValidShoppingListCreate + isValidShoppingListUpdate', () => {
+    const LIST_ID = 'list-001';
+    const validList = {
+      uid:                 UID_A,
+      name:                'Mercado',
+      estimatedTotalCents: 0,
+      status:              'open',
+      items:               [],
+      schemaVersion:       1,
+      createdAt:           serverTimestamp(),
+      updatedAt:           serverTimestamp(),
+    };
+
+    async function seedList(overrides: Record<string, unknown> = {}) {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID_A, 'shoppingLists', LIST_ID), {
+          ...validList,
+          createdAt: FIXED_TS,
+          updatedAt: FIXED_TS,
+          ...overrides,
+        });
+      });
+    }
+
+    it('P1 — CREATE válido deve passar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertSucceeds(setDoc(doc(alice.firestore(), 'users', UID_A, 'shoppingLists', 'list-p1'), validList));
+    });
+
+    it('P2 — CREATE com uid diferente do owner deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertFails(setDoc(doc(alice.firestore(), 'users', UID_A, 'shoppingLists', 'list-p2'), {
+        ...validList, uid: UID_B,
+      }));
+    });
+
+    it('P3 — CREATE com campo extra proibido deve falhar', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertFails(setDoc(doc(alice.firestore(), 'users', UID_A, 'shoppingLists', 'list-p3'), {
+        ...validList, malicious: 'injection',
+      }));
+    });
+
+    it('P4 — UPDATE válido (status + updatedAt) deve passar', async () => {
+      await seedList();
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertSucceeds(updateDoc(doc(alice.firestore(), 'users', UID_A, 'shoppingLists', LIST_ID), {
+        status:    'done',
+        updatedAt: serverTimestamp(),
+      }));
+    });
+
+    it('P5 — UPDATE que muda uid deve falhar', async () => {
+      await seedList();
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertFails(updateDoc(doc(alice.firestore(), 'users', UID_A, 'shoppingLists', LIST_ID), {
+        uid:       UID_B,
+        updatedAt: serverTimestamp(),
+      }));
+    });
+
+    it('P6 — UPDATE com campo extra proibido deve falhar', async () => {
+      await seedList();
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertFails(updateDoc(doc(alice.firestore(), 'users', UID_A, 'shoppingLists', LIST_ID), {
+        malicious: 'injection',
+        updatedAt: serverTimestamp(),
+      }));
+    });
+
+    it('P7 — UPDATE sem updatedAt == request.time deve falhar', async () => {
+      await seedList();
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertFails(updateDoc(doc(alice.firestore(), 'users', UID_A, 'shoppingLists', LIST_ID), {
+        status: 'done',
+        updatedAt: FIXED_TS,
+      }));
+    });
+
+    it('P8 — UPDATE com status inválido deve falhar', async () => {
+      await seedList();
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertFails(updateDoc(doc(alice.firestore(), 'users', UID_A, 'shoppingLists', LIST_ID), {
+        status:    'invalid_status',
+        updatedAt: serverTimestamp(),
+      }));
+    });
+
+    it('P9 — READ por outro usuário deve falhar', async () => {
+      await seedList();
+      const bob = testEnv.authenticatedContext(UID_B);
+      await assertFails(getDoc(doc(bob.firestore(), 'users', UID_A, 'shoppingLists', LIST_ID)));
+    });
+
+    it('P10 — UPDATE com linkedTransactionId string deve passar', async () => {
+      await seedList();
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertSucceeds(updateDoc(doc(alice.firestore(), 'users', UID_A, 'shoppingLists', LIST_ID), {
+        linkedTransactionId: 'tx-abc',
+        updatedAt:           serverTimestamp(),
+      }));
+    });
+  });
 });
 
