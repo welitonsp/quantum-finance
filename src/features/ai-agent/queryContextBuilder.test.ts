@@ -26,7 +26,7 @@ const mockTxs = [
 ] as unknown as Transaction[];
 
 const mockBalances: Partial<ModuleBalances> = {
-  geral: { saldo: 3500.00, receitas: 5000.00, despesas: 1500.00 },
+  geral: { saldo: 3500.00, receitas: 5000.00, despesas: 1500.00, patrimonio: 0, dividas: 0 },
 };
 
 describe('buildQueryContext — get_balances', () => {
