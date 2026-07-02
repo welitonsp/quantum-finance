@@ -951,11 +951,10 @@ export const executeAgentAction = onCall(
     }
 
     // ── register_transfer: transferência entre contas próprias ──
-    // Espelha transferRepo.createTransferWithHistory: UMA transação
-    // type 'transferencia' (category 'Transferência') com fromAccountId/toAccountId —
-    // NÃO duas pernas, NÃO atualiza saldo (saldos são derivados das transações). A
-    // existência de AMBAS as contas é verificada na transação (not-found). history
-    // origin 'ai' (Modelo A) + /decisions. Idempotente por idempotencyKey.
+    // Espelha createTransfer: UMA transação type 'transferencia' + move saldo
+    // das 2 contas atomicamente (débito fromAccount, crédito toAccount) + history
+    // de conta com origin 'ai'. Verifica existência de ambas as contas (not-found).
+    // history da transação origin 'ai' (Modelo A) + /decisions. Idempotente por key.
     if (action.kind === 'register_transfer') {
       const tr = action.payload as {
         fromAccountId: string; toAccountId: string; amountCents: number; date: string; description?: string;
@@ -963,10 +962,12 @@ export const executeAgentAction = onCall(
       const trDescription = (tr.description ?? 'Transferência').trim();
       const trDescriptionLower = trDescription.toLowerCase();
       const trTxRef       = adminDb.collection(`users/${uid}/transactions`).doc();
-      const trHistRef     = adminDb.collection(`users/${uid}/transactions`).doc(trTxRef.id).collection('history').doc();
+      const trHistRef     = trTxRef.collection('history').doc('create');
       const trDecisionRef = adminDb.collection(`users/${uid}/decisions`).doc();
       const fromRef       = adminDb.doc(`users/${uid}/accounts/${tr.fromAccountId}`);
       const toRef         = adminDb.doc(`users/${uid}/accounts/${tr.toAccountId}`);
+      const fromOpId      = `op_agent_transfer_from_${trTxRef.id}`;
+      const toOpId        = `op_agent_transfer_to_${trTxRef.id}`;
 
       if (idempotencyKey) {
         const idemRef  = adminDb.doc(`users/${uid}/idempotency/${idempotencyKey}`);
@@ -980,19 +981,19 @@ export const executeAgentAction = onCall(
       }
 
       const trAfter: Record<string, unknown> = {
-        description:   trDescription,
+        description:      trDescription,
         descriptionLower: trDescriptionLower,
-        value_cents:   tr.amountCents,
-        schemaVersion: 2,
-        type:          'transferencia',
-        category:      'Transferência',
-        date:          tr.date,
-        source:        'manual',
-        fromAccountId: tr.fromAccountId,
-        toAccountId:   tr.toAccountId,
-        isRecurring:   false,
+        value_cents:      tr.amountCents,
+        schemaVersion:    2,
+        type:             'transferencia',
+        category:         'Transferência',
+        date:             tr.date,
+        source:           'manual',
+        fromAccountId:    tr.fromAccountId,
+        toAccountId:      tr.toAccountId,
+        isRecurring:      false,
       };
-      const trTxPayload = { ...trAfter, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() };
+      const trTxPayload   = { ...trAfter, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() };
       const trHistPayload = {
         action:        'CREATE',
         txId:          trTxRef.id,
@@ -1005,13 +1006,13 @@ export const executeAgentAction = onCall(
         changedFields: Object.keys(trAfter),
       };
       const trDecisionPayload = {
-        userId:       uid,
-        createdAt:    FieldValue.serverTimestamp(),
-        intent:       action.intent,
-        question:     action.question,
-        toolsUsed:    action.toolsUsed,
-        userDecision: 'confirmed',
-        outcomeStatus: 'applied',
+        userId:         uid,
+        createdAt:      FieldValue.serverTimestamp(),
+        intent:         action.intent,
+        question:       action.question,
+        toolsUsed:      action.toolsUsed,
+        userDecision:   'confirmed',
+        outcomeStatus:  'applied',
         proposedAction: { kind: action.kind, payload: action.payload },
         ...(action.snapshotRef      !== undefined ? { snapshotRef:      action.snapshotRef }      : {}),
         ...(action.simulationResult !== undefined ? { simulationResult: action.simulationResult } : {}),
@@ -1028,10 +1029,17 @@ export const executeAgentAction = onCall(
             };
           }
         }
-        // Reads antes de writes: ambas as contas devem existir.
+        // Reads antes de writes (regra de transação do Firestore).
         const [fromSnap, toSnap] = await Promise.all([t.get(fromRef), t.get(toRef)]);
         if (!fromSnap.exists) throw new HttpsError('not-found', 'Conta de origem não encontrada.');
         if (!toSnap.exists)   throw new HttpsError('not-found', 'Conta de destino não encontrada.');
+
+        const fromData    = fromSnap.data()!;
+        const toData      = toSnap.data()!;
+        const fromBalance = accountBalanceCents(fromData);
+        const toBalance   = accountBalanceCents(toData);
+        const newFrom     = fromBalance - tr.amountCents;
+        const newTo       = toBalance   + tr.amountCents;
 
         if (idempotencyKey) {
           const idemRef = adminDb.doc(`users/${uid}/idempotency/${idempotencyKey}`);
@@ -1042,8 +1050,53 @@ export const executeAgentAction = onCall(
             expireAt:   new Date(Date.now() + 24 * 60 * 60 * 1000),
           });
         }
-        t.set(trTxRef,       trTxPayload);
-        t.set(trHistRef,     trHistPayload);
+
+        // Transação + history da transação (Modelo A).
+        t.set(trTxRef,   trTxPayload);
+        t.set(trHistRef, trHistPayload);
+
+        // Débito na origem + history da conta.
+        const fromBefore = accountHistorySnapshot(fromData);
+        const fromAfter  = { ...fromBefore, balance: newFrom, schemaVersion: 2, updatedAt: FieldValue.serverTimestamp() };
+        t.update(fromRef, {
+          balance:       newFrom,
+          schemaVersion: 2,
+          updatedAt:     FieldValue.serverTimestamp(),
+          _lastOpId:     fromOpId,
+        });
+        t.set(fromRef.collection('history').doc(fromOpId), {
+          action:        'UPDATE',
+          accountId:     tr.fromAccountId,
+          origin:        'ai',
+          correlationId: fromOpId,
+          createdAt:     FieldValue.serverTimestamp(),
+          schemaVersion: 1,
+          before:        fromBefore,
+          after:         fromAfter,
+          changedFields: fromData['schemaVersion'] === 2 ? ['balance'] : ['balance', 'schemaVersion'],
+        });
+
+        // Crédito no destino + history da conta.
+        const toBefore = accountHistorySnapshot(toData);
+        const toAfter  = { ...toBefore, balance: newTo, schemaVersion: 2, updatedAt: FieldValue.serverTimestamp() };
+        t.update(toRef, {
+          balance:       newTo,
+          schemaVersion: 2,
+          updatedAt:     FieldValue.serverTimestamp(),
+          _lastOpId:     toOpId,
+        });
+        t.set(toRef.collection('history').doc(toOpId), {
+          action:        'UPDATE',
+          accountId:     tr.toAccountId,
+          origin:        'ai',
+          correlationId: toOpId,
+          createdAt:     FieldValue.serverTimestamp(),
+          schemaVersion: 1,
+          before:        toBefore,
+          after:         toAfter,
+          changedFields: toData['schemaVersion'] === 2 ? ['balance'] : ['balance', 'schemaVersion'],
+        });
+
         t.set(trDecisionRef, trDecisionPayload);
         return { id: trTxRef.id, decisionId: trDecisionRef.id };
       });
