@@ -1,5 +1,6 @@
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { db } from '../api/firebase/index';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../api/firebase/index';
 import { logSanitizedFirebaseError } from '../lib/firebaseErrorHandling';
 import { isSafeOperationId } from '../lib/operationTrace';
 
@@ -7,6 +8,9 @@ import { isSafeOperationId } from '../lib/operationTrace';
 
 export type AuditAction = 'IMPORT_TRANSACTION' | 'BULK_UPDATE' | 'UNDO_BULK_UPDATE' | 'ADD_RECURRING' | 'UPDATE_RECURRING' | 'DELETE_RECURRING';
 export type AuditEntity = 'TRANSACTION' | 'RECURRING_TASK';
+
+/** Ações de auditoria de transação migradas para a callable server-trusted `logAuditEvent`. */
+export type TransactionAuditAction = 'BULK_UPDATE' | 'UNDO_BULK_UPDATE';
 
 // ─── Transaction History Model ────────────────────────────────────────────────
 
@@ -65,18 +69,36 @@ export interface AuditLog {
 
 type AuditLogInput = Omit<AuditLog, 'id' | 'createdAt' | 'schemaVersion'>;
 
+/**
+ * Input restrito a ações de recorrentes (client-side, decisão "P3 controlado"
+ * vigente — ver docs/DECISOES-ARQUITETURA.md). BULK_UPDATE/UNDO_BULK_UPDATE
+ * NÃO passam mais por logAction — usar logTransactionAudit (callable).
+ */
+type RecurringAuditLogInput = Omit<AuditLogInput, 'action' | 'entity'> & {
+  action: 'ADD_RECURRING' | 'UPDATE_RECURRING' | 'DELETE_RECURRING';
+  entity: 'RECURRING_TASK';
+};
+
+type TransactionAuditLogInput = {
+  action:    TransactionAuditAction;
+  entity:    'TRANSACTION';
+  details?:  string;
+  metadata?: AuditMetadata;
+};
+
 // ─── AuditService ─────────────────────────────────────────────────────────────
 
 export const AuditService = {
   /**
-   * Persiste um log de auditoria em users/{userId}/audit_logs.
+   * Persiste um log de auditoria de recorrentes em users/{userId}/audit_logs
+   * (ADD_RECURRING/UPDATE_RECURRING/DELETE_RECURRING).
    *
    * - Isolamento por usuário (segurança + escalabilidade)
    * - serverTimestamp() garante integridade temporal (sem drift de cliente)
    * - Estrutura replayable: cada entrada tem { id, from, to }
    * - FAIL SILENT — nunca lança erro nem bloqueia o fluxo principal
    */
-  async logAction(log: AuditLogInput): Promise<void> {
+  async logAction(log: RecurringAuditLogInput): Promise<void> {
     if (!log.userId) {
       if (import.meta.env.DEV) {
         console.warn('[AuditService] logAction ignorado: identificador ausente.');
@@ -98,6 +120,27 @@ export const AuditService = {
     } catch (error) {
       // FAIL SILENT — UI nunca quebra por falha de auditoria
       logSanitizedFirebaseError('audit_log_action', error);
+    }
+  },
+
+  /**
+   * Persiste um log de auditoria de transação (BULK_UPDATE/UNDO_BULK_UPDATE)
+   * via a callable server-trusted `logAuditEvent` (Admin SDK). Migrado da
+   * escrita client-side direta (P2 hardening 2026-07-02) — fecha o
+   * self-forgery em users/{uid}/audit_logs; Rules negam create client-side
+   * dessas 2 actions.
+   *
+   * - FAIL SILENT — nunca lança erro nem bloqueia o fluxo principal
+   */
+  async logTransactionAudit(log: TransactionAuditLogInput): Promise<void> {
+    try {
+      const call = httpsCallable<TransactionAuditLogInput, { logged: boolean }>(
+        functions, 'logAuditEvent'
+      );
+      await call(log);
+    } catch (error) {
+      // FAIL SILENT — UI nunca quebra por falha de auditoria
+      logSanitizedFirebaseError('audit_log_transaction_event', error);
     }
   },
 

@@ -90,3 +90,19 @@
 - `transferRepo.ts` passa a chamar a callable com `idempotencyKey` gerado no client.
 
 **Branch `feature/agent-register-transfer`:** implementada sob a premissa antiga ("sem mover saldo, Functions = 6"). Após #313, deve ser rebaseada para delegar à callable `createTransfer`.
+
+---
+
+## Logs Server-Trusted — `system_logs` e `audit_logs` de Transação (P2 hardening 2026-07-02)
+
+**Contexto:** A auditoria tripla de 2026-07-02 (ver [checklist](audit/CHECKLIST_HARDENING_2026-07-02.md)) apontou que `users/{uid}/system_logs` (chamadas de IA) e `users/{uid}/audit_logs` de `BULK_UPDATE`/`UNDO_BULK_UPDATE` eram gravados **client-side** (`addDoc` direto), permitindo self-forgery — o próprio usuário podia forjar entradas sem a operação correlata ter ocorrido.
+
+**Decisão adotada:**
+- **`system_logs`:** já existia um caminho server-side (`writeStructuredLog` em `functions/src/index.ts`, usado por `chatWithQuantumAI`, `generateAuditReport` e `categorizeTransactionsBatch`). A escrita client-side redundante em `AICategorizationService.ts` (`writeSystemLog`, tipo `AI_CALL`) foi removida — cada chamada de `categorizeWithAI` já dispara `categorizeTransactionsBatch`, que loga `BATCH` server-side. Rules: `create` client-side em `system_logs` agora é **sempre negado**.
+- **`audit_logs` de transação:** nova callable **`logAuditEvent`** (Admin SDK) recebe `BULK_UPDATE`/`UNDO_BULK_UPDATE` e grava com `serverTimestamp()`. `AuditService.logTransactionAudit` substitui `AuditService.logAction` nesses 2 casos em `useTransactions.ts`. Validação pura em `functions/src/auditLogValidation.ts` (padrão de `transferValidation.ts`). Rules: `isValidAuditAction` não aceita mais `BULK_UPDATE`/`UNDO_BULK_UPDATE` no create client-side.
+
+**O que NÃO migrou (fora de escopo, mantido client-side):**
+- **`ADD_RECURRING`/`UPDATE_RECURRING`/`DELETE_RECURRING`:** decisão "P3 controlado" permanece vigente (ver seção "Auditoria de Recorrentes — FASE 6C" acima) — risco de self-forgery já aceito e mitigado por Rules; sem semântica de auto-execução que justifique o custo de migrar.
+- **`IMPORT_TRANSACTION`:** grava dentro da **mesma `runTransaction` atômica** do Modelo A em `LedgerService.ts` (cria a transação + history + audit_log num único commit client-side). Mover para Admin SDK exigiria reescrever todo o pipeline de import como callable — fora do escopo desta migração pontual e dentro da zona proibida de "escritas e histórico atômicos" sem fase própria autorizada.
+
+**Cobertura:** `src/__tests__/firestoreRules.audit.test.ts` blocos B10/B10b (deny) e T (system_logs deny + read allow); `functions/test/auditLogValidation.test.js` (validador puro).

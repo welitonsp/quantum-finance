@@ -518,17 +518,32 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       } as never));
     });
 
-    // B10: payload BULK_UPDATE com details e metadata válidos
-    it('B10 — BULK_UPDATE válido deve passar', async () => {
+    // B10 (P2 hardening 2026-07-02): BULK_UPDATE client-side agora SEMPRE falha —
+    // migrado para a callable server-trusted `logAuditEvent` (Admin SDK), que
+    // não passa por estas Rules. Fecha o self-forgery que existia aqui.
+    it('B10 — BULK_UPDATE client-side deve falhar (migrado para logAuditEvent)', async () => {
       const alice = testEnv.authenticatedContext(UID_A);
       const ref = collection(alice.firestore(), 'users', UID_A, 'audit_logs');
-      await assertSucceeds(addDoc(ref, {
+      await assertFails(addDoc(ref, {
         action: 'BULK_UPDATE' as const,
         entity: 'TRANSACTION' as const,
         createdAt: serverTimestamp(),
         schemaVersion: 2,
         details: 'Updated 3 categories',
         metadata: { count: 3, changes: [] as never[] },
+      }));
+    });
+
+    // B10b (P2 hardening 2026-07-02): UNDO_BULK_UPDATE client-side também falha.
+    it('B10b — UNDO_BULK_UPDATE client-side deve falhar (migrado para logAuditEvent)', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'audit_logs');
+      await assertFails(addDoc(ref, {
+        action: 'UNDO_BULK_UPDATE' as const,
+        entity: 'TRANSACTION' as const,
+        createdAt: serverTimestamp(),
+        schemaVersion: 2,
+        details: 'Desfez 3 transações',
       }));
     });
 

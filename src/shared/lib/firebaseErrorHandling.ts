@@ -35,6 +35,7 @@ export const FIREBASE_ERROR_OPERATIONS = [
   'import_reconcile',
   'import_candidate_search',
   'audit_log_action',
+  'audit_log_transaction_event',
   'audit_transaction_history',
   'ai_category',
   'callable_ai_category',

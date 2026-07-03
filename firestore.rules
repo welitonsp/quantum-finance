@@ -77,11 +77,15 @@ service cloud.firestore {
           ]);
     }
 
+    // BULK_UPDATE/UNDO_BULK_UPDATE removidos da whitelist client-side (P2 hardening
+    // 2026-07-02): migrados para a callable server-trusted `logAuditEvent`
+    // (Admin SDK, functions/src/index.ts), que não passa por estas Rules.
+    // IMPORT_TRANSACTION permanece client-side — acoplado à mesma runTransaction
+    // atômica do Modelo A em LedgerService.ts. ADD/UPDATE/DELETE_RECURRING
+    // permanecem client-side por decisão vigente ("P3 controlado").
     function isValidAuditAction(value) {
       return value in [
         'IMPORT_TRANSACTION',
-        'BULK_UPDATE',
-        'UNDO_BULK_UPDATE',
         'ADD_RECURRING',
         'UPDATE_RECURRING',
         'DELETE_RECURRING'

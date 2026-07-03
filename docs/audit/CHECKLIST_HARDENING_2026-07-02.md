@@ -36,7 +36,7 @@
 ---
 
 ## 🟡 P2 — Melhorias importantes (pós-bloqueadores)
-- [ ] **Logs server-trusted:** mover `audit_logs`/`system_logs` críticos para escrita exclusiva Admin SDK (hoje owner cria client-side; append-only, self-scoped). `firestore.rules:1122-1132`.
+- [x] **Logs server-trusted:** `system_logs` (chamadas de IA) migrado 100% para Admin SDK — removida a escrita client-side redundante em `AICategorizationService.ts` (o callable `categorizeTransactionsBatch` já loga server-side via `writeStructuredLog`); Rules negam `create` client-side (**PR #336**). `audit_logs` de `BULK_UPDATE`/`UNDO_BULK_UPDATE` migrado para a nova callable `logAuditEvent` (Admin SDK) + `AuditService.logTransactionAudit` (**PR #337**). **Mantido client-side, por decisão:** `ADD/UPDATE/DELETE_RECURRING` (P3 controlado vigente) e `IMPORT_TRANSACTION` (acoplado à `runTransaction` atômica do Modelo A em `LedgerService.ts`). Ver `docs/DECISOES-ARQUITETURA.md#logs-server-trusted--system_logs-e-audit_logs-de-transação-p2-hardening-2026-07-02`.
 - [x] **Cobertura de PII:** melhorar `piiMasker.ts` (nomes soltos sem prefixo PIX) + testes adversariais. **PR #333** — EVP, telefone fixo, pagamento+nome Title Case; 6 novos testes.
 - [x] **Recorrentes:** aposentar `useRecurringAutoExecute` client-side. **PR #332** — hook + 31 testes removidos; backend `executeScheduledRecurrents` cobre.
 - [x] **UX agente:** ao detectar `installments>1`, pré-preencher o formulário de parcelamento. **PR #334** — `onRegisterPurchase` em `AIAssistantChat` + wiring em `App.tsx`.
