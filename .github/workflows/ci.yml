@@ -82,6 +82,10 @@ jobs:
         working-directory: functions
         run: npm ci
 
+      - name: Functions Security Audit (deny high+)
+        working-directory: functions
+        run: npm audit --audit-level=high
+
       - name: Functions Tests
         working-directory: functions
         run: npm test
