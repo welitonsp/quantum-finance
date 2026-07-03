@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { dismissOnboardingIfPresent } from '../helpers/onboarding';
 
 /**
  * Fluxo: painel de Metas de Poupança no Dashboard.
@@ -11,6 +12,7 @@ test.describe('Metas de Poupança', () => {
     // Aguarda o dashboard carregar com o painel de metas
     await expect(page.getByText('Metas de Poupança').first())
       .toBeVisible({ timeout: 20_000 });
+    await dismissOnboardingIfPresent(page);
   });
 
   test('painel de Metas é visível no Dashboard', async ({ page }) => {

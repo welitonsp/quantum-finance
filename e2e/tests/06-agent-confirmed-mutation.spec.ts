@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { clearEmulatorData, countAgentTransactions, seedAccounts } from '../helpers/emulator';
+import { dismissOnboardingIfPresent } from '../helpers/onboarding';
 
 /**
  * Fluxo crítico do Agente Financeiro: mutação CONFIRMADA (FASE H).
@@ -35,6 +36,7 @@ async function bootApp(page: Page): Promise<void> {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Centro de Comando' }).first())
     .toBeVisible({ timeout: 20_000 });
+  await dismissOnboardingIfPresent(page);
 }
 
 /** Abre o chat e envia um comando. */
