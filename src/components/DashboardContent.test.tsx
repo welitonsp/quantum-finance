@@ -115,6 +115,8 @@ function renderDashboard(transactions: Transaction[] = []) {
       accounts={[]}
       recurringTasks={[]}
       categories={[]}
+      creditCards={[]}
+      totalFaturaCents={cents(0)}
     />,
   );
 }
