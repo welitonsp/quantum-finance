@@ -106,3 +106,22 @@
 - **`IMPORT_TRANSACTION`:** grava dentro da **mesma `runTransaction` atômica** do Modelo A em `LedgerService.ts` (cria a transação + history + audit_log num único commit client-side). Mover para Admin SDK exigiria reescrever todo o pipeline de import como callable — fora do escopo desta migração pontual e dentro da zona proibida de "escritas e histórico atômicos" sem fase própria autorizada.
 
 **Cobertura:** `src/__tests__/firestoreRules.audit.test.ts` blocos B10/B10b (deny) e T (system_logs deny + read allow); `functions/test/auditLogValidation.test.js` (validador puro).
+
+---
+
+## Migração de Floats Legados — Desbloqueio Parcial e Controlado (FASE 10D, rodada 2)
+
+**Contexto:** a migração automática de `value` (float) → `value_cents` seguia bloqueada por decisão (`CLAUDE.md` — "Migração de Legado"). Toda a ferramenta existente (`functions/scripts/{diagnoseLegacyTransactions,legacyMigrationPolicy,executeLegacyMigration,rollbackLegacyMigration,backupLegacyCandidates}.js`) era, de propósito, só dry-run/plan — nenhum caminho real de escrita existia. O motivo original: não há regra de arredondamento segura para escalas ambíguas (ex.: um `value` inteiro como `1234` pode ser R$ 1234,00 ou R$ 12,34) sem `Math.round`/`parseFloat`, terminantemente proibidos no projeto.
+
+**Decisão adotada nesta rodada:** desbloquear **apenas** o subconjunto inequívoco — documentos classificados `migrationEligible` por `legacyMigrationPolicy.classifyLegacyTransaction` (já têm `value_cents` seguro, `Number.isSafeInteger`; falta só o bump de `schemaVersion`/`source`, zero matemática monetária nova). Casos `adminRepairRequired`/`unknownShape`/escala ambígua **continuam bloqueados** — exigem decisão humana caso a caso, nunca conversão automática.
+
+**Implementação — `functions/scripts/executeLegacyMigrationSafe.js` (novo arquivo, separado de propósito):**
+- `executeLegacyMigration.js` **não foi tocado** — permanece um dry-run planner puro, com seu guardrail estático original intacto (`functions/test/executeLegacyMigration.test.js` continua garantindo ausência total de tokens de escrita nesse arquivo). A nova capacidade de escrita vive **só** no novo arquivo, isolada e fácil de re-bloquear (bastaria remover esse arquivo).
+- `--execute` é obrigatório explicitamente; sem ele, lança erro fixo (não há modo dry-run aqui — para relatório sem escrita, usa-se `executeLegacyMigration.js`).
+- Exige `--backup-file` apontando para um backup válido de `backupLegacyCandidates.js`, revalidado com a mesma lógica de checksum/schema de `rollbackLegacyMigration.js` (`validateBackupPackage`, reaproveitado, não duplicado).
+- **Fail-closed em lote:** classifica todos os documentos do lote antes de escrever qualquer um; se **qualquer** documento não for `migrationEligible`, ou não estiver coberto pelo backup validado, a execução inteira aborta sem escrever nada. Não existe "escrever os elegíveis e pular o resto".
+- O patch escrito é sempre `{ schemaVersion: 2, source? }` — o mesmo que `buildMigrationPlan` (já existente, não duplicado) calcula. Nunca `value_cents`/`value`.
+
+**Passo 0 — ainda pendente, fora do alcance desta sessão:** ninguém rodou `diagnoseLegacyTransactions.js` (read-only) contra o Firestore de produção real. Não há dado sobre quantos documentos `migrationEligible` existem de fato — pode ser zero. Rodar o diagnóstico real é responsabilidade do owner (requer credenciais de produção); esta PR só destrava a capacidade de execução segura, não a executa.
+
+**Cobertura:** `functions/test/executeLegacyMigrationSafe.test.js` — flag obrigatória, fail-closed em lote misto, checksum de backup inválido rejeita antes de qualquer leitura, relatório sanitizado, guardrail estático de matemática financeira proibida (reafirmado, não relaxado).
