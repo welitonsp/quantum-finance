@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ─── Mock framer-motion — AnimatePresence remove imediatamente (sem animação) ──
@@ -164,8 +164,12 @@ describe('ImportButton — acessibilidade da drop zone', () => {
     renderImport();
     fireEvent.click(screen.getByRole('button', { name: 'Importar arquivo de extrato' }));
 
+    // Escopado ao dialog: o botão-gatilho (fora do dialog) e a drop zone (dentro)
+    // compartilham o substring "Importar arquivo de extrato" no aria-label —
+    // uma busca em screen inteiro encontra os dois e falha com "multiple elements".
+    const dialog = screen.getByRole('dialog');
     expect(
-      screen.getByRole('button', { name: /Importar arquivo de extrato/i }),
+      within(dialog).getByRole('button', { name: /Importar arquivo de extrato/i }),
     ).toBeInTheDocument();
   });
 
