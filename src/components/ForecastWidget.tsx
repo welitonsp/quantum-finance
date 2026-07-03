@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, AlertCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, AlertCircle, LineChart as LineChartIcon } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { formatCurrency } from '../utils/formatters';
 import { useForecast } from '../hooks/useForecast';
+import { EmptyState, Skeleton } from '../shared/components/ui';
 import type { Transaction } from '../shared/types/transaction';
 
 interface Props {
@@ -138,15 +139,15 @@ export default function ForecastWidget({ transactions, currentBalance }: Props) 
           </ResponsiveContainer>
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-quantum-fgMuted text-sm">
-          Dados insuficientes para projeção.
+        <div className="flex-1 flex items-center justify-center">
+          <EmptyState icon={LineChartIcon} title="Dados insuficientes para projeção." className="py-0" />
         </div>
       )}
 
       {/* ── Monte Carlo stats ────────────────────────────────────── */}
       {chartData.length > 0 && (
         mcLoading ? (
-          <div className="h-3.5 bg-quantum-border/40 rounded-full animate-pulse w-2/5" />
+          <Skeleton className="w-2/5" />
         ) : (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-quantum-fgMuted border-t border-quantum-border pt-2">
             <span>

@@ -48,7 +48,7 @@
 - [x] CSP estrito no `firebase.json`. **PR #335** — img-src, object-src none, worker-src, frame-src corrigidos.
 - [x] Copy de erro sem mencionar `.env`/termos internos. **PR #332** — AIAssistantChat.tsx.
 - [x] Padronizar PT-BR vs PT-PT ("ficheiro"). **PR #332** — 7 arquivos de parser/import.
-- [ ] Skeleton loaders premium + empty states de Recharts.
+- [x] Skeleton loaders premium + empty states de Recharts: `DashboardCharts.tsx`, `TrendsChart.tsx`, `ForecastWidget.tsx`, `ReportsDashboard.tsx`, `ReportsContent.tsx` (5 arquivos) migrados para os primitivos compartilhados `EmptyState`/`Skeleton`. **PR #338**. **Achado:** `CategoryPieChart.tsx` e `TimelineWidget.tsx`/`SimulationCenter.tsx` não precisavam de mudança — o primeiro está morto (não importado em lugar nenhum do app) e os outros dois já não têm estado vazio alcançável (timeline sempre projeta 90 dias; simulação já mostra loader).
 - [x] Coverage/perf como gates de CI. **PR #335** — statements 60, lines 64 (catraca apertada).
 - [ ] Migração de floats legados (script read-only existe; migração ainda bloqueada por decisão).
 - [ ] UI premium: glassmorphism, tipografia variável, animações de valores no dashboard.
