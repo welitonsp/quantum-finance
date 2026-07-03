@@ -100,6 +100,41 @@ describe('maskPII', () => {
     expect(result).not.toContain('123.456.789-09');
     expect(result).not.toContain('joao@test.com');
   });
+
+  // ── Novos padrões (auditoria 2026-07-02) ──────────────────────────────────
+
+  it('mascara pagamento com nome próprio (Title Case) sem prefixo pix', () => {
+    const result = maskPII('Pagamento para João Silva ref 06');
+    expect(result).toContain('TRANSFERENCIA BANCARIA');
+    expect(result).not.toContain('João Silva');
+  });
+
+  it('mascara recebimento com nome próprio (Title Case) sem prefixo pix', () => {
+    const result = maskPII('Recebimento de Maria Santos salário');
+    expect(result).toContain('TRANSFERENCIA BANCARIA');
+    expect(result).not.toContain('Maria Santos');
+  });
+
+  it('não mascara descrição genérica sem nome próprio', () => {
+    expect(maskPII('Pagamento de conta de luz')).toBe('Pagamento de conta de luz');
+  });
+
+  it('não mascara nome de estabelecimento sem verbo de pagamento (false-positive guard)', () => {
+    expect(maskPII('Supermercado Extra compra')).toBe('Supermercado Extra compra');
+  });
+
+  it('mascara telefone fixo com DDD entre parênteses', () => {
+    const result = maskPII('fone (11) 3456-7890 suporte');
+    expect(result).toContain('[FONE]');
+    expect(result).not.toContain('3456-7890');
+  });
+
+  it('mascara chave PIX EVP (32 hex chars sem hífens)', () => {
+    const evp = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4';
+    const result = maskPII(`PIX chave ${evp}`);
+    expect(result).toContain('[CHAVE-PIX]');
+    expect(result).not.toContain(evp);
+  });
 });
 
 // ─── Suite: maskTransaction ───────────────────────────────────────────────────

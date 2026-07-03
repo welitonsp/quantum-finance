@@ -7,10 +7,14 @@ const CNPJ_PURE_RE = /\b\d{14}\b/g;
 const CPF_PURE_RE  = /\b\d{11}\b/g;
 const EMAIL_RE  = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 const UUID_RE   = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const EVP_RE    = /\b[0-9a-f]{32}\b/gi;
 const PHONE_RE  = /(?:\+?55[\s-]?)?(?:\(?\d{2}\)?[\s-]?)?\b9\d{4}[\s-]?\d{4}\b/g;
+const PHONE_LANDLINE_RE = /\(\d{2}\)[\s-]?\d{4}[\s-]?\d{4}\b/g;
 const PIX_PARA_RE = /\bpix\s+(?:para|envio|pgto|pag\.?|transf\.?)\s+[A-Za-zÀ-ÿ][\w\sÀ-ÿ'.]{2,39}/gi;
 const PIX_DE_RE   = /\bpix\s+(?:de|rec(?:ebido)?\.?|rece?b?\.?)\s+[A-Za-zÀ-ÿ][\w\sÀ-ÿ'.]{2,39}/gi;
 const TRANSF_RE   = /\b(?:ted|doc)\s+(?:para|de)\s+[A-Za-zÀ-ÿ][\w\sÀ-ÿ'.]{2,39}/gi;
+// Verb + preposition + proper name (title-case) — sem prefixo "pix"
+const PAGTO_NOME_RE = /\b(?:[Pp]agamento|PAGAMENTO|[Pp]gto|PGTO|[Rr]ecebimento|RECEBIMENTO|[Tt]ransfer[eê]ncia|TRANSFERENCIA|[Tt]ransf|TRANSF|[Ee]nvio|ENVIO)\s+(?:[Pp]ara|PARA|[Dd]e|DE)\s+[A-ZÁÉÍÓÚÀÂÊÔÃÕÇ][A-Za-záéíóúàâêôãõçÁÉÍÓÚÀÂÊÔÃÕÇ]+(?:\s+[A-ZÁÉÍÓÚÀÂÊÔÃÕÇ][A-Za-záéíóúàâêôãõçÁÉÍÓÚÀÂÊÔÃÕÇ]+){1,3}/g;
 const AGENCIA_RE  = /\b(?:ag\.?|agencia|cc|c\.c\.|conta)\s*[\d./-]+/gi;
 
 export function maskPII(text: string | undefined | null): string {
@@ -22,12 +26,15 @@ export function maskPII(text: string | undefined | null): string {
     .replace(CNPJ_PURE_RE, '[CNPJ]')
     .replace(CPF_PURE_RE,  '[CPF]')
     .replace(EMAIL_RE,    '[EMAIL]')
-    .replace(UUID_RE,     '[CHAVE-PIX]')
-    .replace(PHONE_RE,    '[FONE]')
-    .replace(PIX_PARA_RE, 'PIX ENVIADO')
-    .replace(PIX_DE_RE,   'PIX RECEBIDO')
-    .replace(TRANSF_RE,   'TRANSFERENCIA BANCARIA')
-    .replace(AGENCIA_RE,  '[CONTA]');
+    .replace(UUID_RE,            '[CHAVE-PIX]')
+    .replace(EVP_RE,             '[CHAVE-PIX]')
+    .replace(PHONE_RE,           '[FONE]')
+    .replace(PHONE_LANDLINE_RE,  '[FONE]')
+    .replace(PIX_PARA_RE,        'PIX ENVIADO')
+    .replace(PIX_DE_RE,          'PIX RECEBIDO')
+    .replace(TRANSF_RE,          'TRANSFERENCIA BANCARIA')
+    .replace(PAGTO_NOME_RE,      'TRANSFERENCIA BANCARIA')
+    .replace(AGENCIA_RE,         '[CONTA]');
 }
 
 export function maskTransaction(tx: Transaction): Transaction {
