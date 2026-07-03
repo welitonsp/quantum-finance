@@ -611,14 +611,6 @@ service cloud.firestore {
           && (!('metadata' in data) || data.metadata is map);
     }
 
-    function isValidSystemLog(data) {
-      return data.keys().hasAll(['type', 'detail', 'createdAt'])
-          && data.keys().hasOnly(['type', 'detail', 'createdAt'])
-          && data.type in ['AI_CALL', 'ERROR', 'BATCH']
-          && isStringSized(data.detail, 1, 500)
-          && data.createdAt == request.time;
-    }
-
     function isValidBudget(data) {
       return data.keys().hasAll(['category', 'targetAmount', 'period', 'month', 'schemaVersion', 'createdAt', 'updatedAt'])
           && data.keys().hasOnly(['category', 'targetAmount', 'period', 'month', 'schemaVersion', 'createdAt', 'updatedAt'])
@@ -1125,9 +1117,12 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // system_logs é escrito exclusivamente pelo Admin SDK (writeStructuredLog em
+      // functions/src/index.ts, chamado pelas callables de IA). Nenhum fluxo
+      // client-side legítimo grava aqui — create client-side é sempre negado.
       match /system_logs/{logId} {
         allow read: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidSystemLog(request.resource.data);
+        allow create: if false;
         allow update, delete: if false;
       }
 

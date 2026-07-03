@@ -671,7 +671,7 @@ export function useTransactions(
       const capturedUid     = uid;
       const initialCategory = optimistic.category;
       postAddCallbacks.current.set(tempId, (realId: string) => {
-        void categorizeWithAI(desc, capturedUid).then(aiCat => {
+        void categorizeWithAI(desc).then(aiCat => {
           // Guard: only update when AI returned something meaningful
           if (aiCat && aiCat !== 'Outros') {
             void FirestoreService.updateTransactionWithHistory(capturedUid, realId, { category: aiCat }, {
@@ -785,7 +785,7 @@ export function useTransactions(
         const capturedUid     = uid;
         const initialCategory = optimistic.category;
         postAddCallbacks.current.set(tempId, (realId: string) => {
-          void categorizeWithAI(desc, capturedUid).then(aiCat => {
+          void categorizeWithAI(desc).then(aiCat => {
             if (aiCat && aiCat !== 'Outros') {
               void FirestoreService.updateTransactionWithHistory(capturedUid, realId, { category: aiCat }, {
                 before:        { category: initialCategory },

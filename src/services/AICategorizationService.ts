@@ -1,5 +1,3 @@
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { db } from '../shared/api/firebase/index';
 import { GeminiService } from '../features/ai-chat/GeminiService';
 import { ALLOWED_CATEGORIES } from '../shared/schemas/financialSchemas';
 
@@ -66,24 +64,6 @@ function drain(): void {
   }
 }
 
-// ─── Internal: structured logging ────────────────────────────────────────────
-
-async function writeSystemLog(
-  uid:    string,
-  type:   'AI_CALL' | 'ERROR' | 'BATCH',
-  detail: string
-): Promise<void> {
-  try {
-    await addDoc(collection(db, 'users', uid, 'system_logs'), {
-      type,
-      detail,
-      createdAt: serverTimestamp(),
-    });
-  } catch {
-    // Logging failure is never critical — silently ignored
-  }
-}
-
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -99,10 +79,11 @@ async function writeSystemLog(
  * Note: rate limiting is enforced exclusively server-side. A client-side
  * pre-check was removed because it caused each call to consume 2 quota units
  * instead of 1 (client increment + server increment = effective limit of 25/day).
+ * System logging (AI_CALL/BATCH/ERROR) is written server-side by the
+ * `categorizeTransactionsBatch` callable itself (Admin SDK) — no client uid needed here.
  */
 export async function categorizeWithAI(
-  description: string,
-  uid:         string
+  description: string
 ): Promise<string> {
   try {
     const key = normalize(description);
@@ -126,7 +107,6 @@ export async function categorizeWithAI(
       key,
       resolve: (cat: string) => {
         inFlight.delete(key);
-        void writeSystemLog(uid, 'AI_CALL', 'ai_category_completed');
         externalResolve(cat);
       },
     });
