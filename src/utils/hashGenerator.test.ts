@@ -1,7 +1,44 @@
 import { describe, it, expect } from 'vitest';
-import { generateTransactionHash } from './hashGenerator';
+import { generateHash, generateTransactionHash } from './hashGenerator';
 
-describe('hashGenerator — deduplicação determinística', () => {
+describe('generateHash — chave de memo estável (djb2)', () => {
+  it('é determinístico — mesmo array de partes produz o mesmo hash', () => {
+    const h1 = generateHash(['tx-1', '1000', '2026-04-20']);
+    const h2 = generateHash(['tx-1', '1000', '2026-04-20']);
+    expect(h1).toBe(h2);
+  });
+
+  it('produz hashes diferentes para conteúdos diferentes', () => {
+    const h1 = generateHash(['tx-1', '1000']);
+    const h2 = generateHash(['tx-2', '1000']);
+    expect(h1).not.toBe(h2);
+  });
+
+  it('é sensível à ordem das partes', () => {
+    const h1 = generateHash(['a', 'b']);
+    const h2 = generateHash(['b', 'a']);
+    expect(h1).not.toBe(h2);
+  });
+
+  it('trata array vazio sem lançar', () => {
+    expect(() => generateHash([])).not.toThrow();
+    expect(typeof generateHash([])).toBe('string');
+  });
+
+  it('retorna string em base36 (só dígitos e a-z)', () => {
+    const h = generateHash(['tx-1', '2500', '2026-04-20']);
+    expect(h).toMatch(/^[0-9a-z]+$/);
+  });
+
+  it('permanece estável para uma lista grande de partes (exercita todo o loop)', () => {
+    const parts = Array.from({ length: 50 }, (_, i) => `tx-${i}-${i * 137}`);
+    const h1 = generateHash(parts);
+    const h2 = generateHash([...parts]);
+    expect(h1).toBe(h2);
+  });
+});
+
+describe('hashGenerator — deduplicação determinística (generateTransactionHash)', () => {
   const baseTx = { date: '2026-04-20', value: 1050, description: 'Supermercado ABC' };
 
   it('é determinístico — mesmo input produz mesmo hash', () => {
