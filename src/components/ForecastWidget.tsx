@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, AlertCircle, LineChart as LineChartIcon } from 'lucide-react';
+import CountUp from 'react-countup';
 import { useTheme } from '../contexts/ThemeContext';
 import { formatCurrency } from '../utils/formatters';
 import { useForecast } from '../hooks/useForecast';
@@ -62,7 +63,7 @@ export default function ForecastWidget({ transactions, currentBalance }: Props) 
         <div>
           <p className="text-[10px] uppercase font-bold text-quantum-fgMuted tracking-wider mb-0.5">Saldo em 30 dias</p>
           <p className="text-2xl font-black font-mono text-quantum-fg">
-            {formatCurrency(finalBalance)}
+            <CountUp end={finalBalance} duration={1.2} formattingFn={formatCurrency} />
           </p>
         </div>
 

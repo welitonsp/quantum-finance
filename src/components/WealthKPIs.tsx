@@ -1,3 +1,4 @@
+import CountUp from 'react-countup';
 import { formatCurrency } from '../utils/formatters';
 import type { DashboardKPIs } from '../hooks/useFinancialData';
 
@@ -34,7 +35,7 @@ export default function WealthKPIs({ kpis, loading }: Props) {
             {item.label}
           </p>
           <p className={`text-2xl font-black font-mono ${item.colorClass}`}>
-            {formatCurrency(item.value)}
+            <CountUp end={item.value} duration={1.2} formattingFn={formatCurrency} />
           </p>
         </div>
       ))}
