@@ -5,12 +5,13 @@ import {
   Tooltip as RechartsTooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
 } from 'recharts';
-import { TrendingUp, TrendingDown, Target, BrainCircuit, AlertTriangle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Target, BrainCircuit, AlertTriangle, PieChart as PieChartIcon } from 'lucide-react';
 import Decimal from 'decimal.js';
 import type { Transaction } from '../../shared/types/transaction';
 import { getTransactionAbsCentavos, isExpense } from '../../utils/transactionUtils';
 import { fromCentavos } from '../../shared/types/money';
 import { normalizeCategoryName, type UserCategory } from '../../shared/schemas/categorySchemas';
+import { EmptyState } from '../../shared/components/ui';
 
 interface RechartsTooltipProps {
   active?: boolean;
@@ -177,9 +178,8 @@ export default function ReportsDashboard({ transactions, balances, categories = 
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-quantum-fgMuted">
-              <p className="text-2xl mb-2">📊</p>
-              <p className="text-sm">Sem despesas para analisar.</p>
+            <div className="flex-1 flex items-center justify-center">
+              <EmptyState icon={PieChartIcon} title="Sem despesas para analisar." />
             </div>
           )}
         </div>

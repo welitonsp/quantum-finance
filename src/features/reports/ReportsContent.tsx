@@ -1,14 +1,14 @@
 // src/features/reports/ReportsContent.tsx
 import { useState, useMemo } from 'react';
 import { ComposedChart, BarChart, Bar, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Filter, AlertCircle, Calendar, Scissors, AlertTriangle } from 'lucide-react';
+import { Filter, AlertCircle, Calendar, Scissors, AlertTriangle, TrendingUp, BarChart3 } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 import type { Transaction, Account } from '../../shared/types/transaction';
 import { getTransactionAbsCentavos, isExpense, isInvoicePayment } from '../../utils/transactionUtils';
 import { fromCentavos } from '../../shared/types/money';
 import { calcPareto, calcPatrimonyEvolution } from '../../utils/reportEngine';
 import { normalizeCategoryName, type UserCategory } from '../../shared/schemas/categorySchemas';
-import { TopTabs, ContextualAIButton } from '../../shared/components/ui';
+import { TopTabs, ContextualAIButton, EmptyState } from '../../shared/components/ui';
 
 interface Props {
   transactions: Transaction[];
@@ -238,10 +238,12 @@ export default function ReportsContent({ transactions, accounts, categories = []
                 </div>
               </>
             ) : (
-              <div className="text-center py-12 border-2 border-dashed border-quantum-border rounded-2xl">
-                <AlertCircle className="w-12 h-12 text-quantum-fgMuted mx-auto mb-3" />
-                <h3 className="text-lg font-bold text-quantum-fg">Sem dados para este filtro</h3>
-                <p className="text-sm text-quantum-fgMuted mt-2">Tente alargar o período ou mudar o tipo de despesa.</p>
+              <div className="border-2 border-dashed border-quantum-border rounded-2xl">
+                <EmptyState
+                  icon={AlertCircle}
+                  title="Sem dados para este filtro"
+                  description="Tente alargar o período ou mudar o tipo de despesa."
+                />
               </div>
             )}
           </div>
@@ -254,29 +256,41 @@ export default function ReportsContent({ transactions, accounts, categories = []
             <h3 className="text-sm font-bold uppercase tracking-wider text-quantum-fgMuted mb-4">
               Evolução Patrimonial (6 meses)
             </h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={patrimonyData}>
-                <XAxis dataKey="monthLabel" stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v: number) => `R$${v >= 1000 ? (v/1000).toFixed(1)+'k' : v}`} />
-                <Tooltip contentStyle={{ backgroundColor: '#131A2A', borderColor: '#1E2A3F', borderRadius: '12px', color: '#fff' }} />
-                <Area type="monotone" dataKey="patrimonio" stroke="#6366F1" fill="#6366F1" fillOpacity={0.15} strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
+            {patrimonyData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={patrimonyData}>
+                  <XAxis dataKey="monthLabel" stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v: number) => `R$${v >= 1000 ? (v/1000).toFixed(1)+'k' : v}`} />
+                  <Tooltip contentStyle={{ backgroundColor: '#131A2A', borderColor: '#1E2A3F', borderRadius: '12px', color: '#fff' }} />
+                  <Area type="monotone" dataKey="patrimonio" stroke="#6366F1" fill="#6366F1" fillOpacity={0.15} strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[300px] flex items-center justify-center">
+                <EmptyState icon={TrendingUp} title="Sem histórico patrimonial suficiente." />
+              </div>
+            )}
           </div>
 
           <div className="bg-quantum-card p-5 rounded-2xl border border-quantum-border">
             <h3 className="text-sm font-bold uppercase tracking-wider text-quantum-fgMuted mb-4">
               Pareto 80/20 — Despesas
             </h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={reportParetoData}>
-                <XAxis dataKey="category" stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ backgroundColor: '#131A2A', borderColor: '#1E2A3F', borderRadius: '12px', color: '#fff' }} />
-                <Bar dataKey="total" radius={[6, 6, 0, 0]} maxBarSize={60}
-                  fill="#EF4444" fillOpacity={0.7} />
-              </BarChart>
-            </ResponsiveContainer>
+            {reportParetoData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={reportParetoData}>
+                  <XAxis dataKey="category" stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: '#131A2A', borderColor: '#1E2A3F', borderRadius: '12px', color: '#fff' }} />
+                  <Bar dataKey="total" radius={[6, 6, 0, 0]} maxBarSize={60}
+                    fill="#EF4444" fillOpacity={0.7} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[300px] flex items-center justify-center">
+                <EmptyState icon={BarChart3} title="Sem despesas para gerar o Pareto." />
+              </div>
+            )}
           </div>
         </div>
       )}

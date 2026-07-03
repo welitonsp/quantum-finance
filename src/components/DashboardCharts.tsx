@@ -7,6 +7,7 @@ import {
 import { TrendingUp, Wallet } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { formatCurrency } from '../utils/formatters';
+import { EmptyState } from '../shared/components/ui';
 import type { TimelineDataPoint, CategoryChartPoint } from '../hooks/useFinancialData';
 
 interface Props {
@@ -44,14 +45,12 @@ export default function DashboardCharts({ timelineData, categoryData }: Props) {
 
   if (!hasTimeline && !hasCategories) {
     return (
-      <div className="glass-card-quantum p-10 flex flex-col items-center gap-3 text-center">
-        <Wallet className="w-12 h-12 text-quantum-fgMuted" />
-        <p className="text-quantum-fgMuted font-medium">
-          Nenhuma transação no período selecionado.
-        </p>
-        <p className="text-quantum-fgMuted text-sm">
-          Ajuste o filtro ou adicione transações.
-        </p>
+      <div className="glass-card-quantum">
+        <EmptyState
+          icon={Wallet}
+          title="Nenhuma transação no período selecionado."
+          description="Ajuste o filtro ou adicione transações."
+        />
       </div>
     );
   }
@@ -112,8 +111,8 @@ export default function DashboardCharts({ timelineData, categoryData }: Props) {
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-quantum-fgMuted text-sm">
-            Sem dados de evolução neste período.
+          <div className="flex-1 flex items-center justify-center">
+            <EmptyState title="Sem dados de evolução neste período." className="py-0" />
           </div>
         )}
       </div>
@@ -163,8 +162,8 @@ export default function DashboardCharts({ timelineData, categoryData }: Props) {
             </PieChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-quantum-fgMuted text-sm">
-            Sem despesas no período selecionado.
+          <div className="flex-1 flex items-center justify-center">
+            <EmptyState title="Sem despesas no período selecionado." className="py-0" />
           </div>
         )}
       </div>

@@ -1,10 +1,12 @@
 // src/features/reports/TrendsChart.tsx
 import { useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { TrendingUp } from 'lucide-react';
 import Decimal from 'decimal.js';
 import type { Transaction } from '../../shared/types/transaction';
 import { getTransactionAbsCentavos, isIncome } from '../../utils/transactionUtils';
 import { fromCentavos } from '../../shared/types/money';
+import { EmptyState } from '../../shared/components/ui';
 
 interface Props {
   transactions: Transaction[];
@@ -57,7 +59,10 @@ export default function TrendsChart({ transactions }: Props) {
   if (chartData.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 bg-quantum-bgSecondary/30 rounded-2xl border border-quantum-border border-dashed">
-        <p className="text-quantum-fgMuted">Sem dados suficientes para gerar tendências.</p>
+        <EmptyState
+          icon={TrendingUp}
+          title="Sem dados suficientes para gerar tendências."
+        />
       </div>
     );
   }
