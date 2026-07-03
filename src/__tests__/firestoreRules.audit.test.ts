@@ -3363,7 +3363,7 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
   // installmentRepo.ts agora faz.
 
   describe('R. campo competencia nas Rules (regressão auditoria 2026-07-02)', () => {
-    const txWithCompetencia = (txId: string, competencia: string | null = '2026-07') => ({
+    const txWithCompetencia = (_txId: string, competencia: string | null = '2026-07') => ({
       description:   'Parcela teste (1/3)',
       value_cents:   50000,
       schemaVersion: 2 as const,
@@ -3429,6 +3429,110 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
         ...txWithCompetencia('tx-competencia-r3'),
         campoDesconhecido: 'valor',
       }));
+    });
+  });
+
+  // ── S. groups/expenses — blindagem de update/delete (auditoria 2026-07-02) ────
+  // Antes da correção: allow update/delete era if isGroupMemberForExpense() sem
+  // nenhuma validação, permitindo adulteração de totalCents/payerUid/groupId e
+  // deleção por qualquer membro. Agora:
+  //   update → isValidExpenseUpdate() (imutáveis + updatedAt==request.time + integridade)
+  //   delete → isExpensePayerOrGroupOwner() (payerUid ou ownerUid do grupo)
+
+  describe('S — groups/expenses: blindagem de update/delete', () => {
+    const GROUP_S     = 'group-s-001';
+    const EXPENSE_S   = 'expense-s-001';
+    const EMAIL_A_S   = 'alice-s@test.com';
+    const EMAIL_B_S   = 'bob-s@test.com';
+
+    const baseExpense = () => ({
+      description:       'Jantar',
+      totalCents:        15000,
+      category:          'Alimentação',
+      date:              '2026-07-01',
+      payerUid:          UID_A,
+      payerDisplayName:  'Alice',
+      splitMethod:       'igual',
+      shares:            [{ uid: UID_A, amountCents: 7500, paid: false }, { uid: UID_B, amountCents: 7500, paid: false }],
+      groupId:           GROUP_S,
+      schemaVersion:     1,
+      createdAt:         FIXED_TS,
+      updatedAt:         FIXED_TS,
+    });
+
+    const seedGroupS = async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'groups', GROUP_S), {
+          name:          'Grupo S',
+          ownerUid:      UID_A,
+          memberUids:    [UID_A, UID_B],
+          members:       [],
+          schemaVersion: 1,
+          createdAt:     FIXED_TS,
+          updatedAt:     FIXED_TS,
+        });
+        await setDoc(doc(db, 'groups', GROUP_S, 'expenses', EXPENSE_S), baseExpense());
+      });
+    };
+
+    it('S1 — membro paga própria cota (update shares + updatedAt) deve passar', async () => {
+      await seedGroupS();
+      const alice = testEnv.authenticatedContext(UID_A, { email: EMAIL_A_S });
+      const ref = doc(alice.firestore(), 'groups', GROUP_S, 'expenses', EXPENSE_S);
+      await assertSucceeds(updateDoc(ref, {
+        ...baseExpense(),
+        shares:    [{ uid: UID_A, amountCents: 7500, paid: true, paidAt: '2026-07-01T12:00:00Z' }, { uid: UID_B, amountCents: 7500, paid: false }],
+        updatedAt: serverTimestamp(),
+      }));
+    });
+
+    it('S2 — membro B tenta alterar totalCents deve falhar', async () => {
+      await seedGroupS();
+      const bob = testEnv.authenticatedContext(UID_B, { email: EMAIL_B_S });
+      const ref = doc(bob.firestore(), 'groups', GROUP_S, 'expenses', EXPENSE_S);
+      await assertFails(updateDoc(ref, {
+        ...baseExpense(),
+        totalCents: 1,
+        updatedAt:  serverTimestamp(),
+      }));
+    });
+
+    it('S3 — membro B tenta alterar payerUid deve falhar', async () => {
+      await seedGroupS();
+      const bob = testEnv.authenticatedContext(UID_B, { email: EMAIL_B_S });
+      const ref = doc(bob.firestore(), 'groups', GROUP_S, 'expenses', EXPENSE_S);
+      await assertFails(updateDoc(ref, {
+        ...baseExpense(),
+        payerUid:  UID_B,
+        updatedAt: serverTimestamp(),
+      }));
+    });
+
+    it('S4 — update sem updatedAt==request.time deve falhar', async () => {
+      await seedGroupS();
+      const alice = testEnv.authenticatedContext(UID_A, { email: EMAIL_A_S });
+      const ref = doc(alice.firestore(), 'groups', GROUP_S, 'expenses', EXPENSE_S);
+      await assertFails(updateDoc(ref, {
+        ...baseExpense(),
+        updatedAt: FIXED_TS,
+      }));
+    });
+
+    it('S5 — payerUid deleta própria despesa deve passar', async () => {
+      await seedGroupS();
+      const alice = testEnv.authenticatedContext(UID_A, { email: EMAIL_A_S });
+      await assertSucceeds(deleteDoc(
+        doc(alice.firestore(), 'groups', GROUP_S, 'expenses', EXPENSE_S),
+      ));
+    });
+
+    it('S6 — membro não-payer não pode deletar despesa de outro deve falhar', async () => {
+      await seedGroupS();
+      const bob = testEnv.authenticatedContext(UID_B, { email: EMAIL_B_S });
+      await assertFails(deleteDoc(
+        doc(bob.firestore(), 'groups', GROUP_S, 'expenses', EXPENSE_S),
+      ));
     });
   });
 });

@@ -1475,10 +1475,38 @@ service cloud.firestore {
               && d.updatedAt == request.time;
         }
 
+        function isExpensePayerOrGroupOwner() {
+          let groupOwnerUid = get(/databases/$(database)/documents/groups/$(groupId)).data.ownerUid;
+          return request.auth.uid == resource.data.payerUid
+              || request.auth.uid == groupOwnerUid;
+        }
+
+        function isValidExpenseUpdate() {
+          let d    = request.resource.data;
+          let prev = resource.data;
+          return d.keys().hasAll([
+                'description', 'totalCents', 'category', 'date',
+                'payerUid', 'payerDisplayName', 'splitMethod', 'shares',
+                'groupId', 'createdAt', 'updatedAt', 'schemaVersion'
+              ])
+              && d.groupId          == prev.groupId
+              && d.createdAt        == prev.createdAt
+              && d.payerUid         == prev.payerUid
+              && d.payerDisplayName == prev.payerDisplayName
+              && d.schemaVersion    == prev.schemaVersion
+              && d.totalCents       == prev.totalCents
+              && d.description      == prev.description
+              && d.category         == prev.category
+              && d.date             == prev.date
+              && d.splitMethod      == prev.splitMethod
+              && d.updatedAt        == request.time
+              && d.shares is list && d.shares.size() >= 1;
+        }
+
         allow read:   if isGroupMemberForExpense();
         allow create: if isGroupMemberForExpense() && isValidExpenseCreate();
-        allow update: if isGroupMemberForExpense();
-        allow delete: if isGroupMemberForExpense();
+        allow update: if isGroupMemberForExpense() && isValidExpenseUpdate();
+        allow delete: if isGroupMemberForExpense() && isExpensePayerOrGroupOwner();
       }
     }
 
