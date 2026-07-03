@@ -52,7 +52,7 @@
 - [x] Coverage/perf como gates de CI. **PR #335** — statements 60, lines 64 (catraca apertada).
 - [ ] Migração de floats legados (script read-only existe; migração ainda bloqueada por decisão).
 - [x] UI premium: glassmorphism (`.glass-card-quantum`/`.glass-card-elite`, `src/index.css`) e animações de valores (`react-countup`, já em `DashboardHero`/`KPICards`/`SimulationCenter`) já existiam antes desta rodada. Fechado o que faltava: **tipografia variável** — `index.html` migrado para `wght@100..900` (sintaxe de range), fazendo o Google Fonts servir o arquivo de fonte variável real em vez de 4 instâncias estáticas; sem regressão visual. Estendido `CountUp` a `ForecastWidget.tsx`/`WealthKPIs.tsx` (headlines que ainda usavam `formatCurrency` estático).
-- [ ] Onboarding/wizard de primeira experiência.
+- [x] Onboarding/wizard de primeira experiência: `OnboardingWizard.tsx` (novo, `src/components/onboarding/`) — modal mínimo mostrado quando `accounts.length === 0 && transactions.length === 0`, com 2 atalhos (ir para Contas / abrir formulário de transação, ambos já existentes) + "pular" (persistido via `localStorage`, mesmo padrão de `App.tsx`). **Escopo deliberadamente mínimo** — não existia nenhum precedente no código; decisões de UX (2 passos, sem forçar conclusão, condição de exibição sempre derivada do estado real em vez de um "passo" artificial) são julgamento da implementação, prováveis de precisar iteração após uso real.
 
 ---
 
