@@ -75,7 +75,7 @@ describe('ImportButton — botão de trigger', () => {
   it('renderiza botão de trigger com aria-label correto', () => {
     renderImport();
     expect(
-      screen.getByRole('button', { name: 'Importar ficheiro de extrato' }),
+      screen.getByRole('button', { name: 'Importar arquivo de extrato' }),
     ).toBeInTheDocument();
   });
 
@@ -88,7 +88,7 @@ describe('ImportButton — botão de trigger', () => {
 describe('ImportButton — abertura e estrutura do modal', () => {
   beforeEach(() => {
     renderImport();
-    fireEvent.click(screen.getByRole('button', { name: 'Importar ficheiro de extrato' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Importar arquivo de extrato' }));
   });
 
   it('exibe o dialog após clique no trigger', () => {
@@ -124,7 +124,7 @@ describe('ImportButton — abertura e estrutura do modal', () => {
 describe('ImportButton — fechamento do modal', () => {
   it('fecha ao clicar no botão de fechar', () => {
     renderImport();
-    fireEvent.click(screen.getByRole('button', { name: 'Importar ficheiro de extrato' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Importar arquivo de extrato' }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Fechar diálogo de importação' }));
@@ -133,7 +133,7 @@ describe('ImportButton — fechamento do modal', () => {
 
   it('fecha ao pressionar Escape no estado idle', () => {
     renderImport();
-    fireEvent.click(screen.getByRole('button', { name: 'Importar ficheiro de extrato' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Importar arquivo de extrato' }));
 
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -141,7 +141,7 @@ describe('ImportButton — fechamento do modal', () => {
 
   it('pode ser reaberto após fechar', () => {
     renderImport();
-    const trigger = screen.getByRole('button', { name: 'Importar ficheiro de extrato' });
+    const trigger = screen.getByRole('button', { name: 'Importar arquivo de extrato' });
 
     fireEvent.click(trigger);
     fireEvent.click(screen.getByRole('button', { name: 'Fechar diálogo de importação' }));
@@ -153,7 +153,7 @@ describe('ImportButton — fechamento do modal', () => {
 
   it('não fecha ao pressionar Escape no estado de password_required (cancela o painel de senha)', () => {
     renderImport();
-    fireEvent.click(screen.getByRole('button', { name: 'Importar ficheiro de extrato' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Importar arquivo de extrato' }));
     // Modal deve ainda estar visível
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
@@ -162,7 +162,7 @@ describe('ImportButton — fechamento do modal', () => {
 describe('ImportButton — acessibilidade da drop zone', () => {
   it('exibe área de drop com role="button"', () => {
     renderImport();
-    fireEvent.click(screen.getByRole('button', { name: 'Importar ficheiro de extrato' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Importar arquivo de extrato' }));
 
     expect(
       screen.getByRole('button', { name: /Importar arquivo de extrato/i }),
@@ -171,7 +171,7 @@ describe('ImportButton — acessibilidade da drop zone', () => {
 
   it('exibe input file com accept correto dentro do dialog', () => {
     renderImport();
-    fireEvent.click(screen.getByRole('button', { name: 'Importar ficheiro de extrato' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Importar arquivo de extrato' }));
 
     const dialog = screen.getByRole('dialog');
     const input  = dialog.querySelector('input[type="file"]');

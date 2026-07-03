@@ -7,15 +7,14 @@ import { formatCurrency } from '../utils/formatters';
 import toast from 'react-hot-toast';
 import type { RecurringTask } from '../shared/types/transaction';
 import { fromCentavos, toCentavos } from '../shared/types/money';
-import { currentYearMonth } from '../hooks/useRecurringAutoExecute';
-
 interface Props {
   uid: string;
 }
 
 export default function RecurringManager({ uid }: Props) {
   const { recurringTasks, loading, addRecurring, updateRecurring, removeRecurring } = useRecurring(uid);
-  const thisMonth = currentYearMonth();
+  const now = new Date();
+  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
   const [itemToDelete,    setItemToDelete]    = useState<RecurringTask | null>(null);
   const [isAddModalOpen,  setIsAddModalOpen]  = useState(false);

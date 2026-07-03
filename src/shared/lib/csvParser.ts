@@ -10,7 +10,7 @@ function readFileAsText(file: File, encoding = 'utf-8'): Promise<string> {
       if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
       resolve(text);
     };
-    reader.onerror = () => reject(new Error(`Falha ao ler o ficheiro: ${file.name}`));
+    reader.onerror = () => reject(new Error(`Falha ao ler o arquivo: ${file.name}`));
     reader.readAsText(file, encoding);
   });
 }

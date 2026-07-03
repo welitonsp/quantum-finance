@@ -8,7 +8,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 export const parsePDF = async (file: File, password: string | null = null): Promise<ParsedTransaction[]> => {
   try {
     if (!file || file.type !== 'application/pdf') {
-      throw new Error('O ficheiro não é um PDF válido.');
+      throw new Error('O arquivo não é um PDF válido.');
     }
 
     const arrayBuffer = await file.arrayBuffer();

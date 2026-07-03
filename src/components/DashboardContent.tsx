@@ -42,8 +42,6 @@ import GoalsPanel from './GoalsPanel';
 import AnomalyAlerts from './AnomalyAlerts';
 import CentroComandoWidget from './CentroComandoWidget';
 import { DashboardSection, Spinner } from '../shared/components/ui';
-import toast from 'react-hot-toast';
-import { useRecurringAutoExecute } from '../hooks/useRecurringAutoExecute';
 import type { TimeRange } from '../hooks/useFinancialData';
 import type { UserCategory } from '../shared/schemas/categorySchemas';
 import { BudgetAlertsPanel } from './dashboard/BudgetAlertsPanel';
@@ -105,11 +103,6 @@ export default function DashboardContent({
   categories = [],
 }: Props) {
   const { currentMonth, currentYear } = useNavigation();
-  useRecurringAutoExecute(user?.uid ?? '', recurringTasks, loading, (count) => {
-    const label = count === 1 ? 'despesa fixa lançada' : 'despesas fixas lançadas';
-    toast.success(`${count} ${label} automaticamente.`, { duration: 5000 });
-  });
-
   // ── Hero metrics from existing moduleBalances prop ────────────────────────
   const saldo    = moduleBalances?.geral?.saldo    ?? 0;
   const receitas = moduleBalances?.geral?.receitas ?? 0;
