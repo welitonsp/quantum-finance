@@ -3535,5 +3535,30 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       ));
     });
   });
+
+  // ── T. users/{uid}/system_logs — server-only (P2 hardening 2026-07-02) ──────
+  describe('T — system_logs: create client-side sempre negado', () => {
+    it('T1 — owner tentando criar system_logs deve falhar (Admin SDK exclusivo)', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'system_logs');
+      await assertFails(addDoc(ref, {
+        type: 'AI_CALL',
+        detail: 'ai_category_completed',
+        createdAt: serverTimestamp(),
+      }));
+    });
+
+    it('T2 — leitura do próprio system_logs (export LGPD) deve passar', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID_A, 'system_logs', 'log-001'), {
+          type: 'BATCH',
+          detail: 'categorized 3 transactions',
+          createdAt: FIXED_TS,
+        });
+      });
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertSucceeds(getDoc(doc(alice.firestore(), 'users', UID_A, 'system_logs', 'log-001')));
+    });
+  });
 });
 
