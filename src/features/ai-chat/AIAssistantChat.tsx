@@ -479,7 +479,7 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [
       logSanitizedFirebaseError('ai_chat_advice', error);
       setMessages(prev => [
         ...prev,
-        { role: 'ai', text: '🚨 Interferência quântica detectada. Verifique a chave da API no ficheiro .env.' },
+        { role: 'ai', text: '🚨 Não foi possível conectar ao assistente. Verifique as configurações da API e tente novamente.' },
       ]);
     } finally {
       setIsLoading(false);

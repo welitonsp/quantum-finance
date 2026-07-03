@@ -43,7 +43,7 @@ export async function parseOFX(file: File): Promise<ParsedTransaction[]> {
   const text = await readFileAsText(file);
 
   if (!text.includes('OFXHEADER') && !text.includes('<OFX>')) {
-    throw new Error('Formato inválido. O ficheiro não é um OFX reconhecido.');
+    throw new Error('Formato inválido. O arquivo não é um OFX reconhecido.');
   }
 
   const trnRegex = /<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi;

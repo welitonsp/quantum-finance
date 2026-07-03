@@ -205,7 +205,7 @@ function parseOFXDate(raw: string | null): string | null {
 function parseOFXBuffer(buffer: ArrayBuffer): ParsedTx[] {
   let text: string;
   try { text=new TextDecoder('windows-1252').decode(buffer); } catch { text=new TextDecoder('utf-8').decode(buffer); }
-  if (!text.includes('OFXHEADER')&&!text.includes('<OFX>')) throw new Error('Formato inválido. O ficheiro não é um OFX reconhecido.');
+  if (!text.includes('OFXHEADER')&&!text.includes('<OFX>')) throw new Error('Formato inválido. O arquivo não é um OFX reconhecido.');
 
   const trnRegex=/<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi;
   const transactions: ParsedTx[] = [];
@@ -341,7 +341,7 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
     } else if (type === 'pdf') {
       transactions = await parsePDFBuffer(buffer, password);
     } else {
-      throw new Error(`Tipo de ficheiro não suportado: "${type}". Use csv, ofx ou pdf.`);
+      throw new Error(`Tipo de arquivo não suportado: "${type}". Use csv, ofx ou pdf.`);
     }
 
     self.postMessage({ id, success: true, transactions });

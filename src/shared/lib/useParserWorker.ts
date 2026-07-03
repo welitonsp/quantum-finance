@@ -87,7 +87,7 @@ export function useParserWorker() {
         })
         .catch((e: unknown) => {
           const err = e as Error;
-          reject(new Error(`Falha ao ler o ficheiro "${file.name}": ${err.message}`));
+          reject(new Error(`Falha ao ler o arquivo "${file.name}": ${err.message}`));
         });
     });
   }, []);

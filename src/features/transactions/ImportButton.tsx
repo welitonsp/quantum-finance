@@ -207,7 +207,7 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
         throw err;
       }
 
-      if (!parsed || parsed.length === 0) throw new Error('Nenhuma transação válida encontrada no ficheiro.');
+      if (!parsed || parsed.length === 0) throw new Error('Nenhuma transação válida encontrada no arquivo.');
 
       const { fresh, duplicates } = deduplicate(parsed);
       const parsedStats = buildImportStats(parsed, file, duplicates, fresh.length);
@@ -313,7 +313,7 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
 
   return (
     <>
-      <button ref={triggerRef} onClick={() => setIsOpen(true)} aria-label="Importar ficheiro de extrato" className="btn-quantum-secondary flex items-center gap-2">
+      <button ref={triggerRef} onClick={() => setIsOpen(true)} aria-label="Importar arquivo de extrato" className="btn-quantum-secondary flex items-center gap-2">
         <FileUp className="w-4 h-4" aria-hidden="true" />
         <span className="hidden sm:inline">Importar Ficheiro</span>
       </button>
