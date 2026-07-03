@@ -3,11 +3,13 @@ import { AuditService, type TransactionHistoryEvent } from './AuditService';
 
 // ─── Hoisted mocks ────────────────────────────────────────────────────────────
 
-const { mockAddDoc, mockServerTimestamp, mockCollection } = vi.hoisted(() => {
+const { mockAddDoc, mockServerTimestamp, mockCollection, mockCallable, mockHttpsCallable } = vi.hoisted(() => {
   const mockAddDoc          = vi.fn().mockResolvedValue({ id: 'audit-log-id' });
   const mockServerTimestamp = vi.fn().mockReturnValue({ _serverTimestamp: true });
   const mockCollection      = vi.fn().mockReturnValue({ id: 'audit-col' });
-  return { mockAddDoc, mockServerTimestamp, mockCollection };
+  const mockCallable        = vi.fn().mockResolvedValue({ data: { logged: true } });
+  const mockHttpsCallable   = vi.fn(() => mockCallable);
+  return { mockAddDoc, mockServerTimestamp, mockCollection, mockCallable, mockHttpsCallable };
 });
 
 vi.mock('firebase/firestore', () => ({
@@ -16,34 +18,34 @@ vi.mock('firebase/firestore', () => ({
   collection:      mockCollection,
 }));
 
+vi.mock('firebase/functions', () => ({
+  httpsCallable: mockHttpsCallable,
+}));
+
 vi.mock('../api/firebase/index', () => ({ db: { _isMock: true }, functions: { _isMock: true } }));
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 type LogInput = Parameters<typeof AuditService.logAction>[0];
 
+// AuditService.logAction hoje só grava ações de recorrentes (ADD/UPDATE/DELETE_RECURRING)
+// client-side — BULK_UPDATE/UNDO_BULK_UPDATE migraram para logTransactionAudit
+// (callable server-trusted), ver suíte própria abaixo.
 const mkLog = (overrides: Partial<LogInput> = {}): LogInput => ({
-  userId:   'user-abc',
-  action:   'BULK_UPDATE',
-  entity:   'TRANSACTION',
-  details:  'Alterou 3 categorias para Alimentação',
-  metadata: {
-    count:   3,
-    changes: [
-      { id: 'tx1', from: 'Outros', to: 'Alimentação' },
-      { id: 'tx2', from: 'Outros', to: 'Alimentação' },
-      { id: 'tx3', from: 'Outros', to: 'Alimentação' },
-    ],
-  },
+  userId:  'user-abc',
+  action:  'ADD_RECURRING',
+  entity:  'RECURRING_TASK',
+  details: 'Aluguel mensal',
   ...overrides,
 });
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockAddDoc.mockResolvedValue({ id: 'audit-log-id' });
+  mockCallable.mockResolvedValue({ data: { logged: true } });
 });
 
-// ─── Suite: AuditService.logAction ────────────────────────────────────────────
+// ─── Suite: AuditService.logAction (recorrentes — client-side) ───────────────
 
 describe('AuditService.logAction', () => {
   it('persiste em users/{userId}/audit_logs (path imutável)', async () => {
@@ -72,30 +74,80 @@ describe('AuditService.logAction', () => {
     expect(mockAddDoc).not.toHaveBeenCalled();
   });
 
-  it('metadata.changes preservado integralmente para replay', async () => {
-    const changes = [
-      { id: 'tx1', from: 'Lazer',  to: 'Saúde' },
-      { id: 'tx2', from: 'Outros', to: 'Saúde' },
-    ];
-    await AuditService.logAction(mkLog({ metadata: { count: 2, changes } }));
-    const [, data] = mockAddDoc.mock.calls[0] as [unknown, Record<string, unknown>];
-    expect(data.metadata).toEqual({ count: 2, changes });
-  });
-
   it('grava payload compatível com firestore.rules', async () => {
-    const log = mkLog({ action: 'UNDO_BULK_UPDATE', entity: 'TRANSACTION' });
+    const log = mkLog({ action: 'UPDATE_RECURRING', entity: 'RECURRING_TASK' });
     await AuditService.logAction(log);
     const [, data] = mockAddDoc.mock.calls[0] as [unknown, Record<string, unknown>];
     expect(data).toEqual({
-      action:        'UNDO_BULK_UPDATE',
-      entity:        'TRANSACTION',
+      action:        'UPDATE_RECURRING',
+      entity:        'RECURRING_TASK',
       details:       log.details,
-      metadata:      log.metadata,
       createdAt:     { _serverTimestamp: true },
       schemaVersion: 2,
     });
     expect(data).not.toHaveProperty('userId');
     expect(data).not.toHaveProperty('timestamp');
+  });
+});
+
+// ─── Suite: AuditService.logTransactionAudit (BULK_UPDATE/UNDO_BULK_UPDATE) ──
+// Migrado de escrita client-side direta para a callable server-trusted
+// `logAuditEvent` (Admin SDK) — P2 hardening 2026-07-02.
+
+type TransactionAuditLogInput = Parameters<typeof AuditService.logTransactionAudit>[0];
+
+const mkTransactionAuditLog = (
+  overrides: Partial<TransactionAuditLogInput> = {}
+): TransactionAuditLogInput => ({
+  action:  'BULK_UPDATE',
+  entity:  'TRANSACTION',
+  details: 'Alterou 3 categorias para Alimentação',
+  metadata: {
+    count:   3,
+    changes: [
+      { id: 'tx1', from: 'Outros', to: 'Alimentação' },
+      { id: 'tx2', from: 'Outros', to: 'Alimentação' },
+      { id: 'tx3', from: 'Outros', to: 'Alimentação' },
+    ],
+  },
+  ...overrides,
+});
+
+describe('AuditService.logTransactionAudit', () => {
+  it('chama a callable logAuditEvent com o payload informado', async () => {
+    const log = mkTransactionAuditLog();
+    await AuditService.logTransactionAudit(log);
+    expect(mockHttpsCallable).toHaveBeenCalledWith(expect.anything(), 'logAuditEvent');
+    expect(mockCallable).toHaveBeenCalledWith(log);
+  });
+
+  it('não escreve diretamente no Firestore (addDoc não é chamado)', async () => {
+    await AuditService.logTransactionAudit(mkTransactionAuditLog());
+    expect(mockAddDoc).not.toHaveBeenCalled();
+  });
+
+  it('fail silent: erro da callable não lança exceção para o chamador', async () => {
+    mockCallable.mockRejectedValueOnce(new Error('internal'));
+    await expect(
+      AuditService.logTransactionAudit(mkTransactionAuditLog())
+    ).resolves.toBeUndefined();
+  });
+
+  it('metadata.changes preservado integralmente no payload enviado', async () => {
+    const changes = [
+      { id: 'tx1', from: 'Lazer',  to: 'Saúde' },
+      { id: 'tx2', from: 'Outros', to: 'Saúde' },
+    ];
+    await AuditService.logTransactionAudit(mkTransactionAuditLog({ metadata: { count: 2, changes } }));
+    expect(mockCallable).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: { count: 2, changes },
+    }));
+  });
+
+  it('funciona para UNDO_BULK_UPDATE', async () => {
+    const log = mkTransactionAuditLog({ action: 'UNDO_BULK_UPDATE' });
+    await AuditService.logTransactionAudit(log);
+    expect(mockCallable).toHaveBeenCalledWith(expect.objectContaining({ action: 'UNDO_BULK_UPDATE' }));
   });
 });
 

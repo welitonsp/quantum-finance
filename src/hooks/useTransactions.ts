@@ -941,8 +941,7 @@ export function useTransactions(
       }
 
       // Auditoria global — fire-and-forget após todos os commits (nunca bloqueia UI)
-      void AuditService.logAction({
-        userId:  uid,
+      void AuditService.logTransactionAudit({
         action:  'BULK_UPDATE',
         entity:  'TRANSACTION',
         details: `Alterou ${ids.length} transações para '${updates.category ?? ''}'`,
@@ -978,8 +977,7 @@ export function useTransactions(
       await FirestoreService.batchUndoBulkUpdateTransactionsWithHistory(uid, snap, undoCorrId);
 
       // Auditoria global — fire-and-forget após todos os commits (nunca bloqueia UI)
-      void AuditService.logAction({
-        userId:  uid,
+      void AuditService.logTransactionAudit({
         action:  'UNDO_BULK_UPDATE',
         entity:  'TRANSACTION',
         details: `Desfez ${snap.length} transações`,

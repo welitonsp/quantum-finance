@@ -12,6 +12,7 @@ const {
   mockLimit,
   mockDeleteBatchTransactionsWithHistory,
   mockLogAction,
+  mockLogTransactionAudit,
   mockLogTransactionHistory,
   mockOnSnapshot,
   mockOrderBy,
@@ -33,6 +34,7 @@ const {
     mockHttpsCallable:         vi.fn(() => callable),
     mockLimit:                 vi.fn((count: number) => ({ kind: 'limit', count })),
     mockLogAction:             vi.fn(),
+    mockLogTransactionAudit:   vi.fn(),
     mockLogTransactionHistory: vi.fn(),
     mockOnSnapshot:            vi.fn(),
     mockOrderBy:               vi.fn((field: string, direction: string) => ({ kind: 'orderBy', field, direction })),
@@ -81,6 +83,7 @@ vi.mock('../shared/services/FirestoreService', () => ({
 vi.mock('../shared/services/AuditService', () => ({
   AuditService: {
     logAction:             mockLogAction,
+    logTransactionAudit:   mockLogTransactionAudit,
     logTransactionHistory: mockLogTransactionHistory,
   },
 }));
@@ -861,6 +864,7 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLogAction.mockResolvedValue(undefined);
+    mockLogTransactionAudit.mockResolvedValue(undefined);
     mockLogTransactionHistory.mockResolvedValue(undefined);
     mockBatchUpdateTransactionsWithHistory.mockResolvedValue(undefined);
     mockBatchUndoBulkUpdateTransactionsWithHistory.mockResolvedValue(undefined);
@@ -912,7 +916,7 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
     }
 
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
-    expect(mockLogAction).toHaveBeenCalledWith(expect.objectContaining({ action: 'BULK_UPDATE' }));
+    expect(mockLogTransactionAudit).toHaveBeenCalledWith(expect.objectContaining({ action: 'BULK_UPDATE' }));
 
     unmount();
   });
@@ -1054,7 +1058,7 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
     }
 
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
-    expect(mockLogAction).toHaveBeenCalledWith(expect.objectContaining({ action: 'UNDO_BULK_UPDATE' }));
+    expect(mockLogTransactionAudit).toHaveBeenCalledWith(expect.objectContaining({ action: 'UNDO_BULK_UPDATE' }));
     expect(result.current.hasUndoSnapshot).toBe(false);
 
     unmount();
@@ -1069,7 +1073,7 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
     });
 
     expect(mockBatchUndoBulkUpdateTransactionsWithHistory).not.toHaveBeenCalled();
-    expect(mockLogAction).not.toHaveBeenCalled();
+    expect(mockLogTransactionAudit).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 
     unmount();
@@ -1084,7 +1088,7 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
     });
 
     await waitFor(() => expect(result.current.hasUndoSnapshot).toBe(true));
-    mockLogAction.mockClear();
+    mockLogTransactionAudit.mockClear();
     mockLogTransactionHistory.mockClear();
     mockBatchUndoBulkUpdateTransactionsWithHistory.mockRejectedValueOnce(new Error('undo failed'));
 
@@ -1094,7 +1098,7 @@ describe('useTransactions - bulkUpdateTransactions com batch + history', () => {
 
     expect(result.current.hasUndoSnapshot).toBe(true);
     expect(result.current.isUndoing).toBe(false);
-    expect(mockLogAction).not.toHaveBeenCalled();
+    expect(mockLogTransactionAudit).not.toHaveBeenCalled();
     expect(mockLogTransactionHistory).not.toHaveBeenCalled();
 
     mockBatchUndoBulkUpdateTransactionsWithHistory.mockResolvedValueOnce(undefined);

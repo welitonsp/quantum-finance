@@ -31,6 +31,10 @@ import {
   TransferValidationError,
   validateTransferPayload,
 } from './transferValidation';
+import {
+  AuditLogValidationError,
+  validateAuditLogPayload,
+} from './auditLogValidation';
 import { maskPII } from './lib/piiMasker';
 import {
   centsToReais,
@@ -1381,6 +1385,53 @@ export const generateAuditReport = onCall(
       console.error('[FunctionError]', sanitizeFunctionError('ai_audit_report', e));
       void writeStructuredLog(uid, 'ERROR', safeSystemLogDetail('ai_audit_report'));
       throw new HttpsError('internal', 'Falha no motor de auditoria.');
+    }
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNÇÃO 4B — logAuditEvent (server-trusted — audit_logs de transação, BULK/UNDO)
+// Migra BULK_UPDATE/UNDO_BULK_UPDATE de escrita client-side (addDoc) para Admin
+// SDK — fecha o self-forgery em users/{uid}/audit_logs (P2 hardening 2026-07-02).
+// Rules agora negam create client-side dessas 2 actions (isValidAuditAction).
+// ADD/UPDATE/DELETE_RECURRING permanecem client-side por decisão vigente
+// ("P3 controlado" — docs/DECISOES-ARQUITETURA.md). IMPORT_TRANSACTION também
+// permanece client-side: está acoplado à mesma runTransaction atômica do
+// Modelo A em LedgerService.ts, fora do escopo desta migração.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const logAuditEvent = onCall(
+  {
+    region: REGION,
+    timeoutSeconds: 15,
+    enforceAppCheck: ENFORCE_APP_CHECK,
+    consumeAppCheckToken: ENFORCE_APP_CHECK,
+  },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
+    if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
+
+    const uid = request.auth.uid;
+    let payload: ReturnType<typeof validateAuditLogPayload>;
+    try {
+      payload = validateAuditLogPayload(request.data);
+    } catch (error) {
+      if (error instanceof AuditLogValidationError) {
+        throw new HttpsError('invalid-argument', error.message);
+      }
+      throw error;
+    }
+
+    try {
+      await adminDb.collection(`users/${uid}/audit_logs`).add({
+        ...payload,
+        createdAt: FieldValue.serverTimestamp(),
+        schemaVersion: 2,
+      });
+      return { logged: true };
+    } catch (e) {
+      console.error('[FunctionError]', sanitizeFunctionError('log_audit_event', e));
+      throw new HttpsError('internal', 'Falha ao registrar auditoria.');
     }
   },
 );
