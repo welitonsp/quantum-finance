@@ -52,6 +52,8 @@ interface Props {
    * que não sejam realtime.
    */
   onActionExecuted?: (result: AgentActionResult) => void;
+  /** Pré-preenche o formulário de transação (ex.: compra parcelada detectada pelo agente). */
+  onRegisterPurchase?: (prefill: Partial<Transaction>) => void;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -181,7 +183,7 @@ function CitationDisclosure({ citations }: { citations: CitationTransaction[] })
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [], recurringTasks = [], isOpen, onClose, onActionExecuted }: Props) => {
+export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [], recurringTasks = [], isOpen, onClose, onActionExecuted, onRegisterPurchase }: Props) => {
   const memory = useMemo(() => new ConversationMemory(uid), [uid]);
 
   const [messages, setMessages] = useState<Message[]>([
@@ -306,10 +308,26 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [
 
   // Rota para o `reason` server-trusted `use_installment_form` (compra parcelada).
   const handleInstallmentRoute = useCallback(() => {
-    setConfirmOpen(false);
-    setPendingAction(null);
-    pushAiMessage('Compras parceladas são registradas pelo formulário de transações, não pelo assistente.');
-  }, [pushAiMessage]);
+    if (pendingAction?.proposal.kind === 'register_purchase' && onRegisterPurchase) {
+      const { description, amountCents, date, category, installments, cardId } = pendingAction.proposal.payload;
+      setConfirmOpen(false);
+      setPendingAction(null);
+      onRegisterPurchase({
+        description,
+        value_cents: amountCents,
+        type: 'saida',
+        category: category ?? 'Outros',
+        date,
+        source: 'manual',
+        ...(installments && installments > 1 ? { installmentCount: installments } : {}),
+        ...(cardId ? { cardId } : {}),
+      });
+    } else {
+      setConfirmOpen(false);
+      setPendingAction(null);
+      pushAiMessage('Compras parceladas são registradas pelo formulário de transações.');
+    }
+  }, [pendingAction, onRegisterPurchase, pushAiMessage]);
 
   const submitMessage = async (text: string) => {
     const userText = text.trim();
