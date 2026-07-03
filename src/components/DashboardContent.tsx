@@ -27,7 +27,7 @@ import KPICards from './KPICards';
 import type { Transaction, ModuleBalances, CategoryDataPoint, Account, RecurringTask } from '../shared/types/transaction';
 import { toCentavos, type Centavos } from '../shared/types/money';
 import { useFinancialMetrics } from '../hooks/useFinancialMetrics';
-import { useCreditCards } from '../hooks/useCreditCards';
+import type { CreditCardWithMetrics } from '../shared/types/transaction';
 import QuantumInsights from './QuantumInsights';
 import QuantumCopilotCards from './QuantumCopilotCards';
 import { useQuantumCopilot } from '../hooks/useQuantumCopilot';
@@ -37,8 +37,10 @@ import WeeklyCashflowWidget from './WeeklyCashflowWidget';
 import { useWeeklyCashflow } from '../hooks/useWeeklyCashflow';
 const TimelineWidget   = lazy(() => import('./TimelineWidget'));
 import { toCentavos as toBalanceCents } from '../shared/schemas/financialSchemas';
-import EconomyChallengeWidget from './EconomyChallengeWidget';
-import GoalsPanel from './GoalsPanel';
+// EconomyChallengeWidget/GoalsPanel — code-split via lazy (reduz o bundle eager do
+// dashboard, mesmo padrão dos widgets analíticos acima; P2 hardening — listeners).
+const EconomyChallengeWidget = lazy(() => import('./EconomyChallengeWidget'));
+const GoalsPanel = lazy(() => import('./GoalsPanel'));
 import AnomalyAlerts from './AnomalyAlerts';
 import CentroComandoWidget from './CentroComandoWidget';
 import { DashboardSection, Spinner } from '../shared/components/ui';
@@ -69,6 +71,9 @@ interface Props {
   accounts: Account[];
   recurringTasks: RecurringTask[];
   categories?: UserCategory[];
+  /** Levantado em App.tsx (única fonte do listener onSnapshot de creditCards). */
+  creditCards: CreditCardWithMetrics[];
+  totalFaturaCents: Centavos;
 }
 
 const containerVariants = {
@@ -101,6 +106,8 @@ export default function DashboardContent({
   accounts,
   recurringTasks,
   categories = [],
+  creditCards,
+  totalFaturaCents,
 }: Props) {
   const { currentMonth, currentYear } = useNavigation();
   // ── Hero metrics from existing moduleBalances prop ────────────────────────
@@ -131,8 +138,6 @@ export default function DashboardContent({
   );
 
   const { status, color, rec, score, savingsRate, debtRatio, goalProgress } = st;
-
-  const { cards: creditCards, totalFaturaCents } = useCreditCards(user?.uid ?? '', allTransactions);
 
   const { metrics, loadingMetrics } = useFinancialMetrics(
     user?.uid ?? '',
@@ -252,13 +257,15 @@ export default function DashboardContent({
 
       {/* ── METAS DE POUPANÇA (acima da dobra — objetivos visíveis) ── */}
       <motion.div variants={itemVariants}>
-        <GoalsPanel
-          uid={user?.uid ?? ''}
-          {...(metrics ? { ativosCents: metrics.ativosCents } : {})}
-          {...(metrics && metrics.despesa > 0
-            ? { monthlyExpensesCents: toCentavos(metrics.despesa) as Centavos }
-            : {})}
-        />
+        <Suspense fallback={<div className="py-10 flex justify-center"><Spinner /></div>}>
+          <GoalsPanel
+            uid={user?.uid ?? ''}
+            {...(metrics ? { ativosCents: metrics.ativosCents } : {})}
+            {...(metrics && metrics.despesa > 0
+              ? { monthlyExpensesCents: toCentavos(metrics.despesa) as Centavos }
+              : {})}
+          />
+        </Suspense>
       </motion.div>
 
       {/* ── SAÚDE FINANCEIRA & INSIGHTS (recolhível — Command Center) ── */}

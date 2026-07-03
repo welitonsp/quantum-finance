@@ -320,6 +320,8 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     accounts={accounts}
                     recurringTasks={recurringTasks}
                     categories={categories}
+                    creditCards={creditCards}
+                    totalFaturaCents={totalFaturaCents}
                   />
                 )}
                 {currentPage === 'accounts'   && <AccountsManager   uid={safeUID} />}

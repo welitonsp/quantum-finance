@@ -42,7 +42,7 @@
 - [x] **UX agente:** ao detectar `installments>1`, pré-preencher o formulário de parcelamento. **PR #334** — `onRegisterPurchase` em `AIAssistantChat` + wiring em `App.tsx`.
 - [ ] **Rules complexas (1490 linhas):** avaliar mover mutações sensíveis para callables; reduzir superfície de manutenção.
 - [x] **Bundle:** gate `scripts/check-bundle-size.mjs` no CI pós-build (500 KB global, 600 KB para workers/firebase). **PR #335**
-- [ ] **Listeners:** avaliar BFF/agregação para reduzir múltiplos `onSnapshot` no first paint.
+- [x] **Listeners:** avaliação feita — uma BFF/agregação completa trocaria real-time por latência menor, sem ganho claro (os 8-9 listeners do dashboard são todos necessários para o conteúdo do primeiro paint: saldos, KPIs, orçamento, metas); não implementada por decisão. Fechado com 2 correções concretas e de baixo risco: `useCreditCards` era chamado 2x simultaneamente (`App.tsx` + `DashboardContent.tsx`) — listener duplicado real, agora `DashboardContent` recebe via props; `GoalsPanel`/`EconomyChallengeWidget` convertidos para `React.lazy` (padrão já usado pelos demais widgets do dashboard). Efeito colateral: bundle principal caiu de 523 KB para 484 KB, corrigindo o gate de budget (500 KB) que estava vermelho desde antes desta rodada.
 
 ## 🟢 P3 — Refinamentos
 - [x] CSP estrito no `firebase.json`. **PR #335** — img-src, object-src none, worker-src, frame-src corrigidos.
