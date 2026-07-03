@@ -40,7 +40,7 @@
 - [x] **Cobertura de PII:** melhorar `piiMasker.ts` (nomes soltos sem prefixo PIX) + testes adversariais. **PR #333** — EVP, telefone fixo, pagamento+nome Title Case; 6 novos testes.
 - [x] **Recorrentes:** aposentar `useRecurringAutoExecute` client-side. **PR #332** — hook + 31 testes removidos; backend `executeScheduledRecurrents` cobre.
 - [x] **UX agente:** ao detectar `installments>1`, pré-preencher o formulário de parcelamento. **PR #334** — `onRegisterPurchase` em `AIAssistantChat` + wiring em `App.tsx`.
-- [ ] **Rules complexas (1490 linhas):** avaliar mover mutações sensíveis para callables; reduzir superfície de manutenção.
+- [x] **Rules complexas (1490 linhas):** avaliação feita — o grosso da complexidade (`transactions`/`accounts`/`recurringTasks` com history atômico do Modelo A) é zona proibida e Spark-dependente; migração ampla não é justificável. Fechado com um quick win pontual: `priceObservations` migrado para a callable `recordPriceObservation` (Admin SDK) — Rules negam `create` client-side, `isValidPriceObservationCreate`/`isValidShoppingUnit` removidas (órfãs). `shoppingLists`/`debts` seguem candidatas para uma rodada futura, se necessário.
 - [x] **Bundle:** gate `scripts/check-bundle-size.mjs` no CI pós-build (500 KB global, 600 KB para workers/firebase). **PR #335**
 - [ ] **Listeners:** avaliar BFF/agregação para reduzir múltiplos `onSnapshot` no first paint.
 

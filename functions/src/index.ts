@@ -35,6 +35,10 @@ import {
   AuditLogValidationError,
   validateAuditLogPayload,
 } from './auditLogValidation';
+import {
+  PriceObservationValidationError,
+  validatePriceObservationPayload,
+} from './priceObservationValidation';
 import { maskPII } from './lib/piiMasker';
 import {
   centsToReais,
@@ -1432,6 +1436,50 @@ export const logAuditEvent = onCall(
     } catch (e) {
       console.error('[FunctionError]', sanitizeFunctionError('log_audit_event', e));
       throw new HttpsError('internal', 'Falha ao registrar auditoria.');
+    }
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNÇÃO 4C — recordPriceObservation (server-trusted — Rules→callable, quick win)
+// Migra users/{uid}/priceObservations de escrita client-side direta para esta
+// callable. Coleção de baixo risco financeiro (append-only, sem history atômico,
+// sem saldo) — prova o padrão de migração de mutações simples para Admin SDK.
+// Rules negam create client-side (isValidPriceObservationCreate removida).
+// ═══════════════════════════════════════════════════════════════════════════════
+export const recordPriceObservation = onCall(
+  {
+    region: REGION,
+    timeoutSeconds: 15,
+    enforceAppCheck: ENFORCE_APP_CHECK,
+    consumeAppCheckToken: ENFORCE_APP_CHECK,
+  },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
+    if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
+
+    const uid = request.auth.uid;
+    let payload: ReturnType<typeof validatePriceObservationPayload>;
+    try {
+      payload = validatePriceObservationPayload(request.data);
+    } catch (error) {
+      if (error instanceof PriceObservationValidationError) {
+        throw new HttpsError('invalid-argument', error.message);
+      }
+      throw error;
+    }
+
+    try {
+      const docRef = await adminDb.collection(`users/${uid}/priceObservations`).add({
+        ...payload,
+        uid,
+        createdAt: FieldValue.serverTimestamp(),
+        schemaVersion: 1,
+      });
+      return { id: docRef.id };
+    } catch (e) {
+      console.error('[FunctionError]', sanitizeFunctionError('record_price_observation', e));
+      throw new HttpsError('internal', 'Falha ao registrar observação de preço.');
     }
   },
 );

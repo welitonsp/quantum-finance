@@ -3575,5 +3575,63 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       await assertSucceeds(getDoc(doc(alice.firestore(), 'users', UID_A, 'system_logs', 'log-001')));
     });
   });
+
+  // ── U. users/{uid}/priceObservations — server-only (Rules→callable quick win) ──
+  describe('U — priceObservations: create client-side sempre negado', () => {
+    it('U1 — owner tentando criar priceObservation deve falhar (recordPriceObservation exclusivo)', async () => {
+      const alice = testEnv.authenticatedContext(UID_A);
+      const ref = collection(alice.firestore(), 'users', UID_A, 'priceObservations');
+      await assertFails(addDoc(ref, {
+        uid: UID_A,
+        productName: 'Arroz',
+        store: 'Mercado Central',
+        unitPriceCents: 2599,
+        quantity: '1',
+        unit: 'un',
+        observedAt: '2026-07-03',
+        createdAt: serverTimestamp(),
+        schemaVersion: 1,
+      }));
+    });
+
+    it('U2 — leitura da própria priceObservation deve passar', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID_A, 'priceObservations', 'obs-001'), {
+          uid: UID_A,
+          productName: 'Arroz',
+          store: 'Mercado Central',
+          unitPriceCents: 2599,
+          quantity: '1',
+          unit: 'un',
+          observedAt: '2026-07-03',
+          createdAt: FIXED_TS,
+          schemaVersion: 1,
+        });
+      });
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertSucceeds(getDoc(doc(alice.firestore(), 'users', UID_A, 'priceObservations', 'obs-001')));
+    });
+
+    it('U3 — update client-side em priceObservation deve falhar (já era negado)', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID_A, 'priceObservations', 'obs-002'), {
+          uid: UID_A,
+          productName: 'Feijão',
+          store: 'Mercado Central',
+          unitPriceCents: 899,
+          quantity: '1',
+          unit: 'un',
+          observedAt: '2026-07-03',
+          createdAt: FIXED_TS,
+          schemaVersion: 1,
+        });
+      });
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertFails(updateDoc(
+        doc(alice.firestore(), 'users', UID_A, 'priceObservations', 'obs-002'),
+        { unitPriceCents: 1 },
+      ));
+    });
+  });
 });
 
