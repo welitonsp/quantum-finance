@@ -3,17 +3,26 @@
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 > **Histórico de fases/PRs:** [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md) · **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md)
 
-## Estado Atual — 2026-07-02 (ciclo Hardening pós-auditoria tripla)
+## Estado Atual — 2026-07-02 (ciclo P2/P3 pós-auditoria tripla)
 
-- Branch principal: `main` — HEAD `0072715` (PR #331 mergeado). Working tree esperado: limpo.
-- **Nenhum PR aberto.** PRs #328–#331 mergeados nesta sessão (ciclo de hardening).
+- Branch principal: `main` — HEAD `36a31df` (PR #335 mergeado). Working tree esperado: limpo.
+- **Nenhum PR aberto.** PRs #332–#335 mergeados nesta sessão (ciclo P2/P3).
 - **Cloud Functions: 7 callables** (`createTransaction`, `executeAgentAction`, `createTransfer`, `deleteUserData`, `categorizeTransactionsBatch`, `chatWithQuantumAI`, `generateAuditReport`) + **1 scheduled** (`executeScheduledRecurrents`).
 - **Transferências:** server-only via callable `createTransfer` (movimenta saldo das 2 contas atomicamente, idempotente com TTL 24h). Rules negam create/update client-side de `transferencia` e de `usage/ai_calls`.
 - **Índices:** `firestore.indexes.json` referenciado em `firebase.json` — deploy manual via `firebase deploy --only firestore:indexes`. Index `recurringTasks.active` removido (#328 — era auto-gerido, causava HTTP 400).
+- **`useRecurringAutoExecute` REMOVIDO** (#332) — backend `executeScheduledRecurrents` (onSchedule diária) já cobre com idempotência por `lastExecutedMonth`.
 - Stashes locais podem existir; não são estado canônico da `main`.
-- Suíte atual: **~1389 unit tests + 219 rules tests + 6 suítes E2E Playwright**.
+- Suíte atual: **~1358 unit tests + 219 rules tests + 6 suítes E2E Playwright** (31 testes do hook aposentado removidos; +6 testes PII).
 
-### PRs #328–#331 mergeados (2026-07-02) — Hardening pós-auditoria tripla
+### PRs #332–#335 mergeados (2026-07-02) — Ciclo P2/P3 pós-auditoria
+| PR | Prio | Escopo |
+|---|---|---|
+| #332 | P2/P3 | Aposentar `useRecurringAutoExecute` client-side; "ficheiro"→"arquivo" (PT-BR); cópia de erro sem `.env` |
+| #333 | P2 | `piiMasker.ts`: +3 padrões (EVP 32-hex, telefone fixo, pagamento+nome Title Case) + 6 testes |
+| #334 | P2 | Agente detecta `installments>1` → abre `TransactionForm` pré-preenchido via `onRegisterPurchase` |
+| #335 | P3 | CSP estrito (`firebase.json`); coverage threshold statements 60/lines 64; bundle budget gate no CI |
+
+### PRs #328–#331 mergeados (2026-07-02) — Hardening P0/P1 pós-auditoria tripla
 | PR | Prio | Escopo |
 |---|---|---|
 | #328 | P0 | `firestore.indexes.json` — remove índice `recurringTasks.active` (auto-gerido; deploy vermelho em todo merge) |
@@ -32,7 +41,7 @@
 
 - **Contrato:** o LLM/chat **nunca** grava; toda mutação atravessa **proposta estruturada** (`ActionProposal` Zod `.strict()`) → **confirmação humana** → callable **`executeAgentAction`**. O backend revalida `status==='confirmed'`, grava em `users/{uid}/transactions` + history `origin: 'ai'` + `/decisions`, e mantém idempotência por `idempotencyKey`.
 - **Ações materializadas:** `register_purchase` à vista (`type: 'saida'`), `register_income` à vista (`type: 'entrada'`), `contribute_to_goal`, `register_debt_payment`, `create_budget` e `register_transfer` (movimenta saldo das 2 contas atomicamente, mesma semântica de `createTransfer`, atrás da flag `VITE_ENABLE_AGENT_ROUTER`).
-- **Parcelamento → formulário (decisão de produto fixada):** o Agente registra **apenas compras à vista**; `installments>1` em `register_purchase` é recusado pelo validador server-trusted (`functions/src/agentActionValidation.ts`) com `code: 'failed-precondition'` + `reason: 'use_installment_form'`. **NÃO duplicar lógica monetária de parcelas no Admin SDK.**
+- **Parcelamento → formulário (decisão de produto fixada):** o Agente registra **apenas compras à vista**; `installments>1` em `register_purchase` é recusado pelo validador server-trusted (`functions/src/agentActionValidation.ts`) com `code: 'failed-precondition'` + `reason: 'use_installment_form'`. O cliente detecta o erro e abre `TransactionForm` pré-preenchido via `onRegisterPurchase` em `App.tsx` (PR #334). **NÃO duplicar lógica monetária de parcelas no Admin SDK.**
 - **Intent router:** `geminiIntentClassifier` → `routeIntent` → `ActionConfirmationSheet` → `useAgentAction`, atrás da flag **`VITE_ENABLE_AGENT_ROUTER` (ON em produção desde PR #325)**. Falha no classificador → chat normal (zero regressão).
 - **Query enrichment (PR #326):** quando o router retorna `type: 'answer'`, `buildQueryContext` injeta bloco estruturado (saldo, resumo mensal, cashflow ou cartão) antes do prompt Gemini.
 - **Contexto de recorrentes (PR #327):** `recurringTasks` passados ao `AIAssistantChat` e incluídos no `FinancialContext` do `GeminiService`.
