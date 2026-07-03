@@ -25,5 +25,8 @@
     "firebase-functions-test": "^3.5.0",
     "typescript": "^6.0.3"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "form-data": ">=2.5.6"
+  }
 }
