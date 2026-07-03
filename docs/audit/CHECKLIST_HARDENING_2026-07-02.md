@@ -51,7 +51,7 @@
 - [x] Skeleton loaders premium + empty states de Recharts: `DashboardCharts.tsx`, `TrendsChart.tsx`, `ForecastWidget.tsx`, `ReportsDashboard.tsx`, `ReportsContent.tsx` (5 arquivos) migrados para os primitivos compartilhados `EmptyState`/`Skeleton`. **PR #338**. **Achado:** `CategoryPieChart.tsx` e `TimelineWidget.tsx`/`SimulationCenter.tsx` não precisavam de mudança — o primeiro está morto (não importado em lugar nenhum do app) e os outros dois já não têm estado vazio alcançável (timeline sempre projeta 90 dias; simulação já mostra loader).
 - [x] Coverage/perf como gates de CI. **PR #335** — statements 60, lines 64 (catraca apertada).
 - [ ] Migração de floats legados (script read-only existe; migração ainda bloqueada por decisão).
-- [ ] UI premium: glassmorphism, tipografia variável, animações de valores no dashboard.
+- [x] UI premium: glassmorphism (`.glass-card-quantum`/`.glass-card-elite`, `src/index.css`) e animações de valores (`react-countup`, já em `DashboardHero`/`KPICards`/`SimulationCenter`) já existiam antes desta rodada. Fechado o que faltava: **tipografia variável** — `index.html` migrado para `wght@100..900` (sintaxe de range), fazendo o Google Fonts servir o arquivo de fonte variável real em vez de 4 instâncias estáticas; sem regressão visual. Estendido `CountUp` a `ForecastWidget.tsx`/`WealthKPIs.tsx` (headlines que ainda usavam `formatCurrency` estático).
 - [ ] Onboarding/wizard de primeira experiência.
 
 ---
