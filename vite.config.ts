@@ -166,14 +166,14 @@ export default defineConfig({
       ],
       // Recalibrado em 2026-06-12: FASES 3-8 (#202-#207) mergearam com CI
       // vermelho (main não compilava) e erodiram a cobertura sem o gate agir.
-      // Valores fixados logo abaixo do real atual (lines 63.89 / functions
-      // 60.37 / branches 50.78 / statements 59.95) para voltar a funcionar
-      // como catraca. Subir conforme a dívida de testes for paga.
+      // Valores fixados logo abaixo do real atual para funcionar como catraca.
+      // Bump em 2026-07-02 (auditoria P3): statements 59→60, lines 63→64
+      // alinhados com baseline Codex (60% statements) e medição real (63.89 lines).
       thresholds: {
-        lines: 63,
+        lines: 64,
         functions: 60,
         branches: 50,
-        statements: 59,
+        statements: 60,
       },
     },
   },

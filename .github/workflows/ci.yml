@@ -72,6 +72,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Bundle budget check
+        run: npm run bundlecheck
+
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
