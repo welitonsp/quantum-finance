@@ -3,15 +3,23 @@
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 > **Histórico de fases/PRs:** [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md) · **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md)
 
-## Estado Atual — 2026-07-02 (ciclo Agent Router + Query Enrichment)
+## Estado Atual — 2026-07-02 (ciclo Hardening pós-auditoria tripla)
 
-- Branch principal: `main` — HEAD `4131340` (PR #326 mergeado). Working tree esperado: limpo.
-- **Nenhum PR aberto.** PRs #325–#327 mergeados nesta sessão.
+- Branch principal: `main` — HEAD `0072715` (PR #331 mergeado). Working tree esperado: limpo.
+- **Nenhum PR aberto.** PRs #328–#331 mergeados nesta sessão (ciclo de hardening).
 - **Cloud Functions: 7 callables** (`createTransaction`, `executeAgentAction`, `createTransfer`, `deleteUserData`, `categorizeTransactionsBatch`, `chatWithQuantumAI`, `generateAuditReport`) + **1 scheduled** (`executeScheduledRecurrents`).
 - **Transferências:** server-only via callable `createTransfer` (movimenta saldo das 2 contas atomicamente, idempotente com TTL 24h). Rules negam create/update client-side de `transferencia` e de `usage/ai_calls`.
-- **Índices:** `firestore.indexes.json` referenciado em `firebase.json` — deploy manual via `firebase deploy --only firestore:indexes`.
+- **Índices:** `firestore.indexes.json` referenciado em `firebase.json` — deploy manual via `firebase deploy --only firestore:indexes`. Index `recurringTasks.active` removido (#328 — era auto-gerido, causava HTTP 400).
 - Stashes locais podem existir; não são estado canônico da `main`.
-- Suíte atual: **~1322 unit tests + 190 rules tests + 6 suítes E2E Playwright**.
+- Suíte atual: **~1389 unit tests + 219 rules tests + 6 suítes E2E Playwright**.
+
+### PRs #328–#331 mergeados (2026-07-02) — Hardening pós-auditoria tripla
+| PR | Prio | Escopo |
+|---|---|---|
+| #328 | P0 | `firestore.indexes.json` — remove índice `recurringTasks.active` (auto-gerido; deploy vermelho em todo merge) |
+| #329 | P1 | `firestore.rules` — `'competencia'` adicionado a `txAllowedKeys()`; `installmentRepo.ts` remove campo do afterSnapshot (expression limit); +3 testes emulator |
+| #330 | P1 | `firestore.rules` — `isValidExpenseUpdate()` + `isExpensePayerOrGroupOwner()` em `groups/expenses`; +6 testes emulator |
+| #331 | P1 | `functions/package.json` — override `form-data>=2.5.6` (high CVSS 7.5); gate `npm audit --audit-level=high` no CI |
 
 ### PRs #325–#327 mergeados (2026-07-02)
 | PR | Escopo |
