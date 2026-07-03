@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  collection, query, orderBy, onSnapshot,
-  addDoc, serverTimestamp, limit,
+  collection, query, orderBy, onSnapshot, limit,
 } from 'firebase/firestore';
-import { db } from '../../../shared/api/firebase/index';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../../../shared/api/firebase/index';
 import { logSanitizedFirebaseError } from '../../../shared/lib/firebaseErrorHandling';
 import type { PriceObservation } from '../../../shared/types/shopping';
 import { priceObservationCreateSchema, type PriceObservationCreateInput } from '../../../shared/schemas/shoppingSchemas';
@@ -47,14 +47,11 @@ export function usePriceObservations(uid: string): UsePriceObservationsReturn {
       productName: normalizeProductName(payload.productName),
       store: payload.store.trim(),
     });
-    const ref = collection(db, 'users', uid, 'priceObservations');
-    const docRef = await addDoc(ref, {
-      ...parsed,
-      uid,
-      createdAt: serverTimestamp(),
-      schemaVersion: 1,
-    });
-    return docRef.id;
+    const call = httpsCallable<PriceObservationCreateInput, { id: string }>(
+      functions, 'recordPriceObservation'
+    );
+    const result = await call(parsed);
+    return result.data.id;
   }, [uid]);
 
   const forProduct = useCallback(

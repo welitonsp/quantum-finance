@@ -123,9 +123,9 @@ describe('Functions logging policy', () => {
 
     // error.message só pode vazar ao cliente pelos caminhos CONTROLADOS de erro de
     // validação (mensagens curadas, sem PII/stack): CreateTransactionValidationError,
-    // TransferValidationError, AgentActionValidationError e AuditLogValidationError.
-    // O caminho do Agente também propaga um `reason` estruturado (sem PII) para a UI
-    // rotear (ex.: 'use_installment_form').
+    // TransferValidationError, AgentActionValidationError, AuditLogValidationError
+    // e PriceObservationValidationError. O caminho do Agente também propaga um
+    // `reason` estruturado (sem PII) para a UI rotear (ex.: 'use_installment_form').
     assert.deepEqual(
       messageLines.map(item => item.text),
       [
@@ -133,8 +133,9 @@ describe('Functions logging policy', () => {
         "throw new HttpsError('invalid-argument', error.message);",
         'throw new HttpsError(code, error.message, error.reason ? { reason: error.reason } : undefined);',
         "throw new HttpsError('invalid-argument', error.message);",
+        "throw new HttpsError('invalid-argument', error.message);",
       ],
-      'error.message is allowed only for controlled validation errors (CreateTransaction/CreateTransfer/AgentAction/AuditLog)',
+      'error.message is allowed only for controlled validation errors (CreateTransaction/CreateTransfer/AgentAction/AuditLog/PriceObservation)',
     );
   });
 });
