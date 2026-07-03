@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { dismissOnboardingIfPresent } from '../helpers/onboarding';
 
 /**
  * Smoke tests: verifica que a app carrega e os elementos principais são visíveis.
@@ -20,6 +21,7 @@ test.describe('Smoke — carregamento da app', () => {
 
   test('sidebar exibe os itens de navegação principais', async ({ page }) => {
     await page.goto('/');
+    await dismissOnboardingIfPresent(page);
 
     await expect(page.getByRole('button', { name: 'Centro de Comando' }).first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('button', { name: 'Movimentações' }).first()).toBeVisible({ timeout: 5_000 });
@@ -27,6 +29,7 @@ test.describe('Smoke — carregamento da app', () => {
 
   test('navegar para Movimentações exibe o painel de transações', async ({ page }) => {
     await page.goto('/');
+    await dismissOnboardingIfPresent(page);
 
     await page.getByRole('button', { name: 'Movimentações' }).first().click();
 

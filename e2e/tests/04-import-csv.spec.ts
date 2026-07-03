@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { dismissOnboardingIfPresent } from '../helpers/onboarding';
 
 /**
  * Fluxo: importação de arquivo CSV via modal "Ingestão Quântica".
@@ -12,15 +13,16 @@ test.describe('Importação CSV', () => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Centro de Comando' }).first())
       .toBeVisible({ timeout: 20_000 });
+    await dismissOnboardingIfPresent(page);
   });
 
   test('botão de importação está visível no Header', async ({ page }) => {
-    const importBtn = page.getByRole('button', { name: 'Importar ficheiro de extrato' }).first();
+    const importBtn = page.getByRole('button', { name: 'Importar arquivo de extrato' }).first();
     await expect(importBtn).toBeVisible({ timeout: 10_000 });
   });
 
   test('clicar no botão de importação abre o modal Ingestão Quântica', async ({ page }) => {
-    const importBtn = page.getByRole('button', { name: 'Importar ficheiro de extrato' }).first();
+    const importBtn = page.getByRole('button', { name: 'Importar arquivo de extrato' }).first();
     await expect(importBtn).toBeVisible({ timeout: 10_000 });
     await importBtn.click();
 
@@ -30,7 +32,7 @@ test.describe('Importação CSV', () => {
   });
 
   test('modal de importação contém input de arquivo', async ({ page }) => {
-    const importBtn = page.getByRole('button', { name: 'Importar ficheiro de extrato' }).first();
+    const importBtn = page.getByRole('button', { name: 'Importar arquivo de extrato' }).first();
     await expect(importBtn).toBeVisible({ timeout: 10_000 });
     await importBtn.click();
 

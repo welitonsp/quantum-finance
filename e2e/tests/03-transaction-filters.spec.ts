@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { dismissOnboardingIfPresent } from '../helpers/onboarding';
 
 /**
  * Fluxo: filtros de tipo no painel de Movimentações.
@@ -9,6 +10,7 @@ test.describe('Filtros de tipo em Movimentações', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await expect(page.getByText('Movimentações').first()).toBeVisible({ timeout: 20_000 });
+    await dismissOnboardingIfPresent(page);
     await page.getByText('Movimentações').first().click();
     // Aguarda o painel de transações
     await expect(page.getByRole('button', { name: 'Todas' }).first()).toBeVisible({ timeout: 10_000 });

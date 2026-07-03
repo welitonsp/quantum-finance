@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { dismissOnboardingIfPresent } from '../helpers/onboarding';
 
 /**
  * Fluxo: criação manual de transação.
@@ -11,6 +12,7 @@ test.describe('Criação manual de transação', () => {
     // Aguarda dashboard carregar
     await expect(page.getByText('Dashboard').or(page.getByText('Nova Movimentação')).first())
       .toBeVisible({ timeout: 20_000 });
+    await dismissOnboardingIfPresent(page);
   });
 
   test('botão "Nova Movimentação" abre o formulário', async ({ page }) => {
