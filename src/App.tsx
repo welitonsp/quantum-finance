@@ -31,6 +31,7 @@ import DashboardContent from './components/DashboardContent';
 import TransactionForm from './features/transactions/TransactionForm';
 import TransferForm from './features/transactions/TransferForm';
 import CategorySettings from './components/CategorySettings';
+import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 import type { Transaction } from './shared/types/transaction';
 
 // ─── Lazy-loaded pages ───────────────────────────────────────────────────────
@@ -159,9 +160,11 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   const [isMobileMenuOpen,       setIsMobileMenuOpen]       = useState(false);
   const [isCommandPaletteOpen,   setIsCommandPaletteOpen]   = useState(false);
   const [isCommanderMode,        setIsCommanderMode]        = useState(false);
+  const [onboardingDismissed,    setOnboardingDismissed]    = useState(() => safeStorageGet('quantum_onboarding_dismissed', false));
 
   useEffect(() => safeStorageSet('quantum_sidebar_collapsed', isSidebarCollapsed), [isSidebarCollapsed]);
   useEffect(() => safeStorageSet('quantum_monthly_goal',      monthlyGoal),        [monthlyGoal]);
+  useEffect(() => safeStorageSet('quantum_onboarding_dismissed', onboardingDismissed), [onboardingDismissed]);
 
   const safeUID = user.uid;
 
@@ -181,12 +184,19 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
     undoLastBulkUpdate, isUndoing, hasUndoSnapshot, clearBulkSnapshot,
     hasMoreTransactions, isLoadingMore, loadedCount, loadMoreTransactions,
   } = useTransactions(safeUID, userCategoryRules, undefined, serverSearch);
-  const { accounts } = useAccounts(safeUID);
+  const { accounts, loadingAccounts } = useAccounts(safeUID);
   const { recurringTasks } = useRecurring(safeUID);
   // totalFaturaCents: faturas abertas de cartões — passivo corrente para o net worth
   const { totalFaturaCents, cards: creditCards } = useCreditCards(safeUID, transactions);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
     useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts, categories, totalFaturaCents);
+
+  // Onboarding — condição sempre derivada do estado real (nunca um "passo" artificial):
+  // some sozinho assim que o usuário tiver 1+ conta ou 1+ transação. "Pular" só evita
+  // reaparecer enquanto ambos continuam vazios. Aguarda os 2 primeiros snapshots
+  // (loading/loadingAccounts) para não piscar o wizard antes dos dados carregarem.
+  const showOnboarding = !onboardingDismissed && !loading && !loadingAccounts
+    && accounts.length === 0 && transactions.length === 0;
 
   const [isTransferFormOpen,    setIsTransferFormOpen]    = useState(false);
   const [transferInitialValues, setTransferInitialValues] = useState<import('./features/transactions/TransferForm').TransferInitialValues>({});
@@ -250,6 +260,13 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
         onCancel={() => setTransactionToDelete(null)}
         onConfirm={confirmDelete}
       />
+      {showOnboarding && (
+        <OnboardingWizard
+          onCreateAccount={() => { setCurrentPage('accounts'); setOnboardingDismissed(true); }}
+          onCreateTransaction={() => { setIsFormOpen(true); setOnboardingDismissed(true); }}
+          onDismiss={() => setOnboardingDismissed(true)}
+        />
+      )}
       <QuantumBackground />
 
       <AppShell
