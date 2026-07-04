@@ -3,9 +3,16 @@
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 > **Histórico de fases/PRs:** [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md) · **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md)
 
-## Estado Atual — 2026-07-04 (FASE NFC-e FECHADA no modelo seguro + segurança comercial)
+## Estado Atual — 2026-07-04 (FASES NFC-e + Cesta Pessoal FECHADAS + segurança comercial)
 
-- Branch principal: `main` — HEAD `1e9b1be` (PR #356 mergeado). Working tree esperado: limpo. **Nenhum PR aberto.**
+- Branch principal: `main` — HEAD `d1de25c` (PR #358 mergeado). Working tree esperado: limpo. **Nenhum PR aberto.**
+
+### FASE Cesta Pessoal / Inteligência de Preços — FECHADA (2026-07-04, PRs #357/#358)
+
+1. **#357** Motor puro `src/features/shopping/lib/priceIntelligence.ts` (padrão cardProjection: zero I/O, zero float): `canonicalProductKey` (normalização com remoção de acentos), `buildPriceCatalog` (snapshot por loja, melhor loja, tendência última vs penúltima na mesma loja), `deltaBps` (variação em basis points INTEIROS, round-half-up por aritmética inteira), `compareBasketAcrossStores` (cesta cotada por loja, melhor cobertura total, economia em centavos). +13 testes.
+2. **#358** `PriceIntelligencePanel` no ShoppingPage: "Onde comprar \<lista\>" (cotação por loja da primeira lista aberta, troféu na mais barata, economia) + "Movimentos de preço" (top 5 por |variação|, clique abre PriceHistoryPanel). Invisível sem observações. +5 testes.
+
+Fecha o diferencial de produto: NFC-e importada (#356) → `priceObservations` → comparação de cesta e alertas de variação derivados de notas fiscais reais.
 
 ### FASE Compras Inteligentes / NFC-e — FECHADA (2026-07-04, PRs #352/#354/#355/#356)
 
