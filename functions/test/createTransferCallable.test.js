@@ -164,6 +164,16 @@ function resetMock() {
   Object.keys(docStore).forEach(k => delete docStore[k]);
 }
 
+// Escritas de negócio (exclui o contador de rate limit por operação, que é
+// infraestrutura transversal — coberto por opRateLimit.test.js).
+function businessWrites() {
+  return writes.filter(w => !w.path.includes('/usage/op_'));
+}
+
+function rateLimitWrites() {
+  return writes.filter(w => w.path.includes('/usage/op_'));
+}
+
 describe('accountBalanceCents (normalização de saldo)', () => {
   it('schemaVersion 2: balance já é centavos (preserva sinal)', () => {
     assert.equal(accountBalanceCents({ balance: 150050, schemaVersion: 2 }), 150050);
@@ -241,8 +251,9 @@ describe('createTransfer callable', () => {
 
     assert.equal(result.id, 'tx-transfer-id');
 
-    // 6 writes: tx + tx history + 2 account updates + 2 account histories.
-    assert.equal(writes.length, 6);
+    // 6 escritas de negócio: tx + tx history + 2 account updates + 2 account histories.
+    assert.equal(businessWrites().length, 6);
+    assert.equal(rateLimitWrites().length, 1, 'gate de rate limit deve registrar a operação');
 
     const txWrite = writes.find(w => w.path === `users/${UID}/transactions/tx-transfer-id`);
     assert.ok(txWrite, 'transaction write expected');
@@ -346,7 +357,7 @@ describe('createTransfer callable', () => {
       app: { appId: 'test-app-id' },
     });
 
-    assert.equal(writes.length, 7);
+    assert.equal(businessWrites().length, 7);
     const idemWrite = writes.find(w => w.path.includes('/idempotency/'));
     assert.ok(idemWrite, 'idempotency write expected');
     assert.equal(idemWrite.payload.txId, result.id);
@@ -381,6 +392,6 @@ describe('createTransfer callable', () => {
 
     const idemWrite = writes.find(w => w.path.includes('/idempotency/'));
     assert.equal(idemWrite, undefined, 'malformed key must be ignored');
-    assert.equal(writes.length, 6);
+    assert.equal(businessWrites().length, 6);
   });
 });
