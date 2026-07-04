@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ShoppingCart, Plus, Trash2, Calendar, CheckCircle2, Circle, Clock } from 'lucide-react';
+import { ShoppingCart, Plus, Trash2, Calendar, CheckCircle2, Circle, Clock, ClipboardPaste } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatBRL } from '../../shared/types/money';
 import type { Centavos } from '../../shared/types/money';
@@ -9,6 +9,7 @@ import { usePriceObservations } from './hooks/usePriceObservations';
 import ShoppingListForm from './components/ShoppingListForm';
 import ShoppingListView from './components/ShoppingListView';
 import PriceHistoryPanel from './components/PriceHistoryPanel';
+import NfceImportPanel from './components/NfceImportPanel';
 import type { AddItemPayload } from './hooks/useShoppingLists';
 
 interface Props {
@@ -31,6 +32,7 @@ export default function ShoppingPage({ uid }: Props) {
   const { lists, loading, createList, deleteList, addItem, checkItem, removeItem, finishList } = useShoppingLists(uid);
   const { observations, forProduct, addObservation } = usePriceObservations(uid);
   const [showForm, setShowForm] = useState(false);
+  const [showNfceImport, setShowNfceImport] = useState(false);
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [priceHistoryProduct, setPriceHistoryProduct] = useState<string | null>(null);
 
@@ -114,12 +116,20 @@ export default function ShoppingPage({ uid }: Props) {
             Planeje suas compras e acompanhe gastos reais vs estimados
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-xl transition-colors font-medium"
-        >
-          <Plus size={16} /> Nova lista
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowNfceImport(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-blue-500/40 text-blue-400 hover:bg-blue-500/10 text-sm rounded-xl transition-colors font-medium"
+          >
+            <ClipboardPaste size={16} /> Importar NFC-e
+          </button>
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-xl transition-colors font-medium"
+          >
+            <Plus size={16} /> Nova lista
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -229,6 +239,12 @@ export default function ShoppingPage({ uid }: Props) {
         <ShoppingListForm
           onSave={handleCreateList}
           onClose={() => setShowForm(false)}
+        />
+      )}
+      {showNfceImport && (
+        <NfceImportPanel
+          onClose={() => setShowNfceImport(false)}
+          onRecordObservation={addObservation}
         />
       )}
       {priceHistoryProduct && (
