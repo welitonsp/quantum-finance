@@ -158,6 +158,16 @@ function resetFirestoreMock() {
   Object.keys(idemStore).forEach(k => delete idemStore[k]);
 }
 
+// Escritas de negócio (exclui o contador de rate limit por operação, que é
+// infraestrutura transversal — coberto por opRateLimit.test.js).
+function businessWrites() {
+  return writes.filter(w => !w.path.includes('/usage/op_'));
+}
+
+function rateLimitWrites() {
+  return writes.filter(w => w.path.includes('/usage/op_'));
+}
+
 function assertNoForbiddenFields(value) {
   const forbidden = new Set(['uid', 'id', 'value', 'importHash']);
   const stack = [value];
@@ -217,9 +227,10 @@ describe('createTransaction callable', () => {
     assert.equal(typeof result.id, 'string');
     assert.ok(result.id.length > 0);
 
-    assert.equal(writes.length, 2);
+    assert.equal(businessWrites().length, 2);
+    assert.equal(rateLimitWrites().length, 1, 'gate de rate limit deve registrar a operação');
 
-    const [transactionWrite, historyWrite] = writes;
+    const [transactionWrite, historyWrite] = businessWrites();
     assert.equal(transactionWrite.path, 'users/test-user-id/transactions/tx-test-id');
     assert.equal(historyWrite.path, 'users/test-user-id/transactions/tx-test-id/history/history-test-id');
 
@@ -310,8 +321,8 @@ describe('createTransaction callable', () => {
 
     assert.equal(typeof result.id, 'string');
 
-    // 3 writes: idempotency key + transaction + history
-    assert.equal(writes.length, 3);
+    // 3 writes de negócio: idempotency key + transaction + history
+    assert.equal(businessWrites().length, 3);
     const idemWrite = writes.find(w => w.path.includes('/idempotency/'));
     assert.ok(idemWrite, 'idempotency key write expected');
     assert.equal(idemWrite.payload.txId, result.id);
@@ -350,7 +361,7 @@ describe('createTransaction callable', () => {
     // No idempotency write — key was ignored
     const idemWrite = writes.find(w => w.path.includes('/idempotency/'));
     assert.equal(idemWrite, undefined, 'malformed key must be ignored');
-    // 2 normal writes: transaction + history
-    assert.equal(writes.length, 2);
+    // 2 escritas de negócio: transaction + history
+    assert.equal(businessWrites().length, 2);
   });
 });

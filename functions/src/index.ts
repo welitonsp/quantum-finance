@@ -40,6 +40,7 @@ import {
   validatePriceObservationPayload,
 } from './priceObservationValidation';
 import { maskPII } from './lib/piiMasker';
+import { checkAndIncrementOpRateLimit, type OpRateLimitKey } from './opRateLimit';
 import {
   centsToReais,
   safeCategory,
@@ -143,6 +144,24 @@ async function assertAiRateLimit(uid: string, limitedDetail: string): Promise<vo
   // status === 'error' — falha interna ao validar o limite. NUNCA resource-exhausted.
   void writeStructuredLog(uid, 'ERROR', 'rate limit validation failed');
   throw new HttpsError('internal', 'Não foi possível validar o limite de uso da IA. Tente novamente em instantes.');
+}
+
+// Gate de rate limit por operação/uid para callables de escrita (não-IA).
+// Mesmo contrato de assertAiRateLimit: 'limited' → resource-exhausted;
+// erro interno NUNCA vira resource-exhausted.
+async function assertOpRateLimit(uid: string, opKey: OpRateLimitKey): Promise<void> {
+  const result = await checkAndIncrementOpRateLimit(adminDb, uid, opKey, (e) => {
+    console.error('[FunctionError]', sanitizeFunctionError('op_rate_limit_check', e));
+  });
+  if (result.status === 'allowed') return;
+
+  if (result.status === 'limited') {
+    void writeStructuredLog(uid, 'ERROR', `op rate limit reached — ${opKey} blocked`);
+    throw new HttpsError('resource-exhausted', 'Limite de operações atingido. Tente novamente mais tarde.');
+  }
+
+  void writeStructuredLog(uid, 'ERROR', 'op rate limit validation failed');
+  throw new HttpsError('internal', 'Não foi possível validar o limite de operações. Tente novamente em instantes.');
 }
 
 async function writeStructuredLog(uid: string, type: string, detail: string): Promise<void> {
@@ -355,6 +374,10 @@ export const createTransaction = onCall(
       }
     }
 
+    // Rate limit só após validação + fast-path de idempotência: payload
+    // inválido e replay idempotente não consomem quota nem geram escrita.
+    await assertOpRateLimit(uid, 'createTransaction');
+
     const descriptionLower = data.description.trim().toLowerCase();
     const txRef   = adminDb.collection(`users/${uid}/transactions`).doc();
     const histRef = adminDb
@@ -519,6 +542,10 @@ export const createTransfer = onCall(
         return { id: idemSnap.data()!['txId'] as string };
       }
     }
+
+    // Rate limit só após validação + fast-path de idempotência: payload
+    // inválido e replay idempotente não consomem quota nem geram escrita.
+    await assertOpRateLimit(uid, 'createTransfer');
 
     const fromAccountRef = adminDb.doc(`users/${uid}/accounts/${data.fromAccountId}`);
     const toAccountRef   = adminDb.doc(`users/${uid}/accounts/${data.toAccountId}`);
@@ -696,6 +723,9 @@ export const executeAgentAction = onCall(
       }
       throw error;
     }
+
+    // Rate limit só após validação: proposta inválida não consome quota.
+    await assertOpRateLimit(uid, 'executeAgentAction');
 
     // ── contribute_to_goal: incrementa currentCents da meta (server-trusted) ──
     // Espelha useGoals.setProgress; aditivo (savings podem exceder o alvo). Idempotente.
@@ -1226,6 +1256,7 @@ export const deleteUserData = onCall(
     if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
 
     const uid     = request.auth.uid;
+    await assertOpRateLimit(uid, 'deleteUserData');
     const userRef = adminDb.collection('users').doc(uid);
     await adminDb.recursiveDelete(userRef);
     await admin.auth().deleteUser(uid);
@@ -1426,6 +1457,9 @@ export const logAuditEvent = onCall(
       throw error;
     }
 
+    // Rate limit só após validação: payload inválido não consome quota.
+    await assertOpRateLimit(uid, 'logAuditEvent');
+
     try {
       await adminDb.collection(`users/${uid}/audit_logs`).add({
         ...payload,
@@ -1468,6 +1502,9 @@ export const recordPriceObservation = onCall(
       }
       throw error;
     }
+
+    // Rate limit só após validação: payload inválido não consome quota.
+    await assertOpRateLimit(uid, 'recordPriceObservation');
 
     try {
       const docRef = await adminDb.collection(`users/${uid}/priceObservations`).add({
