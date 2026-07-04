@@ -1,7 +1,8 @@
 import React, { useEffect, useState, lazy, Suspense, useCallback } from 'react';
 import { auth } from './shared/api/firebase/index';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
-import type { User } from 'firebase/auth';
+import type { MultiFactorError, User } from 'firebase/auth';
+import { isMfaRequiredError, resolveTotpSignIn } from './shared/lib/mfa';
 import { BrainCircuit, AlertTriangle, Loader2 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -521,6 +522,9 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
 export default function App() {
   const [user,      setUser]      = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  // Sign-in interrompido por MFA (auth/multi-factor-auth-required): guarda o
+  // erro original — o resolver TOTP precisa dele para concluir o login.
+  const [mfaError,  setMfaError]  = useState<MultiFactorError | null>(null);
 
   useEffect(() => {
     const originalWarn = console.warn;
@@ -547,10 +551,27 @@ export default function App() {
       await signInWithPopup(auth, new GoogleAuthProvider());
       toast.success('Acesso Autorizado, Comandante!');
     } catch (error) {
+      if (isMfaRequiredError(error)) {
+        setMfaError(error);
+        return;
+      }
       logSanitizedFirebaseError('auth_login', error);
       const err = error as { code?: string };
       const msg = err.code === 'auth/popup-closed-by-user' ? 'Login cancelado.' : 'Falha ao autenticar.';
       toast.error(msg);
+    }
+  };
+
+  // Conclui o login com o código TOTP; erro mantém o prompt aberto para nova tentativa.
+  const handleMfaCode = async (code: string) => {
+    if (!mfaError) return;
+    try {
+      await resolveTotpSignIn(auth, mfaError, code);
+      setMfaError(null);
+      toast.success('Acesso Autorizado, Comandante!');
+    } catch (error) {
+      logSanitizedFirebaseError('auth_mfa_resolve', error);
+      toast.error('Código inválido ou expirado. Tente novamente.');
     }
   };
 
@@ -565,7 +586,16 @@ export default function App() {
       </div>
     );
   }
-  if (!user) return <LoginScreen onLogin={handleLogin} />;
+  if (!user) {
+    return (
+      <LoginScreen
+        onLogin={handleLogin}
+        mfaPending={mfaError !== null}
+        onSubmitMfaCode={handleMfaCode}
+        onCancelMfa={() => setMfaError(null)}
+      />
+    );
+  }
 
   return (
     <NavigationProvider>
