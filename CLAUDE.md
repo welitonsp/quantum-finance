@@ -3,39 +3,34 @@
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 > **Histórico de fases/PRs:** [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md) · **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md)
 
-## Estado Atual — 2026-07-02 (ciclo P2/P3 pós-auditoria tripla)
+## Estado Atual — 2026-07-03 (ciclo pós-auditoria: logs server-trusted + UI + onboarding)
 
-- Branch principal: `main` — HEAD `36a31df` (PR #335 mergeado). Working tree esperado: limpo.
-- **Nenhum PR aberto.** PRs #332–#335 mergeados nesta sessão (ciclo P2/P3).
-- **Cloud Functions: 7 callables** (`createTransaction`, `executeAgentAction`, `createTransfer`, `deleteUserData`, `categorizeTransactionsBatch`, `chatWithQuantumAI`, `generateAuditReport`) + **1 scheduled** (`executeScheduledRecurrents`).
-- **Transferências:** server-only via callable `createTransfer` (movimenta saldo das 2 contas atomicamente, idempotente com TTL 24h). Rules negam create/update client-side de `transferencia` e de `usage/ai_calls`.
-- **Índices:** `firestore.indexes.json` referenciado em `firebase.json` — deploy manual via `firebase deploy --only firestore:indexes`. Index `recurringTasks.active` removido (#328 — era auto-gerido, causava HTTP 400).
-- **`useRecurringAutoExecute` REMOVIDO** (#332) — backend `executeScheduledRecurrents` (onSchedule diária) já cobre com idempotência por `lastExecutedMonth`.
+- Branch principal: `main` — HEAD `af4a183` (PR #345 mergeado). Working tree esperado: limpo.
+- **Nenhum PR aberto.** PRs #336–#345 mergeados nesta sessão.
+- **Cloud Functions: 9 callables** (`createTransaction`, `executeAgentAction`, `createTransfer`, `deleteUserData`, `categorizeTransactionsBatch`, `chatWithQuantumAI`, `generateAuditReport`, `logAuditEvent`, `recordPriceObservation`) + **1 scheduled** (`executeScheduledRecurrents`).
+- **Logs/auditoria agora 100% server-trusted** onde viável: `system_logs` (write client-side removida, #336) e `audit_logs` de transação — `BULK_UPDATE`/`UNDO_BULK_UPDATE` — via nova callable `logAuditEvent` (#337). Mantidos client-side por decisão de escopo: recorrentes (P3 controlado) e `IMPORT_TRANSACTION` (acoplado ao `runTransaction` atômico do Modelo A).
+- **`priceObservations` server-trusted** via nova callable `recordPriceObservation` (#339) — mesmo padrão de `transferValidation.ts`.
+- **Novo `OnboardingWizard.tsx`** (#342): modal de primeira experiência quando `accounts.length === 0 && transactions.length === 0`; "pular" persistido em localStorage. **Atenção:** E2E precisa descartá-lo explicitamente — helper `e2e/helpers/onboarding.ts` (`dismissOnboardingIfPresent`) aplicado nos 6 specs (#345, corrige regressão introduzida pelo próprio #342).
+- **Migração de floats legados: desbloqueio parcial e controlado** (#343) — `functions/scripts/executeLegacyMigrationSafe.js` permite `--execute` real apenas para o subconjunto `migrationEligible` (patch `{schemaVersion:2, source?}`, zero matemática nova), fail-closed em lote. **Pendente do owner:** rodar `diagnoseLegacyTransactions.js` (read-only) contra produção para saber quantos documentos são elegíveis — a PR só destrava a capacidade, não executa nada ainda.
+- **Gate de cobertura estava mascarado** (#344) — vitest não roda cobertura quando há teste falhando; um teste de a11y quebrado (`ImportButton.test.tsx`, não relacionado ao conteúdo de nenhuma PR) escondia isso. Corrigido + 41 novos testes reais para fechar as lacunas expostas (`generateHash`, `annotateRiskScores`, `computeBudgetSuggestions`). Cobertura real: statements 60.86% / lines 64.86%.
+- Bundle principal reduzido 523 KB → 484 KB (#340, lazy-load de `GoalsPanel`/`EconomyChallengeWidget` + listener duplicado de `useCreditCards` removido).
 - Stashes locais podem existir; não são estado canônico da `main`.
-- Suíte atual: **~1358 unit tests + 219 rules tests + 6 suítes E2E Playwright** (31 testes do hook aposentado removidos; +6 testes PII).
 
-### PRs #332–#335 mergeados (2026-07-02) — Ciclo P2/P3 pós-auditoria
+### PRs #336–#345 mergeados (2026-07-03)
 | PR | Prio | Escopo |
 |---|---|---|
-| #332 | P2/P3 | Aposentar `useRecurringAutoExecute` client-side; "ficheiro"→"arquivo" (PT-BR); cópia de erro sem `.env` |
-| #333 | P2 | `piiMasker.ts`: +3 padrões (EVP 32-hex, telefone fixo, pagamento+nome Title Case) + 6 testes |
-| #334 | P2 | Agente detecta `installments>1` → abre `TransactionForm` pré-preenchido via `onRegisterPurchase` |
-| #335 | P3 | CSP estrito (`firebase.json`); coverage threshold statements 60/lines 64; bundle budget gate no CI |
+| #336 | P2 | `system_logs` server-trusted — remove escrita client-side redundante (self-forgery) |
+| #337 | P2 | `audit_logs` de transação server-trusted via nova callable `logAuditEvent` |
+| #338 | P3 | Unifica empty states/skeleton dos gráficos Recharts (`EmptyState`/`Skeleton`) |
+| #339 | P2 | `priceObservations` server-trusted via nova callable `recordPriceObservation` |
+| #340 | P2 | Perf: remove listener duplicado `useCreditCards`; lazy-load `GoalsPanel`/`EconomyChallengeWidget`; bundle -39 KB |
+| #341 | P3 | Tipografia variável (Google Fonts range) + `CountUp` em `ForecastWidget`/`WealthKPIs` |
+| #342 | P3 | `OnboardingWizard.tsx` — wizard mínimo de primeira experiência |
+| #343 | P3 | Desbloqueio parcial/controlado da migração de floats legados (`executeLegacyMigrationSafe.js`) |
+| #344 | — | Fix CI: teste de a11y quebrado + gate de cobertura mascarado restaurado (+41 testes) |
+| #345 | — | Fix E2E: `OnboardingWizard` (#342) bloqueava cliques nos 6 specs + locator PT-PT obsoleto |
 
-### PRs #328–#331 mergeados (2026-07-02) — Hardening P0/P1 pós-auditoria tripla
-| PR | Prio | Escopo |
-|---|---|---|
-| #328 | P0 | `firestore.indexes.json` — remove índice `recurringTasks.active` (auto-gerido; deploy vermelho em todo merge) |
-| #329 | P1 | `firestore.rules` — `'competencia'` adicionado a `txAllowedKeys()`; `installmentRepo.ts` remove campo do afterSnapshot (expression limit); +3 testes emulator |
-| #330 | P1 | `firestore.rules` — `isValidExpenseUpdate()` + `isExpensePayerOrGroupOwner()` em `groups/expenses`; +6 testes emulator |
-| #331 | P1 | `functions/package.json` — override `form-data>=2.5.6` (high CVSS 7.5); gate `npm audit --audit-level=high` no CI |
-
-### PRs #325–#327 mergeados (2026-07-02)
-| PR | Escopo |
-|---|---|
-| #325 | `VITE_ENABLE_AGENT_ROUTER=true` em produção via CI (ambos os workflows) |
-| #326 | `queryContextBuilder.ts` — enriquecimento por intent (`get_balances`, `explain_month`, `cashflow_briefing`, `get_invoice`) com +11 testes |
-| #327 | `recurringTasks` passados ao `AIAssistantChat` → Gemini context (era gap: App.tsx tinha os dados mas não repassava) |
+> Histórico de ciclos anteriores (#325–#335): ver [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md).
 
 ## Agente — Contrato de Mutação Confirmada
 
@@ -87,7 +82,7 @@
 - `value` legado, `uid`, `id`, `createdAt` bloqueados em deltas de history.
 - Firestore Rules alinhadas com código e deploy real; não alterar sem ampliar cobertura de emulator (`test:rules`).
 
-## Cloud Functions — 7 Callables (estado atual)
+## Cloud Functions — 9 Callables (estado atual)
 
 `functions/src/index.ts` define `ENFORCE_APP_CHECK = process.env.FUNCTIONS_EMULATOR !== 'true'`. Todas as callables usam `enforceAppCheck: ENFORCE_APP_CHECK` e `consumeAppCheckToken: ENFORCE_APP_CHECK`. Em produção: ON. Sob Functions Emulator: OFF (permite E2E/local sem token real).
 
@@ -100,6 +95,8 @@
 | `categorizeTransactionsBatch` | Categorização em lote via IA |
 | `chatWithQuantumAI` | Chat conversacional com Gemini |
 | `generateAuditReport` | Relatório de auditoria |
+| `logAuditEvent` | `audit_logs` de transação server-trusted (`BULK_UPDATE`/`UNDO_BULK_UPDATE`) — PR #337 |
+| `recordPriceObservation` | `priceObservations` server-trusted — PR #339 |
 
 Replay protection (`consumeAppCheckToken`) **ativo** em todas em produção.
 
@@ -257,7 +254,7 @@ Todas sob `/users/{userId}/`:
 | `consents/{consentId}` | Consentimentos LGPD |
 | `dataProcessingLog/{logId}` | Log de processamento de dados (LGPD — server-only) |
 | `shoppingLists/{listId}` | Listas de compras com itens embutidos |
-| `priceObservations/{obsId}` | Histórico de preços por produto/loja — append-mostly, update bloqueado |
+| `priceObservations/{obsId}` | Histórico de preços por produto/loja — create server-only via callable `recordPriceObservation` (PR #339), update bloqueado |
 | `fcmTokens/{tokenId}` | Tokens FCM para push — owner escreve/deleta, leitura exclusiva Admin SDK |
 | `decisions/{decisionId}` | Diário de Decisões do Agente — append-mostly, update restrito a transição de status |
 | `/{document=**}` | Deny-all catch-all |
@@ -280,7 +277,7 @@ Todas sob `/users/{userId}/`:
 | `src/components/GoalsPanel.tsx` | Metas de poupança com progresso animado |
 | `src/components/RecurringManager.tsx` | Gestão de recorrentes (mensal + anual, pause/resume) |
 | `src/hooks/useGoals.ts` | CRUD em tempo real de `users/{uid}/goals` |
-| `src/hooks/useRecurringAutoExecute.ts` | Scaffold client-side → server-side após FASE 1.4 |
+| `src/components/OnboardingWizard.tsx` | Wizard de primeira experiência (accounts=0 && transactions=0) — PR #342 |
 | `src/utils/exportCSV.ts` | `computeMonthlyReport` + `generateMonthlyReportCSV` |
 | `src/lib/purchaseSimulator.ts` | Motor puro de simulação de compra (zero I/O, zero float) |
 | `src/lib/debtStrategy.ts` | Motor de estratégia de quitação (avalanche/bola-de-neve). **Não existe `debtPlanner.ts`** |
@@ -312,4 +309,4 @@ Todas sob `/users/{userId}/`:
 
 ## Hooks Presentes
 
-`useAccounts`, `useAgentAction`, `useAppLogic`, `useAuditLogs`, `useBudgets`, `useCategories`, `useCategoryRules`, `useCreditCards`, `useFinancialData`, `useFinancialKPIs`, `useFinancialMetrics`, `useForecast`, `useGoals`, `useImportActions`, `useInsightsEngine`, `useModalState`, `usePriceObservations`, `useRecurring`, `useRecurringAutoExecute`, `useRunningBalance`, `useShoppingLists`, `useTransactionActions`, `useTransactionHistory`, `useTransactions`, `useTransactionsPagination`
+`useAccounts`, `useAgentAction`, `useAppLogic`, `useAuditLogs`, `useBudgets`, `useCategories`, `useCategoryRules`, `useCreditCards`, `useFinancialData`, `useFinancialKPIs`, `useFinancialMetrics`, `useForecast`, `useGoals`, `useImportActions`, `useInsightsEngine`, `useModalState`, `usePriceObservations`, `useRecurring`, `useRunningBalance`, `useShoppingLists`, `useTransactionActions`, `useTransactionHistory`, `useTransactions`, `useTransactionsPagination`
