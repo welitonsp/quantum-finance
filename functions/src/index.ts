@@ -41,6 +41,7 @@ import {
 } from './priceObservationValidation';
 import { maskPII } from './lib/piiMasker';
 import { checkAndIncrementOpRateLimit, type OpRateLimitKey } from './opRateLimit';
+import { buildReminderBody, buildReminderSummary } from './pushReminders';
 import {
   centsToReais,
   safeCategory,
@@ -1672,5 +1673,93 @@ export const executeScheduledRecurrents = onSchedule(
     }
 
     console.info('[executeScheduledRecurrents]', { yearMonth, executed, skipped, errors });
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNÇÃO 6 — sendPushReminders (agendada — 1×/dia às 11:00 UTC = 08:00 BRT)
+// Briefing matinal por FCM para usuários que ativaram push (fcmTokens):
+// recorrentes que vencem hoje + faturas de cartão que fecham hoje.
+// Roda DEPOIS de executeScheduledRecurrents (04:00 UTC) de propósito.
+// PRIVACIDADE: payload sem descrições/nomes — só contagens e total BRL
+// (helpers puros em pushReminders.ts). Tokens inválidos são removidos.
+// ═══════════════════════════════════════════════════════════════════════════════
+export const sendPushReminders = onSchedule(
+  {
+    schedule: '0 11 * * *', // 11:00 UTC = 08:00 BRT
+    region: REGION,
+    timeoutSeconds: 300,
+    memory: '256MiB',
+  },
+  async () => {
+    const today = serverTodayISO();
+    const dayOfMonth = Number(today.split('-')[2]);
+    const month = Number(today.split('-')[1]);
+
+    // Só usuários que ativaram push têm docs em fcmTokens — iteração barata.
+    const tokensSnap = await adminDb.collectionGroup('fcmTokens').get();
+    const tokensByUid = new Map<string, Array<{ token: string; ref: admin.firestore.DocumentReference }>>();
+    for (const tokenDoc of tokensSnap.docs) {
+      const uid = tokenDoc.ref.path.split('/')[1];
+      const token = tokenDoc.data()['token'];
+      if (!uid || typeof token !== 'string' || token.length === 0) continue;
+      const list = tokensByUid.get(uid) ?? [];
+      list.push({ token, ref: tokenDoc.ref });
+      tokensByUid.set(uid, list);
+    }
+
+    let sent = 0;
+    let skippedUsers = 0;
+    let removedTokens = 0;
+    let errors = 0;
+
+    for (const [uid, tokens] of tokensByUid) {
+      try {
+        const [tasksSnap, cardsSnap] = await Promise.all([
+          adminDb.collection(`users/${uid}/recurringTasks`).where('active', '==', true).get(),
+          adminDb.collection(`users/${uid}/creditCards`).get(),
+        ]);
+        const summary = buildReminderSummary(
+          tasksSnap.docs.map((d) => d.data()),
+          cardsSnap.docs.map((d) => d.data()),
+          dayOfMonth,
+          month,
+        );
+        const body = buildReminderBody(summary);
+        if (body === null) {
+          skippedUsers++;
+          continue;
+        }
+
+        const response = await admin.messaging().sendEachForMulticast({
+          tokens: tokens.map((t) => t.token),
+          notification: { title: 'Quantum Finance', body },
+          webpush: {
+            fcmOptions: { link: '/' },
+            notification: { icon: '/pwa-192x192.png', badge: '/pwa-192x192.png', tag: 'quantum-daily' },
+          },
+        });
+        sent += response.successCount;
+
+        // Limpeza best-effort de tokens mortos (desinstalação/expiração).
+        await Promise.all(response.responses.map(async (r, i) => {
+          const code = r.error?.code;
+          if (code === 'messaging/registration-token-not-registered'
+            || code === 'messaging/invalid-argument') {
+            try {
+              await tokens[i]!.ref.delete();
+              removedTokens++;
+            } catch { /* token será limpo na próxima execução */ }
+          }
+        }));
+      } catch (e) {
+        errors++;
+        console.warn('[FunctionWarning]', sanitizeFunctionError('push_reminders_user', e));
+      }
+    }
+
+    console.info('[sendPushReminders]', {
+      users: tokensByUid.size, sent, skippedUsers, removedTokens, errors,
+    });
   },
 );

@@ -10,31 +10,17 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // injectManifest: SW customizado em src/sw.ts — necessário para FCM
+      // background push (onBackgroundMessage) no mesmo SW de caching.
+      // navigateFallback e runtime caching de fonts vivem agora em src/sw.ts.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
-      workbox: {
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        globIgnores: ['**/workers/*.js', 'firebase-messaging-sw.js'],
-        navigateFallback: '/offline.html',
-        navigateFallbackAllowlist: [/^(?!\/__).*/],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-cache',
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-static',
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
-            },
-          },
-        ],
+        globIgnores: ['**/workers/*.js'],
       },
       manifest: {
         name: 'Quantum Finance',
