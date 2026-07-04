@@ -3,9 +3,16 @@
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 > **Histórico de fases/PRs:** [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md) · **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md)
 
-## Estado Atual — 2026-07-04 (FASES NFC-e + Cesta Pessoal FECHADAS + segurança comercial)
+## Estado Atual — 2026-07-04 (FASES NFC-e + Cesta Pessoal + FCM Push FECHADAS + segurança comercial)
 
-- Branch principal: `main` — HEAD `d1de25c` (PR #358 mergeado). Working tree esperado: limpo. **Nenhum PR aberto.**
+- Branch principal: `main` — HEAD `721a391` (PR #359 mergeado). Working tree esperado: limpo. **Nenhum PR aberto.**
+- Suíte: **1465 unit + 219 rules + 282 functions + 28 E2E**.
+
+### FASE FCM Background Push — FECHADA (2026-07-04, PR #359)
+
+- `vite.config.ts` → `injectManifest` com SW customizado `src/sw.ts`: caching com paridade total ao generateSW anterior + `onBackgroundMessage` (config via `import.meta.env`; sob emulador messaging não inicializa — E2E intacto). Stub morto `public/firebase-messaging-sw.js` removido. devDeps workbox-*.
+- Nova scheduled **`sendPushReminders`** (11:00 UTC = 08:00 BRT, após `executeScheduledRecurrents`): briefing diário para usuários com push ativo — recorrentes vencendo hoje + faturas fechando hoje. **Payload sem PII** (só contagens e total BRL por aritmética inteira — `functions/src/pushReminders.ts`, puro, 9 testes). Tokens mortos removidos best-effort.
+- **Verificação real pendente (owner):** ativar push em Governança num dispositivo e confirmar recebimento do briefing (ou mensagem de teste via console FCM).
 
 ### FASE Cesta Pessoal / Inteligência de Preços — FECHADA (2026-07-04, PRs #357/#358)
 
@@ -36,7 +43,7 @@ Modelo seguro entregue completo, **zero rede no fluxo do usuário**:
 
 ### Fatos vivos herdados dos ciclos anteriores
 
-- **Cloud Functions: 9 callables** (`createTransaction`, `executeAgentAction`, `createTransfer`, `deleteUserData`, `categorizeTransactionsBatch`, `chatWithQuantumAI`, `generateAuditReport`, `logAuditEvent`, `recordPriceObservation`) + **1 scheduled** (`executeScheduledRecurrents`).
+- **Cloud Functions: 9 callables** (`createTransaction`, `executeAgentAction`, `createTransfer`, `deleteUserData`, `categorizeTransactionsBatch`, `chatWithQuantumAI`, `generateAuditReport`, `logAuditEvent`, `recordPriceObservation`) + **2 scheduled** (`executeScheduledRecurrents` 04:00 UTC; `sendPushReminders` 11:00 UTC — briefing FCM diário, payload sem PII, PR #359).
 - **Logs/auditoria 100% server-trusted** onde viável (#336/#337). Mantidos client-side por decisão: recorrentes (P3 controlado) e `IMPORT_TRANSACTION` (acoplado ao `runTransaction` atômico do Modelo A).
 - **`OnboardingWizard.tsx`** (#342) abre quando `accounts.length === 0 && transactions.length === 0`. **E2E precisa descartá-lo:** helper `e2e/helpers/onboarding.ts` (`dismissOnboardingIfPresent`) nos 6 specs (#345).
 - Cobertura real: statements ~60.9% / lines ~64.9% (gates 60/64). Bundle principal 484 KB (budget 500 KB).
@@ -59,7 +66,7 @@ Modelo seguro entregue completo, **zero rede no fluxo do usuário**:
 
 - **NFC-e fetch automático (`fetchNfce`)** — **ADIADO por decisão de produto/segurança do owner (2026-07-04)**, mesmo com o gate SSRF pronto e testado (#355). O fluxo por QR Code/colagem (fase fechada, PRs #352–#356) já entrega o valor sem abrir rede. Não implementar fetch/scraping de SEFAZ sem nova decisão explícita.
 - **Open Finance / BACEN** — bloqueado por mTLS/orçamento.
-- **FCM background push** — requer migrar `vite.config.ts` para `injectManifest`.
+- ~~FCM background push~~ — **DESTRAVADO e ENTREGUE (PR #359, 2026-07-04)**: `vite.config.ts` migrado para `injectManifest` com SW customizado `src/sw.ts` (caching idêntico ao generateSW anterior + `onBackgroundMessage`); scheduled `sendPushReminders` envia briefing diário sem PII. Stub morto `public/firebase-messaging-sw.js` removido.
 
 ## Zonas Proibidas de Alteração
 
