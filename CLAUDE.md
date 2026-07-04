@@ -3,34 +3,27 @@
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 > **Histórico de fases/PRs:** [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md) · **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md)
 
-## Estado Atual — 2026-07-03 (ciclo pós-auditoria: logs server-trusted + UI + onboarding)
+## Estado Atual — 2026-07-04 (ciclo segurança comercial + NFC-e fase 1)
 
-- Branch principal: `main` — HEAD `af4a183` (PR #345 mergeado). Working tree esperado: limpo.
-- **Nenhum PR aberto.** PRs #336–#345 mergeados nesta sessão.
+- Branch principal: `main` — HEAD `0836194` (PR #352 mergeado). Working tree esperado: limpo. **Nenhum PR aberto.**
+- **PRs #346–#352 mergeados (2026-07-04):**
+  - **#346** CSP sem `'unsafe-inline'` em `script-src` + `base-uri`/`form-action`/`frame-ancestors`/`manifest-src`/`upgrade-insecure-requests` (`firebase.json`).
+  - **#347** **Zero vulnerabilidades npm** (raiz e functions) via overrides cirúrgicos (uuid, teeny-request, ts-deepmerge, js-yaml); gate CI de audit das functions em `--audit-level=moderate`. firebase-admin@14 descartado (peer do firebase-functions só aceita ^13).
+  - **#348** Rate limit por uid nas 6 callables de escrita não-IA (`functions/src/opRateLimit.ts`, doc `users/{uid}/usage/op_{key}`): createTransaction 120/h, createTransfer 30/h, executeAgentAction 60/h, logAuditEvent 240/h, recordPriceObservation 240/h, deleteUserData 5/dia. Gate após validação + fast-path de idempotência. IA já tinha 50/dia.
+  - **#349 + #351** **MFA TOTP completo**: resolver de sign-in (`src/shared/lib/mfa.ts` + prompt em `LoginScreen.tsx`) e painel de inscrição em Settings (`src/features/settings/MfaPanel.tsx`). **Pendente do owner:** habilitar TOTP no console (Authentication → Sign-in method → Multi-factor; requer Identity Platform) — sem isso o painel mostra mensagem clara e nada quebra.
+  - **#352** **NFC-e fase 1 (offline)**: `src/features/shopping/lib/nfceParser.ts` — parser determinístico modelo 65 (zero rede), chave de acesso validada por DV módulo-11, `extractChaveAcesso` de URL de QR Code, valores fiscais → centavos Decimal.js fail-closed, descrição fiscal original imutável, CPF do comprador nunca extraído. Próximos entregáveis: HTML colado → suíte gate SSRF → só então fetch real.
+- **Diagnóstico de floats legados em produção (2026-07-04): zero documentos legados** — 4 transações, todas com `value_cents`. Nada a migrar.
+- Suíte: **1418 unit + 219 rules + 225 functions + 28 E2E**.
+
+### Fatos vivos herdados dos ciclos anteriores
+
 - **Cloud Functions: 9 callables** (`createTransaction`, `executeAgentAction`, `createTransfer`, `deleteUserData`, `categorizeTransactionsBatch`, `chatWithQuantumAI`, `generateAuditReport`, `logAuditEvent`, `recordPriceObservation`) + **1 scheduled** (`executeScheduledRecurrents`).
-- **Logs/auditoria agora 100% server-trusted** onde viável: `system_logs` (write client-side removida, #336) e `audit_logs` de transação — `BULK_UPDATE`/`UNDO_BULK_UPDATE` — via nova callable `logAuditEvent` (#337). Mantidos client-side por decisão de escopo: recorrentes (P3 controlado) e `IMPORT_TRANSACTION` (acoplado ao `runTransaction` atômico do Modelo A).
-- **`priceObservations` server-trusted** via nova callable `recordPriceObservation` (#339) — mesmo padrão de `transferValidation.ts`.
-- **Novo `OnboardingWizard.tsx`** (#342): modal de primeira experiência quando `accounts.length === 0 && transactions.length === 0`; "pular" persistido em localStorage. **Atenção:** E2E precisa descartá-lo explicitamente — helper `e2e/helpers/onboarding.ts` (`dismissOnboardingIfPresent`) aplicado nos 6 specs (#345, corrige regressão introduzida pelo próprio #342).
-- **Migração de floats legados: desbloqueio parcial e controlado** (#343) — `functions/scripts/executeLegacyMigrationSafe.js` permite `--execute` real apenas para o subconjunto `migrationEligible` (patch `{schemaVersion:2, source?}`, zero matemática nova), fail-closed em lote. **Diagnóstico real rodado em 2026-07-04** contra produção (`quantum-finance-39235`): 4 transações totais, todas já com `value_cents`, **zero** documentos com `value` legado — nada para migrar agora. Ver [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md#migração-de-floats-legados--desbloqueio-parcial-e-controlado-fase-10d-rodada-2).
-- **Gate de cobertura estava mascarado** (#344) — vitest não roda cobertura quando há teste falhando; um teste de a11y quebrado (`ImportButton.test.tsx`, não relacionado ao conteúdo de nenhuma PR) escondia isso. Corrigido + 41 novos testes reais para fechar as lacunas expostas (`generateHash`, `annotateRiskScores`, `computeBudgetSuggestions`). Cobertura real: statements 60.86% / lines 64.86%.
-- Bundle principal reduzido 523 KB → 484 KB (#340, lazy-load de `GoalsPanel`/`EconomyChallengeWidget` + listener duplicado de `useCreditCards` removido).
+- **Logs/auditoria 100% server-trusted** onde viável (#336/#337). Mantidos client-side por decisão: recorrentes (P3 controlado) e `IMPORT_TRANSACTION` (acoplado ao `runTransaction` atômico do Modelo A).
+- **`OnboardingWizard.tsx`** (#342) abre quando `accounts.length === 0 && transactions.length === 0`. **E2E precisa descartá-lo:** helper `e2e/helpers/onboarding.ts` (`dismissOnboardingIfPresent`) nos 6 specs (#345).
+- Cobertura real: statements ~60.9% / lines ~64.9% (gates 60/64). Bundle principal 484 KB (budget 500 KB).
 - Stashes locais podem existir; não são estado canônico da `main`.
 
-### PRs #336–#345 mergeados (2026-07-03)
-| PR | Prio | Escopo |
-|---|---|---|
-| #336 | P2 | `system_logs` server-trusted — remove escrita client-side redundante (self-forgery) |
-| #337 | P2 | `audit_logs` de transação server-trusted via nova callable `logAuditEvent` |
-| #338 | P3 | Unifica empty states/skeleton dos gráficos Recharts (`EmptyState`/`Skeleton`) |
-| #339 | P2 | `priceObservations` server-trusted via nova callable `recordPriceObservation` |
-| #340 | P2 | Perf: remove listener duplicado `useCreditCards`; lazy-load `GoalsPanel`/`EconomyChallengeWidget`; bundle -39 KB |
-| #341 | P3 | Tipografia variável (Google Fonts range) + `CountUp` em `ForecastWidget`/`WealthKPIs` |
-| #342 | P3 | `OnboardingWizard.tsx` — wizard mínimo de primeira experiência |
-| #343 | P3 | Desbloqueio parcial/controlado da migração de floats legados (`executeLegacyMigrationSafe.js`) |
-| #344 | — | Fix CI: teste de a11y quebrado + gate de cobertura mascarado restaurado (+41 testes) |
-| #345 | — | Fix E2E: `OnboardingWizard` (#342) bloqueava cliques nos 6 specs + locator PT-PT obsoleto |
-
-> Histórico de ciclos anteriores (#325–#335): ver [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md).
+> Histórico detalhado dos ciclos #325–#345: ver [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md).
 
 ## Agente — Contrato de Mutação Confirmada
 
