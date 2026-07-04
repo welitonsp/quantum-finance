@@ -10,6 +10,7 @@ import ShoppingListForm from './components/ShoppingListForm';
 import ShoppingListView from './components/ShoppingListView';
 import PriceHistoryPanel from './components/PriceHistoryPanel';
 import NfceImportPanel from './components/NfceImportPanel';
+import PriceIntelligencePanel from './components/PriceIntelligencePanel';
 import type { AddItemPayload } from './hooks/useShoppingLists';
 
 interface Props {
@@ -149,6 +150,13 @@ export default function ShoppingPage({ uid }: Props) {
           </div>
         </div>
       )}
+
+      {/* Inteligência de preços (aparece quando há observações registradas) */}
+      <PriceIntelligencePanel
+        observations={observations}
+        activeList={lists.find((l) => l.status !== 'done' && l.items.length > 0) ?? null}
+        onShowPriceHistory={handleShowPriceHistory}
+      />
 
       {/* Lists */}
       {loading ? (
