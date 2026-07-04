@@ -63,5 +63,11 @@ exibir TOTP depois de habilitado via API).
 
 ## Registro de execução
 
-- 2026-07-04 — `--check` inicial executado (estado antes da habilitação): registrado no PR desta mudança.
-- Execução do `--execute` e validação final: responsabilidade do owner, registrar data/resultado abaixo quando rodar.
+| Data | Ação | Resultado |
+|---|---|---|
+| 2026-07-04 | `--check` inicial | MFA DISABLED · TOTP ABSENT · SMS inativo (estado descrito pelo owner confirmado) |
+| 2026-07-04 | `--execute` (autorizado pelo owner, ADC local) | MFA ENABLED · **TOTP ENABLED** · adjacentIntervals=5 · SMS **inativo** (inalterado) |
+| 2026-07-04 | `--check` de validação | `✔ TOTP está ENABLED.` — exit 0 |
+
+**Status: CONCLUÍDO.** O painel MFA em Settings (PR #351) está funcional em produção; o
+enrollment TOTP pode ser testado de ponta a ponta pelo owner.
