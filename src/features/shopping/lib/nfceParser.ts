@@ -42,8 +42,9 @@ export interface NfceParseResult {
   emitenteNome: string;
   /** CNPJ do emitente (emit/CNPJ) — dado público do estabelecimento. */
   emitenteCnpj: string;
-  /** Data/hora de emissão ISO (ide/dhEmi), como string fiscal original. */
-  emitidoEm: string;
+  /** Data/hora de emissão como string fiscal original (ide/dhEmi no XML);
+   *  null quando a fonte (HTML colado) não expõe o campo de forma confiável. */
+  emitidoEm: string | null;
   itens: NfceItem[];
   /** Total da nota em centavos (total/ICMSTot/vNF). */
   totalNotaCents: Centavos;
