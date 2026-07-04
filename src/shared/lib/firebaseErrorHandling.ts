@@ -30,6 +30,8 @@ export const FIREBASE_ERROR_OPERATIONS = [
   'auth_login',
   'auth_login_screen',
   'auth_mfa_resolve',
+  'auth_mfa_enroll',
+  'auth_mfa_unenroll',
   'auth_anonymous_login',
   'app_error_boundary',
   'import_parse',

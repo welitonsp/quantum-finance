@@ -5,6 +5,7 @@ import { db } from '../shared/api/firebase';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import toast from 'react-hot-toast';
 import DataPrivacyPanel from '../features/settings/DataPrivacyPanel';
+import MfaPanel from '../features/settings/MfaPanel';
 
 interface CategoryRule {
   id: string;
@@ -178,6 +179,11 @@ export default function CategorySettings({ uid, onClose }: Props) {
               </div>
             )}
           </div>
+          {/* ── Segurança da conta (MFA TOTP) ──────────────────────────────── */}
+          <div className="border-t border-quantum-border/50 pt-6">
+            <MfaPanel />
+          </div>
+
           {/* ── Privacidade e Dados (LGPD) ─────────────────────────────────── */}
           <div className="border-t border-quantum-border/50 pt-6">
             <DataPrivacyPanel uid={uid} />
