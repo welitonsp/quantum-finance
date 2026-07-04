@@ -45,7 +45,7 @@
 
 ## Bloqueios Estruturais (não iniciar sem decisão)
 
-- **NFC-e** — bloqueado até gate SSRF completo com validação estrita de host/domínio.
+- **NFC-e** — bloqueado até gate SSRF completo com validação estrita de host/domínio. **Plano da fase técnica aprovado (2026-07-04):** `docs/product/FASE_COMPRAS_RADAR_GITHUB_NFCE_2026-07-04.md` — radar GitHub + parser offline sobre fixtures primeiro; fetch real só após suíte SSRF passar.
 - **Open Finance / BACEN** — bloqueado por mTLS/orçamento.
 - **FCM background push** — requer migrar `vite.config.ts` para `injectManifest`.
 
