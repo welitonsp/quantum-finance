@@ -1,7 +1,14 @@
 # FASE Compras Inteligentes — Radar GitHub e Prova Técnica de Importação Fiscal
 
 Data: 2026-07-04
-Status: **planejamento aprovado pelo owner — implementação ainda condicionada ao gate SSRF do threat model**
+Status: **FASE FECHADA no modelo seguro (2026-07-04)** — entregáveis 1–4 mergeados
+(PRs #352 parser XML, #354 parser HTML colado, #355 gate SSRF testado, #356 UI com
+revisão humana). **Fetch automático (`fetchNfce`) ADIADO por decisão de
+produto/segurança do owner:** o fluxo por QR Code/colagem já entrega o valor sem
+abrir superfície de rede, e o CAPTCHA da SEFAZ frequentemente inviabiliza o fetch
+automático de qualquer forma. O gate SSRF (`functions/src/nfceUrlGate.ts`, 48
+testes) permanece pronto para quando/se a decisão mudar. **Não implementar
+fetch/scraping de SEFAZ sem nova decisão explícita do owner.**
 Pré-requisito normativo: `docs/product/THREAT_MODEL_COMPRAS_INTELIGENTES_NFCE_2026-06-12.md` (§12–§16)
 
 > NFC-e real permanece bloqueada até a fase técnica provar o gate SSRF completo.

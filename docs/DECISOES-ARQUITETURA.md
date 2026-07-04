@@ -125,3 +125,24 @@
 **Passo 0 — concluído em 2026-07-04:** `diagnoseLegacyTransactions.js` (read-only) rodado contra o Firestore de produção real (`quantum-finance-39235`). Resultado: **4 transações totais analisadas, todas já com `value_cents` válido; zero (`hasLegacyValue: 0`) documentos com o campo float legado `value`.** `conversionCandidateTotal: 0` — nenhum documento `migrationEligible` no momento. `executeLegacyMigrationSafe.js` permanece destravado (capacidade pronta) mas **sem alvo real para executar** nesta base. Reavaliar se o volume de transações crescer significativamente ou se uma importação futura reintroduzir documentos no formato legado.
 
 **Cobertura:** `functions/test/executeLegacyMigrationSafe.test.js` — flag obrigatória, fail-closed em lote misto, checksum de backup inválido rejeita antes de qualquer leitura, relatório sanitizado, guardrail estático de matemática financeira proibida (reafirmado, não relaxado).
+
+---
+
+## NFC-e — Fase fechada no modelo "zero rede"; fetch automático ADIADO (2026-07-04)
+
+**Contexto:** a FASE Compras Inteligentes/NFC-e entregou o modelo seguro completo em 4 PRs: parser XML local (#352), parser de HTML colado da consulta pública (#354), gate SSRF com suíte do threat model §12–§16 (#355, `functions/src/nfceUrlGate.ts`, 48 testes + guardrail estático anti-rede) e UI de importação com revisão humana obrigatória gravando via callable `recordPriceObservation` rate-limited (#356). Nenhum byte sai do dispositivo durante o parse.
+
+**Decisão (owner, 2026-07-04): a callable `fetchNfce` — fetch automático da NFC-e na SEFAZ — fica ADIADA, mesmo com o gate SSRF pronto e aprovado.**
+
+**Por quê:**
+1. O fluxo por QR Code/colagem já entrega o valor de produto (histórico de preços por item fiscal real) sem abrir NENHUMA superfície de rede no backend.
+2. O CAPTCHA das consultas públicas da SEFAZ frequentemente inviabiliza o fetch automático na prática — o ganho marginal não paga o risco operacional.
+3. Princípio do projeto: superfície de ataque só se abre quando o valor que ela destrava é comprovado por uso real.
+
+**Invariantes enquanto a decisão vigorar:**
+- NÃO implementar `fetchNfce` nem qualquer request/scraping para SEFAZ.
+- NÃO adicionar código de rede aos módulos de parse (`nfceParser.ts`, `nfceHtmlParser.ts`) nem ao gate (`nfceUrlGate.ts` — guardrail estático no teste falha o CI se acontecer).
+- NÃO alterar o threat model.
+- Manter revisão humana antes de gravar qualquer observação de preço.
+
+**Reversão:** exige nova decisão explícita do owner. Quando/se ocorrer, a implementação DEVE consumir o gate existente (resolver DNS → `assertResolvedAddressesAllowed` → conectar no MESMO endereço validado; redirects proibidos; limites de payload/timeout já normativos no módulo).

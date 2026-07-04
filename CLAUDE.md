@@ -3,17 +3,29 @@
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 > **Histórico de fases/PRs:** [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md) · **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md)
 
-## Estado Atual — 2026-07-04 (ciclo segurança comercial + NFC-e fase 1)
+## Estado Atual — 2026-07-04 (FASE NFC-e FECHADA no modelo seguro + segurança comercial)
 
-- Branch principal: `main` — HEAD `0836194` (PR #352 mergeado). Working tree esperado: limpo. **Nenhum PR aberto.**
-- **PRs #346–#352 mergeados (2026-07-04):**
+- Branch principal: `main` — HEAD `1e9b1be` (PR #356 mergeado). Working tree esperado: limpo. **Nenhum PR aberto.**
+
+### FASE Compras Inteligentes / NFC-e — FECHADA (2026-07-04, PRs #352/#354/#355/#356)
+
+Modelo seguro entregue completo, **zero rede no fluxo do usuário**:
+1. **#352** Parser XML local (`src/features/shopping/lib/nfceParser.ts`) — modelo 65, chave DV módulo-11, centavos Decimal.js fail-closed, descrição fiscal imutável, CPF do comprador nunca extraído.
+2. **#354** Parser HTML colado local (`nfceHtmlParser.ts`, layout portal nacional) + `parseNfceDocument` (roteador XML/HTML).
+3. **#355** Gate SSRF (`functions/src/nfceUrlGate.ts`) — allowlist por UF (GO inicial), URL sempre reconstruída da chave, +48 testes cobrindo o threat model §12–§16, guardrail estático anti-rede no próprio módulo.
+4. **#356** UI de importação (`NfceImportPanel` no ShoppingPage) — colar XML/HTML → revisão humana obrigatória (preço/qtde/unidade editáveis) → 1 `priceObservation` por item via callable `recordPriceObservation` (rate-limited).
+
+**DECISÃO DE PRODUTO/SEGURANÇA (owner, 2026-07-04): a callable `fetchNfce` (fetch automático de NFC-e na SEFAZ) fica ADIADA.** O fluxo por QR Code/colagem já entrega o valor sem abrir superfície de rede; CAPTCHA da SEFAZ frequentemente inviabiliza o fetch automático de qualquer forma. O gate SSRF permanece pronto e testado para quando/se a decisão mudar. **Proibido implementar fetch/scraping de SEFAZ sem nova decisão explícita do owner.** Ver `docs/DECISOES-ARQUITETURA.md` e `docs/product/FASE_COMPRAS_RADAR_GITHUB_NFCE_2026-07-04.md`.
+### Ciclo segurança comercial (PRs #346–#353, 2026-07-04)
+
+- **PRs mergeados:**
   - **#346** CSP sem `'unsafe-inline'` em `script-src` + `base-uri`/`form-action`/`frame-ancestors`/`manifest-src`/`upgrade-insecure-requests` (`firebase.json`).
   - **#347** **Zero vulnerabilidades npm** (raiz e functions) via overrides cirúrgicos (uuid, teeny-request, ts-deepmerge, js-yaml); gate CI de audit das functions em `--audit-level=moderate`. firebase-admin@14 descartado (peer do firebase-functions só aceita ^13).
   - **#348** Rate limit por uid nas 6 callables de escrita não-IA (`functions/src/opRateLimit.ts`, doc `users/{uid}/usage/op_{key}`): createTransaction 120/h, createTransfer 30/h, executeAgentAction 60/h, logAuditEvent 240/h, recordPriceObservation 240/h, deleteUserData 5/dia. Gate após validação + fast-path de idempotência. IA já tinha 50/dia.
-  - **#349 + #351** **MFA TOTP completo**: resolver de sign-in (`src/shared/lib/mfa.ts` + prompt em `LoginScreen.tsx`) e painel de inscrição em Settings (`src/features/settings/MfaPanel.tsx`). **Pendente do owner:** habilitar TOTP no console (Authentication → Sign-in method → Multi-factor; requer Identity Platform) — sem isso o painel mostra mensagem clara e nada quebra.
-  - **#352** **NFC-e fase 1 (offline)**: `src/features/shopping/lib/nfceParser.ts` — parser determinístico modelo 65 (zero rede), chave de acesso validada por DV módulo-11, `extractChaveAcesso` de URL de QR Code, valores fiscais → centavos Decimal.js fail-closed, descrição fiscal original imutável, CPF do comprador nunca extraído. Próximos entregáveis: HTML colado → suíte gate SSRF → só então fetch real.
+  - **#349 + #351** **MFA TOTP completo**: resolver de sign-in (`src/shared/lib/mfa.ts` + prompt em `LoginScreen.tsx`) e painel de inscrição em Settings (`src/features/settings/MfaPanel.tsx`).
+  - **#353** **TOTP habilitado no projeto** (Identity Platform) via `functions/scripts/enableTotpMfa.js` (Admin SDK `projectConfigManager`, SMS intocado, adjacentIntervals=5). **Executado e validado em produção 2026-07-04** — ver `docs/security/ENABLE_TOTP_MFA_2026-07-04.md`. MFA funcional de ponta a ponta; teste E2E manual pelo owner pendente.
 - **Diagnóstico de floats legados em produção (2026-07-04): zero documentos legados** — 4 transações, todas com `value_cents`. Nada a migrar.
-- Suíte: **1418 unit + 219 rules + 225 functions + 28 E2E**.
+- Suíte: **1444 unit + 219 rules + 273 functions + 28 E2E**.
 
 ### Fatos vivos herdados dos ciclos anteriores
 
@@ -38,7 +50,7 @@
 
 ## Bloqueios Estruturais (não iniciar sem decisão)
 
-- **NFC-e** — bloqueado até gate SSRF completo com validação estrita de host/domínio. **Plano da fase técnica aprovado (2026-07-04):** `docs/product/FASE_COMPRAS_RADAR_GITHUB_NFCE_2026-07-04.md` — radar GitHub + parser offline sobre fixtures primeiro; fetch real só após suíte SSRF passar.
+- **NFC-e fetch automático (`fetchNfce`)** — **ADIADO por decisão de produto/segurança do owner (2026-07-04)**, mesmo com o gate SSRF pronto e testado (#355). O fluxo por QR Code/colagem (fase fechada, PRs #352–#356) já entrega o valor sem abrir rede. Não implementar fetch/scraping de SEFAZ sem nova decisão explícita.
 - **Open Finance / BACEN** — bloqueado por mTLS/orçamento.
 - **FCM background push** — requer migrar `vite.config.ts` para `injectManifest`.
 
@@ -58,7 +70,7 @@
 - AppShell/navegação **não pode alterar** `functions/`, `firestore.rules`, schemas, services financeiros, testes, `.env`, `package.json`.
 - Design System **não pode alterar** cálculos monetários nem centavos inteiros.
 - Toda feature com IA deve declarar: dados usados, ação sugerida, confirmação exigida, evento de auditoria registrado.
-- NFC-e continua **bloqueada** até threat model SSRF completo.
+- NFC-e por colagem (zero rede) está **entregue**; fetch automático de SEFAZ permanece **adiado** por decisão do owner (2026-07-04) — não implementar sem nova decisão explícita.
 
 ## Contratos Críticos Vivos
 
