@@ -3,10 +3,22 @@
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 > **Histórico de fases/PRs:** [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md) · **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md)
 
-## Estado Atual — 2026-07-04 (FASES NFC-e + Cesta Pessoal + FCM Push FECHADAS + segurança comercial)
+## Estado Atual — 2026-07-09 (Auditoria Big Four + FASE Radar de Compras aberta)
 
-- Branch principal: `main` — HEAD `721a391` (PR #359 mergeado). Working tree esperado: limpo. **Nenhum PR aberto.**
-- Suíte: **1465 unit + 219 rules + 282 functions + 28 E2E**.
+- Branch principal: `main` — HEAD `7292916` (PR #363 mergeado). Working tree esperado: limpo. **Nenhum PR aberto.**
+- Suíte: **1475 unit + 219 rules + 282 functions + 28 E2E** (+10 testes do Radar).
+
+### Auditoria Big Four + Tese Extraordinária (2026-07-09)
+
+- **Laudo:** `docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md` — nota **8.7/10** (Qualified Opinion). Backend/segurança em nível Big Tech; gap em *assurance* automatizado.
+- **Findings MÉDIOS abertos:** **M-01** cobertura baixa (gates 60/64/**branches 50**); **M-02** sem a11y automatizado (falta `eslint-plugin-jsx-a11y` + `jest-axe`); **M-03** verificações reais owner-pending (MFA E2E, FCM push, NFC-e real).
+- **Tese de produto:** `docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md` — 3 ativos-fosso + 5 premissas Fable 5 + sequência de fases.
+
+### FASE Radar de Compras — 1ª entrega (2026-07-09, PR #363)
+
+- Primeiro movimento da Tese: `src/features/shopping/lib/shoppingRadar.ts` (motor PURO, zero I/O, centavos inteiros + basis points) deriva **alertas de alta** (loja da observação mais recente) e **oportunidades de economia** (mesmo produto mais barato noutra loja) das `priceObservations` de NFC-e real.
+- `ShoppingRadarCard.tsx` (card-âncora, gating "UI que some") acima do `PriceIntelligencePanel`. Extensão aditiva `latestStore` em `priceIntelligence.ts`.
+- **Sem escrita/rede/mutação** — camada de insight pura. Próximas fases: Ação de 1 Toque → Gêmeo Financeiro → Selo de Integridade → Copiloto que Cumpre.
 
 ### FASE FCM Background Push — FECHADA (2026-07-04, PR #359)
 
