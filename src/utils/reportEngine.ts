@@ -40,6 +40,7 @@ function getAccountBalanceCentavos(account: Account): number {
   return account.balance;
 }
 
+// Display-only rounding: aritmética interna é em centavos; esta fn só formata saída em reais.
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
