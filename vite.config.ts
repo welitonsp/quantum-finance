@@ -164,6 +164,8 @@ export default defineConfig({
       // Salto real: stmts 66.2→66.96, branches 56.27→57.09, funcs 66.24→66.87, lines 70.24→70.97.
       // Ratchet 2026-07-09 (PR #372): +16 testes (forecastEngine health/projection, hashGenerator, riskScore).
       // Salto real: stmts 66.96→67.01, branches 57.09→57.32, funcs 66.87→66.87, lines 70.97→70.97.
+      // Ratchet 2026-07-09 (PR #374): +55 testes (insightsEngine, debtStrategy, cardProjection).
+      // Salto real: stmts 67.01→67.12, branches 57.32→57.75, funcs 66.87→66.87, lines 70.97→70.97.
       // Próxima meta: branches 65 / lines 75 — campanha sustentada M-01.
       thresholds: {
         lines: 70,
