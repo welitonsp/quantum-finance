@@ -166,6 +166,8 @@ export default defineConfig({
       // Salto real: stmts 66.96→67.01, branches 57.09→57.32, funcs 66.87→66.87, lines 70.97→70.97.
       // Ratchet 2026-07-09 (PR #374): +55 testes (insightsEngine, debtStrategy, cardProjection).
       // Salto real: stmts 67.01→67.12, branches 57.32→57.75, funcs 66.87→66.87, lines 70.97→70.97.
+      // PR #376: fix Centavos type em insightsEngine/cardProjection + purchaseSimulator + shoppingRadar tiebreaker.
+      // Coverage estável (purchaseSimulator já atingia 97.95% branches via outros testes).
       // Próxima meta: branches 65 / lines 75 — campanha sustentada M-01.
       thresholds: {
         lines: 70,
