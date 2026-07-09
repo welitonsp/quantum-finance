@@ -90,6 +90,9 @@ function Drawer({ uid, onClose }: { uid: string; onClose: () => void }) {
   }, [onClose]);
 
   return (
+    // Focus-trap (Tab/Escape) do modal — keydown em role="dialog" é o padrão
+    // WAI-ARIA de diálogo; falso-positivo do jsx-a11y neste caso legítimo.
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
       ref={containerRef}
       className="fixed inset-0 z-50 flex items-stretch justify-end"
