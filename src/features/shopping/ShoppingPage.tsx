@@ -11,6 +11,7 @@ import ShoppingListView from './components/ShoppingListView';
 import PriceHistoryPanel from './components/PriceHistoryPanel';
 import NfceImportPanel from './components/NfceImportPanel';
 import PriceIntelligencePanel from './components/PriceIntelligencePanel';
+import ShoppingRadarCard from './components/ShoppingRadarCard';
 import type { AddItemPayload } from './hooks/useShoppingLists';
 
 interface Props {
@@ -150,6 +151,12 @@ export default function ShoppingPage({ uid }: Props) {
           </div>
         </div>
       )}
+
+      {/* Radar de Compras — sinal acionável (economia + altas) sobre notas reais */}
+      <ShoppingRadarCard
+        observations={observations}
+        onShowPriceHistory={handleShowPriceHistory}
+      />
 
       {/* Inteligência de preços (aparece quando há observações registradas) */}
       <PriceIntelligencePanel
