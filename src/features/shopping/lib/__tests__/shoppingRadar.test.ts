@@ -119,4 +119,41 @@ describe('buildShoppingRadar — ordenação, limite e gating', () => {
     ];
     expect(buildShoppingRadar(input)).toEqual(buildShoppingRadar(input));
   });
+
+  it('tiebreaker de alertas: mesma bps → ordenado por productKey asc', () => {
+    // P-B e P-A têm mesma variação percentual → desempate por productKey asc
+    const radar = buildShoppingRadar([
+      obs({ productName: 'P-B', store: 'X', observedAt: '2026-06-01', unitPriceCents: 1000 }),
+      obs({ productName: 'P-B', store: 'X', observedAt: '2026-07-01', unitPriceCents: 1500 }), // +50%
+      obs({ productName: 'P-A', store: 'X', observedAt: '2026-06-01', unitPriceCents: 2000 }),
+      obs({ productName: 'P-A', store: 'X', observedAt: '2026-07-01', unitPriceCents: 3000 }), // +50%
+    ]);
+    expect(radar.alerts).toHaveLength(2);
+    // ambos com bps=5000; desempate lexicográfico: P-A < P-B → P-A primeiro
+    const k0 = radar.alerts[0]!.productKey;
+    const k1 = radar.alerts[1]!.productKey;
+    expect(k0 < k1).toBe(true);
+  });
+
+  it('tiebreaker de oportunidades: mesma economia → ordenado por productKey asc', () => {
+    const radar = buildShoppingRadar([
+      obs({ productName: 'ZZ', store: 'A', observedAt: '2026-07-01', unitPriceCents: 1000 }),
+      obs({ productName: 'ZZ', store: 'B', observedAt: '2026-07-01', unitPriceCents: 1200 }),
+      obs({ productName: 'AA', store: 'A', observedAt: '2026-07-01', unitPriceCents: 1000 }),
+      obs({ productName: 'AA', store: 'B', observedAt: '2026-07-01', unitPriceCents: 1200 }),
+    ]);
+    expect(radar.opportunities).toHaveLength(2);
+    // mesma economia de 200; desempate lexicográfico: AA < ZZ
+    const k0 = radar.opportunities[0]!.productKey;
+    const k1 = radar.opportunities[1]!.productKey;
+    expect(k0 < k1).toBe(true);
+  });
+
+  it('observationCount reflete o total de observações recebidas', () => {
+    const radar = buildShoppingRadar([
+      obs({ productName: 'X', store: 'A', observedAt: '2026-07-01', unitPriceCents: 500 }),
+      obs({ productName: 'Y', store: 'B', observedAt: '2026-07-01', unitPriceCents: 300 }),
+    ]);
+    expect(radar.observationCount).toBe(2);
+  });
 });

@@ -11,7 +11,7 @@ import type { Centavos } from '../../shared/types/money';
 
 const cents = (n: number): Centavos => n as Centavos;
 
-function tx(overrides: Partial<Transaction> & { value_cents: number }): Transaction {
+function tx(overrides: Partial<Omit<Transaction, 'value_cents'>> & { value_cents: number }): Transaction {
   const { value_cents, ...rest } = overrides;
   return {
     id: 'tx',
@@ -25,13 +25,14 @@ function tx(overrides: Partial<Transaction> & { value_cents: number }): Transact
   } as Transaction;
 }
 
-function account(overrides: Partial<Account>): Account {
+function account(overrides: Partial<Omit<Account, 'balance'>> & { balance?: number }): Account {
+  const { balance = 0, ...rest } = overrides;
   return {
     id: 'acc',
     name: 'Conta',
     type: 'corrente',
-    balance: 0,
-    ...overrides,
+    balance: cents(balance),
+    ...rest,
   } as Account;
 }
 

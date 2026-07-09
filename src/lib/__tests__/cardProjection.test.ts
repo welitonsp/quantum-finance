@@ -5,7 +5,7 @@ import type { Centavos } from '../../shared/types/money';
 
 const cents = (n: number): Centavos => n as Centavos;
 
-function tx(overrides: Partial<Transaction> & { value_cents: number }): Transaction {
+function tx(overrides: Partial<Omit<Transaction, 'value_cents'>> & { value_cents: number }): Transaction {
   const { value_cents, ...rest } = overrides;
   return {
     id: 'tx-1',
