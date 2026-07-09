@@ -34,6 +34,8 @@ export interface ProductPriceProfile {
   stores: StorePriceSnapshot[];
   /** Loja com o menor último preço. */
   bestStore: StorePriceSnapshot;
+  /** Loja da observação mais recente (onde a tendência é medida). */
+  latestStore: string;
   /** Variação do último preço vs o anterior NA MESMA LOJA da última compra;
    *  null quando só há 1 observação nessa loja. Em basis points (1% = 100). */
   trendBps: number | null;
@@ -122,6 +124,7 @@ export function buildPriceCatalog(observations: readonly PriceObservation[]): Pr
       displayName: latest.productName,
       stores,
       bestStore: stores[0]!,
+      latestStore: latest.store.trim(),
       trendBps,
       trendDeltaCents,
     });
