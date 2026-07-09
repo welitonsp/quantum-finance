@@ -155,10 +155,14 @@ export default defineConfig({
       // Valores fixados logo abaixo do real atual para funcionar como catraca.
       // Bump em 2026-07-02 (auditoria P3): statements 59→60, lines 63→64
       // alinhados com baseline Codex (60% statements) e medição real (63.89 lines).
+      // Ratchet 2026-07-09 (finding M-01 da auditoria Big Four): branches 50→51,
+      // travando o real medido 51.16% (+20 testes em competencia/recurrenceDetector).
+      // Fechar M-01 por completo (rumo a branches 65/lines 75) exige elevar a
+      // cobertura REAL de forma sustentada — em andamento, PR a PR.
       thresholds: {
         lines: 64,
         functions: 60,
-        branches: 50,
+        branches: 51,
         statements: 60,
       },
     },
