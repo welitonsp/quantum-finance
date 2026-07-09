@@ -5,15 +5,15 @@
 
 ## Estado Atual — 2026-07-09 (Auditoria Big Four + remediação M-01/M-02 + Radar de Compras)
 
-- Branch principal: `main` — HEAD `c0d9be2` (PRs #363–#374 mergeados). Working tree esperado: limpo. **Nenhum PR aberto.**
-- Suíte: **1635 unit + 219 rules + 282 functions + 28 E2E** (+55 PR #374: insightsEngine/debtStrategy/cardProjection).
+- Branch principal: `main` — HEAD `b1b5249` (PRs #363–#377 mergeados). Working tree esperado: limpo. **Nenhum PR aberto.**
+- Suíte: **1686 unit + 219 rules + 282 functions + 28 E2E** (+37 PR #377: csvParser/cashflowTimeline branches).
 
 ### Auditoria Big Four + Tese Extraordinária (2026-07-09)
 
 - **Laudo:** `docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md` — nota **8.7/10** (Qualified Opinion). Backend/segurança em nível Big Tech; gap em *assurance* automatizado.
 - **Findings — estado da remediação:**
   - **M-02 (a11y) — FECHADO no núcleo (PR #365):** `eslint-plugin-jsx-a11y` no flat config, enforçado no CI; regras objetivas em `error` (zeradas), volumosas em `warn` com ratchet documentado. 3 correções ARIA reais (CommandPalette/ProactiveBriefing/AuditTimeline).
-  - **M-01 (cobertura) — EM CAMPANHA (PRs #366 + #368 + #370 + #372 + #374):** `src/lib/**` adicionado ao scope + 139 testes novos. Cobertura real: stmts 67.12 / branches 57.75 / funcs 66.87 / lines 70.97. Gates: stmts 66 / branches 57 / funcs 66 / lines 70. Meta final: branches→65 / lines→75. Próximos alvos: módulos com baixa cobertura de linhas (purchaseSimulator, shoppingRadar, competencia).
+  - **M-01 (cobertura) — EM CAMPANHA (PRs #366 + #368 + #370 + #372 + #374 + #376 + #377):** `src/lib/**` adicionado ao scope + 176 testes novos. Cobertura real: stmts 67.69 / branches 58.56 / funcs 67.19 / lines 71.38. Gates: stmts 67 / branches 58 / funcs 67 / lines 71. Meta final: branches→65 / lines→75. Próximos alvos: insightsEngine (35 branches perdidas), exportCSV (15), ofxParser (12), forecastEngine (12).
   - **L-01 (float audit) — FECHADO (PR #368):** `round2` em `reportEngine.ts` é falso positivo — display-only (`fromCentavos` → reais → 2 casas), aritmética interna em centavos inteiros. Documentado com comentário inline.
   - **M-03 (verificações reais) — ABERTO, owner-pending:** MFA E2E, FCM push, NFC-e real — exigem validação em dispositivo pelo owner.
 - **Tese de produto:** `docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md` — 3 ativos-fosso + 5 premissas Fable 5 + sequência de fases.

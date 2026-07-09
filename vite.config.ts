@@ -168,12 +168,14 @@ export default defineConfig({
       // Salto real: stmts 67.01→67.12, branches 57.32→57.75, funcs 66.87→66.87, lines 70.97→70.97.
       // PR #376: fix Centavos type em insightsEngine/cardProjection + purchaseSimulator + shoppingRadar tiebreaker.
       // Coverage estável (purchaseSimulator já atingia 97.95% branches via outros testes).
+      // Ratchet 2026-07-09 (PR #377): csvParser (26 testes) + cashflowTimeline branches (+11 testes).
+      // Salto real: stmts 67.12→67.69, branches 57.75→58.56, funcs 66.87→67.19, lines 70.97→71.38.
       // Próxima meta: branches 65 / lines 75 — campanha sustentada M-01.
       thresholds: {
-        lines: 70,
-        functions: 66,
-        branches: 57,
-        statements: 66,
+        lines: 71,
+        functions: 67,
+        branches: 58,
+        statements: 67,
       },
     },
   },
