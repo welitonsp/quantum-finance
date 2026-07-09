@@ -206,7 +206,9 @@ export default function ProactiveBriefing({
       <div
         className="flex items-center gap-3 px-5 py-3.5 cursor-pointer select-none"
         onClick={() => setExpanded(e => !e)}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(x => !x); } }}
         role="button"
+        tabIndex={0}
         aria-expanded={expanded}
       >
         <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${

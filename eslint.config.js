@@ -2,6 +2,7 @@ import js from '@eslint/js';
 import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
 import tseslint from 'typescript-eslint';
 import { defineConfig, globalIgnores } from 'eslint/config';
 
@@ -14,6 +15,7 @@ export default defineConfig([
       ...tseslint.configs.recommended,
       reactHooks.configs.flat.recommended,
       reactRefresh.configs.vite,
+      jsxA11y.flatConfigs.recommended,
     ],
     languageOptions: {
       ecmaVersion: 2020,
@@ -52,6 +54,15 @@ export default defineConfig([
       'react-hooks/exhaustive-deps': 'off',
       'react-hooks/preserve-manual-memoization': 'off',
       'react-refresh/only-export-components': 'off',
+      // ── Acessibilidade (jsx-a11y) — finding M-02 da auditoria 2026-07-09 ──
+      // Tooling estabelecido; regras objetivas de baixa contagem ficam em `error`
+      // (violações já corrigidas). As de alto volume/subjetivas entram como `warn`
+      // para dar VISIBILIDADE sem quebrar o CI — RATCHET: subir para `error` à
+      // medida que forem zeradas. Não relaxar sem zerar antes.
+      'jsx-a11y/label-has-associated-control': 'warn', // 42 — wiring de label/for
+      'jsx-a11y/no-autofocus': 'warn',                 // 9 — autofocus por vezes intencional
+      'jsx-a11y/click-events-have-key-events': 'warn', // 8 — handler de teclado em div clicável
+      'jsx-a11y/no-static-element-interactions': 'warn', // 7 — role em elemento estático
     },
   },
 ]);

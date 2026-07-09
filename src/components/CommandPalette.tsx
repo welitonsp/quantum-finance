@@ -217,7 +217,7 @@ export default function CommandPalette({ isOpen, onClose, isCommanderMode = fals
               )}
 
               <div
-                role="combobox" aria-expanded={true} aria-haspopup="listbox" aria-owns="cp-listbox"
+                role="combobox" aria-expanded={true} aria-haspopup="listbox" aria-controls="cp-listbox" aria-owns="cp-listbox"
                 className={`flex items-center gap-3 px-4 py-3.5 border-b ${isCommanderMode ? 'border-violet-500/20 mt-2' : 'border-quantum-border'}`}
               >
                 {isCommanderMode
