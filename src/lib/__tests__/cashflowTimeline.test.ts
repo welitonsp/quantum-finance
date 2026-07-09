@@ -188,6 +188,182 @@ describe('computeCashflowTimeline', () => {
   });
 });
 
+describe('computeCashflowTimeline — branches adicionais', () => {
+  it('recorrente sem frequency (undefined) é tratado como mensal', () => {
+    const task = {
+      ...recurringTask({ dueDay: 15, value_cents: 5000, type: 'saida' }),
+      frequency: undefined,
+    } as unknown as RecurringTask;
+    const result = computeCashflowTimeline({
+      currentBalanceCents: cents(100000),
+      transactions: [],
+      recurringTasks: [task],
+      today: TODAY,
+      daysAhead: 30,
+    });
+    const day15 = result.find(d => d.date === '2026-07-15')!;
+    expect(day15.events.some(e => e.type === 'recurring')).toBe(true);
+  });
+
+  it('recorrente mensal com dueDay já passado este mês dispara no mês seguinte', () => {
+    // dueDay=5, TODAY=09/jul → clampedDay(5) <= fd(9) → próxima = 2026-08-05
+    const result = computeCashflowTimeline({
+      currentBalanceCents: cents(100000),
+      transactions: [],
+      recurringTasks: [recurringTask({ dueDay: 5, value_cents: 3000, type: 'saida' })],
+      today: TODAY,
+      daysAhead: 60,
+    });
+    expect(result.find(d => d.date === '2026-07-05')).toBeUndefined();
+    const aug5 = result.find(d => d.date === '2026-08-05')!;
+    expect(aug5.events.some(e => e.type === 'recurring')).toBe(true);
+  });
+
+  it('recorrente mensal em dezembro com dueDay passado wrapa para janeiro do ano seguinte', () => {
+    // TODAY=2026-12-20, dueDay=15 → clampedDay(15) <= fd(20) → nm=1, ny=2027 → 2027-01-15
+    const result = computeCashflowTimeline({
+      currentBalanceCents: cents(100000),
+      transactions: [],
+      recurringTasks: [recurringTask({ dueDay: 15, value_cents: 5000 })],
+      today: '2026-12-20',
+      daysAhead: 60,
+    });
+    const jan15 = result.find(d => d.date === '2027-01-15');
+    expect(jan15).toBeDefined();
+    expect(jan15!.events.some(e => e.type === 'recurring')).toBe(true);
+  });
+
+  it('recorrente anual com dueMonth já passado neste ano dispara no próximo ano', () => {
+    // TODAY=jul/2026, dueMonth=3 → thisYearDate=2026-03-10 <= 2026-07-09 → 2027-03-10
+    const annual = recurringTask({ frequency: 'anual', dueMonth: 3, dueDay: 10, value_cents: 50000 });
+    const result = computeCashflowTimeline({
+      currentBalanceCents: cents(100000),
+      transactions: [],
+      recurringTasks: [annual],
+      today: TODAY,
+      daysAhead: 400,
+    });
+    const mar2027 = result.find(d => d.date === '2027-03-10')!;
+    expect(mar2027).toBeDefined();
+    expect(mar2027.events.some(e => e.type === 'recurring')).toBe(true);
+  });
+
+  it('recorrente anual sem dueMonth (undefined) usa mês 1 (janeiro)', () => {
+    // dueMonth ?? 1 → janeiro; 2026-01-15 <= today → 2027-01-15
+    // dueMonth is not included in helper defaults → will be undefined at runtime
+    const annual = recurringTask({ frequency: 'anual', dueDay: 15, value_cents: 50000 });
+    const result = computeCashflowTimeline({
+      currentBalanceCents: cents(100000),
+      transactions: [],
+      recurringTasks: [annual],
+      today: TODAY,
+      daysAhead: 400,
+    });
+    const jan2027 = result.find(d => d.date === '2027-01-15')!;
+    expect(jan2027).toBeDefined();
+    expect(jan2027.events.some(e => e.type === 'recurring')).toBe(true);
+  });
+
+  it("transação de tipo 'transferencia' não conta como renda histórica", () => {
+    const transferTx = tx({ date: '2026-06-01', value_cents: 900000, type: 'transferencia' });
+    const withTransfer = computeCashflowTimeline({
+      currentBalanceCents: cents(0),
+      transactions: [transferTx],
+      recurringTasks: [],
+      today: TODAY,
+      daysAhead: 1,
+    });
+    const noTx = computeCashflowTimeline({
+      currentBalanceCents: cents(0),
+      transactions: [],
+      recurringTasks: [],
+      today: TODAY,
+      daysAhead: 1,
+    });
+    expect(withTransfer[0]!.balanceCents).toBe(noTx[0]!.balanceCents);
+    expect(withTransfer[0]!.events.some(e => e.type === 'projection')).toBe(false);
+  });
+
+  it("transação de tipo 'receita' conta como renda histórica (além de 'entrada')", () => {
+    const receitaTx = tx({ date: '2026-06-01', value_cents: 900000, type: 'receita' });
+    const result = computeCashflowTimeline({
+      currentBalanceCents: cents(0),
+      transactions: [receitaTx],
+      recurringTasks: [],
+      today: TODAY,
+      daysAhead: 1,
+    });
+    expect(result[0]!.events.some(e => e.type === 'projection')).toBe(true);
+  });
+
+  it('parcela futura de entrada (type=entrada) eleva o saldo', () => {
+    const entradaTx = tx({
+      date: '2026-07-20',
+      value_cents: 15000,
+      type: 'entrada',
+      installmentGroupId: 'grp-renda',
+    });
+    const result = computeCashflowTimeline({
+      currentBalanceCents: cents(50000),
+      transactions: [entradaTx],
+      recurringTasks: [],
+      today: TODAY,
+      daysAhead: 30,
+    });
+    const day20 = result.find(d => d.date === '2026-07-20')!;
+    expect(day20.balanceCents).toBe(65000);
+    expect(day20.events[0]!.direction).toBe('in');
+  });
+
+  it('transação futura sem installmentGroupId não é tratada como parcela', () => {
+    const regularTx = tx({ date: '2026-07-20', value_cents: 10000, type: 'saida' });
+    const result = computeCashflowTimeline({
+      currentBalanceCents: cents(100000),
+      transactions: [regularTx],
+      recurringTasks: [],
+      today: TODAY,
+      daysAhead: 30,
+    });
+    const day20 = result.find(d => d.date === '2026-07-20')!;
+    expect(day20.events.filter(e => e.type === 'installment')).toHaveLength(0);
+  });
+
+  it('parcela com date === today não aparece na projeção (getFutureInstallments excluí date <= today)', () => {
+    const todayTx = tx({ date: TODAY, value_cents: 10000, type: 'saida', installmentGroupId: 'grp-1' });
+    const result = computeCashflowTimeline({
+      currentBalanceCents: cents(100000),
+      transactions: [todayTx],
+      recurringTasks: [],
+      today: TODAY,
+      daysAhead: 30,
+    });
+    const anyInstallment = result.some(d => d.events.some(e => e.type === 'installment'));
+    expect(anyInstallment).toBe(false);
+  });
+
+  it('recorrente é excluído quando descrição coincide com parcela futura (anti-double-counting)', () => {
+    const desc = 'Netflix';
+    const installTx = tx({
+      date: '2026-07-20',
+      value_cents: 3990,
+      type: 'saida',
+      description: desc,
+      installmentGroupId: 'grp-netflix',
+    });
+    const recTask = recurringTask({ dueDay: 20, value_cents: 3990, type: 'saida', description: desc });
+    const result = computeCashflowTimeline({
+      currentBalanceCents: cents(100000),
+      transactions: [installTx],
+      recurringTasks: [recTask],
+      today: TODAY,
+      daysAhead: 30,
+    });
+    const day20 = result.find(d => d.date === '2026-07-20')!;
+    expect(day20.events.filter(e => e.type === 'installment')).toHaveLength(1);
+    expect(day20.events.filter(e => e.type === 'recurring')).toHaveLength(0);
+  });
+});
+
 describe('firstNegativeDate', () => {
   it('retorna null quando nenhum dia tem saldo negativo', () => {
     const timeline: DailyBalance[] = [
