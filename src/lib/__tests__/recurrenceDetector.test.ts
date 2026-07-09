@@ -1,17 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { detectRecurrenceCandidates } from '../recurrenceDetector';
 import type { Transaction } from '../../shared/types/transaction';
+import type { Centavos } from '../../shared/types/money';
+
+/** Cast local de fixtures de teste para o tipo branded Centavos. */
+const cents = (n: number): Centavos => n as Centavos;
 
 let seq = 0;
-function tx(partial: Partial<Transaction>): Transaction {
+function tx(partial: Partial<Omit<Transaction, 'value_cents'>> & { value_cents?: number }): Transaction {
   seq += 1;
+  const { value_cents, ...rest } = partial;
   return {
     id: `tx-${seq}`,
     description: 'Assinatura',
     date: '2026-01-10',
-    value_cents: 5000,
+    value_cents: cents(value_cents ?? 5000),
     type: 'saida',
-    ...partial,
+    ...rest,
   } as Transaction;
 }
 
