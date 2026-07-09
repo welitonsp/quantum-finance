@@ -140,6 +140,7 @@ export default defineConfig({
         'src/shared/schemas/**/*.ts',
         'src/shared/lib/**/*.ts',
         'src/shared/services/**/*.ts',
+        'src/lib/**/*.ts',
         'src/utils/**/*.ts',
         'src/hooks/**/*.ts',
       ],
@@ -155,15 +156,16 @@ export default defineConfig({
       // Valores fixados logo abaixo do real atual para funcionar como catraca.
       // Bump em 2026-07-02 (auditoria P3): statements 59→60, lines 63→64
       // alinhados com baseline Codex (60% statements) e medição real (63.89 lines).
-      // Ratchet 2026-07-09 (finding M-01 da auditoria Big Four): branches 50→51,
-      // travando o real medido 51.16% (+20 testes em competencia/recurrenceDetector).
-      // Fechar M-01 por completo (rumo a branches 65/lines 75) exige elevar a
-      // cobertura REAL de forma sustentada — em andamento, PR a PR.
+      // Ratchet 2026-07-09 (finding M-01 PR #366): branches 50→51 (real 51.16%).
+      // Ratchet 2026-07-09 (PR #368): src/lib/** adicionado ao scope + 34 testes
+      // (cashflowTimeline, contextSerializer, ofxParser). Salto real:
+      // stmts 60.19→66.2, branches 51.16→56.27, funcs 60.75→66.24, lines 64.13→70.24.
+      // Próxima meta: branches 65 / lines 75 — campanha sustentada M-01.
       thresholds: {
-        lines: 64,
-        functions: 60,
-        branches: 51,
-        statements: 60,
+        lines: 70,
+        functions: 66,
+        branches: 56,
+        statements: 66,
       },
     },
   },
