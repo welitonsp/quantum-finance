@@ -5,15 +5,16 @@
 
 ## Estado Atual — 2026-07-09 (Auditoria Big Four + remediação M-01/M-02 + Radar de Compras)
 
-- Branch principal: `main` — HEAD `b0fa6c8` (PRs #363–#366 mergeados). Working tree esperado: limpo. **Nenhum PR aberto.**
-- Suíte: **1495 unit + 219 rules + 282 functions + 28 E2E** (+10 Radar, +20 competencia/recurrenceDetector).
+- Branch principal: `main` — HEAD `d12b9ee` (PRs #363–#367 mergeados). **PR aberto: #368** (campanha M-01, aguardando merge).
+- Suíte: **1530 unit + 219 rules + 282 functions + 28 E2E** (+34 testes PR #368: cashflowTimeline, contextSerializer, ofxParser).
 
 ### Auditoria Big Four + Tese Extraordinária (2026-07-09)
 
 - **Laudo:** `docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md` — nota **8.7/10** (Qualified Opinion). Backend/segurança em nível Big Tech; gap em *assurance* automatizado.
 - **Findings — estado da remediação:**
   - **M-02 (a11y) — FECHADO no núcleo (PR #365):** `eslint-plugin-jsx-a11y` no flat config, enforçado no CI; regras objetivas em `error` (zeradas), volumosas em `warn` com ratchet documentado. 3 correções ARIA reais (CommandPalette/ProactiveBriefing/AuditTimeline).
-  - **M-01 (cobertura) — PARCIAL (PR #366):** gate `branches` 50→51 (real 51.16%); +20 testes travando `competencia.ts` (contrato canônico) e `recurrenceDetector.ts`. Fechamento total (branches→65/lines→75) = campanha sustentada de testes, PR a PR. Cobertura real: stmts 60.19 / branch 51.16 / func 60.75 / lines 64.13.
+  - **M-01 (cobertura) — EM CAMPANHA (PRs #366 + #368):** PR #368 (pendente merge) adiciona `src/lib/**` ao scope de coverage + 34 testes (cashflowTimeline, contextSerializer, ofxParser). Salto real: stmts 60.19→66.2 / branches 51.16→56.27 / funcs 60.75→66.24 / lines 64.13→70.24. Gates pós-merge: stmts 66 / branches 56 / funcs 66 / lines 70. Meta final: branches→65 / lines→75.
+  - **L-01 (float audit) — FECHADO (PR #368):** `round2` em `reportEngine.ts` é falso positivo — display-only (`fromCentavos` → reais → 2 casas), aritmética interna em centavos inteiros. Documentado com comentário inline.
   - **M-03 (verificações reais) — ABERTO, owner-pending:** MFA E2E, FCM push, NFC-e real — exigem validação em dispositivo pelo owner.
 - **Tese de produto:** `docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md` — 3 ativos-fosso + 5 premissas Fable 5 + sequência de fases.
 - **Nota de processo:** rodar `npm run typecheck` antes de pushar — vitest/coverage usam esbuild e não type-checam (branded types como `Centavos` escapam localmente; quebraram #366 no CI).
