@@ -95,4 +95,19 @@ describe('hashGenerator — deduplicação determinística (generateTransactionH
     const h = generateTransactionHash({ date: '2026-04-20', value: 0, description: '' });
     expect(typeof h).toBe('string');
   });
+
+  it('date falsy usa string vazia como dateStr (branch else do ternário)', () => {
+    // Cobre a branch `tx.date ? ... : ''` quando date é string vazia (falsy)
+    const hWithout = generateTransactionHash({ date: '', value: 100, description: 'X' });
+    const hWith    = generateTransactionHash({ date: '2026-04-20', value: 100, description: 'X' });
+    expect(typeof hWithout).toBe('string');
+    expect(hWithout).not.toBe(hWith);
+  });
+
+  it('getTransactionCentavos sem value nem value_cents usa 0 (branch ?? 0)', () => {
+    // Ambos value e value_cents ausentes → getTransactionCentavos retorna null → ?? 0
+    const h = generateTransactionHash({ date: '2026-04-20', description: 'Sem valor' });
+    expect(typeof h).toBe('string');
+    expect(h.length).toBeGreaterThan(0);
+  });
 });

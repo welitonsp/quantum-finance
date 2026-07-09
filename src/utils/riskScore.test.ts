@@ -101,4 +101,30 @@ describe('annotateRiskScores — detecção estatística de anomalias por catego
     expect(result[0]!.description).toBe('Compra específica');
     expect(result[0]!.id).toBe('t1');
   });
+
+  it('classifica como elevated quando z-score fica entre 1.5 e 2.5', () => {
+    // 3 valores base de 1000 + outlier de 5000:
+    // mean=(3000+5000)/4=2000, std≈1732, z_outlier=(5000-2000)/1732≈1.73 (entre 1.5 e 2.5)
+    const txs = [
+      expenseTx({ id: 'b1', value_cents: cents(1000) }),
+      expenseTx({ id: 'b2', value_cents: cents(1000) }),
+      expenseTx({ id: 'b3', value_cents: cents(1000) }),
+      expenseTx({ id: 'mod', value_cents: cents(5000) }),
+    ];
+    const result = annotateRiskScores(txs);
+    expect(result.find(t => t.id === 'mod')!.riskScore).toBe('elevated');
+  });
+
+  it('usa "Outros" como categoria quando category é undefined (branch ?? "Outros")', () => {
+    const txs = [
+      // 7 valores base sem categoria
+      ...Array.from({ length: 7 }, (_, i) =>
+        expenseTx({ id: `base-${i}`, value_cents: cents(1000), category: undefined as unknown as string }),
+      ),
+      expenseTx({ id: 'outlier', value_cents: cents(50000), category: undefined as unknown as string }),
+    ];
+    const result = annotateRiskScores(txs);
+    // Outlier deve ser detectado mesmo sem categoria (agrupado em 'Outros')
+    expect(result.find(t => t.id === 'outlier')!.riskScore).toBe('anomalous');
+  });
 });
