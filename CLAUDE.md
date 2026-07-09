@@ -3,16 +3,20 @@
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 > **Histórico de fases/PRs:** [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md) · **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md)
 
-## Estado Atual — 2026-07-09 (Auditoria Big Four + FASE Radar de Compras aberta)
+## Estado Atual — 2026-07-09 (Auditoria Big Four + remediação M-01/M-02 + Radar de Compras)
 
-- Branch principal: `main` — HEAD `7292916` (PR #363 mergeado). Working tree esperado: limpo. **Nenhum PR aberto.**
-- Suíte: **1475 unit + 219 rules + 282 functions + 28 E2E** (+10 testes do Radar).
+- Branch principal: `main` — HEAD `b0fa6c8` (PRs #363–#366 mergeados). Working tree esperado: limpo. **Nenhum PR aberto.**
+- Suíte: **1495 unit + 219 rules + 282 functions + 28 E2E** (+10 Radar, +20 competencia/recurrenceDetector).
 
 ### Auditoria Big Four + Tese Extraordinária (2026-07-09)
 
 - **Laudo:** `docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md` — nota **8.7/10** (Qualified Opinion). Backend/segurança em nível Big Tech; gap em *assurance* automatizado.
-- **Findings MÉDIOS abertos:** **M-01** cobertura baixa (gates 60/64/**branches 50**); **M-02** sem a11y automatizado (falta `eslint-plugin-jsx-a11y` + `jest-axe`); **M-03** verificações reais owner-pending (MFA E2E, FCM push, NFC-e real).
+- **Findings — estado da remediação:**
+  - **M-02 (a11y) — FECHADO no núcleo (PR #365):** `eslint-plugin-jsx-a11y` no flat config, enforçado no CI; regras objetivas em `error` (zeradas), volumosas em `warn` com ratchet documentado. 3 correções ARIA reais (CommandPalette/ProactiveBriefing/AuditTimeline).
+  - **M-01 (cobertura) — PARCIAL (PR #366):** gate `branches` 50→51 (real 51.16%); +20 testes travando `competencia.ts` (contrato canônico) e `recurrenceDetector.ts`. Fechamento total (branches→65/lines→75) = campanha sustentada de testes, PR a PR. Cobertura real: stmts 60.19 / branch 51.16 / func 60.75 / lines 64.13.
+  - **M-03 (verificações reais) — ABERTO, owner-pending:** MFA E2E, FCM push, NFC-e real — exigem validação em dispositivo pelo owner.
 - **Tese de produto:** `docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md` — 3 ativos-fosso + 5 premissas Fable 5 + sequência de fases.
+- **Nota de processo:** rodar `npm run typecheck` antes de pushar — vitest/coverage usam esbuild e não type-checam (branded types como `Centavos` escapam localmente; quebraram #366 no CI).
 
 ### FASE Radar de Compras — 1ª entrega (2026-07-09, PR #363)
 
