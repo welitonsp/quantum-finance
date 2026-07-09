@@ -160,11 +160,13 @@ export default defineConfig({
       // Ratchet 2026-07-09 (PR #368): src/lib/** adicionado ao scope + 34 testes
       // (cashflowTimeline, contextSerializer, ofxParser). Salto real:
       // stmts 60.19→66.2, branches 51.16→56.27, funcs 60.75→66.24, lines 64.13→70.24.
+      // Ratchet 2026-07-09 (PR #370): +34 testes (ForecastChart + transactionsToCSV/escapeCSV).
+      // Salto real: stmts 66.2→66.96, branches 56.27→57.09, funcs 66.24→66.87, lines 70.24→70.97.
       // Próxima meta: branches 65 / lines 75 — campanha sustentada M-01.
       thresholds: {
         lines: 70,
         functions: 66,
-        branches: 56,
+        branches: 57,
         statements: 66,
       },
     },

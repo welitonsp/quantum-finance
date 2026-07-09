@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Transaction } from '../shared/types/transaction';
 import type { Centavos } from '../shared/types/money';
-import { computeMonthlyReport, generateMonthlyReportCSV } from './exportCSV';
+import { computeMonthlyReport, generateMonthlyReportCSV, transactionsToCSV } from './exportCSV';
 
 const cents = (n: number) => n as Centavos;
 
@@ -171,5 +171,63 @@ describe('generateMonthlyReportCSV', () => {
     ];
     const csv = generateMonthlyReportCSV(txs, 2026, 6);
     expect(csv).not.toContain('Fora do mes');
+  });
+});
+
+describe('transactionsToCSV', () => {
+  it('inclui BOM UTF-8 no início', () => {
+    const csv = transactionsToCSV([]);
+    expect(csv.charCodeAt(0)).toBe(0xfeff);
+  });
+
+  it('inclui linha de cabeçalho com as colunas corretas', () => {
+    const csv = transactionsToCSV([]);
+    const firstLine = csv.slice(1).split('\r\n')[0];
+    expect(firstLine).toBe('Data,Descrição,Valor,Tipo,Categoria,Conta');
+  });
+
+  it('serializa transação de entrada como Receita', () => {
+    const txs = [tx({ date: '2026-06-01', type: 'entrada', value_cents: cents(10000), description: 'Salário', category: 'Renda', account: 'Nubank' })];
+    const csv = transactionsToCSV(txs);
+    expect(csv).toContain('Receita');
+    expect(csv).toContain('Salário');
+    expect(csv).toContain('Nubank');
+  });
+
+  it('serializa transação de saida sem paidInvoiceMonth como Despesa', () => {
+    const txs = [tx({ date: '2026-06-01', type: 'saida', value_cents: cents(5000) })];
+    const csv = transactionsToCSV(txs);
+    expect(csv).toContain('Despesa');
+  });
+
+  it('serializa pagamento de fatura (paidInvoiceMonth) como Pagamento Fatura', () => {
+    const txs = [tx({ date: '2026-06-01', type: 'saida', value_cents: cents(8000), paidInvoiceMonth: '2026-05' })];
+    const csv = transactionsToCSV(txs);
+    expect(csv).toContain('Pagamento Fatura');
+  });
+
+  it('formata valor em reais com vírgula decimal e envolve em aspas (CSV pt-BR)', () => {
+    const txs = [tx({ date: '2026-06-01', type: 'saida', value_cents: cents(15050) })];
+    const csv = transactionsToCSV(txs);
+    // Valor "150,50" contém vírgula → escapeCSV o envolve em aspas
+    expect(csv).toContain('"150,50"');
+  });
+
+  it('escapa descrição com vírgula envolvendo em aspas duplas', () => {
+    const txs = [tx({ date: '2026-06-01', type: 'saida', description: 'Café, Lanche', value_cents: cents(2000) })];
+    const csv = transactionsToCSV(txs);
+    expect(csv).toContain('"Café, Lanche"');
+  });
+
+  it('escapa aspas duplas internas duplicando-as', () => {
+    const txs = [tx({ date: '2026-06-01', type: 'saida', description: 'Diz "oi"', value_cents: cents(1000) })];
+    const csv = transactionsToCSV(txs);
+    expect(csv).toContain('"Diz ""oi"""');
+  });
+
+  it('aceita tipo legado receita como Receita', () => {
+    const txs = [tx({ date: '2026-06-01', type: 'receita', value_cents: cents(5000) })];
+    const csv = transactionsToCSV(txs);
+    expect(csv).toContain('Receita');
   });
 });
