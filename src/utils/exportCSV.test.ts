@@ -230,4 +230,79 @@ describe('transactionsToCSV', () => {
     const csv = transactionsToCSV(txs);
     expect(csv).toContain('Receita');
   });
+
+  it('date/description/category/account undefined → fallbacks vazios ou "Outros"', () => {
+    // Todos os campos opcionais ausentes
+    const txs = [{ ...tx({ value_cents: cents(1000) }), date: undefined, description: undefined, category: undefined, account: undefined } as unknown as Transaction];
+    const csv = transactionsToCSV(txs);
+    expect(csv).toContain('Outros'); // category ?? 'Outros'
+  });
+
+  it('escapa descrição com quebra de linha envolvendo em aspas', () => {
+    const txs = [tx({ date: '2026-06-01', type: 'saida', description: 'Linha1\nLinha2', value_cents: cents(1000) })];
+    const csv = transactionsToCSV(txs);
+    expect(csv).toContain('"Linha1\nLinha2"');
+  });
+});
+
+// ─── computeMonthlyReport — branches adicionais ──────────────────────────────
+
+describe('computeMonthlyReport — branches adicionais', () => {
+  it('pagamento de fatura (paidInvoiceMonth) não conta como despesa de consumo', () => {
+    const txs = [
+      tx({ date: '2026-06-01', type: 'saida', value_cents: cents(10000), paidInvoiceMonth: '2026-05' }),
+      tx({ date: '2026-06-02', type: 'saida', value_cents: cents(3000) }),
+    ];
+    const r = computeMonthlyReport(txs, 2026, 6);
+    // apenas a despesa sem paidInvoiceMonth conta
+    expect(r.expenseCents).toBe(3000);
+  });
+
+  it('categoria undefined em despesa → agrupada como "Outros"', () => {
+    const base = tx({ date: '2026-06-01', type: 'saida', value_cents: cents(5000) });
+    delete (base as unknown as Record<string, unknown>).category;
+    const txs = [base];
+    const r = computeMonthlyReport(txs, 2026, 6);
+    expect(r.topCategories[0]!.name).toBe('Outros');
+  });
+});
+
+// ─── generateMonthlyReportCSV — branches adicionais ──────────────────────────
+
+describe('generateMonthlyReportCSV — branches adicionais', () => {
+  it('serializa tipo transferencia como "Transferência" no detalhe', () => {
+    const txs = [
+      tx({ date: '2026-06-01', type: 'transferencia', description: 'TED', value_cents: cents(5000) }),
+    ];
+    const csv = generateMonthlyReportCSV(txs, 2026, 6);
+    expect(csv).toContain('Transferência');
+    expect(csv).toContain('TED');
+  });
+
+  it('serializa entrada como "Receita" no detalhe', () => {
+    const txs = [
+      tx({ date: '2026-06-01', type: 'entrada', description: 'Salário', value_cents: cents(10000) }),
+    ];
+    const csv = generateMonthlyReportCSV(txs, 2026, 6);
+    expect(csv).toContain('Receita');
+    expect(csv).toContain('Salário');
+  });
+
+  it('serializa pagamento de fatura como "Pagamento Fatura" no detalhe', () => {
+    const txs = [
+      tx({ date: '2026-06-01', type: 'saida', paidInvoiceMonth: '2026-05', value_cents: cents(8000) }),
+    ];
+    const csv = generateMonthlyReportCSV(txs, 2026, 6);
+    expect(csv).toContain('Pagamento Fatura');
+  });
+
+  it('exclui transações deletadas do detalhe', () => {
+    const txs = [
+      tx({ date: '2026-06-01', type: 'saida', description: 'Deletada', value_cents: cents(5000), isDeleted: true }),
+      tx({ date: '2026-06-02', type: 'saida', description: 'Válida',   value_cents: cents(2000) }),
+    ];
+    const csv = generateMonthlyReportCSV(txs, 2026, 6);
+    expect(csv).not.toContain('Deletada');
+    expect(csv).toContain('Válida');
+  });
 });
