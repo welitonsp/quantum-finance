@@ -3,17 +3,17 @@
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 > **Histórico de fases/PRs:** [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md) · **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md)
 
-## Estado Atual — 2026-07-09 (Auditoria Big Four + remediação M-01/M-02 + Radar de Compras)
+## Estado Atual — 2026-07-10 (Auditoria Big Four + remediação M-01/M-02 + Radar de Compras)
 
-- Branch principal: `main` — HEAD `4aff7ba` (PRs #363–#379 mergeados). Working tree esperado: limpo. **Nenhum PR aberto.**
-- Suíte: **1710 unit + 219 rules + 282 functions + 28 E2E** (+24 PR #379: insightsEngine pilares/exportCSV branches).
+- Branch principal: `main` — HEAD `c9176c3` (PRs #363–#381 mergeados). Working tree esperado: limpo. **Nenhum PR aberto.**
+- Suíte: **1714 unit + 219 rules + 282 functions + 28 E2E** (+4 PR #381: ofxParser + forecastEngine branches).
 
 ### Auditoria Big Four + Tese Extraordinária (2026-07-09)
 
 - **Laudo:** `docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md` — nota **8.7/10** (Qualified Opinion). Backend/segurança em nível Big Tech; gap em *assurance* automatizado.
 - **Findings — estado da remediação:**
   - **M-02 (a11y) — FECHADO no núcleo (PR #365):** `eslint-plugin-jsx-a11y` no flat config, enforçado no CI; regras objetivas em `error` (zeradas), volumosas em `warn` com ratchet documentado. 3 correções ARIA reais (CommandPalette/ProactiveBriefing/AuditTimeline).
-  - **M-01 (cobertura) — EM CAMPANHA (PRs #366+#368+#370+#372+#374+#376+#377+#379):** `src/lib/**` adicionado ao scope + 200 testes novos. Cobertura real: stmts 67.70 / branches 59.18 / funcs 67.19 / lines 71.38. Gates: stmts 67 / branches 59 / funcs 67 / lines 71. Meta final: branches→65 / lines→75. Próximos alvos: ofxParser (12 branches), forecastEngine (12), dashboardUtils (11), recurrenceDetector (8).
+  - **M-01 (cobertura) — EM CAMPANHA (PRs #366+#368+#370+#372+#374+#376+#377+#379+#381):** `src/lib/**` adicionado ao scope + 213 testes novos. Cobertura real: stmts ~67.70 / branches ~59.7 / funcs ~67.19 / lines ~71.38. Gates: stmts 67 / branches 60 / funcs 67 / lines 71. Meta final: branches→65 / lines→75. Próximos alvos: dashboardUtils (11 branches), recurrenceDetector (8), antiTarifaEngine (8).
   - **L-01 (float audit) — FECHADO (PR #368):** `round2` em `reportEngine.ts` é falso positivo — display-only (`fromCentavos` → reais → 2 casas), aritmética interna em centavos inteiros. Documentado com comentário inline.
   - **M-03 (verificações reais) — ABERTO, owner-pending:** MFA E2E, FCM push, NFC-e real — exigem validação em dispositivo pelo owner.
 - **Tese de produto:** `docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md` — 3 ativos-fosso + 5 premissas Fable 5 + sequência de fases.
