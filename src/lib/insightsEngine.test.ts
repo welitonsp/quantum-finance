@@ -310,4 +310,74 @@ describe('computeKPIs', () => {
     const r = computeKPIs(c);
     expect(r.savingsRatePct).toBe(0);
   });
+
+  it('conta do tipo cartao entra como passivo (valor absoluto)', () => {
+    const c = ctx({
+      accounts: [
+        acc({ type: 'corrente', balance: 500000 as Centavos }),
+        acc({ type: 'cartao',   balance: -80000 as Centavos }),
+      ],
+    });
+    // 500000 − |−80000| = 420000
+    expect(computeKPIs(c).netWorthCents).toBe(420000);
+  });
+
+  it('conta de tipo desconhecido não entra em ativos nem passivos', () => {
+    const c = ctx({
+      accounts: [
+        acc({ type: 'corrente', balance: 100000 as Centavos }),
+        acc({ type: 'outro' as Account['type'], balance: 999999 as Centavos }),
+      ],
+    });
+    expect(computeKPIs(c).netWorthCents).toBe(100000);
+  });
+
+  it('ignora transação sem data e pagamento de fatura no cálculo mensal', () => {
+    const c = ctx({
+      currentMonth: '2026-06',
+      transactions: [
+        tx({ value_cents: 400000 as Centavos, date: '2026-06-01', type: 'entrada', category: 'salário' }),
+        tx({ value_cents: 100000 as Centavos, date: '2026-06-05', type: 'saida',   category: 'alimentação' }),
+        // Pagamento de fatura: não conta como despesa de consumo
+        tx({ value_cents: 70000 as Centavos, date: '2026-06-07', type: 'saida', category: 'Cartão', paidInvoiceMonth: '2026-05' }),
+        // Sem data: ignorada
+        tx({ value_cents: 555555 as Centavos, date: '', type: 'saida', category: 'alimentação' }),
+      ],
+    });
+    const r = computeKPIs(c);
+    expect(r.monthlyIncomeCents).toBe(400000);
+    expect(r.monthlyExpenseCents).toBe(100000);
+  });
+});
+
+describe('computeForecast — branches adicionais', () => {
+  it('ignora transações sem data e de pagamento de fatura', () => {
+    const c = ctx({
+      today: '2026-06-10',
+      currentMonth: '2026-06',
+      transactions: [
+        tx({ value_cents: 300000 as Centavos, date: '2026-06-01', type: 'entrada', category: 'salário' }),
+        tx({ value_cents: 90000 as Centavos, date: '2026-06-05', type: 'saida', category: 'alimentação' }),
+        tx({ value_cents: 40000 as Centavos, date: '2026-06-06', type: 'saida', category: 'Cartão', paidInvoiceMonth: '2026-05' }),
+        tx({ value_cents: 111111 as Centavos, date: '', type: 'saida', category: 'alimentação' }),
+      ],
+    });
+    const r = computeForecast(c);
+    expect(r.projectedIncomeCents).toBe(300000);
+    // despesa base = 90000 (fatura e sem-data excluídas), projeção ≥ base
+    expect(r.projectedExpenseCents).toBeGreaterThanOrEqual(90000);
+  });
+
+  it('receita e despesa zeradas quando nada no mês corrente', () => {
+    const c = ctx({
+      today: '2026-06-10',
+      currentMonth: '2026-06',
+      transactions: [
+        tx({ value_cents: 999999 as Centavos, date: '2026-05-01', type: 'saida', category: 'alimentação' }),
+      ],
+    });
+    const r = computeForecast(c);
+    expect(r.projectedIncomeCents).toBe(0);
+    expect(r.projectedExpenseCents).toBe(0);
+  });
 });

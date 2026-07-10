@@ -165,4 +165,48 @@ describe('calcPareto - despesas por categoria', () => {
     expect(result[0]!.category).toBe('Alimentação');
     expect(result[0]!.isInTop20).toBe(true);
   });
+
+  it('ignora despesa sem value_cents e sem value numérico', () => {
+    const txs: Transaction[] = [
+      { id: '1', description: 'X', type: 'despesa', category: 'Lazer', date: '2026-01-01' } as Transaction,
+    ];
+    // value ausente → getReportTransactionAbsCentavos retorna 0 → descartada
+    expect(calcPareto(txs)).toEqual([]);
+  });
+
+  it('trata value legado decimal como reais e converte para centavos', () => {
+    const txs: Transaction[] = [
+      { id: '1', description: 'X', value: 12.34, type: 'despesa', category: 'Lazer', date: '2026-01-01' } as Transaction,
+    ];
+    const result = calcPareto(txs);
+    expect(result).toHaveLength(1);
+    // 12.34 reais → 1234 centavos → fromCentavos → 12.34
+    expect(result[0]!.total).toBe(12.34);
+  });
+});
+
+describe('calcPatrimonyEvolution - branches de robustez', () => {
+  const FIXED_DATE = new Date('2026-04-26T12:00:00Z');
+
+  it('ignora conta com balance não finito (NaN → 0)', () => {
+    const accounts: Account[] = [
+      { id: 'a1', name: 'Boa', type: 'corrente', balance: c(100_000) },
+      { id: 'a2', name: 'Ruim', type: 'corrente', balance: NaN as unknown as Centavos },
+    ];
+    const result = calcPatrimonyEvolution([], accounts, FIXED_DATE);
+    // Apenas a conta boa conta: 100_000 centavos = 1000 reais
+    expect(result[5]!.patrimonio).toBe(1000);
+  });
+
+  it('ignora transação com data inválida', () => {
+    const accounts: Account[] = [
+      { id: 'a1', name: 'C', type: 'corrente', balance: c(100_000) },
+    ];
+    const txs: Transaction[] = [
+      { id: 't1', description: 'inválida', value_cents: c(5000), type: 'despesa', category: 'Lazer', date: 'not-a-date' } as Transaction,
+    ];
+    const result = calcPatrimonyEvolution(txs, accounts, FIXED_DATE);
+    // Data inválida descartada → patrimônio atual inalterado (1000 reais)
+    expect(result[5]!.patrimonio).toBe(1000);
+  });
 });
