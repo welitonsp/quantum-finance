@@ -5,15 +5,15 @@
 
 ## Estado Atual — 2026-07-10 (Auditoria Big Four + remediação M-01/M-02 + Radar de Compras)
 
-- Branch principal: `main` — PRs #363–#389 mergeados. Working tree esperado: limpo. **Nenhum PR aberto.**
-- Suíte: **1771 unit + 219 rules + 282 functions + 28 E2E** (+11 PR #389: useScoreHistory).
+- Branch principal: `main` — PRs #363–#391 mergeados. Working tree esperado: limpo. **Nenhum PR aberto.**
+- Suíte: **1781 unit + 219 rules + 282 functions + 28 E2E** (+10 PR #391: useWeeklyCashflow).
 
 ### Auditoria Big Four + Tese Extraordinária (2026-07-09)
 
 - **Laudo:** `docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md` — nota **8.7/10** (Qualified Opinion). Backend/segurança em nível Big Tech; gap em *assurance* automatizado.
 - **Findings — estado da remediação:**
   - **M-02 (a11y) — FECHADO no núcleo (PR #365):** `eslint-plugin-jsx-a11y` no flat config, enforçado no CI; regras objetivas em `error` (zeradas), volumosas em `warn` com ratchet documentado. 3 correções ARIA reais (CommandPalette/ProactiveBriefing/AuditTimeline).
-  - **M-01 (cobertura) — EM CAMPANHA (PRs #366…#383+#385+#387+#389):** scope `src/lib/**` + `src/shared/lib/**` + `src/hooks/**` + 270 testes novos. Cobertura real (pós-#389): stmts ~69.05 / branches ~61.54 / funcs ~68.68 / lines ~72.50. **Gates ratchetados p/ stmts 68 / branches 61 / funcs 68 / lines 72** (margem ≥0.5% cada). Meta final: branches→65 / lines→75. **⚠️ Nota #383:** o PR #382 ratchetou branches p/ 60 **acima** da real (~59.8%) → CI do `main` vermelho; #383 destravou (→60.04), #385 (→60.22), #387 (→60.47), #389 useScoreHistory (+42 branches → 61.54, folga p/ ratchetar). **Regra: só ratchetar com ≥0.5% de margem real medida no CI.** Próximos alvos: useRecurring, useWeeklyCashflow, cashflowTimeline (hooks/motores com branches soltos).
+  - **M-01 (cobertura) — EM CAMPANHA (PRs #366…#383+#385+#387+#389+#391):** scope `src/lib/**` + `src/shared/lib/**` + `src/hooks/**` + 280 testes novos. Cobertura real (pós-#391): stmts ~69.68 / branches ~62.33 / funcs ~69.10 / lines ~73.06. **Gates: stmts 68 / branches 61 / funcs 68 / lines 72** (ratchetados no #390). Meta final: branches→65 / lines→75. **⚠️ Nota #383:** o PR #382 ratchetou branches p/ 60 **acima** da real (~59.8%) → CI do `main` vermelho; #383 destravou (→60.04), #385/#387 (→60.47), #389 useScoreHistory (→61.54), #391 useWeeklyCashflow (→62.33). **Regra: só ratchetar com ≥0.5% de margem real medida no CI.** Margem atual sobre os gates: branches +1.33 / lines +1.06 / stmts +1.68 / funcs +1.10 — subir os gates 1 ponto (branches→62, lines→73) deixaria margem <0.5%, então **aguardar mais 1–2 PRs antes do próximo ratchet**. Próximos alvos: useRecurring, cashflowTimeline, insightsEngine (branches soltos).
   - **L-01 (float audit) — FECHADO (PR #368):** `round2` em `reportEngine.ts` é falso positivo — display-only (`fromCentavos` → reais → 2 casas), aritmética interna em centavos inteiros. Documentado com comentário inline.
   - **M-03 (verificações reais) — ABERTO, owner-pending:** MFA E2E, FCM push, NFC-e real — exigem validação em dispositivo pelo owner.
 - **Tese de produto:** `docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md` — 3 ativos-fosso + 5 premissas Fable 5 + sequência de fases.
