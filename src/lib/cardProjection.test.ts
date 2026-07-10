@@ -45,6 +45,16 @@ describe('invoiceCompetenciaForDate', () => {
   it('virada de ano: janeiro antes do fechamento → dezembro anterior', () => {
     expect(invoiceCompetenciaForDate('2025-01-05', 10)).toBe('2024-12');
   });
+
+  it('data incompleta usa fallback de mês/dia (dia=1 → janela anterior)', () => {
+    // '2025' → y=2025, m e d ausentes → m=1, d=1; d(1) < closingDay(10) → dez/2024
+    expect(invoiceCompetenciaForDate('2025', 10)).toBe('2024-12');
+  });
+
+  it('closingDay fora da faixa 1–31 não desloca a janela', () => {
+    // closingDay=0 → condição de ajuste falsa → mês corrente sem deslocamento
+    expect(invoiceCompetenciaForDate('2025-03-05', 0)).toBe('2025-03');
+  });
 });
 
 // ─── projectCardInvoices — R$ 100,00 em 3x ────────────────────────────────────
@@ -164,6 +174,31 @@ describe('projectCardInvoices — abatimentos', () => {
     });
     expect(result.openTotalCents).toBe(120000);
     expect(result.effectiveAvailableCents).toBe(0);
+  });
+
+  it('usa createdAt quando a transação não tem date', () => {
+    const txs: Transaction[] = [
+      { id: 'c1', cardId: 'card-1', type: 'saida', value_cents: cents(15000), createdAt: '2025-03-15T09:00:00Z', source: 'manual', category: 'Outros' } as Transaction,
+    ];
+    const result = projectCardInvoices({
+      cardId: 'card-1', closingDay: 10, limitCents: cents(500000),
+      transactions: txs, referenceDateISO: '2025-03-25',
+    });
+    // createdAt 15/03 (> fechamento 10) → fatura corrente 2025-03
+    expect(result.currentInvoiceCents).toBe(15000);
+  });
+
+  it('ignora despesa sem date e sem createdAt', () => {
+    const txs: Transaction[] = [
+      charge({ id: 'i1', date: '2025-03-15', value_cents: 10000 }),
+      { id: 'nodate', cardId: 'card-1', type: 'saida', value_cents: cents(99999), source: 'manual', category: 'Outros' } as Transaction,
+    ];
+    const result = projectCardInvoices({
+      cardId: 'card-1', closingDay: 10, limitCents: cents(500000),
+      transactions: txs, referenceDateISO: '2025-03-20',
+    });
+    // a tx sem data é descartada → só a de 10000 conta
+    expect(result.openTotalCents).toBe(10000);
   });
 
   it('ignora transações de outros cartões', () => {
