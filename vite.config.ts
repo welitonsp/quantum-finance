@@ -174,11 +174,15 @@ export default defineConfig({
       // Salto real: stmts 67.69→67.70, branches 58.56→59.18, funcs 67.19→67.19, lines 71.38→71.38.
       // Ratchet 2026-07-10 (PR #381): ofxParser (+8 testes) + forecastEngine (+5 testes) branches adicionais.
       // Bump conservador: branches 59→60. Meta final: branches 65 / lines 75.
+      // ⚠️ 2026-07-10 (PR #382): ratchet branches 59→60 ficou ACIMA da real (~59.8%) → CI do main vermelho.
+      // Corrigido em #383 com cobertura real (→60.04); #385 (→60.22), #387 (→60.47), #389 (→61.54).
+      // Ratchet 2026-07-10 (pós-#389): margem real folgada permite subir todos os gates 1 ponto.
+      // Real medido: stmts 69.05 / branches 61.54 / funcs 68.68 / lines 72.50 (margem ≥0.5% em cada).
       thresholds: {
-        lines: 71,
-        functions: 67,
-        branches: 60,
-        statements: 67,
+        lines: 72,
+        functions: 68,
+        branches: 61,
+        statements: 68,
       },
     },
   },
