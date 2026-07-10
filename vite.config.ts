@@ -179,11 +179,14 @@ export default defineConfig({
       // Ratchet 2026-07-10 (pós-#389 / #390): gates → stmts 68 / branches 61 / funcs 68 / lines 72.
       // Ratchet 2026-07-10 (pós-#391 useWeeklyCashflow + #393 useForecast): real medido
       // stmts 71.10 / branches 63.22 / funcs 71.01 / lines 74.50 → sobe todos 2 pts (margem ≥1% cada).
+      // 🎯 2026-07-10 (pós-#395 useGoals + #396 useBudgets): METAS FINAIS M-01 atingidas —
+      // real stmts 73.59 / branches 65.52 / funcs 74.30 / lines 76.94. branches≥65 e lines≥75.
+      // Gates fixados logo abaixo do real (catraca): stmts 72 / branches 64 / funcs 73 / lines 75.
       thresholds: {
-        lines: 73,
-        functions: 70,
-        branches: 62,
-        statements: 70,
+        lines: 75,
+        functions: 73,
+        branches: 64,
+        statements: 72,
       },
     },
   },
