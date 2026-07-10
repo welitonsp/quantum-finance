@@ -176,13 +176,14 @@ export default defineConfig({
       // Bump conservador: branches 59→60. Meta final: branches 65 / lines 75.
       // ⚠️ 2026-07-10 (PR #382): ratchet branches 59→60 ficou ACIMA da real (~59.8%) → CI do main vermelho.
       // Corrigido em #383 com cobertura real (→60.04); #385 (→60.22), #387 (→60.47), #389 (→61.54).
-      // Ratchet 2026-07-10 (pós-#389): margem real folgada permite subir todos os gates 1 ponto.
-      // Real medido: stmts 69.05 / branches 61.54 / funcs 68.68 / lines 72.50 (margem ≥0.5% em cada).
+      // Ratchet 2026-07-10 (pós-#389 / #390): gates → stmts 68 / branches 61 / funcs 68 / lines 72.
+      // Ratchet 2026-07-10 (pós-#391 useWeeklyCashflow + #393 useForecast): real medido
+      // stmts 71.10 / branches 63.22 / funcs 71.01 / lines 74.50 → sobe todos 2 pts (margem ≥1% cada).
       thresholds: {
-        lines: 72,
-        functions: 68,
-        branches: 61,
-        statements: 68,
+        lines: 73,
+        functions: 70,
+        branches: 62,
+        statements: 70,
       },
     },
   },
