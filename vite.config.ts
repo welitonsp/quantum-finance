@@ -172,11 +172,12 @@ export default defineConfig({
       // Salto real: stmts 67.12→67.69, branches 57.75→58.56, funcs 66.87→67.19, lines 70.97→71.38.
       // Ratchet 2026-07-10 (PR #379): insightsEngine pilares (+16 testes) + exportCSV branches (+8 testes).
       // Salto real: stmts 67.69→67.70, branches 58.56→59.18, funcs 67.19→67.19, lines 71.38→71.38.
-      // Próxima meta: branches 65 / lines 75 — campanha sustentada M-01.
+      // Ratchet 2026-07-10 (PR #381): ofxParser (+8 testes) + forecastEngine (+5 testes) branches adicionais.
+      // Bump conservador: branches 59→60. Meta final: branches 65 / lines 75.
       thresholds: {
         lines: 71,
         functions: 67,
-        branches: 59,
+        branches: 60,
         statements: 67,
       },
     },
