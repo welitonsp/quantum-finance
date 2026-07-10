@@ -153,6 +153,32 @@ describe('computeHealthScore', () => {
     expect(r.details).toHaveLength(4);
   });
 
+  it('ignora tx sem data / de outro mês / pagamento de fatura e soma custo fixo', () => {
+    const c = ctx({
+      currentMonth: '2026-06',
+      transactions: [
+        tx({ value_cents: 1000000 as Centavos, date: '2026-06-01', type: 'entrada', category: 'salário' }),
+        // Custo fixo (categoria fixa) do mês corrente
+        tx({ value_cents: 200000 as Centavos, date: '2026-06-05', type: 'saida', category: 'moradia' }),
+        // Pagamento de fatura: não é despesa de consumo
+        tx({ value_cents: 50000 as Centavos, date: '2026-06-07', type: 'saida', category: 'Cartão', paidInvoiceMonth: '2026-05' }),
+        // Mês anterior: excluída
+        tx({ value_cents: 999999 as Centavos, date: '2026-05-20', type: 'saida', category: 'moradia' }),
+        // Sem data: excluída
+        tx({ value_cents: 888888 as Centavos, date: '', type: 'saida', category: 'moradia' }),
+      ],
+      accounts: [
+        acc({ type: 'corrente', balance: 5000000 as Centavos }),
+        acc({ type: 'cartao',   balance: -100000 as Centavos }),
+        acc({ type: 'outro' as Account['type'], balance: 777777 as Centavos }),
+      ],
+    });
+    const r = computeHealthScore(c);
+    expect(r.total).toBe(r.pillarSavings + r.pillarDebt + r.pillarReserve + r.pillarBudget);
+    // taxaPoupança = (1M − 200k)/1M = 80% → pilar máximo
+    expect(r.pillarSavings).toBe(25);
+  });
+
   it('returns max score for excellent finances', () => {
     const c = ctx({
       transactions: [
