@@ -84,4 +84,83 @@ describe('parseOFX', () => {
     expect(result[0]!.description).toBe('Primeira');
     expect(result[1]!.description).toBe('Segunda');
   });
+
+  // ─── branches adicionais ───────────────────────────────────────────────────
+
+  it('usa "Transação OFX" como descrição quando MEMO e NAME estão ausentes', async () => {
+    const file = makeOFXFile([
+      stmtTrn({ DTPOSTED: '20260715', TRNAMT: '-50.00', FITID: 'FIT010' }),
+    ]);
+    const result = await parseOFX(file);
+    expect(result[0]!.description).toBe('Transação OFX');
+  });
+
+  it('gera id automático quando FITID está ausente', async () => {
+    const file = makeOFXFile([
+      stmtTrn({ DTPOSTED: '20260715', TRNAMT: '-75.00', MEMO: 'Sem FITID' }),
+    ]);
+    const result = await parseOFX(file);
+    expect(result).toHaveLength(1);
+    // id gerado automaticamente (não contém fitId da transação)
+    expect(result[0]!.fitId).toBeNull();
+    expect(result[0]!.id).toContain('ofx:');
+  });
+
+  it('pula transação com TRNAMT = 0', async () => {
+    const file = makeOFXFile([
+      stmtTrn({ DTPOSTED: '20260715', TRNAMT: '0.00', FITID: 'FIT011', MEMO: 'Zero' }),
+      stmtTrn({ DTPOSTED: '20260715', TRNAMT: '-10.00', FITID: 'FIT012', MEMO: 'Valida' }),
+    ]);
+    const result = await parseOFX(file);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.description).toBe('Valida');
+  });
+
+  it('usa data de hoje como fallback quando DTPOSTED está ausente', async () => {
+    const file = makeOFXFile([
+      stmtTrn({ TRNAMT: '-20.00', FITID: 'FIT013', MEMO: 'Sem data' }),
+    ]);
+    const result = await parseOFX(file);
+    expect(result).toHaveLength(1);
+    // data deve ser YYYY-MM-DD (hoje ou formato válido)
+    expect(result[0]!.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('pula transação com TRNAMT inválido (não numérico)', async () => {
+    const file = makeOFXFile([
+      stmtTrn({ DTPOSTED: '20260715', TRNAMT: 'abc', FITID: 'FIT014', MEMO: 'Invalido' }),
+      stmtTrn({ DTPOSTED: '20260715', TRNAMT: '-5.00', FITID: 'FIT015', MEMO: 'Valida' }),
+    ]);
+    const result = await parseOFX(file);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.description).toBe('Valida');
+  });
+
+  it('reconhece OFX que contém <OFX> mas não OFXHEADER', async () => {
+    // Cobre o segundo ramo da validação de formato: !includes(OFXHEADER) && !includes(<OFX>)
+    // Se incluir <OFX>, não lança erro
+    const content = `<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS>
+<STMTTRN>
+<DTPOSTED>20260715
+<TRNAMT>-50.00
+<FITID>FITONLY
+<MEMO>Sem header
+</STMTTRN>
+</STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>`;
+    const file = new File([content], 'noheader.ofx', { type: 'text/plain' });
+    const result = await parseOFX(file);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.description).toBe('Sem header');
+  });
+
+  it('parseOFXDate retorna null quando dígitos < 8 (data inválida curta)', async () => {
+    // DTPOSTED "2026" → 4 dígitos < 8 → parseOFXDate retorna null → usa today fallback
+    const file = makeOFXFile([
+      stmtTrn({ DTPOSTED: '2026', TRNAMT: '-30.00', FITID: 'FIT020', MEMO: 'Data curta' }),
+    ]);
+    const result = await parseOFX(file);
+    // Não deve lançar; usa data fallback de hoje
+    expect(result).toHaveLength(1);
+    expect(result[0]!.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
 });
