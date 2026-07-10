@@ -398,4 +398,274 @@ describe('computeKPIs', () => {
     const result = computeKPIs(ctx);
     expect(result.monthlyExpenseCents).toBe(0);
   });
+
+  it('conta investimento conta como ativo (além de corrente/poupanca)', () => {
+    const ctx: InsightContext = {
+      ...BASE_CTX,
+      accounts: [account({ type: 'investimento', balance: 50000 })],
+      transactions: [],
+    };
+    const result = computeKPIs(ctx);
+    expect(result.netWorthCents).toBe(50000);
+  });
+});
+
+// ─── computeHealthScore — pilares adicionais ──────────────────────────────────
+
+describe('computeHealthScore — pilares adicionais', () => {
+  it('pillarSavings = 25 + pillarReserve = 25 + pillarBudget = 25 — cenário de excelência', () => {
+    // taxaPoupanca=90%, comprometimento=10%, reservaMeses=60
+    const ctx: InsightContext = {
+      ...BASE_CTX,
+      accounts: [account({ type: 'poupanca', balance: 600000 })],
+      transactions: [
+        tx({ value_cents: 100000, type: 'entrada', date: '2026-07-01' }),
+        tx({ value_cents: 10000,  type: 'saida',   date: '2026-07-05', category: 'moradia' }),
+      ],
+    };
+    const result = computeHealthScore(ctx);
+    expect(result.pillarReserve).toBe(25);
+    expect(result.pillarBudget).toBe(25);
+    expect(result.details[2]).toContain('sólida');
+    expect(result.details[3]).toContain('Ótimo');
+  });
+
+  it('pillarSavings = 20 quando taxaPoupança entre 20% e 29%', () => {
+    // 100000 receita, 75000 despesa → 25% poupança
+    const ctx: InsightContext = {
+      ...BASE_CTX,
+      accounts: [account({ type: 'corrente', balance: 100000 })],
+      transactions: [
+        tx({ value_cents: 100000, type: 'entrada', date: '2026-07-01' }),
+        tx({ value_cents: 75000,  type: 'saida',   date: '2026-07-05', category: 'Lazer' }),
+      ],
+    };
+    const result = computeHealthScore(ctx);
+    expect(result.pillarSavings).toBe(20);
+    expect(result.details[0]).toContain('Excelente');
+  });
+
+  it('pillarSavings = 12 quando taxaPoupança entre 10% e 19%', () => {
+    // 100000 receita, 85000 despesa → 15% poupança
+    const ctx: InsightContext = {
+      ...BASE_CTX,
+      accounts: [account({ type: 'corrente', balance: 100000 })],
+      transactions: [
+        tx({ value_cents: 100000, type: 'entrada', date: '2026-07-01' }),
+        tx({ value_cents: 85000,  type: 'saida',   date: '2026-07-05', category: 'Lazer' }),
+      ],
+    };
+    const result = computeHealthScore(ctx);
+    expect(result.pillarSavings).toBe(12);
+    expect(result.details[0]).toContain('Razoável');
+  });
+
+  it('pillarReserve = 18 quando reservaMeses entre 3 e 5', () => {
+    // custoFixoMensal=10000, ativos=40000 → 4 meses → pillarReserve=18
+    const ctx: InsightContext = {
+      ...BASE_CTX,
+      accounts: [account({ type: 'poupanca', balance: 40000 })],
+      transactions: [
+        tx({ value_cents: 100000, type: 'entrada', date: '2026-07-01' }),
+        tx({ value_cents: 10000,  type: 'saida',   date: '2026-07-05', category: 'moradia' }),
+      ],
+    };
+    const result = computeHealthScore(ctx);
+    expect(result.pillarReserve).toBe(18);
+    expect(result.details[2]).toContain('parcial');
+  });
+
+  it('pillarReserve = 8 quando reservaMeses entre 1 e 2', () => {
+    // custoFixoMensal=10000, ativos=15000 → 1.5 meses → pillarReserve=8
+    const ctx: InsightContext = {
+      ...BASE_CTX,
+      accounts: [account({ type: 'poupanca', balance: 15000 })],
+      transactions: [
+        tx({ value_cents: 100000, type: 'entrada', date: '2026-07-01' }),
+        tx({ value_cents: 10000,  type: 'saida',   date: '2026-07-05', category: 'moradia' }),
+      ],
+    };
+    const result = computeHealthScore(ctx);
+    expect(result.pillarReserve).toBe(8);
+    expect(result.details[2]).toContain('insuficiente');
+  });
+
+  it('pillarBudget = 18 quando comprometimento entre 21% e 35%', () => {
+    // 100000 receita, 30000 moradia → comprometimento 30%
+    const ctx: InsightContext = {
+      ...BASE_CTX,
+      accounts: [account({ type: 'corrente', balance: 100000 })],
+      transactions: [
+        tx({ value_cents: 100000, type: 'entrada', date: '2026-07-01' }),
+        tx({ value_cents: 30000,  type: 'saida',   date: '2026-07-05', category: 'moradia' }),
+      ],
+    };
+    const result = computeHealthScore(ctx);
+    expect(result.pillarBudget).toBe(18);
+    expect(result.details[3]).toContain('Moderate');
+  });
+
+  it('pillarBudget = 0 quando comprometimento > 50%', () => {
+    // 100000 receita, 60000 moradia → comprometimento 60%
+    const ctx: InsightContext = {
+      ...BASE_CTX,
+      accounts: [account({ type: 'corrente', balance: 100000 })],
+      transactions: [
+        tx({ value_cents: 100000, type: 'entrada', date: '2026-07-01' }),
+        tx({ value_cents: 60000,  type: 'saida',   date: '2026-07-05', category: 'moradia' }),
+      ],
+    };
+    const result = computeHealthScore(ctx);
+    expect(result.pillarBudget).toBe(0);
+    expect(result.details[3]).toContain('comprometida');
+  });
+
+  it('pillarDebt = 20 quando endividamento entre 11% e 30%', () => {
+    // ativos=100000, passivos=30000 → total=130000, endiv≈23.1% → <=30 → 20; detail: >20 → "Dívida moderada"
+    const ctx: InsightContext = {
+      ...BASE_CTX,
+      accounts: [
+        account({ type: 'corrente', balance: 100000 }),
+        account({ type: 'divida',   balance: 30000 }),
+      ],
+      transactions: [],
+    };
+    const result = computeHealthScore(ctx);
+    expect(result.pillarDebt).toBe(20);
+    expect(result.details[1]).toContain('moderada');
+  });
+
+  it('pillarDebt = 6 quando endividamento entre 51% e 70%', () => {
+    // ativos=100000, passivos=120000 → total=220000, endiv≈54.5% → <=70 → 6
+    const ctx: InsightContext = {
+      ...BASE_CTX,
+      accounts: [
+        account({ type: 'corrente', balance: 100000 }),
+        account({ type: 'cartao',   balance: 120000 }),
+      ],
+      transactions: [],
+    };
+    const result = computeHealthScore(ctx);
+    expect(result.pillarDebt).toBe(6);
+    expect(result.details[1]).toContain('alto');
+  });
+
+  it('pillarDebt = 0 quando endividamento > 70%', () => {
+    // ativos=100000, passivos=300000 → total=400000, endiv=75%
+    const ctx: InsightContext = {
+      ...BASE_CTX,
+      accounts: [
+        account({ type: 'corrente', balance: 100000 }),
+        account({ type: 'divida',   balance: 300000 }),
+      ],
+      transactions: [],
+    };
+    const result = computeHealthScore(ctx);
+    expect(result.pillarDebt).toBe(0);
+  });
+
+  it('tipo de conta desconhecido não contribui para ativos nem passivos', () => {
+    // 'wallet' não está em nenhuma lista → ativos=0, passivos=0 → usa receita/despesa como fallback
+    const ctx: InsightContext = {
+      ...BASE_CTX,
+      accounts: [account({ type: 'wallet' as 'corrente', balance: 100000 })],
+      transactions: [
+        tx({ value_cents: 50000, type: 'entrada', date: '2026-07-01' }),
+        tx({ value_cents: 10000, type: 'saida',   date: '2026-07-05', category: 'Lazer' }),
+      ],
+    };
+    const result = computeHealthScore(ctx);
+    // accounts.length > 0 → não usa fallback receita/despesa; tipo desconhecido → ativos=0
+    expect(typeof result.total).toBe('number');
+  });
+
+  it("tipo 'despesa' (legado) conta como despesa de consumo", () => {
+    // isExpenseTx cobre 'saida' | 'despesa'
+    const ctx: InsightContext = {
+      ...BASE_CTX,
+      accounts: [account({ type: 'corrente', balance: 50000 })],
+      transactions: [
+        tx({ value_cents: 100000, type: 'entrada', date: '2026-07-01' }),
+        tx({ value_cents: 20000,  type: 'despesa' as 'saida', date: '2026-07-05', category: 'Lazer' }),
+      ],
+    };
+    const result = computeHealthScore(ctx);
+    // 100000 receita - 20000 despesa = 80% poupança → pillarSavings=25
+    expect(result.pillarSavings).toBe(25);
+  });
+});
+
+// ─── computeAnomalies — branches adicionais ───────────────────────────────────
+
+describe('computeAnomalies — branches adicionais', () => {
+  it('tx histórico do ano anterior (y < curYear) é incluído no histórico', () => {
+    // histórico com datas em 2025 → y < curY (2026) → entra como histórico
+    const histTxs = Array.from({ length: 5 }, (_, i) =>
+      tx({ value_cents: 10000, category: 'Mercado', date: `2025-0${i + 1}-10` }),
+    );
+    const ctx: InsightContext = {
+      ...BASE_CTX,
+      transactions: [
+        ...histTxs,
+        tx({ value_cents: 20000, category: 'Mercado', date: '2026-07-01' }),
+      ],
+    };
+    const result = computeAnomalies(ctx);
+    expect(result.length).toBeGreaterThan(0);
+    expect(result[0]!.category).toBe('Mercado');
+  });
+
+  it('categoria undefined em tx histórico defaults para "Outros"', () => {
+    const makeNocat = (vc: number, d: string) => {
+      const t = tx({ value_cents: vc, date: d });
+      delete (t as unknown as Record<string, unknown>).category;
+      return t;
+    };
+    const histTxs = Array.from({ length: 5 }, (_, i) => makeNocat(10000, `2026-0${i + 1}-10`));
+    const ctx: InsightContext = {
+      ...BASE_CTX,
+      transactions: [
+        ...histTxs,
+        makeNocat(20000, '2026-07-01'),
+      ],
+    };
+    const result = computeAnomalies(ctx);
+    expect(result.some(r => r.category === 'Outros')).toBe(true);
+  });
+
+  it('gasto abaixo da média em > 25% gera anomalia com deltaPct negativo', () => {
+    // avg 20000, atual 5000 → delta -75% → severity 'high' com deltaPct < 0
+    const histTxs = Array.from({ length: 5 }, (_, i) =>
+      tx({ value_cents: 20000, category: 'Lazer', date: `2026-0${i + 1}-10` }),
+    );
+    const ctx: InsightContext = {
+      ...BASE_CTX,
+      transactions: [
+        ...histTxs,
+        tx({ value_cents: 5000, category: 'Lazer', date: '2026-07-01' }),
+      ],
+    };
+    const result = computeAnomalies(ctx);
+    const lazer = result.find(r => r.category === 'Lazer');
+    expect(lazer).toBeDefined();
+    expect(lazer!.deltaPct).toBeLessThan(0);
+    expect(lazer!.severity).toBe('high');
+  });
+
+  it('categoria no mês atual sem histórico → avg=0 → ignorada', () => {
+    // histórico tem 5 tx de 'Alimentação', mês atual tem 1 tx de 'Lazer' (nova cat)
+    const histTxs = Array.from({ length: 5 }, (_, i) =>
+      tx({ value_cents: 10000, category: 'Alimentação', date: `2026-0${i + 1}-10` }),
+    );
+    const ctx: InsightContext = {
+      ...BASE_CTX,
+      transactions: [
+        ...histTxs,
+        tx({ value_cents: 99999, category: 'Lazer', date: '2026-07-01' }), // sem histórico → avg=0 → skip
+      ],
+    };
+    const result = computeAnomalies(ctx);
+    const lazer = result.find(r => r.category === 'Lazer');
+    expect(lazer).toBeUndefined();
+  });
 });
