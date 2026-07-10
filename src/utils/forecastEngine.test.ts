@@ -116,6 +116,62 @@ describe('calculateForecast - projeção de recorrentes', () => {
   });
 });
 
+// ─── branches adicionais ──────────────────────────────────────────────────────
+
+describe('calculateForecast — branches adicionais', () => {
+  it('median com quantidade par de valores cobre o ramo even-length', () => {
+    // incomeVals terá exatamente 2 elementos → median usa (s[0]+s[1])/2
+    const txs = [
+      tx('entrada', 10000, '2026-04-10', 'Entrada1'),
+      tx('entrada', 30000, '2026-04-11', 'Entrada2'),
+    ];
+    const result = calculateForecast(txs, 0, 30, FIXED_DATE);
+    // medInc = (10000+30000)/2 = 20000; ambos <= 60000 → filteredInc preservado
+    expect(result.health).toBe('good');
+  });
+
+  it('recorrente do tipo entrada projeta com signed positivo (isIncome=true)', () => {
+    // 2 ocorrências de 'Salário' entrada → recorrente detectado; isIncome=true → signed=+10000
+    const ref = new Date('2026-04-01T12:00:00Z');
+    const txs = [
+      tx('entrada', 10000, '2026-02-15', 'Salário'),
+      tx('entrada', 10000, '2026-03-15', 'Salário'),
+    ];
+    const result = calculateForecast(txs, 0, 30, ref);
+    // recorrente projetado ~Apr 12 eleva saldo de 0 → algum ponto com balance > 0
+    expect(result.points.some(p => p.balance > 0)).toBe(true);
+    expect(result.finalBalance).toBeGreaterThan(0);
+  });
+
+  it('ignora transação sem date no agrupamento (branch !tx.date)', () => {
+    const noDate = {
+      ...tx('saida', 5000, '2026-04-01'),
+      date: undefined,
+    } as unknown as Transaction;
+    expect(() => calculateForecast([tx('saida', 5000, '2026-04-01'), noDate], 100, 30, FIXED_DATE)).not.toThrow();
+  });
+
+  it('ignora transação com value_cents undefined no agrupamento (branch txCentavos===null)', () => {
+    const noCents = {
+      ...tx('saida', 5000, '2026-04-01'),
+      value_cents: undefined,
+    } as unknown as Transaction;
+    expect(() => calculateForecast([tx('saida', 5000, '2026-04-01'), noCents], 100, 30, FIXED_DATE)).not.toThrow();
+  });
+
+  it('filtro de anomalia exclui outlier > mediana*3 (v <= medExp*3 false branch)', () => {
+    // medExp = median([100, 100, 500]) = 100; 500 > 100*3=300 → removido
+    const txs = [
+      tx('saida', 100, '2026-04-10', 'Normal1'),
+      tx('saida', 100, '2026-04-11', 'Normal2'),
+      tx('saida', 500, '2026-04-12', 'Outlier'),
+    ];
+    const result = calculateForecast(txs, 1000, 30, FIXED_DATE);
+    // sem outlier o run rate é baixo → saldo final positivo
+    expect(result.finalBalance).toBeGreaterThan(0);
+  });
+});
+
 describe('calculateForecast - centavos e recorrência', () => {
   it('sem transações retorna EMPTY com currentBalance preservado em reais', () => {
     const result = calculateForecast([], 999.99, 30, FIXED_DATE);
