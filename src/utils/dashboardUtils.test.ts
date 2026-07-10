@@ -167,6 +167,51 @@ describe('calculateBudgetAlerts', () => {
     expect(alerts).toEqual([]);
   });
 
+  it('targetAmountCents inválido (negativo) é tratado como zero e não gera alerta', () => {
+    const alerts = calculateBudgetAlerts([
+      { id: 'b-neg', category: 'Alimentação', month: '2026-05', targetAmountCents: cents(-500) },
+    ], [
+      tx({ category: 'Alimentação', value_cents: cents(10000), date: '2026-05-10' }),
+    ]);
+    // limitCents = 0 → percentUsed = 0 → status null → sem alerta
+    expect(alerts).toEqual([]);
+  });
+
+  it('targetAmountCents não inteiro é tratado como zero', () => {
+    const alerts = calculateBudgetAlerts([
+      { id: 'b-frac', category: 'Alimentação', month: '2026-05', targetAmountCents: 1234.56 },
+    ], [
+      tx({ category: 'Alimentação', value_cents: cents(10000), date: '2026-05-10' }),
+    ]);
+    expect(alerts).toEqual([]);
+  });
+
+  it('mesmo status: ordena por percentUsed decrescente (linha 146)', () => {
+    const budgets = [
+      { id: 'b1', category: 'Lazer',       month: '2026-05', targetAmountCents: cents(1000) },
+      { id: 'b2', category: 'Alimentação', month: '2026-05', targetAmountCents: cents(1000) },
+    ];
+    const txs = [
+      tx({ category: 'Lazer',       value_cents: cents(1100), date: '2026-05-01' }), // critical 110%
+      tx({ category: 'Alimentação', value_cents: cents(2000), date: '2026-05-01' }), // critical 200%
+    ];
+    const alerts = calculateBudgetAlerts(budgets, txs);
+    expect(alerts.map(a => a.id)).toEqual(['b2', 'b1']); // 200% antes de 110%
+  });
+
+  it('mesmo status e percentUsed: desempata por categoria (linha 147)', () => {
+    const budgets = [
+      { id: 'b-zebra', category: 'Zebra', month: '2026-05', targetAmountCents: cents(1000) },
+      { id: 'b-abac',  category: 'Abacaxi', month: '2026-05', targetAmountCents: cents(1000) },
+    ];
+    const txs = [
+      tx({ category: 'Zebra',   value_cents: cents(1100), date: '2026-05-01' }), // critical 110%
+      tx({ category: 'Abacaxi', value_cents: cents(1100), date: '2026-05-01' }), // critical 110%
+    ];
+    const alerts = calculateBudgetAlerts(budgets, txs);
+    expect(alerts.map(a => a.category)).toEqual(['Abacaxi', 'Zebra']); // ordem alfabética pt-BR
+  });
+
   it('dois alertas: critical aparece antes de attention na ordenação (linha 145-147)', () => {
     const budgets = [
       { id: 'b1', category: 'Lazer',       month: '2026-05', targetAmountCents: cents(1000) },

@@ -179,6 +179,49 @@ describe('detectarTarifas — ordenação', () => {
   });
 });
 
+describe('detectarTarifas — frequência alta e fallback de valor', () => {
+  it('adiciona razão de meses consecutivos quando frequência ≥ 6', () => {
+    // 6 meses distintos dentro da janela (dez/2024 – maio/2025)
+    const meses = ['2024-12', '2025-01', '2025-02', '2025-03', '2025-04', '2025-05'];
+    const txs = meses.map((ym) =>
+      makeTx({
+        description: 'Tarifa Manutenção Conta',
+        value_cents: 1500 as Centavos,
+        date: `${ym}-01`,
+      }),
+    );
+    const r = detectarTarifas(txs);
+    expect(r.tarifas[0]!.frequencia).toBe(6);
+    expect(r.tarifas[0]!.risco).toBe('alto');
+    expect(r.tarifas[0]!.razoes.some((rz) => rz.includes('6 meses consecutivos'))).toBe(true);
+  });
+
+  it('usa value legado quando value_cents está ausente', () => {
+    // Sem value_cents → canonicalCents cai em toCentavos(tx.value)
+    const legado = (date: string): Transaction => {
+      const t = makeTx({ value_cents: 0 as Centavos, value: 15, date });
+      delete (t as { value_cents?: Centavos }).value_cents;
+      return t;
+    };
+    const txs = [legado('2025-04-01'), legado('2025-05-01')];
+    const r = detectarTarifas(txs);
+    expect(r.tarifas).toHaveLength(1);
+    expect(r.tarifas[0]!.ultimoValorCents).toBe(1500);
+  });
+
+  it('trata value e value_cents ausentes como zero', () => {
+    const semValor = (date: string): Transaction => {
+      const t = makeTx({ value_cents: 0 as Centavos, date });
+      delete (t as { value_cents?: Centavos }).value_cents;
+      delete (t as { value?: number }).value;
+      return t;
+    };
+    const txs = [semValor('2025-04-01'), semValor('2025-05-01')];
+    const r = detectarTarifas(txs);
+    expect(r.tarifas[0]!.totalCobradoCents).toBe(0);
+  });
+});
+
 describe('detectarTarifas — janela de tempo', () => {
   it('ignora transações fora da janela de 12 meses', () => {
     // Transação de 14 meses atrás não deve ser incluída

@@ -170,4 +170,31 @@ describe('simulateDebtStrategy — robustez', () => {
     expect(r.months).toBe(1);
     expect(r.order[0]!.payoffMonthIndex).toBe(0);
   });
+
+  it('plano não converge quando juros excedem o orçamento → inviável', () => {
+    // interest/mês = 10% de 100000 = 10000; orçamento = mínimo = 5000 < juros.
+    // Passa o gate de viabilidade (budget ≥ sumMin) mas o saldo cresce a cada mês.
+    const r = simulateDebtStrategy(
+      [debt('a', 100000, 0.10, 5000)],
+      cents(5000),
+      'avalanche',
+    );
+    expect(r.feasible).toBe(false);
+    expect(r.reason).toMatch(/não converge|horizonte/i);
+    expect(r.months).toBe(600); // MAX_MONTHS
+    expect(r.order).toEqual([]);
+    expect(r.totalPaidCents).toBeGreaterThan(0);
+  });
+
+  it('snowball desempata por MAIOR juro quando saldos são iguais', () => {
+    // Dois saldos idênticos e sem juros → ordenação cai no desempate por taxa.
+    const r = simulateDebtStrategy(
+      [debt('x', 50000, 0, 1000, 'X'), debt('y', 50000, 0, 1000, 'Y')],
+      cents(60000),
+      'snowball',
+    );
+    expect(r.feasible).toBe(true);
+    // Orçamento cobre uma dívida inteira + sobra: uma quita no mês 0.
+    expect(r.order.some(s => s.payoffMonthIndex === 0)).toBe(true);
+  });
 });
