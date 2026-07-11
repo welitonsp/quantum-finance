@@ -63,3 +63,23 @@ describe('App Check guardrails — full enforcement', () => {
     );
   });
 });
+
+describe('Cost & AI-consent guardrails (F-09, F-01)', () => {
+  it('caps maxInstances globally (bounds custo/DoS econômico)', () => {
+    assert.match(
+      source,
+      /setGlobalOptions\(\s*{[^}]*maxInstances\s*:\s*\d+/,
+      'must set a global maxInstances cap via setGlobalOptions',
+    );
+  });
+
+  it('gates every Gemini callable behind AI consent (assertAiConsent) before the rate limit', () => {
+    for (const name of ['categorizeTransactionsBatch', 'chatWithQuantumAI', 'generateAuditReport']) {
+      const body = source.slice(source.indexOf(`export const ${name}`));
+      const consentIdx = body.indexOf('assertAiConsent');
+      const rateIdx    = body.indexOf('assertAiRateLimit');
+      assert.ok(consentIdx > 0, `${name} must call assertAiConsent`);
+      assert.ok(consentIdx < rateIdx, `${name} must check consent before the rate limit`);
+    }
+  });
+});
