@@ -184,11 +184,13 @@ export default defineConfig({
       // Gates fixados logo abaixo do real (catraca): stmts 72 / branches 64 / funcs 73 / lines 75.
       // Reforço 2026-07-10 (pós-#398 useDebts + #399 useCategories + #400 useChallenges):
       // real stmts 77.48 / branches 68.19 / funcs 79.40 / lines 80.78 → gates → 75 / 67 / 78 / 79.
+      // Reforço 2026-07-11 (pós-#402 updateRecurringWithHistory + #403 recurringRepo):
+      // real stmts 78.03 / branches 68.55 / funcs 79.83 / lines 81.29 → gates → 77 / 68 / 79 / 80.
       thresholds: {
-        lines: 79,
-        functions: 78,
-        branches: 67,
-        statements: 75,
+        lines: 80,
+        functions: 79,
+        branches: 68,
+        statements: 77,
       },
     },
   },
