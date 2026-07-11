@@ -31,6 +31,7 @@ import QuantumBackground from './components/QuantumBackground';
 import DashboardContent from './components/DashboardContent';
 import TransactionForm from './features/transactions/TransactionForm';
 import TransferForm from './features/transactions/TransferForm';
+import { ConversationMemory } from './features/ai-chat/ConversationMemory';
 import CategorySettings from './components/CategorySettings';
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 import type { Transaction } from './shared/types/transaction';
@@ -576,6 +577,8 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    // Privacidade (F-10): descarta memória de conversa do chat ao sair.
+    ConversationMemory.purgeAll();
     try { await signOut(auth); } catch { toast.error('Erro ao sair.'); }
   };
 
