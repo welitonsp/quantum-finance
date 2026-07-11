@@ -13,17 +13,33 @@ const originalAdminModule = require.cache[adminModulePath];
 let scenario = 'allowed';
 let structuredLogShouldThrow = false;
 let systemLogWrites = [];
+// Consentimento de IA (F-01): 'granted' | 'denied' | 'missing' | 'error'.
+let aiConsent = 'granted';
 const DAILY_AI_LIMIT = 50; // mirrors functions/src/index.ts
 
 function resetMock() {
   scenario = 'allowed';
   structuredLogShouldThrow = false;
   systemLogWrites = [];
+  aiConsent = 'granted';
 }
 
 const mockDb = {
   doc(path) {
-    return { path };
+    return {
+      path,
+      // Consent gate lê users/{uid}/consents/current.
+      get: async () => {
+        if (String(path).endsWith('consents/current')) {
+          if (aiConsent === 'error') throw new Error('consent read failed');
+          return {
+            exists: aiConsent !== 'missing',
+            data: () => ({ ai: aiConsent === 'granted' }),
+          };
+        }
+        return { exists: false, data: () => undefined };
+      },
+    };
   },
   collection(path) {
     return {
@@ -164,6 +180,45 @@ describe('AI callable rate-limit dispatch', () => {
     await assert.rejects(
       wrappedChat({ data: { prompt: 'oi' }, auth: { uid: 'user-1' }, app: { appId: 'app-1' } }),
       (err) => err.code === 'internal',
+    );
+  });
+});
+
+// F-01 — gate de consentimento de IA (fail-closed, ANTES do rate limit).
+describe('AI consent gate', () => {
+  beforeEach(() => resetMock());
+
+  it('bloqueia com permission-denied quando NÃO há consentimento (doc ausente)', async () => {
+    aiConsent = 'missing';
+    scenario = 'limited'; // se passasse do consent, seria resource-exhausted
+    await assert.rejects(
+      wrappedChat({ data: { prompt: 'oi' }, auth: { uid: 'user-1' }, app: { appId: 'app-1' } }),
+      (err) => err.code === 'permission-denied',
+    );
+  });
+
+  it('bloqueia com permission-denied quando ai === false', async () => {
+    aiConsent = 'denied';
+    await assert.rejects(
+      wrappedChat({ data: { prompt: 'oi' }, auth: { uid: 'user-1' }, app: { appId: 'app-1' } }),
+      (err) => err.code === 'permission-denied',
+    );
+  });
+
+  it('fail-closed: erro ao ler consentimento também nega (permission-denied)', async () => {
+    aiConsent = 'error';
+    await assert.rejects(
+      wrappedChat({ data: { prompt: 'oi' }, auth: { uid: 'user-1' }, app: { appId: 'app-1' } }),
+      (err) => err.code === 'permission-denied',
+    );
+  });
+
+  it('com consentimento concedido, passa do gate e chega ao rate limit (resource-exhausted)', async () => {
+    aiConsent = 'granted';
+    scenario = 'limited';
+    await assert.rejects(
+      wrappedChat({ data: { prompt: 'oi' }, auth: { uid: 'user-1' }, app: { appId: 'app-1' } }),
+      (err) => err.code === 'resource-exhausted',
     );
   });
 });
