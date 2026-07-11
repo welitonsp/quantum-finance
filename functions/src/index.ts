@@ -1280,6 +1280,16 @@ export const deleteUserData = onCall(
     if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
 
     const uid     = request.auth.uid;
+
+    // F-06 — step-up: exclusão irreversível exige autenticação RECENTE. O Admin SDK
+    // não produz auth/requires-recent-login, então validamos `auth_time` do token
+    // (só muda numa (re)autenticação real, não em refresh). Janela: 5 min.
+    const authTimeSec = typeof request.auth.token.auth_time === 'number' ? request.auth.token.auth_time : 0;
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (authTimeSec === 0 || nowSec - authTimeSec > 5 * 60) {
+      throw new HttpsError('failed-precondition', 'Reautenticação recente necessária para excluir a conta.');
+    }
+
     await assertOpRateLimit(uid, 'deleteUserData');
     const userRef = adminDb.collection('users').doc(uid);
     await adminDb.recursiveDelete(userRef);
