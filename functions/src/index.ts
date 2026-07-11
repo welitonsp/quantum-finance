@@ -147,6 +147,23 @@ async function assertAiRateLimit(uid: string, limitedDetail: string): Promise<vo
   throw new HttpsError('internal', 'Não foi possível validar o limite de uso da IA. Tente novamente em instantes.');
 }
 
+// Gate de consentimento de IA (F-01, LGPD) — FAIL-CLOSED.
+// Nenhum dado do titular é enviado ao operador de IA (Gemini) sem consentimento
+// explícito (`users/{uid}/consents/current.ai === true`). Falha de leitura → nega.
+async function assertAiConsent(uid: string): Promise<void> {
+  let consented = false;
+  try {
+    const snap = await adminDb.doc(`users/${uid}/consents/current`).get();
+    consented = snap.exists && snap.data()?.ai === true;
+  } catch {
+    void writeStructuredLog(uid, 'ERROR', 'ai consent validation failed');
+    throw new HttpsError('permission-denied', 'Não foi possível validar o consentimento de uso de IA.');
+  }
+  if (consented) return;
+  void writeStructuredLog(uid, 'DENY', 'ai consent absent — request blocked');
+  throw new HttpsError('permission-denied', 'Consentimento de uso de IA não concedido. Ative-o em Configurações › Privacidade.');
+}
+
 // Gate de rate limit por operação/uid para callables de escrita (não-IA).
 // Mesmo contrato de assertAiRateLimit: 'limited' → resource-exhausted;
 // erro interno NUNCA vira resource-exhausted.
@@ -1292,6 +1309,7 @@ export const categorizeTransactionsBatch = onCall(
       throw new HttpsError('invalid-argument', `Máximo ${MAX_BATCH_SIZE} transações por lote.`);
     }
 
+    await assertAiConsent(uid);
     await assertAiRateLimit(uid, `daily AI limit reached (${DAILY_AI_LIMIT}/day) — categorization blocked`);
 
     type RawTx = { id?: unknown; description?: unknown; value_cents?: unknown; value?: unknown; type?: unknown; category?: unknown };
@@ -1358,6 +1376,7 @@ export const chatWithQuantumAI = onCall(
     if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
 
     const uid = request.auth.uid;
+    await assertAiConsent(uid);
     await assertAiRateLimit(uid, 'daily AI limit reached — chat blocked');
 
     const { prompt: userMessage, financialContext: rawContext } =
@@ -1402,6 +1421,7 @@ export const generateAuditReport = onCall(
     if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
 
     const uid = request.auth.uid;
+    await assertAiConsent(uid);
     await assertAiRateLimit(uid, 'daily AI limit reached — audit blocked');
 
     const { financialContext: rawContext } =
