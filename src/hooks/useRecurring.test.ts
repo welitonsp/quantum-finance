@@ -94,6 +94,7 @@ vi.mock('../shared/services/AuditService', () => ({
 import {
   computeRecurringChangedFields,
   sanitizeRecurringForHistory,
+  updateRecurringWithHistory,
   useRecurring,
 } from './useRecurring';
 
@@ -338,5 +339,51 @@ describe('useRecurring — history Modelo A leve', () => {
     expect(result.current.recurringTasks).toEqual([]);
 
     unmount();
+  });
+});
+
+describe('updateRecurringWithHistory', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockBatchCommit.mockResolvedValue(undefined);
+    mockGenerateSafeOperationId.mockReturnValue('op_safe_recurring_0001');
+  });
+
+  it('no-op sem uid ou sem id (não lê o documento)', async () => {
+    await updateRecurringWithHistory('', 'r1', { active: false });
+    await updateRecurringWithHistory('uid-1', '', { active: false });
+    expect(mockGetDoc).not.toHaveBeenCalled();
+  });
+
+  it('no-op quando o documento não existe', async () => {
+    mockGetDoc.mockResolvedValue(existingSnap(undefined));
+    await updateRecurringWithHistory('uid-1', 'r1', { active: false });
+    expect(mockGetDoc).toHaveBeenCalledTimes(1);
+    expect(mockBatchCommit).not.toHaveBeenCalled();
+  });
+
+  it('atualiza com history pareado (Modelo A) e converte value para centavos', async () => {
+    mockGetDoc.mockResolvedValue(existingSnap({
+      description: 'Aluguel', value: 120050, category: 'Moradia',
+      dueDay: 1, active: true, frequency: 'mensal',
+    }));
+
+    await updateRecurringWithHistory('uid-1', 'r1', { value: 100, active: false });
+
+    // batch.update no doc + batch.set no history + commit
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
+    expect(mockBatchSet).toHaveBeenCalledTimes(1);
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+
+    const updatePayload = lastUpdatePayload(0);
+    expect(updatePayload['value']).toBe(10000);          // toCentavos(100)
+    expect(updatePayload['_lastOpId']).toBe('op_safe_recurring_0001');
+    expect(updatePayload['id']).toBeUndefined();
+    expect(updatePayload['uid']).toBeUndefined();
+
+    const historyPayload = lastSetPayload(0);
+    expect(historyPayload['before']).toBeDefined();
+    expect(historyPayload['after']).toBeDefined();
+    expect(historyPayload['changedFields']).toBeDefined();
   });
 });
