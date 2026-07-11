@@ -1588,17 +1588,24 @@ export function isTaskDueToday(
   if (task['active'] !== true) return false;
 
   const dueDay: number = typeof task['dueDay'] === 'number' ? task['dueDay'] : 1;
+  // F-07 (catch-up): materializa qualquer tarefa VENCIDA ainda não executada no mês,
+  // não apenas no dia exato — se o Scheduler/Firestore falhar no dia do vencimento, a
+  // execução acontece no próximo run. Idempotência garantida por `lastExecutedMonth`.
+  // O dia de vencimento é limitado ao último dia do mês (dueDay 31 em fev → 28/29).
+  const [y, m] = monthKey.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(y ?? 2000, m ?? 1, 0)).getUTCDate();
+  const effectiveDueDay = Math.min(dueDay, lastDay);
 
   if (task['frequency'] === 'anual') {
     const dueMonth: number = typeof task['dueMonth'] === 'number' ? task['dueMonth'] : 1;
     if (dueMonth !== currentMonth) return false;
     if (task['lastExecutedMonth'] === monthKey) return false;
-    return dayOfMonth === dueDay;
+    return dayOfMonth >= effectiveDueDay;
   }
 
   // Mensal
   if (task['lastExecutedMonth'] === monthKey) return false;
-  return dayOfMonth === dueDay;
+  return dayOfMonth >= effectiveDueDay;
 }
 
 function shouldExecuteTask(task: admin.firestore.DocumentData, yearMonth: string, today: string): boolean {
