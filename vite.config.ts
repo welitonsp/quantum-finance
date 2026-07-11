@@ -182,11 +182,13 @@ export default defineConfig({
       // 🎯 2026-07-10 (pós-#395 useGoals + #396 useBudgets): METAS FINAIS M-01 atingidas —
       // real stmts 73.59 / branches 65.52 / funcs 74.30 / lines 76.94. branches≥65 e lines≥75.
       // Gates fixados logo abaixo do real (catraca): stmts 72 / branches 64 / funcs 73 / lines 75.
+      // Reforço 2026-07-10 (pós-#398 useDebts + #399 useCategories + #400 useChallenges):
+      // real stmts 77.48 / branches 68.19 / funcs 79.40 / lines 80.78 → gates → 75 / 67 / 78 / 79.
       thresholds: {
-        lines: 75,
-        functions: 73,
-        branches: 64,
-        statements: 72,
+        lines: 79,
+        functions: 78,
+        branches: 67,
+        statements: 75,
       },
     },
   },
