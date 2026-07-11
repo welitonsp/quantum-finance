@@ -64,7 +64,12 @@ describe('App Check guardrails — full enforcement', () => {
   });
 });
 
-describe('Cost & AI-consent guardrails (F-09, F-01)', () => {
+describe('Cost & AI-consent guardrails (F-09, F-01, F-06)', () => {
+  it('deleteUserData exige autenticação recente (step-up via auth_time)', () => {
+    const body = source.slice(source.indexOf('export const deleteUserData'));
+    assert.ok(/auth_time/.test(body), 'deleteUserData deve validar auth_time (step-up)');
+  });
+
   it('caps maxInstances globally (bounds custo/DoS econômico)', () => {
     assert.match(
       source,

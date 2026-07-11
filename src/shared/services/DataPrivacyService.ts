@@ -119,7 +119,12 @@ export async function deleteUserAccount(uid: string): Promise<void> {
     await callDelete({});
   } catch (err) {
     const code = (err as { code?: string }).code ?? '';
-    if (code === 'functions/unauthenticated' || code === 'auth/requires-recent-login') {
+    // functions/failed-precondition = step-up exigido pelo servidor (F-06).
+    if (
+      code === 'functions/unauthenticated' ||
+      code === 'auth/requires-recent-login' ||
+      code === 'functions/failed-precondition'
+    ) {
       throw new Error('REQUIRES_RECENT_LOGIN');
     }
     logSanitizedFirebaseError('data_delete_account', err);
