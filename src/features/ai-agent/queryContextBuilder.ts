@@ -12,7 +12,7 @@
  */
 import type { AgentIntent } from '../../shared/schemas/agentSchemas';
 import type { Transaction, ModuleBalances } from '../../shared/types/transaction';
-import { formatBRL } from '../../shared/types/money';
+import { formatBRL, toCentavos } from '../../shared/types/money';
 import { getTransactionAbsCentavos } from '../../utils/transactionUtils';
 
 function fmtReais(reais: number): string {
@@ -117,7 +117,8 @@ function buildCashflowContext(
   if (nonZero.length === 0) return null;
 
   const avgExpenseCents = Math.round(nonZero.reduce((a, b) => a + b, 0) / nonZero.length);
-  const saldoCents      = Math.round((balances?.geral?.saldo ?? 0) * 100);
+  // F-05: conversão reais→centavos via helper sancionado (Decimal.js), nunca Math.round(x*100).
+  const saldoCents      = toCentavos(balances?.geral?.saldo ?? 0);
   const projectedCents  = saldoCents - avgExpenseCents;
 
   const lines = [
