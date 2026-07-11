@@ -47,10 +47,33 @@ describe('isTaskDueToday', () => {
     );
   });
 
-  it('returns false for monthly task when dayOfMonth !== dueDay', () => {
+  it('returns false for monthly task BEFORE the due day', () => {
     assert.equal(
       isTaskDueToday({ active: true, dueDay: 15 }, 14, 6, MONTH_KEY),
       false,
+    );
+  });
+
+  // F-07 — catch-up: dias APÓS o vencimento ainda materializam (se não executado no mês).
+  it('catch-up: monthly task fires on a day AFTER the due day when not yet executed', () => {
+    assert.equal(
+      isTaskDueToday({ active: true, dueDay: 15 }, 20, 6, MONTH_KEY),
+      true,
+    );
+  });
+
+  it('catch-up: does NOT re-fire when already executed this month (idempotent)', () => {
+    assert.equal(
+      isTaskDueToday({ active: true, dueDay: 15, lastExecutedMonth: MONTH_KEY }, 20, 6, MONTH_KEY),
+      false,
+    );
+  });
+
+  it('catch-up: clamps due day to the last day of the month (dueDay 31 em fevereiro)', () => {
+    // fev/2026 tem 28 dias; dueDay 31 → efetivo 28 → dia 28 dispara.
+    assert.equal(
+      isTaskDueToday({ active: true, dueDay: 31 }, 28, 2, '2026-02'),
+      true,
     );
   });
 
@@ -59,9 +82,10 @@ describe('isTaskDueToday', () => {
       isTaskDueToday({ active: true }, 1, 6, MONTH_KEY),
       true,
     );
+    // dia 2 com dueDay padrão 1 → catch-up (vencido, não executado).
     assert.equal(
       isTaskDueToday({ active: true }, 2, 6, MONTH_KEY),
-      false,
+      true,
     );
   });
 
