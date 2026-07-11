@@ -9,6 +9,7 @@
  *   firebase deploy --only functions
  */
 
+import { setGlobalOptions } from 'firebase-functions/v2';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
@@ -49,6 +50,11 @@ import {
   txCents,
 } from './lib/financialUtils';
 import { safeSystemLogDetail, sanitizeFunctionError } from './lib/logger';
+
+// F-09 — teto global de instâncias: bounds custo/DoS econômico (Firebase/Gemini).
+// Cada function fica limitada a este número de instâncias concorrentes; folgado para
+// a carga de um app financeiro pessoal, mas impede escalonamento ilimitado sob abuso.
+setGlobalOptions({ maxInstances: 20 });
 
 admin.initializeApp();
 const adminDb = admin.firestore();
