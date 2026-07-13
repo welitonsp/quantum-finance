@@ -40,6 +40,7 @@ import {
   PriceObservationValidationError,
   validatePriceObservationPayload,
 } from './priceObservationValidation';
+import { validateInviteAcceptance } from './sharedFinanceValidation';
 import { maskPII } from './lib/piiMasker';
 import { checkAndIncrementOpRateLimit, type OpRateLimitKey } from './opRateLimit';
 import { buildReminderBody, buildReminderSummary } from './pushReminders';
@@ -1554,6 +1555,64 @@ export const recordPriceObservation = onCall(
     } catch (e) {
       console.error('[FunctionError]', sanitizeFunctionError('record_price_observation', e));
       throw new HttpsError('internal', 'Falha ao registrar observação de preço.');
+    }
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNÇÃO — acceptGroupInvite (F-03 — aceite server-trusted, atômico e single-use)
+// ═══════════════════════════════════════════════════════════════════════════════
+export const acceptGroupInvite = onCall(
+  {
+    region: REGION,
+    timeoutSeconds: 15,
+    enforceAppCheck: ENFORCE_APP_CHECK,
+    consumeAppCheckToken: ENFORCE_APP_CHECK,
+    cors: CORS_ORIGINS,
+  },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
+    if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
+
+    const uid   = request.auth.uid;
+    const email = typeof request.auth.token.email === 'string' ? request.auth.token.email : '';
+    const data  = (request.data ?? {}) as { groupId?: unknown; inviteId?: unknown; displayName?: unknown };
+    const groupId  = typeof data.groupId === 'string' ? data.groupId : '';
+    const inviteId = typeof data.inviteId === 'string' ? data.inviteId : '';
+    const displayName = typeof data.displayName === 'string' ? data.displayName.slice(0, 80) : email;
+    if (!groupId || !inviteId) throw new HttpsError('invalid-argument', 'groupId e inviteId são obrigatórios.');
+
+    await assertOpRateLimit(uid, 'acceptGroupInvite');
+
+    const groupRef  = adminDb.doc(`groups/${groupId}`);
+    const inviteRef = adminDb.doc(`groups/${groupId}/invites/${inviteId}`);
+
+    try {
+      await adminDb.runTransaction(async (txn) => {
+        const [inviteSnap, groupSnap] = await Promise.all([txn.get(inviteRef), txn.get(groupRef)]);
+        const check = validateInviteAcceptance(
+          inviteSnap.exists ? inviteSnap.data() : null,
+          groupSnap.exists ? groupSnap.data() : null,
+          uid, email, Date.now(),
+        );
+        if (!check.ok) throw new HttpsError(check.code, check.reason);
+
+        // Adiciona o membro e CONSOME o convite (single-use) atomicamente.
+        txn.update(groupRef, {
+          memberUids: FieldValue.arrayUnion(uid),
+          members:    FieldValue.arrayUnion({ uid, displayName, email: email.toLowerCase().trim() }),
+          updatedAt:  FieldValue.serverTimestamp(),
+        });
+        txn.update(inviteRef, {
+          status:     'accepted',
+          acceptedAt: FieldValue.serverTimestamp(),
+        });
+      });
+      return { joined: true };
+    } catch (e) {
+      if (e instanceof HttpsError) throw e;
+      console.error('[FunctionError]', sanitizeFunctionError('accept_group_invite', e));
+      throw new HttpsError('internal', 'Falha ao aceitar o convite.');
     }
   },
 );

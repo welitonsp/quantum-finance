@@ -3320,11 +3320,11 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       }));
     });
 
-    it('Q7 — invitee aceita convite (status pending→accepted) deve passar', async () => {
+    it('Q7 — invitee NÃO pode aceitar convite pelo cliente (F-03: accept é server-only)', async () => {
       await seedGroup();
       await seedInvite('pending');
       const bob = testEnv.authenticatedContext(UID_B, { email: EMAIL_B });
-      await assertSucceeds(updateDoc(
+      await assertFails(updateDoc(
         doc(bob.firestore(), 'groups', GROUP_ID, 'invites', INVITE_ID),
         { status: 'accepted', acceptedAt: serverTimestamp() },
       ));
@@ -3350,16 +3350,26 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       ));
     });
 
-    it('Q10 — invitee entra no grupo via convite aceito deve passar', async () => {
+    it('Q10 — invitee NÃO pode se auto-adicionar ao grupo pelo cliente (F-03: entrada é server-only)', async () => {
       await seedGroup();
       await seedInvite('accepted');
       const bob = testEnv.authenticatedContext(UID_B, { email: EMAIL_B });
-      await assertSucceeds(updateDoc(doc(bob.firestore(), 'groups', GROUP_ID), {
+      await assertFails(updateDoc(doc(bob.firestore(), 'groups', GROUP_ID), {
         memberUids:            [UID_A, UID_B],
         members:               [{ uid: UID_B, displayName: 'Bob', email: EMAIL_B }],
         updatedAt:             serverTimestamp(),
         _lastAcceptedInviteId: INVITE_ID,
       }));
+    });
+
+    it('Q11 — invitee ainda pode RECUSAR o próprio convite (pending→rejected)', async () => {
+      await seedGroup();
+      await seedInvite('pending');
+      const bob = testEnv.authenticatedContext(UID_B, { email: EMAIL_B });
+      await assertSucceeds(updateDoc(
+        doc(bob.firestore(), 'groups', GROUP_ID, 'invites', INVITE_ID),
+        { status: 'rejected', rejectedAt: serverTimestamp() },
+      ));
     });
   });
 
