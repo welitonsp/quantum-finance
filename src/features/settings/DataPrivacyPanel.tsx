@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useId } from 'react';
 import { Download, Trash2, Loader2, ShieldCheck, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { exportAllUserData, deleteUserAccount } from '../../shared/services/DataPrivacyService';
@@ -27,6 +27,7 @@ const EVENT_LABELS: Record<string, string> = {
 };
 
 export default function DataPrivacyPanel({ uid }: Props) {
+  const fieldId = useId();
   // ── Export / Delete state ──────────────────────────────────────────────────
   const [isExporting,       setIsExporting]       = useState(false);
   const [isDeleting,        setIsDeleting]         = useState(false);
@@ -144,8 +145,10 @@ export default function DataPrivacyPanel({ uid }: Props) {
           </div>
         ) : (
           <div className="space-y-3">
-            <label className="flex items-start gap-3 cursor-pointer group">
+            {/* eslint-disable-next-line jsx-a11y/label-has-associated-control -- o label associa o checkbox via htmlFor/id e tem texto visível; falso-positivo de profundidade (texto em div>span) */}
+            <label htmlFor={`${fieldId}-analytics`} className="flex items-start gap-3 cursor-pointer group">
               <input
+                id={`${fieldId}-analytics`}
                 type="checkbox"
                 checked={localAnalytics}
                 onChange={e => setLocalAnalytics(e.target.checked)}
@@ -159,8 +162,10 @@ export default function DataPrivacyPanel({ uid }: Props) {
               </div>
             </label>
 
-            <label className="flex items-start gap-3 cursor-pointer group">
+            {/* eslint-disable-next-line jsx-a11y/label-has-associated-control -- o label associa o checkbox via htmlFor/id e tem texto visível; falso-positivo de profundidade (texto em div>span) */}
+            <label htmlFor={`${fieldId}-ai`} className="flex items-start gap-3 cursor-pointer group">
               <input
+                id={`${fieldId}-ai`}
                 type="checkbox"
                 checked={localAi}
                 onChange={e => setLocalAi(e.target.checked)}

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useId } from 'react';
 import { Plus, Trash2, Repeat, AlertTriangle, Wallet, Calendar, X, CheckCircle2, Pause, Play, Clock } from 'lucide-react';
 import Decimal from 'decimal.js';
 import { useRecurring } from '../hooks/useRecurring';
@@ -12,6 +12,7 @@ interface Props {
 }
 
 export default function RecurringManager({ uid }: Props) {
+  const fieldId = useId();
   const { recurringTasks, loading, addRecurring, updateRecurring, removeRecurring } = useRecurring(uid);
   const now = new Date();
   const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -257,29 +258,29 @@ export default function RecurringManager({ uid }: Props) {
 
             <form onSubmit={(e) => void handleAddRecurring(e)} className="p-6 space-y-5">
               <div>
-                <label className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Descrição</label>
-                <input type="text" value={newDescription} onChange={e => setNewDescription(e.target.value)} required placeholder="Ex: Aluguel, Internet..."
+                <label htmlFor={`${fieldId}-desc`} className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Descrição</label>
+                <input id={`${fieldId}-desc`} type="text" value={newDescription} onChange={e => setNewDescription(e.target.value)} required placeholder="Ex: Aluguel, Internet..."
                   className="w-full bg-quantum-bg border border-quantum-border rounded-xl px-4 py-3 text-sm text-quantum-fg focus:outline-none focus:border-cyan-500 transition-colors placeholder:text-slate-600" />
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Valor Fixo (R$)</label>
-                <input type="text" inputMode="decimal" value={newValue} onChange={e => setNewValue(e.target.value)} required placeholder="0,00"
+                <label htmlFor={`${fieldId}-value`} className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Valor Fixo (R$)</label>
+                <input id={`${fieldId}-value`} type="text" inputMode="decimal" value={newValue} onChange={e => setNewValue(e.target.value)} required placeholder="0,00"
                   className="w-full bg-quantum-bg border border-quantum-border rounded-xl px-4 py-3 text-sm text-quantum-fg focus:outline-none focus:border-cyan-500 font-mono transition-colors placeholder:text-slate-600" />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Categoria</label>
-                  <select value={newCategory} onChange={e => setNewCategory(e.target.value)} className="w-full bg-quantum-bg border border-quantum-border rounded-xl px-4 py-3 text-sm text-quantum-fg focus:outline-none focus:border-cyan-500 transition-colors">
+                  <label htmlFor={`${fieldId}-cat`} className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Categoria</label>
+                  <select id={`${fieldId}-cat`} value={newCategory} onChange={e => setNewCategory(e.target.value)} className="w-full bg-quantum-bg border border-quantum-border rounded-xl px-4 py-3 text-sm text-quantum-fg focus:outline-none focus:border-cyan-500 transition-colors">
                     {['Moradia','Transporte','Assinaturas','Saúde','Educação','Outros'].map(c => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Frequência</label>
-                  <select value={newFrequency} onChange={e => setNewFrequency(e.target.value as 'mensal' | 'anual')} className="w-full bg-quantum-bg border border-quantum-border rounded-xl px-4 py-3 text-sm text-quantum-fg focus:outline-none focus:border-cyan-500 transition-colors">
+                  <label htmlFor={`${fieldId}-freq`} className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Frequência</label>
+                  <select id={`${fieldId}-freq`} value={newFrequency} onChange={e => setNewFrequency(e.target.value as 'mensal' | 'anual')} className="w-full bg-quantum-bg border border-quantum-border rounded-xl px-4 py-3 text-sm text-quantum-fg focus:outline-none focus:border-cyan-500 transition-colors">
                     <option value="mensal">Mensal</option>
                     <option value="anual">Anual</option>
                   </select>
@@ -288,8 +289,9 @@ export default function RecurringManager({ uid }: Props) {
 
               <div className={`grid gap-4 ${newFrequency === 'anual' ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 <div>
-                  <label className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Dia de Vencimento</label>
+                  <label htmlFor={`${fieldId}-dueday`} className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Dia de Vencimento</label>
                   <input
+                    id={`${fieldId}-dueday`}
                     type="number" min={1} max={31} value={newDueDay}
                     onChange={e => setNewDueDay(Math.min(31, Math.max(1, Number(e.target.value))))}
                     className="w-full bg-quantum-bg border border-quantum-border rounded-xl px-4 py-3 text-sm text-quantum-fg focus:outline-none focus:border-cyan-500 transition-colors"
@@ -297,8 +299,8 @@ export default function RecurringManager({ uid }: Props) {
                 </div>
                 {newFrequency === 'anual' && (
                   <div>
-                    <label className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Mês de Vencimento</label>
-                    <select value={newDueMonth} onChange={e => setNewDueMonth(Number(e.target.value))} className="w-full bg-quantum-bg border border-quantum-border rounded-xl px-4 py-3 text-sm text-quantum-fg focus:outline-none focus:border-cyan-500 transition-colors">
+                    <label htmlFor={`${fieldId}-duemonth`} className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Mês de Vencimento</label>
+                    <select id={`${fieldId}-duemonth`} value={newDueMonth} onChange={e => setNewDueMonth(Number(e.target.value))} className="w-full bg-quantum-bg border border-quantum-border rounded-xl px-4 py-3 text-sm text-quantum-fg focus:outline-none focus:border-cyan-500 transition-colors">
                       {['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map((m, i) => (
                         <option key={m} value={i + 1}>{m}</option>
                       ))}

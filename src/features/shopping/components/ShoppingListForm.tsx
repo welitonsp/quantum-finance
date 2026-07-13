@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { X, Plus, Trash2, ShoppingCart } from 'lucide-react';
 import Decimal from 'decimal.js';
 import { formatBRL, toCentavos } from '../../../shared/types/money';
@@ -48,6 +48,7 @@ interface Props {
 }
 
 export default function ShoppingListForm({ onSave, onClose }: Props) {
+  const fieldId = useId();
   const [listName, setListName] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
   const [items, setItems] = useState<(DraftItem & { id: string })[]>([]);
@@ -122,8 +123,9 @@ export default function ShoppingListForm({ onSave, onClose }: Props) {
           {/* Lista metadata */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-quantum-muted mb-1">Nome da lista *</label>
+              <label htmlFor={`${fieldId}-name`} className="block text-sm text-quantum-muted mb-1">Nome da lista *</label>
               <input
+                id={`${fieldId}-name`}
                 className="w-full bg-quantum-bg border border-quantum-border rounded-lg px-3 py-2 text-quantum-fg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                 placeholder="Ex: Mercado semanal"
                 value={listName}
@@ -131,8 +133,9 @@ export default function ShoppingListForm({ onSave, onClose }: Props) {
               />
             </div>
             <div>
-              <label className="block text-sm text-quantum-muted mb-1">Data planejada</label>
+              <label htmlFor={`${fieldId}-date`} className="block text-sm text-quantum-muted mb-1">Data planejada</label>
               <input
+                id={`${fieldId}-date`}
                 type="date"
                 className="w-full bg-quantum-bg border border-quantum-border rounded-lg px-3 py-2 text-quantum-fg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                 value={scheduledDate}
