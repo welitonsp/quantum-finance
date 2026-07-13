@@ -70,6 +70,15 @@ describe('Cost & AI-consent guardrails (F-09, F-01, F-06)', () => {
     assert.ok(/auth_time/.test(body), 'deleteUserData deve validar auth_time (step-up)');
   });
 
+  it('deleteUserData limpa a participação em grupos (F-04 — dados compartilhados)', () => {
+    const body = source.slice(
+      source.indexOf('export const deleteUserData'),
+      source.indexOf('export const categorizeTransactionsBatch'),
+    );
+    assert.ok(/collection\('groups'\)[\s\S]*array-contains/.test(body), 'deve consultar grupos do usuário');
+    assert.ok(/arrayRemove\(uid\)/.test(body), 'deve remover uid de memberUids nos grupos alheios');
+  });
+
   it('caps maxInstances globally (bounds custo/DoS econômico)', () => {
     assert.match(
       source,

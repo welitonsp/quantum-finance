@@ -1292,6 +1292,31 @@ export const deleteUserData = onCall(
     }
 
     await assertOpRateLimit(uid, 'deleteUserData');
+
+    // F-04 (groups) — dados compartilhados vivem FORA de users/{uid} e não são
+    // alcançados pelo recursiveDelete. Grupos DO usuário são apagados por inteiro
+    // (recursiveDelete inclui invites/expenses); nos demais ele é removido de
+    // memberUids/members (minimização de PII — LGPD).
+    try {
+      const groupsSnap = await adminDb.collection('groups').where('memberUids', 'array-contains', uid).get();
+      for (const groupDoc of groupsSnap.docs) {
+        const g = groupDoc.data();
+        if (g['ownerUid'] === uid) {
+          await adminDb.recursiveDelete(groupDoc.ref);
+        } else {
+          const members = Array.isArray(g['members']) ? g['members'] : [];
+          await groupDoc.ref.update({
+            memberUids: FieldValue.arrayRemove(uid),
+            members:    members.filter((m: { uid?: unknown }) => m?.uid !== uid),
+            updatedAt:  FieldValue.serverTimestamp(),
+          });
+        }
+      }
+    } catch (e) {
+      // Falha na limpeza de grupos não deve impedir a exclusão da conta do titular.
+      console.error('[FunctionError]', sanitizeFunctionError('delete_user_groups_cleanup', e));
+    }
+
     const userRef = adminDb.collection('users').doc(uid);
     await adminDb.recursiveDelete(userRef);
     await admin.auth().deleteUser(uid);
