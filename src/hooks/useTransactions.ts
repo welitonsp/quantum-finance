@@ -20,6 +20,7 @@ import {
   type FirebaseErrorOperation,
 } from '../shared/lib/firebaseErrorHandling';
 import { generateSafeOperationId } from '../shared/lib/operationTrace';
+import { outboxPut, outboxDelete, outboxList } from '../shared/lib/offlineOutbox';
 import toast from 'react-hot-toast';
 import {
   normalizeTransaction,
@@ -473,6 +474,8 @@ export function useTransactions(
               postAddCallbacks.current.delete(op.tempId);
               aiCb(realId);
             }
+            // F-11: criação confirmada no servidor → remove do outbox durável.
+            void outboxDelete(op.idempotencyKey);
             // Remove item temporário; snapshot traz o item real com timestamps do servidor
             pendingAdds.current.delete(op.tempId);
             pendingAddResolvers.current.get(op.tempId)?.resolve(realId);
@@ -571,6 +574,8 @@ export function useTransactions(
 
           // Rollback + limpa pendingIds
           if (op.type === 'add') {
+            // F-11: descarte definitivo → remove do outbox durável (não re-replicar).
+            void outboxDelete(op.idempotencyKey);
             postAddCallbacks.current.delete(op.tempId);
             pendingAddResolvers.current.get(op.tempId)?.reject(finalError);
             pendingAddResolvers.current.delete(op.tempId);
@@ -692,11 +697,45 @@ export function useTransactions(
     pendingAdds.current.set(tempId, optimistic);
     setTransactions(prev => [optimistic, ...prev]);
 
+    // F-11: persiste a intenção de criação num outbox durável (IndexedDB) ANTES de
+    // enfileirar. Se o app for recarregado/fechado offline, a criação é reproduzida
+    // ao voltar online (a callable dedup por idempotencyKey).
+    const idempotencyKey = makeIdempotencyKey();
+    void outboxPut({ idempotencyKey, uid, data: enriched as Record<string, unknown>, createdAt: now });
+
     return new Promise<string>((resolve, reject) => {
       pendingAddResolvers.current.set(tempId, { resolve, reject });
-      enqueue({ type: 'add', tempId, txId, idempotencyKey: makeIdempotencyKey(), data: enriched, retries: 0, nextRetryAt: 0 });
+      enqueue({ type: 'add', tempId, txId, idempotencyKey, data: enriched, retries: 0, nextRetryAt: 0 });
     });
   }, [uid, enqueue]);
+
+  // ── Replay do outbox durável (F-11) ────────────────────────────────────────
+  // Ao (re)montar com uid, reproduz criações pendentes que ficaram no IndexedDB
+  // (ex.: app fechado offline). Reusa a máquina otimista; dedup por idempotencyKey.
+  const replayOutbox = useCallback(async (): Promise<void> => {
+    if (!uid) return;
+    const entries = await outboxList(uid);
+    for (const entry of entries) {
+      const now    = Date.now();
+      const tempId = makeTempId();
+      const txId   = makeManualTransactionId(uid);
+      const cents  = getTxCentavos(entry.data) ?? (0 as Centavos);
+      const optimistic = {
+        description: '', value: fromCentavos(cents), value_cents: cents,
+        type: 'saida', category: 'Outros', date: new Date().toISOString().slice(0, 10),
+        ...entry.data, id: tempId, uid, createdAt: now, updatedAt: now,
+      } as Transaction;
+      pendingAdds.current.set(tempId, optimistic);
+      setTransactions(prev => [optimistic, ...prev]);
+      pendingAddResolvers.current.set(tempId, { resolve: () => {}, reject: () => {} });
+      enqueue({ type: 'add', tempId, txId, idempotencyKey: entry.idempotencyKey, data: entry.data as Partial<Transaction>, retries: 0, nextRetryAt: 0 });
+    }
+  }, [uid, enqueue]);
+
+  useEffect(() => {
+    if (!uid) return;
+    void replayOutbox();
+  }, [uid, replayOutbox]);
 
   // ── UPDATE — Optimistic + enqueue ─────────────────────────────────────────
   const update = useCallback(async (id: string, data: Partial<Transaction>): Promise<void> => {
