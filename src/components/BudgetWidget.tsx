@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, type FormEvent } from 'react';
+import { useState, useMemo, useEffect, useRef, useId, type FormEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Target, Plus, Trash2, X, TrendingUp,
@@ -183,6 +183,7 @@ function AddForm({ onAdd, onClose }: AddFormProps) {
   const [amount,   setAmount]   = useState('');
   const [month,    setMonth]    = useState(currentMonthStr());
   const [busy,     setBusy]     = useState(false);
+  const fieldId = useId();
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -224,10 +225,11 @@ function AddForm({ onAdd, onClose }: AddFormProps) {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* Category */}
           <div>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-quantum-fgMuted mb-1.5 block">
+            <label htmlFor={`${fieldId}-category`} className="text-[10px] font-bold uppercase tracking-wider text-quantum-fgMuted mb-1.5 block">
               Categoria
             </label>
             <select
+              id={`${fieldId}-category`}
               value={category}
               onChange={e => setCategory(e.target.value)}
               className="input-quantum text-sm"
@@ -242,10 +244,11 @@ function AddForm({ onAdd, onClose }: AddFormProps) {
 
           {/* Amount */}
           <div>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-quantum-fgMuted mb-1.5 block">
+            <label htmlFor={`${fieldId}-amount`} className="text-[10px] font-bold uppercase tracking-wider text-quantum-fgMuted mb-1.5 block">
               Limite (R$)
             </label>
             <input
+              id={`${fieldId}-amount`}
               type="text"
               inputMode="decimal"
               placeholder="500,00"
@@ -258,10 +261,11 @@ function AddForm({ onAdd, onClose }: AddFormProps) {
 
           {/* Month */}
           <div>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-quantum-fgMuted mb-1.5 block">
+            <label htmlFor={`${fieldId}-month`} className="text-[10px] font-bold uppercase tracking-wider text-quantum-fgMuted mb-1.5 block">
               Mês
             </label>
             <select
+              id={`${fieldId}-month`}
               value={month}
               onChange={e => setMonth(e.target.value)}
               className="input-quantum text-sm"
@@ -399,8 +403,9 @@ function SuggestModal({ suggestions, onApprove, onClose }: SuggestModalProps) {
                   </div>
                   {/* Editable amount */}
                   <div className="shrink-0" onClick={e => e.stopPropagation()}>
-                    <label className="text-[9px] font-bold uppercase tracking-wider text-quantum-fgMuted block mb-1">Limite R$</label>
+                    <label htmlFor={`budget-adjust-${s.category}`} className="text-[9px] font-bold uppercase tracking-wider text-quantum-fgMuted block mb-1">Limite R$</label>
                     <input
+                      id={`budget-adjust-${s.category}`}
                       type="text"
                       inputMode="decimal"
                       value={getAmount(s)}
