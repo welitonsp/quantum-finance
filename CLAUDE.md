@@ -5,7 +5,7 @@
 
 ## Estado Atual — 2026-07-10 (Auditoria Big Four + remediação M-01/M-02 + Radar de Compras)
 
-- Branch principal: `main` — PRs #363–#417 mergeados. Working tree esperado: limpo. **Nenhum PR aberto.**
+- Branch principal: `main` — PRs #363–#423 mergeados. Working tree esperado: limpo. **Nenhum PR aberto.**
 - Suíte: **1900+ unit + 227 rules + 303 functions + 28 E2E** (auditoria externa 2ª rodada: F-01/F-02/F-03/F-04/F-05/F-06/F-07/F-09/F-10).
 
 ### Remediação Auditoria Externa (2ª rodada, 2026-07-11 — nota inicial 6,2/10)
@@ -19,7 +19,9 @@ Laudo externo independente elevou findings de segurança/LGPD/confiabilidade. **
 - **F-07 (recorrentes catch-up) — FECHADO (#410):** `isTaskDueToday` usa `>=` (catch-up idempotente) + clamp de fim de mês.
 - **F-09 (custo/DoS) — PARCIAL (#409):** `setGlobalOptions({ maxInstances: 20 })`. Billing alerts/quota/paginação = infra/owner.
 - **F-10 (memória chat) — FECHADO (#406):** `ConversationMemory` efêmera (sessionStorage + TTL 24h + purge no logout).
-- **PENDENTES (fases maiores / decisão do owner):** **F-04-groups** (limpar `groups` global na exclusão de conta — follow-up curto agora que o padrão server-trust existe); **F-08** (pinar `firebase-tools` — versão é decisão do owner p/ deploy prod); **F-11** (outbox offline — feature); **F-12** (a11y: zerar 65 warnings → `error`); **F-13** (cobrir `components/**`/`features/**` antes de expandir gate); **F-14** (Lighthouse/CWV em modo relatório); **F-15** (métricas/SLOs/alertas — infra).
+- **F-04-groups — FECHADO (#419):** `deleteUserData` limpa `groups` global (owner → recursiveDelete; membro → arrayRemove). F-04 completo.
+- **F-12 (a11y) — categoria de LABELS FECHADA + enforçada (#420/#421/#422/#423):** 42 warnings `label-has-associated-control` → 0 (padrão `useId`+`htmlFor`/`id` em ~15 formulários), regra **elevada a `error`** no eslint (regressão quebra CI). Warnings a11y totais 65→23. **Restam (revisão VISUAL):** `no-autofocus` (9), `no-static-element-interactions`+`click-events` (14) — divs clicáveis precisam de suporte a teclado/role, melhor com a UI à vista.
+- **PENDENTES (decisão do owner / infra):** **F-08** (pinar `firebase-tools` — versão é decisão do owner p/ deploy prod); **F-11** (outbox offline — feature); **F-13** (cobrir `components/**`/`features/**` antes de expandir gate); **F-14** (Lighthouse/CWV em modo relatório); **F-15** (métricas/SLOs/alertas — infra); resto do **F-12** (autofocus/divs clicáveis — revisão visual).
 
 ### Auditoria Big Four + Tese Extraordinária (2026-07-09)
 
