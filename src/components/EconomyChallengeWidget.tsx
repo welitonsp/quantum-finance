@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useId } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Swords, Plus, X, Trophy, ChevronRight, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -72,6 +72,7 @@ interface CreateModalProps {
 }
 
 function CreateModal({ transactions, onClose, onCreate }: CreateModalProps) {
+  const fieldId = useId();
   const cats = useMemo(() => expenseCategories(transactions), [transactions]);
   const [category, setCategory]   = useState(cats[0] ?? '');
   const [targetPct, setTargetPct] = useState(20);
@@ -118,8 +119,9 @@ function CreateModal({ transactions, onClose, onCreate }: CreateModalProps) {
         <div className="space-y-4">
           {/* Category */}
           <div>
-            <label className="text-xs font-bold text-quantum-fgMuted mb-1.5 block">Categoria</label>
+            <label htmlFor={`${fieldId}-cat`} className="text-xs font-bold text-quantum-fgMuted mb-1.5 block">Categoria</label>
             <select
+              id={`${fieldId}-cat`}
               value={category}
               onChange={e => setCategory(e.target.value)}
               className="w-full bg-quantum-bgSecondary border border-quantum-border rounded-xl px-3 py-2.5 text-sm text-quantum-fg focus:outline-none focus:border-quantum-accent"

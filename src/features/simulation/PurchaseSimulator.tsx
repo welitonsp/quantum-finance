@@ -2,7 +2,7 @@
  * PurchaseSimulator.tsx — Simulador de Decisão de Compra (FASE 3)
  * Responde "posso comprar isso agora?" com veredito verde/amarelo/vermelho.
  */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useId } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
@@ -84,6 +84,7 @@ interface Props {
 // ─── Componente principal ──────────────────────────────────────────────────────
 export default function PurchaseSimulator({ balances, onRegisterPurchase, creditCards }: Props) {
   const { isPrivacyMode } = usePrivacy();
+  const fieldId = useId();
 
   // ── Inputs ──────────────────────────────────────────────────────────────────
   const [priceRaw, setPriceRaw]           = useState('');
@@ -240,10 +241,11 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
           {/* Seletor de cartão — visível apenas se houver cartões cadastrados */}
           {creditCards && creditCards.length > 0 && (
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-quantum-fg flex items-center gap-1">
+              <label htmlFor={`${fieldId}-card`} className="text-xs font-bold text-quantum-fg flex items-center gap-1">
                 <CreditCard className="w-3 h-3" /> Cartão de crédito
               </label>
               <select
+                id={`${fieldId}-card`}
                 value={selectedCardId ?? ''}
                 onChange={e => setSelectedCardId(e.target.value || null)}
                 className="w-full bg-quantum-card/60 border border-quantum-border rounded-xl px-3 py-2.5 text-sm text-quantum-fg focus:outline-none focus:border-violet-500/60 transition-colors"
@@ -266,8 +268,9 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
 
           {/* Valor */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-quantum-fg">Valor da compra (R$)</label>
+            <label htmlFor={`${fieldId}-price`} className="text-xs font-bold text-quantum-fg">Valor da compra (R$)</label>
             <input
+              id={`${fieldId}-price`}
               type="text"
               inputMode="decimal"
               placeholder="0,00"
@@ -280,8 +283,9 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
           {/* Descrição e categoria (usados ao registrar) */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-quantum-fg">Descrição</label>
+              <label htmlFor={`${fieldId}-desc`} className="text-xs font-bold text-quantum-fg">Descrição</label>
               <input
+                id={`${fieldId}-desc`}
                 type="text"
                 placeholder="ex: Notebook"
                 value={description}
@@ -290,8 +294,9 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-quantum-fg">Categoria</label>
+              <label htmlFor={`${fieldId}-cat`} className="text-xs font-bold text-quantum-fg">Categoria</label>
               <input
+                id={`${fieldId}-cat`}
                 type="text"
                 placeholder="Outros"
                 value={category}
@@ -303,8 +308,9 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
 
           {/* Parcelas */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-quantum-fg">Parcelas</label>
+            <label htmlFor={`${fieldId}-inst`} className="text-xs font-bold text-quantum-fg">Parcelas</label>
             <select
+              id={`${fieldId}-inst`}
               value={installments}
               onChange={e => setInstallments(Number(e.target.value))}
               className="w-full bg-quantum-card/60 border border-quantum-border rounded-xl px-3 py-2.5 text-sm text-quantum-fg focus:outline-none focus:border-violet-500/60 transition-colors"
@@ -318,10 +324,11 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
           {/* Data e fechamento */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-quantum-fg flex items-center gap-1">
+              <label htmlFor={`${fieldId}-pdate`} className="text-xs font-bold text-quantum-fg flex items-center gap-1">
                 <CalendarDays className="w-3 h-3" /> Data da compra
               </label>
               <input
+                id={`${fieldId}-pdate`}
                 type="date"
                 value={purchaseDate}
                 onChange={e => setPurchaseDate(e.target.value)}
@@ -329,10 +336,11 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-quantum-fg">
+              <label htmlFor={`${fieldId}-closing`} className="text-xs font-bold text-quantum-fg">
                 Dia de fechamento{selectedCard ? ' (cartão)' : ''}
               </label>
               <input
+                id={`${fieldId}-closing`}
                 type="number"
                 min={1}
                 max={31}
@@ -351,8 +359,9 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
           {/* Renda e já comprometido */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-quantum-fg">Renda mensal (R$)</label>
+              <label htmlFor={`${fieldId}-income`} className="text-xs font-bold text-quantum-fg">Renda mensal (R$)</label>
               <input
+                id={`${fieldId}-income`}
                 type="text"
                 inputMode="decimal"
                 placeholder="ex: 5000"
@@ -362,7 +371,7 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-quantum-fg">Já comprometido (R$)</label>
+              <label htmlFor={`${fieldId}-committed`} className="text-xs font-bold text-quantum-fg">Já comprometido (R$)</label>
               {selectedCard ? (
                 <div className="flex items-center justify-between bg-quantum-card/40 border border-quantum-border rounded-xl px-3 py-2.5">
                   <span className="text-[10px] text-quantum-fgMuted">Parcelas futuras reais</span>
@@ -372,6 +381,7 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
                 </div>
               ) : (
                 <input
+                  id={`${fieldId}-committed`}
                   type="text"
                   inputMode="decimal"
                   placeholder="ex: 800"
@@ -386,8 +396,9 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
           {/* Limite % e CDI */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-quantum-fg">Limite comprometimento (%)</label>
+              <label htmlFor={`${fieldId}-limitpct`} className="text-xs font-bold text-quantum-fg">Limite comprometimento (%)</label>
               <input
+                id={`${fieldId}-limitpct`}
                 type="number"
                 min={5}
                 max={80}
@@ -397,8 +408,9 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-quantum-fg">CDI mensal (%)</label>
+              <label htmlFor={`${fieldId}-cdi`} className="text-xs font-bold text-quantum-fg">CDI mensal (%)</label>
               <input
+                id={`${fieldId}-cdi`}
                 type="text"
                 inputMode="decimal"
                 placeholder="0.83"
