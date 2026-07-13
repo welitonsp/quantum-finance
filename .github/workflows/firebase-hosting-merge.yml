@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Wait for Quality Gates to pass
-        uses: lewagon/wait-on-check-action@v1.8.0
+        uses: lewagon/wait-on-check-action@96d9100b431964d10e0136aff8b9ccb92470505e # v1.8.0
         with:
           ref: ${{ github.sha }}
           check-name: 'E2E Tests (Playwright)'
@@ -31,15 +31,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: wait_for_ci
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: 'npm'
 
       - name: Install Firebase Tools
-        run: npm install -g firebase-tools
+        run: npm install -g firebase-tools@15.23.0
 
       - name: Deploy Firestore Rules and Indexes
         # Deploys firestore.rules + firestore.indexes.json — never hosting or functions.
@@ -59,15 +59,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: wait_for_ci
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: 'npm'
 
       - name: Install Firebase Tools
-        run: npm install -g firebase-tools
+        run: npm install -g firebase-tools@15.23.0
 
       - name: Install & build functions
         # Instala e compila o codebase de functions (TS -> functions/lib) antes do deploy.
@@ -112,9 +112,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: wait_for_ci
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: 'npm'
@@ -128,7 +128,7 @@ jobs:
         run: npm run build
 
       - name: Install Firebase Tools
-        run: npm install -g firebase-tools
+        run: npm install -g firebase-tools@15.23.0
 
       - name: Deploy Firebase Hosting live
         env:
