@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, useId } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Save, AlertCircle, TrendingDown, TrendingUp,
@@ -144,6 +144,7 @@ interface Props {
 
 export default function TransactionForm({ uid, onSave, editingTransaction, onCancelEdit, creditCards }: Props) {
   const isEditing = Boolean(editingTransaction);
+  const fieldId = useId();
   const {
     categories,
     loading: loadingCategories,
@@ -381,7 +382,7 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
 
         <form onSubmit={(e) => void handleSubmit(e)} className="px-6 pb-6 space-y-5">
           <div>
-            <label className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Tipo</label>
+            <span className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Tipo</span>
             <TypeToggle value={formData.type} onChange={handleTypeChange} />
           </div>
 
@@ -396,20 +397,20 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="flex items-center gap-1.5 text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">
+              <label htmlFor={`${fieldId}-value`} className="flex items-center gap-1.5 text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">
                 <DollarSign className="w-3 h-3" /> Valor (R$)
               </label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-quantum-fgMuted text-sm font-semibold">R$</span>
-                <input type="text" inputMode="decimal" name="value" value={formData.value} onChange={handleChange}
+                <input id={`${fieldId}-value`} type="text" inputMode="decimal" name="value" value={formData.value} onChange={handleChange}
                   placeholder="0,00" className="input-quantum w-full pl-9" />
               </div>
             </div>
             <div>
-              <label className="flex items-center gap-1.5 text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">
+              <label htmlFor={`${fieldId}-date`} className="flex items-center gap-1.5 text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">
                 <Calendar className="w-3 h-3" /> Data
               </label>
-              <input type="date" name="date" value={formData.date} onChange={handleChange} className="input-quantum w-full" />
+              <input id={`${fieldId}-date`} type="date" name="date" value={formData.date} onChange={handleChange} className="input-quantum w-full" />
             </div>
           </div>
 
@@ -437,10 +438,11 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
                     className="overflow-hidden"
                   >
                     <div className="mt-2 flex items-center gap-3">
-                      <label className="text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest whitespace-nowrap">
+                      <label htmlFor={`${fieldId}-installments`} className="text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest whitespace-nowrap">
                         Nº de parcelas
                       </label>
                       <input
+                        id={`${fieldId}-installments`}
                         type="number"
                         min={2}
                         max={120}

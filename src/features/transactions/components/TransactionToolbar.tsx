@@ -1,6 +1,6 @@
 // src/features/transactions/components/TransactionToolbar.tsx
 // Barra de filtros, busca, ordenação, tabs e exportação
-import { type RefObject } from 'react';
+import { useId, type RefObject } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Filter, X, SlidersHorizontal,
@@ -157,6 +157,7 @@ export function TransactionToolbar({
   setReportMonth,
   searchRef,
 }: TransactionToolbarProps) {
+  const fieldId = useId();
   const hasAdvancedFilter =
     filtersOpen || !!filterCat || !!dateFrom || !!dateTo || !!valueMin || !!valueMax || !!filterOrigin || filterReconciliationStatus !== 'all';
 
@@ -296,8 +297,9 @@ export function TransactionToolbar({
                   <p className="text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-3">Período do Relatório</p>
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div>
-                      <label className="text-[10px] text-quantum-fgMuted">Mês</label>
+                      <label htmlFor={`${fieldId}-month`} className="text-[10px] text-quantum-fgMuted">Mês</label>
                       <select
+                        id={`${fieldId}-month`}
                         value={reportMonth}
                         onChange={e => setReportMonth(Number(e.target.value))}
                         className="input-quantum w-full text-sm mt-1"
@@ -310,8 +312,9 @@ export function TransactionToolbar({
                       </select>
                     </div>
                     <div>
-                      <label className="text-[10px] text-quantum-fgMuted">Ano</label>
+                      <label htmlFor={`${fieldId}-year`} className="text-[10px] text-quantum-fgMuted">Ano</label>
                       <select
+                        id={`${fieldId}-year`}
                         value={reportYear}
                         onChange={e => setReportYear(Number(e.target.value))}
                         className="input-quantum w-full text-sm mt-1"

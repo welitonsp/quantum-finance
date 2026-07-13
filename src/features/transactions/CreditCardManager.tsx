@@ -1,5 +1,5 @@
 // src/features/transactions/CreditCardManager.tsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CreditCard, Plus, Trash2, Edit2, CheckCircle,
@@ -237,6 +237,7 @@ interface CardFormProps {
   onCancel: () => void;
 }
 function CardForm({ initial, onSave, onCancel }: CardFormProps) {
+  const fieldId = useId();
   const [form, setForm] = useState<CardFormData>({
     name:       initial?.name       ?? '',
     limit:      initial ? fromCentavos(initial.limit) : '',
@@ -267,8 +268,9 @@ function CardForm({ initial, onSave, onCancel }: CardFormProps) {
       className="space-y-4"
     >
       <div>
-        <label className="text-xs text-quantum-fgMuted uppercase tracking-wider mb-1.5 block">Nome do Cartão</label>
+        <label htmlFor={`${fieldId}-name`} className="text-xs text-quantum-fgMuted uppercase tracking-wider mb-1.5 block">Nome do Cartão</label>
         <input
+          id={`${fieldId}-name`}
           className="input-quantum"
           placeholder="Ex: Nubank Platinum"
           value={form.name}
@@ -277,8 +279,9 @@ function CardForm({ initial, onSave, onCancel }: CardFormProps) {
         />
       </div>
       <div>
-        <label className="text-xs text-quantum-fgMuted uppercase tracking-wider mb-1.5 block">Limite (R$)</label>
+        <label htmlFor={`${fieldId}-limit`} className="text-xs text-quantum-fgMuted uppercase tracking-wider mb-1.5 block">Limite (R$)</label>
         <input
+          id={`${fieldId}-limit`}
           className="input-quantum"
           type="number"
           placeholder="5000.00"
@@ -289,8 +292,9 @@ function CardForm({ initial, onSave, onCancel }: CardFormProps) {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-xs text-quantum-fgMuted uppercase tracking-wider mb-1.5 block">Dia de Fecho</label>
+          <label htmlFor={`${fieldId}-closing`} className="text-xs text-quantum-fgMuted uppercase tracking-wider mb-1.5 block">Dia de Fecho</label>
           <input
+            id={`${fieldId}-closing`}
             className="input-quantum"
             type="number" min="1" max="31"
             value={form.closingDay}
@@ -298,8 +302,9 @@ function CardForm({ initial, onSave, onCancel }: CardFormProps) {
           />
         </div>
         <div>
-          <label className="text-xs text-quantum-fgMuted uppercase tracking-wider mb-1.5 block">Dia de Vencimento</label>
+          <label htmlFor={`${fieldId}-due`} className="text-xs text-quantum-fgMuted uppercase tracking-wider mb-1.5 block">Dia de Vencimento</label>
           <input
+            id={`${fieldId}-due`}
             className="input-quantum"
             type="number" min="1" max="31"
             value={form.dueDay}
@@ -308,7 +313,7 @@ function CardForm({ initial, onSave, onCancel }: CardFormProps) {
         </div>
       </div>
       <div>
-        <label className="text-xs text-quantum-fgMuted uppercase tracking-wider mb-2 block">Cor do Cartão</label>
+        <span className="text-xs text-quantum-fgMuted uppercase tracking-wider mb-2 block">Cor do Cartão</span>
         <div className="flex gap-2 flex-wrap">
           {CARD_COLORS.map(c => (
             <button

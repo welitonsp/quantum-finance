@@ -1,5 +1,5 @@
 // src/features/transactions/AccountsManager.tsx
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useId } from 'react';
 import { Plus, Building2, PiggyBank, TrendingUp, CreditCard, Landmark, Trash2, Wallet, Pencil, Check, X } from 'lucide-react';
 import { useAccounts } from '../../hooks/useAccounts';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
@@ -17,6 +17,7 @@ interface Props {
 
 export default function AccountsManager({ uid }: Props) {
   const { accounts, loadingAccounts, addAccount, updateAccount, removeAccount } = useAccounts(uid);
+  const fieldId = useId();
   const [isModalOpen,     setIsModalOpen]     = useState(false);
   const [accountToDelete, setAccountToDelete] = useState<Account | null>(null);
   const [editingId,       setEditingId]       = useState<string | null>(null);
@@ -238,8 +239,9 @@ export default function AccountsManager({ uid }: Props) {
             <h3 className="text-lg font-bold text-quantum-fg mb-6">Nova Conta</h3>
             <form onSubmit={e => void handleSave(e)} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-2">Nome da Instituição</label>
+                <label htmlFor={`${fieldId}-name`} className="block text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-2">Nome da Instituição</label>
                 <input
+                  id={`${fieldId}-name`}
                   type="text" required value={name} onChange={e => setName(e.target.value)}
                   placeholder="Ex: Nubank, Binance, BPI..."
                   className="w-full bg-slate-50 dark:bg-quantum-bgSecondary border border-slate-200 dark:border-quantum-border rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-quantum-fg"
@@ -247,8 +249,9 @@ export default function AccountsManager({ uid }: Props) {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-2">Tipo</label>
+                  <label htmlFor={`${fieldId}-type`} className="block text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-2">Tipo</label>
                   <select
+                    id={`${fieldId}-type`}
                     value={type} onChange={e => setType(e.target.value as AccountType)}
                     className="w-full bg-slate-50 dark:bg-quantum-bgSecondary border border-slate-200 dark:border-quantum-border rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-quantum-fg"
                   >
@@ -260,8 +263,9 @@ export default function AccountsManager({ uid }: Props) {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-2">Saldo Atual</label>
+                  <label htmlFor={`${fieldId}-balance`} className="block text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-2">Saldo Atual</label>
                   <input
+                    id={`${fieldId}-balance`}
                     type="number" step="0.01" required value={balance} onChange={e => setBalance(e.target.value)}
                     placeholder="0.00"
                     className="w-full bg-slate-50 dark:bg-quantum-bgSecondary border border-slate-200 dark:border-quantum-border rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-quantum-fg"
