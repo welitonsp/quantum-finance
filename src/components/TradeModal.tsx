@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { X, TrendingUp, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -9,6 +9,7 @@ interface Props {
 }
 
 export default function TradeModal({ isOpen, onClose, assetSymbol }: Props) {
+  const fieldId = useId();
   const [quantity,    setQuantity]    = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -55,8 +56,9 @@ export default function TradeModal({ isOpen, onClose, assetSymbol }: Props) {
 
         <form onSubmit={(e) => void handleTrade(e)} className="space-y-5">
           <div>
-            <label className="block text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-1.5 ml-1">Quantidade Simétrica</label>
+            <label htmlFor={`${fieldId}-qty`} className="block text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-1.5 ml-1">Quantidade Simétrica</label>
             <input
+              id={`${fieldId}-qty`}
               type="number" step="0.0001" min="0"
               value={quantity} onChange={e => setQuantity(e.target.value)}
               placeholder="Ex: 0.5" autoFocus
