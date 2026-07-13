@@ -1,6 +1,6 @@
 // src/features/goals/EmergencyFundCalculator.tsx
 // Calculadora de Reserva de Emergência — mostra cobertura atual e permite criar meta.
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useId } from 'react';
 import { motion } from 'framer-motion';
 import { ShieldCheck, ShieldAlert, ShieldX, Plus } from 'lucide-react';
 import Decimal from 'decimal.js';
@@ -66,6 +66,7 @@ export default function EmergencyFundCalculator({
   currentSavingsCents,
   onCreateGoal,
 }: Props) {
+  const fieldId = useId();
   const [targetMonths, setTargetMonths] = useState(6);
   const [busy,         setBusy]         = useState(false);
   const [created,      setCreated]      = useState(false);
@@ -157,12 +158,13 @@ export default function EmergencyFundCalculator({
           {/* Months slider */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-quantum-fgMuted">
+              <label htmlFor={`${fieldId}-months`} className="text-[10px] font-bold uppercase tracking-wider text-quantum-fgMuted">
                 Meses de cobertura desejados
               </label>
               <span className="text-xs font-black text-quantum-accent">{targetMonths} meses</span>
             </div>
             <input
+              id={`${fieldId}-months`}
               type="range"
               min={3}
               max={12}
