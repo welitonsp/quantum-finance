@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   collection, query, where, onSnapshot,
   doc, addDoc, deleteDoc, updateDoc, getDocs,
-  serverTimestamp, writeBatch, getDoc, arrayUnion,
+  serverTimestamp, writeBatch, getDoc,
 } from 'firebase/firestore';
-import { db } from '../../../shared/api/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../../../shared/api/firebase';
 import { logSanitizedFirebaseError } from '../../../shared/lib/firebaseErrorHandling';
 import type { Group, GroupInvite, SharedExpense, SharedExpenseCreatePayload } from '../../../shared/types/shared';
 
@@ -133,37 +134,32 @@ export function useGroups(uid: string) {
   );
 
   /**
-   * Aceita um convite: em batch, marca o convite como 'accepted' e adiciona
-   * o usuário ao grupo. O server-side Rule valida via `_lastAcceptedInviteId`
-   * que o invite existe e foi aceito antes de autorizar a entrada no grupo.
+   * Aceita um convite via callable server-trusted `acceptGroupInvite` (F-03):
+   * o servidor valida (pendente, no prazo, e-mail do token, não-membro), adiciona
+   * o membro e CONSOME o convite atomicamente numa transação. O cliente não pode
+   * mais se auto-adicionar (Rules negam) — impede reentrada após remoção.
+   * `email` é derivado do token no servidor; aqui só passamos o displayName.
    */
   const acceptInvite = useCallback(
     async (
       groupId: string,
       inviteId: string,
       displayName: string,
-      email: string,
+      _email: string,
     ): Promise<void> => {
+      void _email; // e-mail vem do token de auth no servidor (não confiar no cliente)
       try {
-        const inviteRef = doc(db, 'groups', groupId, 'invites', inviteId);
-        const groupRef  = doc(db, 'groups', groupId);
-
-        // Step 1: mark invite accepted so the group update rule can verify it.
-        await updateDoc(inviteRef, { status: 'accepted', acceptedAt: serverTimestamp() });
-
-        // Step 2: add self to the group. Rules check the already-committed invite.
-        await updateDoc(groupRef, {
-          memberUids: arrayUnion(uid),
-          members:    arrayUnion({ uid, displayName, email }),
-          updatedAt:  serverTimestamp(),
-          _lastAcceptedInviteId: inviteId,
-        });
+        const accept = httpsCallable<
+          { groupId: string; inviteId: string; displayName: string },
+          { joined: boolean }
+        >(functions, 'acceptGroupInvite');
+        await accept({ groupId, inviteId, displayName });
       } catch (err) {
         logSanitizedFirebaseError('shared_group_invite_accept', err);
         throw err;
       }
     },
-    [uid],
+    [],
   );
 
   const rejectInvite = useCallback(

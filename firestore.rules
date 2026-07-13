@@ -1357,33 +1357,13 @@ service cloud.firestore {
             && before.memberUids.toSet().hasAll(after.memberUids.toSet());
       }
 
-      // canAcceptGroupInvitation: o convidado adiciona APENAS a si mesmo após ter
-      // aceitado o convite (status=='accepted' já persistido antes desta escrita).
-      function canAcceptGroupInvitation() {
-        let uid    = request.auth.uid;
-        let email  = request.auth.token.email;
-        let before = resource.data;
-        let after  = request.resource.data;
-        let invId  = after.get('_lastAcceptedInviteId', '');
-        let inv    = get(/databases/$(database)/documents/groups/$(groupId)/invites/$(invId)).data;
-        return request.auth != null
-            && email != null
-            && invId.size() > 0
-            && !(uid in before.memberUids)
-            && uid in after.memberUids
-            && after.memberUids.size() == before.memberUids.size() + 1
-            && after.ownerUid      == before.ownerUid
-            && after.name          == before.name
-            && after.schemaVersion == before.schemaVersion
-            && after.createdAt     == before.createdAt
-            && inv.inviteeEmail    == email
-            && inv.status          == 'accepted';
-      }
+      // F-03: a ENTRADA no grupo via convite é server-trusted (callable
+      // acceptGroupInvite, Admin SDK) — atômica, single-use e com expiração.
+      // O cliente NÃO pode mais se auto-adicionar (removido canAcceptGroupInvitation).
 
       allow read:   if isMember();
       allow create: if request.auth != null && isValidGroupCreate();
-      allow update: if (isGroupOwner() && isValidGroupOwnerUpdate())
-                    || canAcceptGroupInvitation();
+      allow update: if isGroupOwner() && isValidGroupOwnerUpdate();
       allow delete: if isGroupOwner();
 
       // Convites: owner cria, convidado lê e atualiza status próprio.
@@ -1418,6 +1398,9 @@ service cloud.firestore {
               && d.createdAt         == request.time;
         }
 
+        // F-03: o cliente só pode RECUSAR o próprio convite. O ACEITE ('accepted')
+        // é exclusivo do servidor (callable acceptGroupInvite via Admin SDK), que
+        // adiciona o membro e consome o convite atomicamente.
         function isValidInviteStatusUpdate() {
           let d    = request.resource.data;
           let prev = resource.data;
@@ -1427,7 +1410,7 @@ service cloud.firestore {
               && d.schemaVersion == prev.schemaVersion
               && d.createdAt    == prev.createdAt
               && prev.status    == 'pending'
-              && d.status in ['accepted', 'rejected'];
+              && d.status       == 'rejected';
         }
 
         allow read:   if isGroupOwnerForInvite() || isMemberOfGroup() || isInvitee();

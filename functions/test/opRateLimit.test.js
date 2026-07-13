@@ -57,10 +57,11 @@ beforeEach(() => {
 });
 
 describe('OP_RATE_LIMITS — configuração', () => {
-  it('cobre exatamente as 6 callables de escrita não-IA', () => {
+  it('cobre exatamente as 7 callables de escrita não-IA', () => {
     assert.deepEqual(
       Object.keys(OP_RATE_LIMITS).sort(),
       [
+        'acceptGroupInvite',
         'createTransaction',
         'createTransfer',
         'deleteUserData',
