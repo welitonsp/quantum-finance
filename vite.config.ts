@@ -150,6 +150,10 @@ export default defineConfig({
         'src/**/*.d.ts',
         '**/.claude/**',
         '**/.claude/worktrees/**',
+        // F-11: outbox IndexedDB — glue não exercitável em jsdom (sem fake-indexeddb,
+        // que tocaria package-lock/zona protegida). O comportamento fail-safe é testado
+        // em offlineOutbox.test.ts; as branches de sucesso do IndexedDB rodam no browser real.
+        'src/shared/lib/offlineOutbox.ts',
       ],
       // Recalibrado em 2026-06-12: FASES 3-8 (#202-#207) mergearam com CI
       // vermelho (main não compilava) e erodiram a cobertura sem o gate agir.
