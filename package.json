@@ -22,10 +22,10 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",
-    "@tanstack/react-virtual": "^3.14.4",
+    "@tanstack/react-virtual": "^3.14.6",
     "decimal.js": "^10.6.0",
     "firebase": "^10.8.0",
-    "framer-motion": "^12.42.0",
+    "framer-motion": "^12.42.2",
     "lucide-react": "^0.577.0",
     "pdfjs-dist": "^5.7.284",
     "react": "^19.2.7",
@@ -33,7 +33,7 @@
     "react-dom": "^19.2.7",
     "react-hot-toast": "^2.6.0",
     "react-markdown": "^10.1.0",
-    "recharts": "^3.9.0",
+    "recharts": "^3.9.2",
     "zod": "^4.4.3"
   },
   "overrides": {
