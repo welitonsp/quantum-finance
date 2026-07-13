@@ -35,6 +35,8 @@ export const OP_RATE_LIMITS = {
   logAuditEvent:          { limit: 240, windowMs: HOUR_MS },
   recordPriceObservation: { limit: 240, windowMs: HOUR_MS },
   acceptGroupInvite:      { limit: 30,  windowMs: HOUR_MS },
+  createGroupExpense:     { limit: 120, windowMs: HOUR_MS },
+  settleGroupExpenseShare:{ limit: 240, windowMs: HOUR_MS },
 } as const satisfies Record<string, OpRateLimitConfig>;
 
 export type OpRateLimitKey = keyof typeof OP_RATE_LIMITS;

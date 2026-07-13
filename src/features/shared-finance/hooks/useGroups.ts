@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   collection, query, where, onSnapshot,
   doc, addDoc, deleteDoc, updateDoc, getDocs,
-  serverTimestamp, writeBatch, getDoc,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../../../shared/api/firebase';
@@ -244,15 +244,27 @@ export function useGroupExpenses(groupId: string | null) {
     return unsub;
   }, [groupId]);
 
+  // F-02: criação server-trusted — o servidor valida integridade das cotas
+  // (soma == total, uids do grupo). O cliente não escreve a despesa diretamente.
   const addExpense = useCallback(
     async (groupId: string, payload: SharedExpenseCreatePayload): Promise<void> => {
       try {
-        await addDoc(collection(db, 'groups', groupId, 'expenses'), {
-          ...payload,
+        const create = httpsCallable<
+          {
+            groupId: string; description: string; totalCents: number; category: string;
+            date: string; splitMethod: string; payerDisplayName: string; shares: unknown;
+          },
+          { id: string }
+        >(functions, 'createGroupExpense');
+        await create({
           groupId,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          schemaVersion: 1,
+          description:      payload.description,
+          totalCents:      payload.totalCents,
+          category:        payload.category,
+          date:            payload.date,
+          splitMethod:     payload.splitMethod,
+          payerDisplayName: payload.payerDisplayName,
+          shares:          payload.shares,
         });
       } catch (err) {
         logSanitizedFirebaseError('shared_expense_add', err);
@@ -262,23 +274,16 @@ export function useGroupExpenses(groupId: string | null) {
     [],
   );
 
+  // F-02: quitação server-trusted — membro quita só a própria cota; payer/owner
+  // podem quitar a de outros. Impede marcar cota alheia como paga.
   const markSharePaid = useCallback(
     async (groupId: string, expenseId: string, memberUid: string): Promise<void> => {
       try {
-        const ref = doc(db, 'groups', groupId, 'expenses', expenseId);
-        const snap = await getDoc(ref);
-        if (!snap.exists()) return;
-
-        const data = snap.data() as SharedExpense;
-        const updatedShares = data.shares.map((s) =>
-          s.uid === memberUid
-            ? { ...s, paid: true, paidAt: new Date().toISOString() }
-            : s,
-        );
-
-        const batch = writeBatch(db);
-        batch.update(ref, { shares: updatedShares, updatedAt: serverTimestamp() });
-        await batch.commit();
+        const settle = httpsCallable<
+          { groupId: string; expenseId: string; targetUid: string },
+          { settled: boolean }
+        >(functions, 'settleGroupExpenseShare');
+        await settle({ groupId, expenseId, targetUid: memberUid });
       } catch (err) {
         logSanitizedFirebaseError('shared_expense_mark_paid', err);
         throw err;

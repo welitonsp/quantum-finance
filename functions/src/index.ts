@@ -40,7 +40,7 @@ import {
   PriceObservationValidationError,
   validatePriceObservationPayload,
 } from './priceObservationValidation';
-import { validateInviteAcceptance } from './sharedFinanceValidation';
+import { validateInviteAcceptance, validateExpenseShares } from './sharedFinanceValidation';
 import { maskPII } from './lib/piiMasker';
 import { checkAndIncrementOpRateLimit, type OpRateLimitKey } from './opRateLimit';
 import { buildReminderBody, buildReminderSummary } from './pushReminders';
@@ -1613,6 +1613,143 @@ export const acceptGroupInvite = onCall(
       if (e instanceof HttpsError) throw e;
       console.error('[FunctionError]', sanitizeFunctionError('accept_group_invite', e));
       throw new HttpsError('internal', 'Falha ao aceitar o convite.');
+    }
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNÇÃO — createGroupExpense (F-02 — despesa de grupo server-trusted)
+// Valida integridade das cotas (soma == total, uids do grupo) no servidor.
+// ═══════════════════════════════════════════════════════════════════════════════
+const SPLIT_METHODS = ['igual', 'proporcional', 'personalizado'];
+
+export const createGroupExpense = onCall(
+  {
+    region: REGION,
+    timeoutSeconds: 15,
+    enforceAppCheck: ENFORCE_APP_CHECK,
+    consumeAppCheckToken: ENFORCE_APP_CHECK,
+    cors: CORS_ORIGINS,
+  },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
+    if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
+
+    const uid = request.auth.uid;
+    const d = (request.data ?? {}) as Record<string, unknown>;
+    const groupId = typeof d.groupId === 'string' ? d.groupId : '';
+    const description = typeof d.description === 'string' ? d.description.trim() : '';
+    const totalCents = d.totalCents;
+    const category = typeof d.category === 'string' ? d.category.slice(0, 60) : 'Outros';
+    const date = typeof d.date === 'string' ? d.date : '';
+    const splitMethod = typeof d.splitMethod === 'string' ? d.splitMethod : '';
+    const payerDisplayName = typeof d.payerDisplayName === 'string' ? d.payerDisplayName.slice(0, 80) : '';
+    const shares = d.shares;
+
+    if (!groupId) throw new HttpsError('invalid-argument', 'groupId obrigatório.');
+    if (description.length < 1 || description.length > 160) throw new HttpsError('invalid-argument', 'Descrição inválida.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new HttpsError('invalid-argument', 'Data inválida.');
+    if (!SPLIT_METHODS.includes(splitMethod)) throw new HttpsError('invalid-argument', 'Método de divisão inválido.');
+
+    await assertOpRateLimit(uid, 'createGroupExpense');
+
+    const groupRef = adminDb.doc(`groups/${groupId}`);
+    try {
+      const newId = await adminDb.runTransaction(async (txn) => {
+        const groupSnap = await txn.get(groupRef);
+        if (!groupSnap.exists) throw new HttpsError('not-found', 'group_not_found');
+        const memberUids = groupSnap.data()?.memberUids;
+        if (!Array.isArray(memberUids) || !memberUids.includes(uid)) {
+          throw new HttpsError('permission-denied', 'not_a_member');
+        }
+        const check = validateExpenseShares(shares, totalCents, memberUids);
+        if (!check.ok) throw new HttpsError(check.code, check.reason);
+
+        const expRef = adminDb.collection(`groups/${groupId}/expenses`).doc();
+        txn.set(expRef, {
+          description,
+          totalCents: totalCents as number,
+          category,
+          date,
+          payerUid: uid,
+          payerDisplayName: payerDisplayName || (request.auth!.token.email ?? uid),
+          splitMethod,
+          shares,
+          groupId,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          schemaVersion: 1,
+        });
+        return expRef.id;
+      });
+      return { id: newId };
+    } catch (e) {
+      if (e instanceof HttpsError) throw e;
+      console.error('[FunctionError]', sanitizeFunctionError('create_group_expense', e));
+      throw new HttpsError('internal', 'Falha ao criar a despesa.');
+    }
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNÇÃO — settleGroupExpenseShare (F-02 — quitar cota server-trusted)
+// Um membro só quita a PRÓPRIA cota; payer/owner podem quitar a de qualquer um.
+// ═══════════════════════════════════════════════════════════════════════════════
+export const settleGroupExpenseShare = onCall(
+  {
+    region: REGION,
+    timeoutSeconds: 15,
+    enforceAppCheck: ENFORCE_APP_CHECK,
+    consumeAppCheckToken: ENFORCE_APP_CHECK,
+    cors: CORS_ORIGINS,
+  },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
+    if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
+
+    const uid = request.auth.uid;
+    const d = (request.data ?? {}) as Record<string, unknown>;
+    const groupId = typeof d.groupId === 'string' ? d.groupId : '';
+    const expenseId = typeof d.expenseId === 'string' ? d.expenseId : '';
+    const targetUid = typeof d.targetUid === 'string' && d.targetUid ? d.targetUid : uid;
+    if (!groupId || !expenseId) throw new HttpsError('invalid-argument', 'groupId e expenseId obrigatórios.');
+
+    await assertOpRateLimit(uid, 'settleGroupExpenseShare');
+
+    const groupRef = adminDb.doc(`groups/${groupId}`);
+    const expRef   = adminDb.doc(`groups/${groupId}/expenses/${expenseId}`);
+    try {
+      await adminDb.runTransaction(async (txn) => {
+        const [groupSnap, expSnap] = await Promise.all([txn.get(groupRef), txn.get(expRef)]);
+        if (!groupSnap.exists) throw new HttpsError('not-found', 'group_not_found');
+        if (!expSnap.exists)   throw new HttpsError('not-found', 'expense_not_found');
+
+        const group = groupSnap.data()!;
+        const exp   = expSnap.data()!;
+        const memberUids: string[] = Array.isArray(group.memberUids) ? group.memberUids : [];
+        if (!memberUids.includes(uid)) throw new HttpsError('permission-denied', 'not_a_member');
+
+        // Só o próprio membro quita sua cota; payer/owner podem quitar a de outros.
+        const isPayerOrOwner = uid === exp.payerUid || uid === group.ownerUid;
+        if (targetUid !== uid && !isPayerOrOwner) {
+          throw new HttpsError('permission-denied', 'cannot_settle_other_share');
+        }
+
+        const shares = Array.isArray(exp.shares) ? exp.shares : [];
+        let found = false;
+        const updated = shares.map((s: Record<string, unknown>) => {
+          if (s?.uid === targetUid) { found = true; return { ...s, paid: true, paidAt: new Date().toISOString() }; }
+          return s;
+        });
+        if (!found) throw new HttpsError('failed-precondition', 'share_not_found');
+
+        txn.update(expRef, { shares: updated, updatedAt: FieldValue.serverTimestamp() });
+      });
+      return { settled: true };
+    } catch (e) {
+      if (e instanceof HttpsError) throw e;
+      console.error('[FunctionError]', sanitizeFunctionError('settle_group_expense_share', e));
+      throw new HttpsError('internal', 'Falha ao quitar a cota.');
     }
   },
 );
