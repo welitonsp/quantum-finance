@@ -1,7 +1,10 @@
 import { initializeApp }                                      from 'firebase/app';
 import { initializeAppCheck, ReCaptchaV3Provider }            from 'firebase/app-check';
 import { getAuth, connectAuthEmulator }                        from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator }              from 'firebase/firestore';
+import {
+  getFirestore, initializeFirestore, connectFirestoreEmulator,
+  persistentLocalCache, persistentMultipleTabManager,
+}                                                              from 'firebase/firestore';
 import { getFunctions, connectFunctionsEmulator }              from 'firebase/functions';
 
 const firebaseConfig = {
@@ -15,7 +18,19 @@ const firebaseConfig = {
 
 export const app       = initializeApp(firebaseConfig);
 export const auth      = getAuth(app);
-export const db        = getFirestore(app);
+
+// F-11 — cache PERSISTENTE (IndexedDB): leituras funcionam offline (dashboard/lista
+// sobrevivem a reload sem rede) e escritas DIRETAS ao Firestore ficam numa fila durável
+// que replica ao reconectar. Sob emulador/test ou sem IndexedDB, usa o padrão (memória)
+// para determinismo. (A criação canônica via callable é tratada por outbox à parte.)
+const _useEmulatorDb = import.meta.env.DEV && import.meta.env.VITE_USE_EMULATOR === 'true';
+const _isTestEnv     = import.meta.env.MODE === 'test' || import.meta.env.VITEST === 'true';
+export const db = (_useEmulatorDb || _isTestEnv || typeof indexedDB === 'undefined')
+  ? getFirestore(app)
+  : initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+
 export const functions = getFunctions(app, 'southamerica-east1');
 
 if (import.meta.env.DEV && import.meta.env.VITE_USE_EMULATOR === 'true') {
