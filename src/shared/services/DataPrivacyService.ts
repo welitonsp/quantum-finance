@@ -10,7 +10,11 @@ import { logSanitizedFirebaseError } from '../lib/firebaseErrorHandling';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const EXPORTABLE_SUBCOLLECTIONS = [
+// F-04 (LGPD): inventário completo das subcoleções sob users/{uid}. Coleções
+// server-only (fcmTokens, dataProcessingLog, system_logs) que o cliente não pode
+// ler retornam [] graciosamente — o gap fica documentado para o export server-side.
+// `recurring` é alias de `recurringTasks` e `idempotency` é interno (não exportados).
+export const EXPORTABLE_SUBCOLLECTIONS = [
   'transactions',
   'accounts',
   'audit_logs',
@@ -21,6 +25,16 @@ const EXPORTABLE_SUBCOLLECTIONS = [
   'creditCards',
   'recurringTasks',
   'simulations',
+  'debts',
+  'goals',
+  'scoreHistory',
+  'challenges',
+  'consents',
+  'dataProcessingLog',
+  'shoppingLists',
+  'priceObservations',
+  'fcmTokens',
+  'decisions',
 ] as const;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
