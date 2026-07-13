@@ -3501,15 +3501,25 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       });
     };
 
-    it('S1 — membro paga própria cota (update shares + updatedAt) deve passar', async () => {
+    it('S1 — F-02: update de despesa pelo cliente é NEGADO (server-only)', async () => {
       await seedGroupS();
       const alice = testEnv.authenticatedContext(UID_A, { email: EMAIL_A_S });
       const ref = doc(alice.firestore(), 'groups', GROUP_S, 'expenses', EXPENSE_S);
-      await assertSucceeds(updateDoc(ref, {
+      // Mesmo o pagamento da própria cota agora passa pela callable settleGroupExpenseShare.
+      await assertFails(updateDoc(ref, {
         ...baseExpense(),
         shares:    [{ uid: UID_A, amountCents: 7500, paid: true, paidAt: '2026-07-01T12:00:00Z' }, { uid: UID_B, amountCents: 7500, paid: false }],
         updatedAt: serverTimestamp(),
       }));
+    });
+
+    it('S1b — F-02: create de despesa pelo cliente é NEGADO (server-only)', async () => {
+      await seedGroupS();
+      const alice = testEnv.authenticatedContext(UID_A, { email: EMAIL_A_S });
+      await assertFails(addDoc(
+        collection(alice.firestore(), 'groups', GROUP_S, 'expenses'),
+        { ...baseExpense(), createdAt: serverTimestamp(), updatedAt: serverTimestamp() },
+      ));
     });
 
     it('S2 — membro B tenta alterar totalCents deve falhar', async () => {
