@@ -5,8 +5,20 @@
 
 ## Estado Atual — 2026-07-10 (Auditoria Big Four + remediação M-01/M-02 + Radar de Compras)
 
-- Branch principal: `main` — PRs #363–#403 mergeados. Working tree esperado: limpo. **Nenhum PR aberto.**
-- Suíte: **1862 unit + 219 rules + 282 functions + 28 E2E** (+10 #402 updateRecurringWithHistory, +6 #403 recurringRepo).
+- Branch principal: `main` — PRs #363–#412 mergeados. Working tree esperado: limpo. **Nenhum PR aberto.**
+- Suíte: **1900+ unit + 219 rules + 292 functions + 28 E2E** (auditoria externa 2ª rodada: F-01/F-04/F-05/F-06/F-07/F-09/F-10).
+
+### Remediação Auditoria Externa (2ª rodada, 2026-07-11 — nota inicial 6,2/10)
+
+Laudo externo independente elevou findings de segurança/LGPD/confiabilidade. **7 findings fechados** (PRs #406–#412), todos com CI verde:
+- **F-01 (consent IA) — FECHADO (#408):** `assertAiConsent(uid)` fail-closed antes do Gemini nas 3 callables de IA (chat/categorização/auditoria). UI mirror = follow-up.
+- **F-04 (export LGPD) — PARCIAL (#412):** `EXPORTABLE_SUBCOLLECTIONS` completa (10→20 subcoleções). *Delete de user já é completo (recursiveDelete recursivo).* Falta: limpeza do `groups` global + export server-side (fase shared-finance).
+- **F-05 (invariante monetário) — FECHADO (#407):** removida a única conversão float ativa (`Math.round(saldo*100)`→`toCentavos`) em `queryContextBuilder`. Demais `*100` são percentuais legítimos.
+- **F-06 (step-up delete) — FECHADO (#411):** `deleteUserData` exige `auth_time` recente (5 min) → `failed-precondition`; cliente reusa UX `REQUIRES_RECENT_LOGIN`.
+- **F-07 (recorrentes catch-up) — FECHADO (#410):** `isTaskDueToday` usa `>=` (catch-up idempotente) + clamp de fim de mês.
+- **F-09 (custo/DoS) — PARCIAL (#409):** `setGlobalOptions({ maxInstances: 20 })`. Billing alerts/quota/paginação = infra/owner.
+- **F-10 (memória chat) — FECHADO (#406):** `ConversationMemory` efêmera (sessionStorage + TTL 24h + purge no logout).
+- **PENDENTES (fases maiores / decisão do owner):** **F-02/F-03 (shared-finance)** exigem **server-trust** (Rules não somam arrays nem validam single-use atômico; `firestore.rules` perto do limite de 1000 expressões) — callables + deny direto + testes emulator; **F-08** (pinar `firebase-tools` — versão é decisão do owner p/ deploy prod); **F-11** (outbox offline — feature); **F-12** (a11y: zerar 65 warnings → `error`); **F-13** (cobrir `components/**`/`features/**` antes de expandir gate); **F-14** (Lighthouse/CWV em modo relatório); **F-15** (métricas/SLOs/alertas — infra).
 
 ### Auditoria Big Four + Tese Extraordinária (2026-07-09)
 
