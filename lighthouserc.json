@@ -1,0 +1,21 @@
+{
+  "ci": {
+    "collect": {
+      "staticDistDir": "./dist",
+      "numberOfRuns": 3,
+      "settings": {
+        "formFactor": "mobile",
+        "screenEmulation": {
+          "mobile": true,
+          "width": 360,
+          "height": 800,
+          "deviceScaleFactor": 2,
+          "disabled": false
+        }
+      }
+    },
+    "upload": {
+      "target": "temporary-public-storage"
+    }
+  }
+}
