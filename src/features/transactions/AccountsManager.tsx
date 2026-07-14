@@ -1,5 +1,5 @@
 // src/features/transactions/AccountsManager.tsx
-import { useState, useMemo, useId } from 'react';
+import { useState, useMemo, useId, useCallback, useEffect, useRef } from 'react';
 import { Plus, Building2, PiggyBank, TrendingUp, CreditCard, Landmark, Trash2, Wallet, Pencil, Check, X } from 'lucide-react';
 import { useAccounts } from '../../hooks/useAccounts';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
@@ -27,6 +27,22 @@ export default function AccountsManager({ uid }: Props) {
   const [name,    setName]    = useState('');
   const [type,    setType]    = useState<AccountType>('corrente');
   const [balance, setBalance] = useState('');
+
+  const editNameRef = useCallback((node: HTMLInputElement | null) => {
+    if (node) node.focus();
+  }, []);
+  const modalFirstInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isModalOpen) modalFirstInputRef.current?.focus();
+  }, [isModalOpen]);
+
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsModalOpen(false); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [isModalOpen]);
 
   const openEdit = (acc: Account) => {
     setEditingId(acc.id);
@@ -189,9 +205,9 @@ export default function AccountsManager({ uid }: Props) {
                   <div>
                     {editingId === acc.id ? (
                       <input
+                        ref={editNameRef}
                         type="text" value={editName} onChange={e => setEditName(e.target.value)}
                         className="text-sm font-bold bg-transparent border-b border-quantum-accent text-quantum-fg outline-none w-32"
-                        autoFocus
                       />
                     ) : (
                       <h4 className="font-bold text-quantum-fg text-sm leading-tight">{acc.name}</h4>
@@ -234,13 +250,14 @@ export default function AccountsManager({ uid }: Props) {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-quantum-card/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
+          <div className="absolute inset-0 bg-quantum-card/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} aria-hidden="true" />
           <div className="bg-white dark:bg-quantum-card w-full max-w-md rounded-3xl p-6 relative z-10 shadow-2xl border dark:border-quantum-border animate-in zoom-in-95 duration-200">
             <h3 className="text-lg font-bold text-quantum-fg mb-6">Nova Conta</h3>
             <form onSubmit={e => void handleSave(e)} className="space-y-4">
               <div>
                 <label htmlFor={`${fieldId}-name`} className="block text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-2">Nome da Instituição</label>
                 <input
+                  ref={modalFirstInputRef}
                   id={`${fieldId}-name`}
                   type="text" required value={name} onChange={e => setName(e.target.value)}
                   placeholder="Ex: Nubank, Binance, BPI..."

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ShieldCheck, Wallet } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
@@ -16,6 +16,11 @@ interface Props {
 export default function LoginScreen({ onLogin, mfaPending = false, onSubmitMfaCode, onCancelMfa }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [mfaCode, setMfaCode] = useState('');
+  const mfaInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (mfaPending) mfaInputRef.current?.focus();
+  }, [mfaPending]);
 
   const handleLogin = async () => {
     if (isLoading) return;
@@ -65,6 +70,7 @@ export default function LoginScreen({ onLogin, mfaPending = false, onSubmitMfaCo
             <p className="text-sm text-quantum-fgMuted mb-6">Digite o código de 6 dígitos do seu app autenticador para concluir o acesso.</p>
 
             <input
+              ref={mfaInputRef}
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -75,7 +81,6 @@ export default function LoginScreen({ onLogin, mfaPending = false, onSubmitMfaCo
               placeholder="000000"
               aria-label="Código do app autenticador"
               className="w-full text-center text-2xl tracking-[0.5em] font-mono bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-cyan-500"
-              autoFocus
             />
 
             <button
