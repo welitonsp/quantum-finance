@@ -63,7 +63,9 @@
 - Atalho visível para o **⌘K** no topo da sidebar ("Buscar… ⌘K") — reforça a navegação por busca.
 - Zero mudança de páginas/rotas; risco baixo.
 
-### Nível 2 — consolidação real (PR-C, **requer decisão do owner**): 20 destinos → 7
+### Nível 2 — consolidação real (PR-C): 20 destinos → 7
+
+> ✅ **DECISÃO DO OWNER (2026-07-14): APROVADA a consolidação em 7 destinos**, com **Finanças Compartilhadas dentro de Governança**. Execução em PRs pequenos (1 agrupamento por PR), após os lotes A e B.
 
 Promover ao desktop a hierarquia que o mobile já validou; módulos secundários viram **abas internas** (`TopTabs`, primitivo já existente) da página-mãe:
 
@@ -78,7 +80,7 @@ Promover ao desktop a hierarquia que o mobile já validou; módulos secundários
 | **Governança** | Cofre · LGPD/Privacidade · Finanças Compartilhadas |
 
 - Regra de ouro: **nenhuma feature morre** — muda o ponto de entrada. `currentPage` continua funcionando (aliases redirecionam para a página-mãe + aba).
-- Pontos em aberto para o owner: (a) Finanças Compartilhadas merece destino próprio se for aposta de produto; (b) IR em Análises ou Governança; (c) ordem dos 7.
+- Decididos: Compartilhadas → Governança (owner, 2026-07-14). Em aberto (decidir no PR correspondente): IR em Análises ou Governança; ordem final dos 7.
 - Respeita `docs/UI_UX_ARCHITECTURE.md` (sem react-router; switch `currentPage`).
 
 ---
@@ -87,7 +89,7 @@ Promover ao desktop a hierarquia que o mobile já validou; módulos secundários
 
 ### PR-A — Zerar warnings (3 lotes pequenos + gate)
 
-- [ ] **PR-A1 — foco em diálogos (5 arquivos):** `App.tsx` (A1), `BudgetModal` (A2), `TradeModal` (A3), `PasswordPanel` (A8), `PreviewPanel` (A9). Padrão único: `useRef` + `useEffect` de foco no mount/abertura. Incluir `Esc` fecha nos modais tocados que não tenham.
+- [x] **PR-A1 — foco em diálogos (5 arquivos):** `App.tsx` (A1), `BudgetModal` (A2), `TradeModal` (A3), `PasswordPanel` (A8), `PreviewPanel` (A9). Padrão único: `useRef` + `useEffect` de foco no mount/abertura. Incluir `Esc` fecha nos modais tocados que não tenham. **→ PR #434** (23→18 warnings; Esc adicionado aos 3 modais).
 - [ ] **PR-A2 — foco + página (3 arquivos):** `LoginScreen` (A4, remover), `SharedFinancePage` (A5+A6), `AccountsManager` (A7 + B2 backdrop + Esc no modal Nova Conta).
 - [ ] **PR-A3 — divs clicáveis (5 arquivos):** `Sidebar` (B1 + Esc fecha menu mobile), `CreditCardManager` (B3 + Esc), `TransferForm` (B4 + Esc), `BudgetWidget` (B5/B6 checkbox semântico), `ShoppingPage` (B7 botão real).
 - [ ] **PR-A4 — gate:** elevar `no-autofocus`, `no-static-element-interactions`, `click-events-have-key-events` para `error` no `eslint.config.js` (regressão quebra CI) + sync deste checklist.
@@ -100,7 +102,7 @@ Promover ao desktop a hierarquia que o mobile já validou; módulos secundários
 - [ ] Botão "Buscar ⌘K" no topo (abre CommandPalette).
 - [ ] Teste de componente cobrindo colapso/persistência/teclado.
 
-### PR-C — Consolidação de módulos (Nível 2) — **aguardando decisão do owner** (§2)
+### PR-C — Consolidação de módulos (Nível 2) — **APROVADA pelo owner em 2026-07-14** (§2; Compartilhadas → Governança). Sequência sugerida de PRs: C1 Movimentações←Contas/Cartões/Fixas · C2 Planejamento←Dívidas/Simulações · C3 Análises←Timeline/Calendário/IR · C4 IA←Quantum/Anti-Tarifa · C5 Governança←LGPD/Compartilhadas · C6 sidebar final 7 destinos + aliases de `currentPage`.
 
 ### Varredura QA premium (contínua, guia por tela)
 
