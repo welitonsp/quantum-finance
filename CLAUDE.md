@@ -3,88 +3,27 @@
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 > **Histórico de fases/PRs:** [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md) · **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md)
 
-## Estado Atual — 2026-07-10 (Auditoria Big Four + remediação M-01/M-02 + Radar de Compras)
+## Estado Atual — 2026-07-14 (consolidação de docs + backlog único)
 
-- Branch principal: `main` — PRs #363–#430 mergeados. Working tree esperado: limpo. **Nenhum PR aberto.**
-- Suíte: **1900+ unit + 227 rules + 303 functions + 28 E2E** (auditoria externa 2ª rodada: F-01/F-02/F-03/F-04/F-05/F-06/F-07/F-09/F-10).
-
-### Remediação Auditoria Externa (2ª rodada, 2026-07-11 — nota inicial 6,2/10)
-
-Laudo externo independente elevou findings de segurança/LGPD/confiabilidade. **9 findings fechados** (PRs #406–#417), todos com CI verde:
-- **F-02/F-03 (shared-finance) — FECHADOS (#416 F-03, #417 F-02):** fase **server-trust** completa. Validador puro `functions/src/sharedFinanceValidation.ts` (`validateInviteAcceptance` + `validateExpenseShares`). Callables `acceptGroupInvite` (aceite atômico/single-use/expiração), `createGroupExpense` e `settleGroupExpenseShare` (integridade de shares: soma==total, uids do grupo; quita só a própria cota). Rules: entrada no grupo via convite e create/update de despesa → **server-only** (`if false`/removidas as funções), reduzindo expressões. `useGroups` chama as callables. Rules 226→227.
-- **F-01 (consent IA) — FECHADO (#408):** `assertAiConsent(uid)` fail-closed antes do Gemini nas 3 callables de IA (chat/categorização/auditoria). UI mirror = follow-up.
-- **F-04 (export LGPD) — PARCIAL (#412):** `EXPORTABLE_SUBCOLLECTIONS` completa (10→20 subcoleções). *Delete de user já é completo (recursiveDelete recursivo).* Falta: limpeza do `groups` global + export server-side (fase shared-finance).
-- **F-05 (invariante monetário) — FECHADO (#407):** removida a única conversão float ativa (`Math.round(saldo*100)`→`toCentavos`) em `queryContextBuilder`. Demais `*100` são percentuais legítimos.
-- **F-06 (step-up delete) — FECHADO (#411):** `deleteUserData` exige `auth_time` recente (5 min) → `failed-precondition`; cliente reusa UX `REQUIRES_RECENT_LOGIN`.
-- **F-07 (recorrentes catch-up) — FECHADO (#410):** `isTaskDueToday` usa `>=` (catch-up idempotente) + clamp de fim de mês.
-- **F-09 (custo/DoS) — PARCIAL (#409):** `setGlobalOptions({ maxInstances: 20 })`. Billing alerts/quota/paginação = infra/owner.
-- **F-10 (memória chat) — FECHADO (#406):** `ConversationMemory` efêmera (sessionStorage + TTL 24h + purge no logout).
-- **F-04-groups — FECHADO (#419):** `deleteUserData` limpa `groups` global (owner → recursiveDelete; membro → arrayRemove). F-04 completo.
-- **F-12 (a11y) — categoria de LABELS FECHADA + enforçada (#420/#421/#422/#423):** 42 warnings `label-has-associated-control` → 0 (padrão `useId`+`htmlFor`/`id` em ~15 formulários), regra **elevada a `error`** no eslint (regressão quebra CI). Warnings a11y totais 65→23. **Restam (revisão VISUAL):** `no-autofocus` (9), `no-static-element-interactions`+`click-events` (14) — divs clicáveis precisam de suporte a teclado/role, melhor com a UI à vista.
-- **F-08 (supply chain) — FECHADO (#425):** `firebase-tools` fixado em **15.23.0** (decisão do owner) e **todas as GitHub Actions pinadas por commit SHA** (com comentário da tag) nos 4 workflows; Dependabot segue atualizando de forma revisável.
-- **F-14 (Core Web Vitals) — FECHADO (#427):** workflow `lighthouse.yml` (não-bloqueante, `@lhci/cli@0.15.1`) roda em **perfil móvel** no push para main + sob demanda, publicando o relatório LHR (temporary-public-storage). `lighthouserc.json` = medição (sem assertions que quebrem o build). Validado no CI. Web-Vitals RUM + budgets por rota = evolução futura.
-- **F-11 (offline durável) — FECHADO (#429 frente 1 + #430 frente 2):** frente 1 = `initializeFirestore` com `persistentLocalCache`+`persistentMultipleTabManager` (leituras offline + fila durável de escritas diretas; memória sob emulador/test). frente 2 = **outbox IndexedDB** (`src/shared/lib/offlineOutbox.ts`, escopado por uid, `idempotencyKey`, texto puro por decisão do owner, fail-safe) para a criação via callable: `outboxPut`/`outboxDelete`/`replayOutbox` no `useTransactions` reusando a máquina otimista (dedup por idempotencyKey). Escopo: só criação (update/delete já durável pela frente 1). `offlineOutbox.ts` excluído do coverage (IndexedDB não exercitável em jsdom; fail-safe testado).
-- **PENDENTES (infra / revisão visual):** **F-13** (cobrir `components/**`/`features/**` antes de expandir gate); **F-15** (métricas/SLOs/alertas — infra); resto do **F-12** (autofocus/divs clicáveis — revisão visual).
-
-### Auditoria Big Four + Tese Extraordinária (2026-07-09)
-
-- **Laudo:** `docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md` — nota **8.7/10** (Qualified Opinion). Backend/segurança em nível Big Tech; gap em *assurance* automatizado.
-- **Findings — estado da remediação:**
-  - **M-02 (a11y) — FECHADO no núcleo (PR #365):** `eslint-plugin-jsx-a11y` no flat config, enforçado no CI; regras objetivas em `error` (zeradas), volumosas em `warn` com ratchet documentado. 3 correções ARIA reais (CommandPalette/ProactiveBriefing/AuditTimeline).
-  - **M-01 (cobertura) — 🎯 METAS ATINGIDAS + reforço em andamento (PRs #366…#396+#398+#399+#400):** scope `src/lib/**` + `src/shared/lib/**` + `src/hooks/**` + 345 testes novos. **Cobertura real (pós-#400): stmts 77.48 / branches 68.19 / funcs 79.40 / lines 80.78** — bem acima das metas (branches≥65, lines≥75). **Gates fixados p/ stmts 77 / branches 68 / funcs 79 / lines 80** (#404, catraca logo abaixo do real; real pós-#403: stmts 78.03 / branches 68.55 / funcs 79.83 / lines 81.29). **⚠️ Nota #383:** o PR #382 ratchetou branches p/ 60 **acima** da real → CI do `main` vermelho; #383 destravou (→60.04) e a campanha subiu via motores puros + hooks até 65.52 (metas), com reforço em useDebts/useCategories/useChallenges/useRecurring/recurringRepo (→68.55). **Regra: só ratchetar com ≥0.5% de margem real medida no CI.** Reforço opcional restante: useForecast (Web Worker — não exercitável em jsdom), utils 0% (financialData/categoryRules/importActions/timingEvents), workers (parserWorker/pdfParser), motores com branches soltos (insightsEngine).
-  - **L-01 (float audit) — FECHADO (PR #368):** `round2` em `reportEngine.ts` é falso positivo — display-only (`fromCentavos` → reais → 2 casas), aritmética interna em centavos inteiros. Documentado com comentário inline.
-  - **M-03 (verificações reais) — ABERTO, owner-pending:** MFA E2E, FCM push, NFC-e real — exigem validação em dispositivo pelo owner. **Roteiro passo a passo:** [docs/audit/M03_CHECKLIST_VERIFICACOES_REAIS.md](docs/audit/M03_CHECKLIST_VERIFICACOES_REAIS.md) (código/unit já no verde; falta só a prova em ambiente real, fora do alcance de CI).
-- **Tese de produto:** `docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md` — 3 ativos-fosso + 5 premissas Fable 5 + sequência de fases.
-- **Nota de processo:** rodar `npm run typecheck` antes de pushar — vitest/coverage usam esbuild e não type-checam (branded types como `Centavos` escapam localmente; quebraram #366 no CI).
-
-### FASE Radar de Compras — 1ª entrega (2026-07-09, PR #363)
-
-- Primeiro movimento da Tese: `src/features/shopping/lib/shoppingRadar.ts` (motor PURO, zero I/O, centavos inteiros + basis points) deriva **alertas de alta** (loja da observação mais recente) e **oportunidades de economia** (mesmo produto mais barato noutra loja) das `priceObservations` de NFC-e real.
-- `ShoppingRadarCard.tsx` (card-âncora, gating "UI que some") acima do `PriceIntelligencePanel`. Extensão aditiva `latestStore` em `priceIntelligence.ts`.
-- **Sem escrita/rede/mutação** — camada de insight pura. Próximas fases: Ação de 1 Toque → Gêmeo Financeiro → Selo de Integridade → Copiloto que Cumpre.
-
-### FASE FCM Background Push — FECHADA (2026-07-04, PR #359)
-
-- `vite.config.ts` → `injectManifest` com SW customizado `src/sw.ts`: caching com paridade total ao generateSW anterior + `onBackgroundMessage` (config via `import.meta.env`; sob emulador messaging não inicializa — E2E intacto). Stub morto `public/firebase-messaging-sw.js` removido. devDeps workbox-*.
-- Nova scheduled **`sendPushReminders`** (11:00 UTC = 08:00 BRT, após `executeScheduledRecurrents`): briefing diário para usuários com push ativo — recorrentes vencendo hoje + faturas fechando hoje. **Payload sem PII** (só contagens e total BRL por aritmética inteira — `functions/src/pushReminders.ts`, puro, 9 testes). Tokens mortos removidos best-effort.
-- **Verificação real pendente (owner):** ativar push em Governança num dispositivo e confirmar recebimento do briefing (ou mensagem de teste via console FCM).
-
-### FASE Cesta Pessoal / Inteligência de Preços — FECHADA (2026-07-04, PRs #357/#358)
-
-1. **#357** Motor puro `src/features/shopping/lib/priceIntelligence.ts` (padrão cardProjection: zero I/O, zero float): `canonicalProductKey` (normalização com remoção de acentos), `buildPriceCatalog` (snapshot por loja, melhor loja, tendência última vs penúltima na mesma loja), `deltaBps` (variação em basis points INTEIROS, round-half-up por aritmética inteira), `compareBasketAcrossStores` (cesta cotada por loja, melhor cobertura total, economia em centavos). +13 testes.
-2. **#358** `PriceIntelligencePanel` no ShoppingPage: "Onde comprar \<lista\>" (cotação por loja da primeira lista aberta, troféu na mais barata, economia) + "Movimentos de preço" (top 5 por |variação|, clique abre PriceHistoryPanel). Invisível sem observações. +5 testes.
-
-Fecha o diferencial de produto: NFC-e importada (#356) → `priceObservations` → comparação de cesta e alertas de variação derivados de notas fiscais reais.
-
-### FASE Compras Inteligentes / NFC-e — FECHADA (2026-07-04, PRs #352/#354/#355/#356)
-
-Modelo seguro entregue completo, **zero rede no fluxo do usuário**:
-1. **#352** Parser XML local (`src/features/shopping/lib/nfceParser.ts`) — modelo 65, chave DV módulo-11, centavos Decimal.js fail-closed, descrição fiscal imutável, CPF do comprador nunca extraído.
-2. **#354** Parser HTML colado local (`nfceHtmlParser.ts`, layout portal nacional) + `parseNfceDocument` (roteador XML/HTML).
-3. **#355** Gate SSRF (`functions/src/nfceUrlGate.ts`) — allowlist por UF (GO inicial), URL sempre reconstruída da chave, +48 testes cobrindo o threat model §12–§16, guardrail estático anti-rede no próprio módulo.
-4. **#356** UI de importação (`NfceImportPanel` no ShoppingPage) — colar XML/HTML → revisão humana obrigatória (preço/qtde/unidade editáveis) → 1 `priceObservation` por item via callable `recordPriceObservation` (rate-limited).
-
-**DECISÃO DE PRODUTO/SEGURANÇA (owner, 2026-07-04): a callable `fetchNfce` (fetch automático de NFC-e na SEFAZ) fica ADIADA.** O fluxo por QR Code/colagem já entrega o valor sem abrir superfície de rede; CAPTCHA da SEFAZ frequentemente inviabiliza o fetch automático de qualquer forma. O gate SSRF permanece pronto e testado para quando/se a decisão mudar. **Proibido implementar fetch/scraping de SEFAZ sem nova decisão explícita do owner.** Ver `docs/DECISOES-ARQUITETURA.md` e `docs/product/FASE_COMPRAS_RADAR_GITHUB_NFCE_2026-07-04.md`.
-### Ciclo segurança comercial (PRs #346–#353, 2026-07-04)
-
-- **PRs mergeados:**
-  - **#346** CSP sem `'unsafe-inline'` em `script-src` + `base-uri`/`form-action`/`frame-ancestors`/`manifest-src`/`upgrade-insecure-requests` (`firebase.json`).
-  - **#347** **Zero vulnerabilidades npm** (raiz e functions) via overrides cirúrgicos (uuid, teeny-request, ts-deepmerge, js-yaml); gate CI de audit das functions em `--audit-level=moderate`. firebase-admin@14 descartado (peer do firebase-functions só aceita ^13).
-  - **#348** Rate limit por uid nas 6 callables de escrita não-IA (`functions/src/opRateLimit.ts`, doc `users/{uid}/usage/op_{key}`): createTransaction 120/h, createTransfer 30/h, executeAgentAction 60/h, logAuditEvent 240/h, recordPriceObservation 240/h, deleteUserData 5/dia. Gate após validação + fast-path de idempotência. IA já tinha 50/dia.
-  - **#349 + #351** **MFA TOTP completo**: resolver de sign-in (`src/shared/lib/mfa.ts` + prompt em `LoginScreen.tsx`) e painel de inscrição em Settings (`src/features/settings/MfaPanel.tsx`).
-  - **#353** **TOTP habilitado no projeto** (Identity Platform) via `functions/scripts/enableTotpMfa.js` (Admin SDK `projectConfigManager`, SMS intocado, adjacentIntervals=5). **Executado e validado em produção 2026-07-04** — ver `docs/security/ENABLE_TOTP_MFA_2026-07-04.md`. MFA funcional de ponta a ponta; teste E2E manual pelo owner pendente.
-- **Diagnóstico de floats legados em produção (2026-07-04): zero documentos legados** — 4 transações, todas com `value_cents`. Nada a migrar.
-- Suíte: **1444 unit + 219 rules + 273 functions + 28 E2E**.
+- Branch principal: `main` — PRs #363–#432 mergeados. Working tree esperado: limpo. **Nenhum PR aberto.**
+- Suíte: **1900+ unit + 227 rules + 303 functions + 28 E2E**. Gates de cobertura: **stmts 77 / branches 68 / funcs 79 / lines 80** — regra permanente: só ratchetar com ≥0,5% de margem real medida no CI (incidente #382/#383).
+- **Pendências: fonte única em [docs/PENDENCIAS.md](docs/PENDENCIAS.md).** Resumo: código = F-12 restante (a11y visual), F-13 (cobertura components/features), UI mirror do consent IA, ErrorBoundaries por feature, higiene de `any`; owner/infra = M-03 (verificações reais em dispositivo — [roteiro](docs/audit/M03_CHECKLIST_VERIFICACOES_REAIS.md)), F-09 restante (billing/quotas), F-15 (SLOs/alertas); produto = fases 2–5 da Tese (próxima: **Ação de 1 Toque**).
+- **Auditorias (concluídas e registradas):**
+  - Big Four 2026-07-09 — **8.7/10** ([laudo](docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md)); M-01/M-02/L-01 fechados; M-03 owner-pending.
+  - Externa independente 2026-07-11 — **6,2/10 pré-remediação** ([registro + tabela F-01…F-15](docs/audit/AUDITORIA_EXTERNA_2026-07-11.md)); **11 fechados, 2 parciais (F-09/F-12), 2 abertos (F-13/F-15)**; re-auditoria após fechar os restantes.
+- **Tese de produto:** [docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md](docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md) — fase 1 (Radar de Compras) entregue (#363).
+- **Nota de processo:** rodar `npm run typecheck` antes de pushar — vitest/coverage usam esbuild e não type-checam (branded types como `Centavos` escapam localmente).
+- Detalhe completo dos ciclos #346–#430 (NFC-e, Cesta, FCM, segurança comercial, remediações): [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md).
 
 ### Fatos vivos herdados dos ciclos anteriores
 
-- **Cloud Functions: 9 callables** (`createTransaction`, `executeAgentAction`, `createTransfer`, `deleteUserData`, `categorizeTransactionsBatch`, `chatWithQuantumAI`, `generateAuditReport`, `logAuditEvent`, `recordPriceObservation`) + **2 scheduled** (`executeScheduledRecurrents` 04:00 UTC; `sendPushReminders` 11:00 UTC — briefing FCM diário, payload sem PII, PR #359).
+- **Cloud Functions: 12 callables** (`createTransaction`, `executeAgentAction`, `createTransfer`, `deleteUserData`, `categorizeTransactionsBatch`, `chatWithQuantumAI`, `generateAuditReport`, `logAuditEvent`, `recordPriceObservation`, `acceptGroupInvite`, `createGroupExpense`, `settleGroupExpenseShare`) + **2 scheduled** (`executeScheduledRecurrents` 04:00 UTC; `sendPushReminders` 11:00 UTC — briefing FCM sem PII).
+- **Hardening ativo:** `assertAiConsent` fail-closed nas callables de IA; step-up (`auth_time` ≤5 min) no `deleteUserData`; rate limit por uid nas callables de escrita; MFA TOTP ativo em produção; `maxInstances: 20`; Actions pinadas por SHA + `firebase-tools@15.23.0`.
+- **Offline:** `persistentLocalCache`+`persistentMultipleTabManager` (leituras + escritas diretas) e outbox IndexedDB (`src/shared/lib/offlineOutbox.ts`) para criação via callable.
 - **Logs/auditoria 100% server-trusted** onde viável (#336/#337). Mantidos client-side por decisão: recorrentes (P3 controlado) e `IMPORT_TRANSACTION` (acoplado ao `runTransaction` atômico do Modelo A).
-- **`OnboardingWizard.tsx`** (#342) abre quando `accounts.length === 0 && transactions.length === 0`. **E2E precisa descartá-lo:** helper `e2e/helpers/onboarding.ts` (`dismissOnboardingIfPresent`) nos 6 specs (#345).
-- Cobertura real: statements ~60.9% / lines ~64.9% (gates 60/64). Bundle principal 484 KB (budget 500 KB).
+- **`OnboardingWizard.tsx`** (#342) abre quando `accounts.length === 0 && transactions.length === 0`. **E2E precisa descartá-lo:** helper `e2e/helpers/onboarding.ts` (`dismissOnboardingIfPresent`) nos specs (#345).
+- Bundle principal 484 KB (budget 500 KB, gate no CI).
 - Stashes locais podem existir; não são estado canônico da `main`.
-
-> Histórico detalhado dos ciclos #325–#345: ver [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md).
 
 ## Agente — Contrato de Mutação Confirmada
 
@@ -101,7 +40,7 @@ Modelo seguro entregue completo, **zero rede no fluxo do usuário**:
 
 - **NFC-e fetch automático (`fetchNfce`)** — **ADIADO por decisão de produto/segurança do owner (2026-07-04)**, mesmo com o gate SSRF pronto e testado (#355). O fluxo por QR Code/colagem (fase fechada, PRs #352–#356) já entrega o valor sem abrir rede. Não implementar fetch/scraping de SEFAZ sem nova decisão explícita.
 - **Open Finance / BACEN** — bloqueado por mTLS/orçamento.
-- ~~FCM background push~~ — **DESTRAVADO e ENTREGUE (PR #359, 2026-07-04)**: `vite.config.ts` migrado para `injectManifest` com SW customizado `src/sw.ts` (caching idêntico ao generateSW anterior + `onBackgroundMessage`); scheduled `sendPushReminders` envia briefing diário sem PII. Stub morto `public/firebase-messaging-sw.js` removido.
+- **Migração automática float→`value_cents`** — segue bloqueada; diagnóstico de 2026-07-04 achou **zero documentos legados** em produção (pendência esvaziada na prática).
 
 ## Zonas Proibidas de Alteração
 
@@ -136,7 +75,7 @@ Modelo seguro entregue completo, **zero rede no fluxo do usuário**:
 - `value` legado, `uid`, `id`, `createdAt` bloqueados em deltas de history.
 - Firestore Rules alinhadas com código e deploy real; não alterar sem ampliar cobertura de emulator (`test:rules`).
 
-## Cloud Functions — 9 Callables (estado atual)
+## Cloud Functions — 12 Callables (estado atual)
 
 `functions/src/index.ts` define `ENFORCE_APP_CHECK = process.env.FUNCTIONS_EMULATOR !== 'true'`. Todas as callables usam `enforceAppCheck: ENFORCE_APP_CHECK` e `consumeAppCheckToken: ENFORCE_APP_CHECK`. Em produção: ON. Sob Functions Emulator: OFF (permite E2E/local sem token real).
 
@@ -151,6 +90,9 @@ Modelo seguro entregue completo, **zero rede no fluxo do usuário**:
 | `generateAuditReport` | Relatório de auditoria |
 | `logAuditEvent` | `audit_logs` de transação server-trusted (`BULK_UPDATE`/`UNDO_BULK_UPDATE`) — PR #337 |
 | `recordPriceObservation` | `priceObservations` server-trusted — PR #339 |
+| `acceptGroupInvite` | Aceite de convite de grupo atômico/single-use/expiração — PR #416 |
+| `createGroupExpense` | Despesa compartilhada server-trusted (shares: soma==total, uids do grupo) — PR #417 |
+| `settleGroupExpenseShare` | Quitação da própria cota em despesa de grupo — PR #417 |
 
 Replay protection (`consumeAppCheckToken`) **ativo** em todas em produção.
 
@@ -333,6 +275,8 @@ Todas sob `/users/{userId}/`:
 | `decisions/{decisionId}` | Diário de Decisões do Agente — append-mostly, update restrito a transição de status |
 | `/{document=**}` | Deny-all catch-all |
 
+**Coleção global (fora de `/users/`):** `groups/{groupId}` — finanças compartilhadas; entrada via convite e create/update de despesa são **server-only** (callables `acceptGroupInvite`/`createGroupExpense`/`settleGroupExpenseShare`, PRs #416/#417); `deleteUserData` limpa participação/ownership (#419).
+
 ## Referência Rápida de Arquivos Críticos
 
 | Arquivo | Responsabilidade |
@@ -376,7 +320,7 @@ Todas sob `/users/{userId}/`:
 | `src/shared/lib/firebaseErrorHandling.ts` | `logSanitizedFirebaseError` + `FIREBASE_ERROR_OPERATIONS` |
 | `firestore.rules` | Regras de segurança com schema versionado |
 | `firestore.indexes.json` | Índices compostos para queries paginadas |
-| `functions/src/index.ts` | Cloud Functions (TS→`lib/`): 7 callables |
+| `functions/src/index.ts` | Cloud Functions (TS→`lib/`): 12 callables + 2 scheduled |
 | `functions/src/agentActionValidation.ts` | Validador puro de ações do Agente (server-trusted) |
 | `playwright.config.ts` | Config E2E: Chromium, webServer com VITE_USE_EMULATOR |
 | `e2e/tests/` | 6 suítes E2E: smoke, create, filters, import-csv, goals, agent-confirmed-mutation |
