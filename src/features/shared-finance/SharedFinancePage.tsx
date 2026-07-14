@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Users, Plus, Trash2, ChevronRight, ArrowRight,
   Check, Receipt, X, ChevronDown, Mail, UserPlus, Clock,
@@ -27,6 +27,11 @@ export default function SharedFinancePage({ uid, displayName, email }: Props) {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
+  const newGroupInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showCreateGroup) newGroupInputRef.current?.focus();
+  }, [showCreateGroup]);
 
   // Estado do fluxo "Entrar em grupo por ID"
   const [joinGroupId, setJoinGroupId] = useState('');
@@ -132,7 +137,7 @@ export default function SharedFinancePage({ uid, displayName, email }: Props) {
               onChange={(e) => setNewGroupName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleCreateGroup()}
               className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-              autoFocus
+              ref={newGroupInputRef}
             />
             <button
               onClick={handleCreateGroup}
@@ -307,6 +312,11 @@ function GroupDetail({
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteMsg, setInviteMsg] = useState('');
+  const inviteInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showInviteForm) inviteInputRef.current?.focus();
+  }, [showInviteForm]);
 
   const allMembers: SplitParticipant[] = [
     { uid, displayName },
@@ -392,7 +402,7 @@ function GroupDetail({
               onChange={(e) => setInviteEmail(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendInvite()}
               className="flex-1 text-sm border border-indigo-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
-              autoFocus
+              ref={inviteInputRef}
             />
             <button
               onClick={handleSendInvite}

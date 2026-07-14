@@ -75,7 +75,6 @@ export default function LoginScreen({ onLogin, mfaPending = false, onSubmitMfaCo
               placeholder="000000"
               aria-label="Código do app autenticador"
               className="w-full text-center text-2xl tracking-[0.5em] font-mono bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-cyan-500"
-              autoFocus
             />
 
             <button
