@@ -1,4 +1,4 @@
-import React, { useEffect, useState, lazy, Suspense, useCallback } from 'react';
+import React, { useEffect, useRef, useState, lazy, Suspense, useCallback } from 'react';
 import { auth } from './shared/api/firebase/index';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
 import type { MultiFactorError, User } from 'firebase/auth';
@@ -90,6 +90,14 @@ interface ConfirmDeleteModalProps {
   onConfirm:   () => void;
 }
 const ConfirmDeleteModal = ({ transaction, onCancel, onConfirm }: ConfirmDeleteModalProps) => {
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (transaction) cancelRef.current?.focus(); }, [transaction]);
+  useEffect(() => {
+    if (!transaction) return;
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [transaction, onCancel]);
   if (!transaction) return null;
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-[100] flex items-center justify-center bg-quantum-bg/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -105,7 +113,7 @@ const ConfirmDeleteModal = ({ transaction, onCancel, onConfirm }: ConfirmDeleteM
           <p className="text-sm font-bold truncate text-quantum-fg">"{transaction.description}"</p>
         </div>
         <div className="flex justify-end gap-3">
-          <button onClick={onCancel} autoFocus className="px-5 py-2.5 rounded-xl font-bold text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/5 transition-colors">Cancelar</button>
+          <button ref={cancelRef} onClick={onCancel} className="px-5 py-2.5 rounded-xl font-bold text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/5 transition-colors">Cancelar</button>
           <button onClick={onConfirm} className="px-5 py-2.5 rounded-xl font-bold bg-red-600 text-quantum-fg hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20">Apagar</button>
         </div>
       </div>

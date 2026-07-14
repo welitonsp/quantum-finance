@@ -1,4 +1,4 @@
-import { useState, useEffect, useId } from 'react';
+import { useState, useEffect, useRef, useId } from 'react';
 import { X, Target, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -11,12 +11,24 @@ interface Props {
 
 export default function BudgetModal({ isOpen, onClose, currentGoal, onSave }: Props) {
   const fieldId = useId();
+  const goalInputRef = useRef<HTMLInputElement>(null);
   const [goal, setGoal]                     = useState('');
   const [showConfirmZero, setShowConfirmZero] = useState(false);
 
   useEffect(() => {
     if (isOpen) { setGoal(currentGoal ? String(currentGoal) : ''); setShowConfirmZero(false); }
   }, [isOpen, currentGoal]);
+
+  useEffect(() => {
+    if (isOpen && !showConfirmZero) goalInputRef.current?.focus();
+  }, [isOpen, showConfirmZero]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -60,7 +72,7 @@ export default function BudgetModal({ isOpen, onClose, currentGoal, onSave }: Pr
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label htmlFor={`${fieldId}-goal`} className="block text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-1.5 ml-1">Valor do Teto (R$)</label>
-                <input id={`${fieldId}-goal`} type="number" step="0.01" min="0" value={goal} onChange={e => setGoal(e.target.value)} placeholder="Ex: 3500.00" autoFocus
+                <input ref={goalInputRef} id={`${fieldId}-goal`} type="number" step="0.01" min="0" value={goal} onChange={e => setGoal(e.target.value)} placeholder="Ex: 3500.00"
                   className="w-full px-4 py-3 bg-quantum-bg border border-quantum-border rounded-xl text-quantum-fg font-mono focus:outline-none focus:border-quantum-accent focus:ring-1 focus:ring-quantum-accent transition-all" />
               </div>
               <button type="submit" className="w-full py-3.5 font-bold rounded-xl transition-all shadow-lg bg-quantum-accent text-quantum-bg hover:bg-emerald-400 hover:shadow-quantum-accentGlow flex items-center justify-center gap-2">Guardar Objetivo</button>
