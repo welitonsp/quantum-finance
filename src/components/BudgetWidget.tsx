@@ -379,12 +379,22 @@ function SuggestModal({ suggestions, onApprove, onClose }: SuggestModalProps) {
             return (
               <div
                 key={s.category}
-                className={`rounded-2xl border p-4 transition-all cursor-pointer ${
+                role="checkbox"
+                aria-checked={isSelected}
+                aria-label={`Incluir orçamento para ${s.category}`}
+                tabIndex={0}
+                className={`rounded-2xl border p-4 transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-accent/50 ${
                   isSelected
                     ? 'border-quantum-accent/40 bg-quantum-accent/5'
                     : 'border-quantum-border bg-quantum-bgSecondary/30 opacity-60'
                 }`}
                 onClick={() => toggle(s.category)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggle(s.category);
+                  }
+                }}
               >
                 <div className="flex items-start gap-3">
                   <div className={`mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
@@ -402,7 +412,7 @@ function SuggestModal({ suggestions, onApprove, onClose }: SuggestModalProps) {
                     <p className="text-xs text-quantum-fgMuted mt-0.5">{s.reason}</p>
                   </div>
                   {/* Editable amount */}
-                  <div className="shrink-0" onClick={e => e.stopPropagation()}>
+                  <div className="shrink-0" role="presentation" onClick={e => e.stopPropagation()}>
                     <label htmlFor={`budget-adjust-${s.category}`} className="text-[9px] font-bold uppercase tracking-wider text-quantum-fgMuted block mb-1">Limite R$</label>
                     <input
                       id={`budget-adjust-${s.category}`}
