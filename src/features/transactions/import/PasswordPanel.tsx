@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { AlertTriangle, Loader2, ArrowRight } from 'lucide-react';
 
@@ -12,6 +12,9 @@ interface PasswordPanelProps {
 export function PasswordPanel({ file, wrongPassword, onSubmit, onCancel }: PasswordPanelProps) {
   const [password,   setPassword]   = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
 
   useEffect(() => {
     if (wrongPassword) setSubmitting(false);
@@ -38,12 +41,12 @@ export function PasswordPanel({ file, wrongPassword, onSubmit, onCancel }: Passw
           Senha do PDF
         </label>
         <input
+          ref={inputRef}
           id="pdf-password-input"
           type="password"
           value={password}
           onChange={e => setPassword(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); }}
-          autoFocus
           autoComplete="new-password"
           autoCorrect="off"
           autoCapitalize="off"

@@ -1,4 +1,4 @@
-import { useState, useId } from 'react';
+import { useState, useEffect, useRef, useId } from 'react';
 import { X, TrendingUp, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -10,8 +10,20 @@ interface Props {
 
 export default function TradeModal({ isOpen, onClose, assetSymbol }: Props) {
   const fieldId = useId();
+  const quantityRef = useRef<HTMLInputElement>(null);
   const [quantity,    setQuantity]    = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) quantityRef.current?.focus();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -58,10 +70,11 @@ export default function TradeModal({ isOpen, onClose, assetSymbol }: Props) {
           <div>
             <label htmlFor={`${fieldId}-qty`} className="block text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-1.5 ml-1">Quantidade Simétrica</label>
             <input
+              ref={quantityRef}
               id={`${fieldId}-qty`}
               type="number" step="0.0001" min="0"
               value={quantity} onChange={e => setQuantity(e.target.value)}
-              placeholder="Ex: 0.5" autoFocus
+              placeholder="Ex: 0.5"
               className="w-full px-4 py-3 bg-quantum-bg border border-quantum-border rounded-xl text-quantum-fg font-mono focus:outline-none focus:border-cyan-500 transition-all"
             />
           </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckSquare, Square, Loader2, RotateCcw, Zap, ChevronDown } from 'lucide-react';
 import { ALLOWED_CATEGORIES } from '../../../shared/schemas/financialSchemas';
@@ -27,6 +27,9 @@ export function PreviewPanel({
 }: PreviewPanelProps) {
   const [items,     setItems]     = useState<PreviewItem[]>(() => transactions.map(tx => ({ ...tx, _selected: true })));
   const [editingId, setEditingId] = useState<string | null>(null);
+  const editSelectRef = useRef<HTMLSelectElement>(null);
+
+  useEffect(() => { if (editingId) editSelectRef.current?.focus(); }, [editingId]);
 
   const selected   = items.filter(t => t._selected);
   const allChecked = selected.length === items.length;
@@ -141,7 +144,7 @@ export function PreviewPanel({
                     <td className="px-3 py-2">
                       {editingId === tx.id ? (
                         <select
-                          autoFocus
+                          ref={editSelectRef}
                           value={tx.category ?? ''}
                           onChange={e => { setCat(tx.id, e.target.value); setEditingId(null); }}
                           onBlur={() => setEditingId(null)}
