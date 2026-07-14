@@ -59,10 +59,10 @@ export default defineConfig([
       // (violações já corrigidas). As de alto volume/subjetivas entram como `warn`
       // para dar VISIBILIDADE sem quebrar o CI — RATCHET: subir para `error` à
       // medida que forem zeradas. Não relaxar sem zerar antes.
-      'jsx-a11y/label-has-associated-control': 'error', // F-12: zerado e enforçado (useId + htmlFor/id)
-      'jsx-a11y/no-autofocus': 'warn',                 // 9 — autofocus por vezes intencional
-      'jsx-a11y/click-events-have-key-events': 'warn', // 8 — handler de teclado em div clicável
-      'jsx-a11y/no-static-element-interactions': 'warn', // 7 — role em elemento estático
+      'jsx-a11y/label-has-associated-control': 'error',      // F-12: zerado e enforçado
+      'jsx-a11y/no-autofocus': 'error',                     // F-12: zerado (PRs A1-A2) — gate de regressão
+      'jsx-a11y/click-events-have-key-events': 'error',     // F-12: zerado (PR A3) — gate de regressão
+      'jsx-a11y/no-static-element-interactions': 'error',   // F-12: zerado (PR A3) — gate de regressão
     },
   },
 ]);
