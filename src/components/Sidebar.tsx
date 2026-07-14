@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigation } from '../contexts/NavigationContext';
 import {
   LayoutDashboard, Clock, CalendarRange, CalendarDays, Target, Wallet, ShieldCheck, Settings, LogOut,
@@ -90,6 +91,13 @@ export default function Sidebar({
 }: Props) {
   const { currentPage, setCurrentPage } = useNavigation();
 
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsMobileMenuOpen(false); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isMobileMenuOpen, setIsMobileMenuOpen]);
+
   const handleNavClick = (page: string) => {
     setCurrentPage(page);
     setIsMobileMenuOpen(false);
@@ -107,6 +115,7 @@ export default function Sidebar({
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
+          aria-hidden="true"
         />
       )}
 

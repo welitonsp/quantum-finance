@@ -193,10 +193,19 @@ export default function ShoppingPage({ uid }: Props) {
             return (
               <div
                 key={list.id}
-                className={`bg-quantum-card border rounded-xl p-4 cursor-pointer hover:border-blue-500/40 transition-all group ${
+                role="button"
+                tabIndex={0}
+                aria-label={`Abrir lista ${list.name}`}
+                className={`bg-quantum-card border rounded-xl p-4 cursor-pointer hover:border-blue-500/40 transition-all group focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-accent/50 ${
                   list.status === 'done' ? 'border-quantum-border/50 opacity-70' : 'border-quantum-border'
                 }`}
                 onClick={() => setSelectedListId(list.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedListId(list.id);
+                  }
+                }}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">

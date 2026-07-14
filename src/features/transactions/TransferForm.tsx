@@ -58,6 +58,12 @@ export default function TransferForm({ uid, accounts, onClose, initialValues }: 
     valueRef.current?.focus();
   }, []);
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
   const originAccounts      = accounts.filter(a => a.type !== 'cartao');
   const destinationAccounts = accounts;
 
@@ -115,7 +121,7 @@ export default function TransferForm({ uid, accounts, onClose, initialValues }: 
         animate="visible"
         exit="hidden"
       >
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
 
         <motion.div
           className="relative w-full max-w-md bg-quantum-bg border border-quantum-border rounded-2xl shadow-2xl overflow-hidden"

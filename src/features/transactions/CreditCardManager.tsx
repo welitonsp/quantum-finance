@@ -142,6 +142,12 @@ function PayInvoiceModal({ card, accounts, onClose, onPay }: PayInvoiceModalProp
 
   useEffect(() => { selectRef.current?.focus(); }, []);
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
   const payableAccounts = accounts.filter(a => a.type !== 'cartao');
   const canSubmit = Boolean(fromAccountId) && !isSubmitting;
 
@@ -168,7 +174,7 @@ function PayInvoiceModal({ card, accounts, onClose, onPay }: PayInvoiceModalProp
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <motion.div
         className="relative w-full max-w-sm bg-quantum-bg border border-quantum-border rounded-2xl shadow-2xl overflow-hidden"
         initial={{ opacity: 0, y: 32, scale: 0.97 }}
