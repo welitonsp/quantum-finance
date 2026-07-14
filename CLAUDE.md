@@ -5,7 +5,7 @@
 
 ## Estado Atual — 2026-07-10 (Auditoria Big Four + remediação M-01/M-02 + Radar de Compras)
 
-- Branch principal: `main` — PRs #363–#427 mergeados. Working tree esperado: limpo. **Nenhum PR aberto.**
+- Branch principal: `main` — PRs #363–#430 mergeados. Working tree esperado: limpo. **Nenhum PR aberto.**
 - Suíte: **1900+ unit + 227 rules + 303 functions + 28 E2E** (auditoria externa 2ª rodada: F-01/F-02/F-03/F-04/F-05/F-06/F-07/F-09/F-10).
 
 ### Remediação Auditoria Externa (2ª rodada, 2026-07-11 — nota inicial 6,2/10)
@@ -23,7 +23,8 @@ Laudo externo independente elevou findings de segurança/LGPD/confiabilidade. **
 - **F-12 (a11y) — categoria de LABELS FECHADA + enforçada (#420/#421/#422/#423):** 42 warnings `label-has-associated-control` → 0 (padrão `useId`+`htmlFor`/`id` em ~15 formulários), regra **elevada a `error`** no eslint (regressão quebra CI). Warnings a11y totais 65→23. **Restam (revisão VISUAL):** `no-autofocus` (9), `no-static-element-interactions`+`click-events` (14) — divs clicáveis precisam de suporte a teclado/role, melhor com a UI à vista.
 - **F-08 (supply chain) — FECHADO (#425):** `firebase-tools` fixado em **15.23.0** (decisão do owner) e **todas as GitHub Actions pinadas por commit SHA** (com comentário da tag) nos 4 workflows; Dependabot segue atualizando de forma revisável.
 - **F-14 (Core Web Vitals) — FECHADO (#427):** workflow `lighthouse.yml` (não-bloqueante, `@lhci/cli@0.15.1`) roda em **perfil móvel** no push para main + sob demanda, publicando o relatório LHR (temporary-public-storage). `lighthouserc.json` = medição (sem assertions que quebrem o build). Validado no CI. Web-Vitals RUM + budgets por rota = evolução futura.
-- **PENDENTES (feature / infra / revisão visual):** **F-11** (outbox offline — feature); **F-13** (cobrir `components/**`/`features/**` antes de expandir gate); **F-15** (métricas/SLOs/alertas — infra); resto do **F-12** (autofocus/divs clicáveis — revisão visual).
+- **F-11 (offline durável) — FECHADO (#429 frente 1 + #430 frente 2):** frente 1 = `initializeFirestore` com `persistentLocalCache`+`persistentMultipleTabManager` (leituras offline + fila durável de escritas diretas; memória sob emulador/test). frente 2 = **outbox IndexedDB** (`src/shared/lib/offlineOutbox.ts`, escopado por uid, `idempotencyKey`, texto puro por decisão do owner, fail-safe) para a criação via callable: `outboxPut`/`outboxDelete`/`replayOutbox` no `useTransactions` reusando a máquina otimista (dedup por idempotencyKey). Escopo: só criação (update/delete já durável pela frente 1). `offlineOutbox.ts` excluído do coverage (IndexedDB não exercitável em jsdom; fail-safe testado).
+- **PENDENTES (infra / revisão visual):** **F-13** (cobrir `components/**`/`features/**` antes de expandir gate); **F-15** (métricas/SLOs/alertas — infra); resto do **F-12** (autofocus/divs clicáveis — revisão visual).
 
 ### Auditoria Big Four + Tese Extraordinária (2026-07-09)
 
