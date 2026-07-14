@@ -73,6 +73,9 @@ playwright-report/
 # OUTROS
 # =========================
 *.local
-.claude/
+# Estado/configuração local do Claude Code fica IGNORADO, exceto os subagentes
+# do projeto (.claude/agents/), que são config compartilhada e versionada.
+.claude/*
+!.claude/agents/
 .claire/
 .lighthouseci/
