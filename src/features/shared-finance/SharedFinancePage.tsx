@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Users, Plus, Trash2, ChevronRight, ArrowRight,
   Check, Receipt, X, ChevronDown, Mail, UserPlus, Clock,
@@ -27,6 +27,7 @@ export default function SharedFinancePage({ uid, displayName, email }: Props) {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
+  const groupNameRef = useRef<HTMLInputElement>(null);
 
   // Estado do fluxo "Entrar em grupo por ID"
   const [joinGroupId, setJoinGroupId] = useState('');
@@ -36,6 +37,10 @@ export default function SharedFinancePage({ uid, displayName, email }: Props) {
   const [joinSuccess, setJoinSuccess] = useState('');
 
   const selectedGroup = groups.find((g) => g.id === selectedGroupId) ?? null;
+
+  useEffect(() => {
+    if (showCreateGroup) groupNameRef.current?.focus();
+  }, [showCreateGroup]);
 
   async function handleCreateGroup() {
     const name = newGroupName.trim();
@@ -126,13 +131,13 @@ export default function SharedFinancePage({ uid, displayName, email }: Props) {
         {showCreateGroup && (
           <div className="flex gap-2 mb-2">
             <input
+              ref={groupNameRef}
               type="text"
               placeholder="Nome do grupo"
               value={newGroupName}
               onChange={(e) => setNewGroupName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleCreateGroup()}
               className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-              autoFocus
             />
             <button
               onClick={handleCreateGroup}
@@ -307,6 +312,11 @@ function GroupDetail({
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteMsg, setInviteMsg] = useState('');
+  const inviteEmailRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showInviteForm) inviteEmailRef.current?.focus();
+  }, [showInviteForm]);
 
   const allMembers: SplitParticipant[] = [
     { uid, displayName },
@@ -386,13 +396,13 @@ function GroupDetail({
           <p className="text-sm font-medium text-indigo-800">Convidar por e-mail</p>
           <div className="flex gap-2">
             <input
+              ref={inviteEmailRef}
               type="email"
               placeholder="email@exemplo.com"
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendInvite()}
               className="flex-1 text-sm border border-indigo-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
-              autoFocus
             />
             <button
               onClick={handleSendInvite}

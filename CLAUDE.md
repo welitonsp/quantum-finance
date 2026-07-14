@@ -121,20 +121,21 @@ lastExecutedMonth?: string;        // formato YYYY-MM
 - Script de diagnóstico read-only: `functions/scripts/diagnoseLegacyTransactions.js`.
 - Migração automática de float → `value_cents` continua **bloqueada**.
 
-## Orquestração de Modelos (Fable 5 pensa, Opus/Sonnet executam)
+## Orquestração de Modelos (Fable 5 analisa, Opus executa)
 
-Para aproveitar melhor os modelos do Claude Code, este projeto separa **decisão** de **execução**:
+**Regra de ouro:** Fable 5 decide → builder (Opus) implementa → Fable 5 revisa o diff → Weliton autoriza merge.
 
 - **Sessão principal = Fable 5 (orquestrador):** planeja, investiga, decide arquitetura e **revisa
-  o diff linha a linha antes de qualquer merge**. **Não escreve código de tarefas mecânicas** na
-  própria sessão — delega. (Rode `/model` e selecione **Fable 5** para a sessão de orquestração.)
-- **Executores (subagentes, em `.claude/agents/`):**
-  - **`worker` — Sonnet 5** (`model: sonnet`): tarefas rotineiras já especificadas — edição pontual,
-    aplicar diff já decidido, buscas, formatar, rodar testes.
-  - **`builder` — Opus 4.8** (`model: opus`): implementações não-triviais **já desenhadas** — feature
-    especificada, correção de lógica revisada, escrita de testes.
+  o diff linha a linha antes de qualquer merge**. **Não escreve código** na própria sessão — delega
+  ao `builder`. (Rode `/model` e selecione **Fable 5** para a sessão de orquestração.)
+- **Executor principal = `builder` — Opus 4.8** (`model: opus`): toda implementação já especificada
+  — features, correções de lógica, escrita de testes, aplicar diffs decididos. É o caminho padrão
+  de execução neste projeto.
+- **Executor auxiliar = `worker` — Sonnet** (`model: sonnet`): **apenas** tarefas puramente
+  mecânicas sem nenhuma decisão de código — buscas (`grep`/`glob`), rodar suíte de testes,
+  verificar lint. Nenhuma edição de arquivo.
 - **Regra crítica de custo:** subagente herda o modelo da sessão. **Sempre fixe `model:` no
-  frontmatter** (`sonnet`/`opus`), senão a execução roda ao preço do Fable 5.
+  frontmatter** (`opus`/`sonnet`), senão a execução roda ao preço do Fable 5.
 - **Guardrails dos executores:** nunca fazem commit/merge (trabalho fica na branch para revisão);
   nunca decidem arquitetura nem tocam lógica financeira/Rules/Functions sem diff já decidido;
   em ambiguidade, **param e perguntam ao orquestrador**.
