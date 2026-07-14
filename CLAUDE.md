@@ -179,6 +179,26 @@ lastExecutedMonth?: string;        // formato YYYY-MM
 - Script de diagnóstico read-only: `functions/scripts/diagnoseLegacyTransactions.js`.
 - Migração automática de float → `value_cents` continua **bloqueada**.
 
+## Orquestração de Modelos (Fable 5 pensa, Opus/Sonnet executam)
+
+Para aproveitar melhor os modelos do Claude Code, este projeto separa **decisão** de **execução**:
+
+- **Sessão principal = Fable 5 (orquestrador):** planeja, investiga, decide arquitetura e **revisa
+  o diff linha a linha antes de qualquer merge**. **Não escreve código de tarefas mecânicas** na
+  própria sessão — delega. (Rode `/model` e selecione **Fable 5** para a sessão de orquestração.)
+- **Executores (subagentes, em `.claude/agents/`):**
+  - **`worker` — Sonnet 5** (`model: sonnet`): tarefas rotineiras já especificadas — edição pontual,
+    aplicar diff já decidido, buscas, formatar, rodar testes.
+  - **`builder` — Opus 4.8** (`model: opus`): implementações não-triviais **já desenhadas** — feature
+    especificada, correção de lógica revisada, escrita de testes.
+- **Regra crítica de custo:** subagente herda o modelo da sessão. **Sempre fixe `model:` no
+  frontmatter** (`sonnet`/`opus`), senão a execução roda ao preço do Fable 5.
+- **Guardrails dos executores:** nunca fazem commit/merge (trabalho fica na branch para revisão);
+  nunca decidem arquitetura nem tocam lógica financeira/Rules/Functions sem diff já decidido;
+  em ambiguidade, **param e perguntam ao orquestrador**.
+- Delegação só quando o usuário pedir ou nomear o agente (subagente parte "do zero" e re-deriva
+  contexto — é o caminho caro do plano; não disparar para poll de trabalho já rastreado).
+
 ## Processo Operacional Permanente
 
 - Read-only antes de implementação.
