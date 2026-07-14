@@ -1,6 +1,62 @@
 # Quantum Finance — Histórico de Fases e PRs
 
-> Arquivo de arquivo histórico. Contém todos os blocos de "Estado Consolidado" e cronologias de PR removidos do `CLAUDE.md` para reduzir seu tamanho. Regras ativas e contratos críticos permanecem em `CLAUDE.md`. Decisões arquiteturais em `docs/DECISOES-ARQUITETURA.md`.
+> Arquivo de arquivo histórico. Contém todos os blocos de "Estado Consolidado" e cronologias de PR removidos do `CLAUDE.md` para reduzir seu tamanho. Regras ativas e contratos críticos permanecem em `CLAUDE.md`. Decisões arquiteturais em `docs/DECISOES-ARQUITETURA.md`. Pendências vivas em `docs/PENDENCIAS.md`.
+
+---
+
+## Estado Consolidado — Auditorias 2026-07 (Big Four + Externa) + Fases NFC-e/Cesta/FCM/Radar (#346–#430) (2026-07-14)
+
+> Bloco movido do `CLAUDE.md` em 2026-07-14 (consolidação de docs). Tudo abaixo está **CONCLUÍDO**; pendências residuais foram para `docs/PENDENCIAS.md`.
+
+### Remediação Auditoria Externa (2ª rodada, 2026-07-11 — nota inicial 6,2/10)
+
+Registro canônico com tabela completa de findings: `docs/audit/AUDITORIA_EXTERNA_2026-07-11.md`. **11 fechados, 2 parciais (F-09, F-12), 2 abertos (F-13, F-15).** Detalhe das entregas (PRs #406–#430, CI verde):
+- **F-02/F-03 (shared-finance) — FECHADOS (#416 F-03, #417 F-02):** fase **server-trust** completa. Validador puro `functions/src/sharedFinanceValidation.ts` (`validateInviteAcceptance` + `validateExpenseShares`). Callables `acceptGroupInvite` (aceite atômico/single-use/expiração), `createGroupExpense` e `settleGroupExpenseShare` (integridade de shares: soma==total, uids do grupo; quita só a própria cota). Rules: entrada no grupo via convite e create/update de despesa → **server-only**. `useGroups` chama as callables. Rules 226→227.
+- **F-01 (consent IA) — FECHADO (#408):** `assertAiConsent(uid)` fail-closed antes do Gemini nas 3 callables de IA. UI mirror = follow-up (PENDENCIAS item 3).
+- **F-04 (export LGPD) — FECHADO (#412 + #419):** `EXPORTABLE_SUBCOLLECTIONS` 10→20 subcoleções; `deleteUserData` limpa `groups` global (owner → recursiveDelete; membro → arrayRemove).
+- **F-05 (invariante monetário) — FECHADO (#407):** removida a única conversão float ativa (`Math.round(saldo*100)`→`toCentavos`) em `queryContextBuilder`.
+- **F-06 (step-up delete) — FECHADO (#411):** `deleteUserData` exige `auth_time` recente (5 min) → `failed-precondition`; cliente reusa UX `REQUIRES_RECENT_LOGIN`.
+- **F-07 (recorrentes catch-up) — FECHADO (#410):** `isTaskDueToday` usa `>=` (catch-up idempotente) + clamp de fim de mês.
+- **F-09 (custo/DoS) — PARCIAL (#409):** `setGlobalOptions({ maxInstances: 20 })`. Billing alerts/quota/paginação = infra/owner.
+- **F-10 (memória chat) — FECHADO (#406):** `ConversationMemory` efêmera (sessionStorage + TTL 24h + purge no logout).
+- **F-12 (a11y) — labels FECHADOS + enforçados (#420–#423):** 42 warnings `label-has-associated-control` → 0 (padrão `useId`+`htmlFor`/`id` em ~15 formulários), regra elevada a `error`. Warnings totais 65→23. Restam autofocus/divs clicáveis (PENDENCIAS item 1).
+- **F-08 (supply chain) — FECHADO (#425):** `firebase-tools` fixado em **15.23.0** e todas as GitHub Actions pinadas por commit SHA nos 4 workflows.
+- **F-14 (Core Web Vitals) — FECHADO (#427):** workflow `lighthouse.yml` não-bloqueante (`@lhci/cli@0.15.1`), perfil móvel, push para main + sob demanda, LHR em temporary-public-storage.
+- **F-11 (offline durável) — FECHADO (#429 + #430):** frente 1 = `initializeFirestore` com `persistentLocalCache`+`persistentMultipleTabManager`; frente 2 = outbox IndexedDB (`src/shared/lib/offlineOutbox.ts`, escopado por uid, `idempotencyKey`, fail-safe) para criação via callable, com `outboxPut`/`outboxDelete`/`replayOutbox` no `useTransactions` (dedup por idempotencyKey). `offlineOutbox.ts` excluído do coverage (IndexedDB não exercitável em jsdom).
+
+### Auditoria Big Four + Tese Extraordinária (2026-07-09)
+
+- **Laudo:** `docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md` — nota **8.7/10** (Qualified Opinion).
+- **M-02 (a11y) — FECHADO no núcleo (#365):** `eslint-plugin-jsx-a11y` no flat config, enforçado no CI; 3 correções ARIA reais (CommandPalette/ProactiveBriefing/AuditTimeline).
+- **M-01 (cobertura) — METAS ATINGIDAS (#366…#404):** scope `src/lib/**` + `src/shared/lib/**` + `src/hooks/**` + 345 testes novos. Cobertura real pós-#403: stmts 78.03 / branches 68.55 / funcs 79.83 / lines 81.29; **gates fixados em 77/68/79/80** (#404). Incidente #382/#383: ratchet acima do real deixou o main vermelho → **regra permanente: só ratchetar com ≥0.5% de margem real medida no CI.** Reforço opcional restante em PENDENCIAS item 6.
+- **L-01 (float audit) — FECHADO (#368):** `round2` em `reportEngine.ts` é falso positivo (display-only); documentado inline.
+- **M-03 — segue owner-pending** (PENDENCIAS item 7; roteiro em `docs/audit/M03_CHECKLIST_VERIFICACOES_REAIS.md`).
+
+### FASE Radar de Compras — 1ª entrega (2026-07-09, #363)
+
+- `src/features/shopping/lib/shoppingRadar.ts` (motor PURO, zero I/O, centavos + basis points): alertas de alta + oportunidades de economia derivados das `priceObservations` de NFC-e real. `ShoppingRadarCard.tsx` (card-âncora, gating "UI que some") acima do `PriceIntelligencePanel`. Extensão aditiva `latestStore` em `priceIntelligence.ts`. Sem escrita/rede/mutação.
+
+### FASE FCM Background Push — FECHADA (2026-07-04, #359)
+
+- `vite.config.ts` → `injectManifest` com SW customizado `src/sw.ts` (paridade de caching + `onBackgroundMessage`; sob emulador messaging não inicializa). Scheduled **`sendPushReminders`** (11:00 UTC = 08:00 BRT): briefing diário sem PII (`functions/src/pushReminders.ts`, puro, 9 testes); tokens mortos removidos best-effort. Verificação em dispositivo real = M-03.
+
+### FASE Cesta Pessoal / Inteligência de Preços — FECHADA (2026-07-04, #357/#358)
+
+- **#357** Motor puro `priceIntelligence.ts` (zero I/O, zero float): `canonicalProductKey`, `buildPriceCatalog`, `deltaBps` (basis points inteiros, round-half-up), `compareBasketAcrossStores`. +13 testes.
+- **#358** `PriceIntelligencePanel` no ShoppingPage: cotação por loja + movimentos de preço. Invisível sem observações. +5 testes.
+
+### FASE Compras Inteligentes / NFC-e — FECHADA (2026-07-04, #352/#354/#355/#356)
+
+Modelo seguro completo, **zero rede no fluxo do usuário**: parser XML local (#352, modelo 65, DV módulo-11, Decimal.js fail-closed, CPF nunca extraído); parser HTML colado (#354) + roteador `parseNfceDocument`; gate SSRF (#355, `functions/src/nfceUrlGate.ts`, allowlist por UF, +48 testes do threat model §12–§16); UI de importação com revisão humana obrigatória (#356) → `recordPriceObservation` rate-limited. **`fetchNfce` ADIADO por decisão do owner (2026-07-04)** — ver Bloqueios Estruturais no `CLAUDE.md`.
+
+### Ciclo segurança comercial (#346–#353, 2026-07-04)
+
+- **#346** CSP sem `'unsafe-inline'` em `script-src` + `base-uri`/`form-action`/`frame-ancestors`/`manifest-src`/`upgrade-insecure-requests`.
+- **#347** Zero vulnerabilidades npm (raiz e functions) via overrides cirúrgicos; gate CI `--audit-level=moderate` nas functions.
+- **#348** Rate limit por uid nas 6 callables de escrita não-IA (`functions/src/opRateLimit.ts`): createTransaction 120/h, createTransfer 30/h, executeAgentAction 60/h, logAuditEvent 240/h, recordPriceObservation 240/h, deleteUserData 5/dia.
+- **#349/#351** MFA TOTP completo (resolver de sign-in `src/shared/lib/mfa.ts` + `MfaPanel.tsx`).
+- **#353** TOTP habilitado no projeto (Identity Platform), executado e validado em produção 2026-07-04 — `docs/security/ENABLE_TOTP_MFA_2026-07-04.md`.
+- Diagnóstico de floats legados em produção (2026-07-04): **zero documentos legados** — nada a migrar.
 
 ---
 
@@ -46,7 +102,7 @@
 
 ### 0.2 Agente — fluxo seguro de mutação confirmada (#300–#302) — estado em 2026-06-29
 - **E2E #300/#302** (`e2e/tests/06-agent-confirmed-mutation.spec.ts`): proposta sem gravação imediata; cancelar sem gravar; confirmar grava exatamente 1; UI reflete via `useTransactions`/`onSnapshot`; sucesso só após callable. A suíte cobre despesa e receita, determinística e sem LLM real.
-- **Doc normativo:** `docs/AI_AGENT_CONFIRMED_MUTATION_FLOW.md` e `docs/PROJECT_KNOWLEDGE_SYNC_2026-06-27.md`.
+- **Doc normativo:** `docs/AI_AGENT_CONFIRMED_MUTATION_FLOW.md` (o sync `PROJECT_KNOWLEDGE_SYNC_2026-06-27.md` foi removido em 2026-07-14; disponível no histórico git).
 
 ### 0.3 Próximos PRs recomendados (em 2026-06-29)
 1. **Docs sync pós-#302:** atualizar `CLAUDE.md`, README e docs normativos para remover referências obsoletas a receita recusada/#300 como último marco.
@@ -100,7 +156,7 @@ Plano canônico: `docs/UI_UX_ARCHITECTURE.md` (consolida auditorias Gemini+Codex
 - **Núcleo puro e testável (`src/features/ai-agent/`):** `intentRegistry.ts` (8 intenções, enum fechado → ferramentas read-only + `kind` de ação + `requiredSlots`), `proposalBuilders.ts` (slots → `ActionProposal` pending, Zod strict, defaults date/competência), `intentRouter.ts` (`routeIntent` → `answer`/`proposal`+pergunta/`need_more_info`/`low_confidence`/`unknown_intent`; `heuristicIntentClassifier` determinístico p/ fallback/teste). `AGENT_INTENTS`/`AgentIntent` no `agentSchemas.ts`. +16 testes. Ver `docs/AI_TOOL_ROUTER.md` §7.
 - **Adaptador Gemini ENTREGUE (`geminiIntentClassifier.ts`):** reusa o callable `chatWithQuantumAI` como transporte (sem tocar `functions/`); `createGeminiIntentClassifier(transport)` injetável/testável. **O LLM informa valor em reais; conversão p/ centavos via `toCentavos`** (LLM nunca calcula centavos). Saída validada (intenção ∈ enum, confiança 0..1); qualquer falha → confiança 0 → `low_confidence` → chat normal. +11 testes.
 - **Wiring no chat ENTREGUE (#288):** `AIAssistantChat.submitMessage` liga `geminiIntentClassifier`→`routeIntent`→`ActionConfirmationSheet`→`useAgentAction` atrás da flag **`VITE_ENABLE_AGENT_ROUTER` (default OFF)**. Despacho: `proposal`→sheet (confirmação humana); `need_more_info`→pede o slot (só o rótulo); `answer`/`low_confidence`/`unknown_intent`/falha→chat normal. Helper puro `src/features/ai-agent/proposalPresentation.ts`. +13 testes (7 helper + 5 chat-wiring). Flag OFF = chat idêntico (zero regressão).
-- **Pendente (passo do OWNER, exige emulator):** validar qualidade da classificação Gemini com `firebase emulators:start --only auth,firestore,functions` + `npm run dev`, ajustar `buildClassificationPrompt` se preciso, e então **ligar a flag** `VITE_ENABLE_AGENT_ROUTER=true`. Cadeia de governança garante que classificação errada NÃO escreve (pior caso: proposta recusada no sheet). Ver `docs/EXECUTION_STATUS_2026-06-23.md` §3.1 e `docs/AI_TOOL_ROUTER.md` §7.2.
+- **Pendente (passo do OWNER, exige emulator):** validar qualidade da classificação Gemini com `firebase emulators:start --only auth,firestore,functions` + `npm run dev`, ajustar `buildClassificationPrompt` se preciso, e então **ligar a flag** `VITE_ENABLE_AGENT_ROUTER=true`. Cadeia de governança garante que classificação errada NÃO escreve (pior caso: proposta recusada no sheet). Ver `docs/AI_TOOL_ROUTER.md` §7.2. *(Resolvido: flag ON em produção desde o PR #325; o snapshot `EXECUTION_STATUS_2026-06-23.md` foi removido em 2026-07-14 — histórico git.)*
 
 ---
 
@@ -121,7 +177,7 @@ Plano canônico: `docs/UI_UX_ARCHITECTURE.md` (consolida auditorias Gemini+Codex
 - Validação: typecheck/lint/build ✅; unit **1222** ✅; rules **182** ✅ (Java 21 + emulator); functions **145** ✅.
 
 ### 0.1 Correções de imprecisões do próprio CLAUDE.md (auditoria 2026-06-19)
-> Ver `docs/RECONCILIACAO_FASES_PENDENTES_2026-06-19.md`. Duas afirmações dos blocos abaixo estavam **incorretas** vs o código real:
+> Ver `RECONCILIACAO_FASES_PENDENTES_2026-06-19.md` (removido em 2026-07-14; histórico git). Duas afirmações dos blocos abaixo estavam **incorretas** vs o código real:
 - **`src/lib/debtPlanner.ts` NUNCA existiu.** O plano de quitação por dívida vivia em `DebtModule.tsx` + `useDebts.ts` (`calcMonthlyPaymentCents`, amortização PV/r/n). O motor de **estratégia** (avalanche/bola-de-neve) só passou a existir como **`src/lib/debtStrategy.ts`** (PR #259). Onde os blocos antigos citam `debtPlanner.ts`, leia `debtStrategy.ts` (estratégia) / `useDebts.ts` (amortização). Não existe `debtPlanner.test.ts`; o teste é `src/lib/debtStrategy.test.ts`.
 - **FASE 7 / "Agente Conversacional auditável" estava superdimensionada.** O que existia era chat (`GeminiService`→callable `chatWithQuantumAI` + máscara PII + `ProactiveBriefing`), **sem** roteador de intenções, tool registry, contrato de placeholders, `ActionProposal` ou `/decisions`. A governança (H-0, #258), a fundação (H, #260) e a **camada de ação server-trusted** (`executeAgentAction`, #264) foram entregues nesta trilha. Ainda pendente (fases futuras): **intent router no LLM** dentro do chat, execução dos outros 3 kinds de ação e split de parcelas no `register_purchase`.
 

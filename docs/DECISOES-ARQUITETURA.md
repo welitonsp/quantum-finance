@@ -95,7 +95,7 @@
 
 ## Logs Server-Trusted — `system_logs` e `audit_logs` de Transação (P2 hardening 2026-07-02)
 
-**Contexto:** A auditoria tripla de 2026-07-02 (ver [checklist](audit/CHECKLIST_HARDENING_2026-07-02.md)) apontou que `users/{uid}/system_logs` (chamadas de IA) e `users/{uid}/audit_logs` de `BULK_UPDATE`/`UNDO_BULK_UPDATE` eram gravados **client-side** (`addDoc` direto), permitindo self-forgery — o próprio usuário podia forjar entradas sem a operação correlata ter ocorrido.
+**Contexto:** A auditoria tripla de 2026-07-02 (checklist `CHECKLIST_HARDENING_2026-07-02.md`, 100% concluído e removido em 2026-07-14 — histórico git) apontou que `users/{uid}/system_logs` (chamadas de IA) e `users/{uid}/audit_logs` de `BULK_UPDATE`/`UNDO_BULK_UPDATE` eram gravados **client-side** (`addDoc` direto), permitindo self-forgery — o próprio usuário podia forjar entradas sem a operação correlata ter ocorrido.
 
 **Decisão adotada:**
 - **`system_logs`:** já existia um caminho server-side (`writeStructuredLog` em `functions/src/index.ts`, usado por `chatWithQuantumAI`, `generateAuditReport` e `categorizeTransactionsBatch`). A escrita client-side redundante em `AICategorizationService.ts` (`writeSystemLog`, tipo `AI_CALL`) foi removida — cada chamada de `categorizeWithAI` já dispara `categorizeTransactionsBatch`, que loga `BATCH` server-side. Rules: `create` client-side em `system_logs` agora é **sempre negado**.
