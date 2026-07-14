@@ -1,10 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigation } from '../contexts/NavigationContext';
 import {
   LayoutDashboard, Clock, CalendarRange, CalendarDays, Target, Wallet, ShieldCheck, Settings, LogOut,
   Landmark, BrainCircuit, Repeat, CreditCard, TrendingDown, ShoppingBag,
   Receipt, ShieldAlert, Users, Cpu, FlaskConical, ShoppingCart,
-  PieChart, X,
+  PieChart, X, ChevronRight, Search,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -26,7 +26,11 @@ interface Props {
   isSidebarCollapsed: boolean;
   setIsSettingsOpen: (open: boolean) => void;
   handleLogout: () => void;
+  onOpenCommandPalette?: () => void;
 }
+
+const SIDEBAR_GROUPS_STORAGE_KEY = 'quantum_sidebar_groups';
+const DEFAULT_OPEN = new Set(['Principal']); // só Principal aberto por padrão
 
 /** Navegação alinhada aos 8 módulos oficiais do Quantum Finance 2.0 */
 const NAV_GROUPS: NavGroup[] = [
@@ -88,8 +92,39 @@ export default function Sidebar({
   isSidebarCollapsed,
   setIsSettingsOpen,
   handleLogout,
+  onOpenCommandPalette,
 }: Props) {
   const { currentPage, setCurrentPage } = useNavigation();
+
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem(SIDEBAR_GROUPS_STORAGE_KEY);
+      if (stored) return new Set(JSON.parse(stored) as string[]);
+    } catch { /* ignore */ }
+    return new Set(DEFAULT_OPEN);
+  });
+
+  const toggleGroup = (title: string) => {
+    setOpenGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(title)) next.delete(title); else next.add(title);
+      try { localStorage.setItem(SIDEBAR_GROUPS_STORAGE_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  // Garante que o grupo do item ativo esteja aberto (não esconder a rota atual).
+  useEffect(() => {
+    const activeGroup = NAV_GROUPS.find(g => g.items.some(item => item.id === currentPage));
+    if (!activeGroup) return;
+    setOpenGroups(prev => {
+      if (prev.has(activeGroup.title)) return prev;
+      const next = new Set(prev);
+      next.add(activeGroup.title);
+      try { localStorage.setItem(SIDEBAR_GROUPS_STORAGE_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  }, [currentPage]);
 
   useEffect(() => {
     if (!isMobileMenuOpen) return;
@@ -146,16 +181,45 @@ export default function Sidebar({
           </button>
         </div>
 
+        {/* Busca ⌘K */}
+        {!isSidebarCollapsed && onOpenCommandPalette && (
+          <div className="px-4 pb-2">
+            <button
+              type="button"
+              onClick={onOpenCommandPalette}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-quantum-fgMuted bg-quantum-bgSecondary/50 border border-quantum-border rounded-xl hover:border-quantum-accent/30 hover:text-quantum-fg transition-colors"
+            >
+              <Search className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="flex-1 text-left">Buscar…</span>
+              <kbd className="text-[10px] font-mono opacity-60">⌘K</kbd>
+            </button>
+          </div>
+        )}
+
         {/* Grupos de navegação */}
-        <nav className="flex-1 overflow-y-auto custom-scrollbar py-4 space-y-5" aria-label="Módulos do sistema">
+        <nav className="flex-1 overflow-y-auto py-4 space-y-3" aria-label="Módulos do sistema">
           {NAV_GROUPS.map((group) => (
             <div key={group.title} className="px-4">
               {!isSidebarCollapsed && (
-                <p className="text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2 ml-2">
-                  {group.title}
-                </p>
+                <button
+                  type="button"
+                  aria-expanded={openGroups.has(group.title)}
+                  aria-controls={`nav-group-${group.title}`}
+                  onClick={() => toggleGroup(group.title)}
+                  className="w-full flex items-center justify-between text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2 ml-2 pr-1 hover:text-quantum-fg transition-colors"
+                >
+                  <span>{group.title}</span>
+                  <ChevronRight
+                    className={`w-3 h-3 transition-transform duration-200 ${openGroups.has(group.title) ? 'rotate-90' : ''} motion-reduce:transition-none`}
+                  />
+                </button>
               )}
-              <div className="space-y-1">
+              <div
+                id={!isSidebarCollapsed ? `nav-group-${group.title}` : undefined}
+                className={`space-y-1 overflow-hidden transition-all duration-200 ease-in-out motion-reduce:transition-none ${
+                  isSidebarCollapsed || openGroups.has(group.title) ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                }`}
+              >
                 {group.items.map((item) => {
                   const Icon = item.icon;
                   const isActive = currentPage === item.id;
