@@ -288,6 +288,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
             isSidebarCollapsed={isSidebarCollapsed}
             setIsSettingsOpen={setIsSettingsOpen}
             handleLogout={handleLogout}
+            onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
           />
         }
         header={
