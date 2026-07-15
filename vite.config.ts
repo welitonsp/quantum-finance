@@ -147,6 +147,8 @@ export default defineConfig({
         'src/features/simulation/forecastMonteCarlo.ts',
         'src/features/transactions/import/importHelpers.ts',
         'src/features/ai-agent/intentRegistry.ts',
+        'src/features/transactions/import/processResolvedImportBatch.ts',
+        'src/features/transactions/importCandidateSearch.ts',
       ],
       exclude: [
         '**/*.test.ts',
@@ -197,6 +199,9 @@ export default defineConfig({
       // F-13 2026-07-14: scope expandido (+3 features pure-logic: forecastMonteCarlo, importHelpers,
       // intentRegistry). Real pós-expansão: stmts 78.13 / branches 68.61 / funcs 79.89 / lines 81.37.
       // Melhora <0,5% em todos os eixos → sem ratchet (regra: ≥0,5% margem real medida). Gates mantidos.
+      // F-13 2026-07-15: scope +2 (processResolvedImportBatch, importCandidateSearch) com 31 testes.
+      // Real pós-expansão: stmts 78.41 / branches 68.98 / funcs 80.04 / lines 81.64.
+      // Melhora <0,5% em todos os eixos vs. base → sem ratchet. Gates mantidos.
       thresholds: {
         lines: 80,
         functions: 79,
