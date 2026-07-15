@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from 'vitest';
 import type { Transaction } from '../shared/types/transaction';
 import type { Centavos } from '../shared/types/money';
@@ -38,7 +37,7 @@ describe('transaction status helpers', () => {
     expect(getTransactionOriginLabel({ source: 'csv' })).toBe('CSV');
     expect(getTransactionOriginLabel({ source: 'ofx' })).toBe('OFX');
     expect(getTransactionOriginLabel({ source: 'pdf' })).toBe('PDF');
-    expect(getTransactionOriginLabel({ source: 'unknown' as any })).toBe('UNKNOWN');
+    expect(getTransactionOriginLabel({ source: 'unknown' as unknown as Exclude<Transaction['source'], undefined> })).toBe('UNKNOWN');
   });
 
   it('isImportedTransaction identifica transacoes nao manuais', () => {
@@ -47,13 +46,13 @@ describe('transaction status helpers', () => {
     expect(isImportedTransaction({ source: 'csv' })).toBe(true);
     expect(isImportedTransaction({ source: 'ofx' })).toBe(true);
     expect(isImportedTransaction({ source: 'pdf' })).toBe(true);
-    expect(isImportedTransaction({ source: 'unknown' as any })).toBe(false);
+    expect(isImportedTransaction({ source: 'unknown' as unknown as Exclude<Transaction['source'], undefined> })).toBe(false);
   });
 
   it('isReconciledTransaction identifica transacoes conciliadas', () => {
     expect(isReconciledTransaction({ reconciliationStatus: 'reconciled' })).toBe(true);
     expect(isReconciledTransaction({})).toBe(false);
-    expect(isReconciledTransaction({ reconciliationStatus: 'pending' as any })).toBe(false);
+    expect(isReconciledTransaction({ reconciliationStatus: 'pending' as unknown as Exclude<Transaction['reconciliationStatus'], undefined> })).toBe(false);
   });
 
   it('isImportedUnreconciledTransaction identifica importadas pendentes de conciliacao', () => {
@@ -154,8 +153,8 @@ describe('calculateRunningBalances', () => {
 
   it('createdAt como string ISO é usado como tiebreaker (linha 76-77)', () => {
     const txs = [
-      tx({ id: 'b', type: 'entrada', value_cents: cents(1000), date: '2026-05-01', createdAt: '2026-05-01T12:00:00Z' as any }),
-      tx({ id: 'a', type: 'entrada', value_cents: cents(500),  date: '2026-05-01', createdAt: '2026-05-01T08:00:00Z' as any }),
+      tx({ id: 'b', type: 'entrada', value_cents: cents(1000), date: '2026-05-01', createdAt: '2026-05-01T12:00:00Z' as unknown as Exclude<Transaction['createdAt'], undefined> }),
+      tx({ id: 'a', type: 'entrada', value_cents: cents(500),  date: '2026-05-01', createdAt: '2026-05-01T08:00:00Z' as unknown as Exclude<Transaction['createdAt'], undefined> }),
     ];
     const balances = calculateRunningBalances(txs);
     // 'a' criado antes (8h) vem primeiro → balance 500, depois 'b' → 1500
@@ -165,8 +164,8 @@ describe('calculateRunningBalances', () => {
 
   it('createdAt com objeto {toMillis} é usado como tiebreaker (linha 81-85)', () => {
     const txs = [
-      tx({ id: 'late',  type: 'entrada', value_cents: cents(1000), date: '2026-05-01', createdAt: { toMillis: () => 2000 } as any }),
-      tx({ id: 'early', type: 'entrada', value_cents: cents(500),  date: '2026-05-01', createdAt: { toMillis: () => 1000 } as any }),
+      tx({ id: 'late',  type: 'entrada', value_cents: cents(1000), date: '2026-05-01', createdAt: { toMillis: () => 2000 } as unknown as Exclude<Transaction['createdAt'], undefined> }),
+      tx({ id: 'early', type: 'entrada', value_cents: cents(500),  date: '2026-05-01', createdAt: { toMillis: () => 1000 } as unknown as Exclude<Transaction['createdAt'], undefined> }),
     ];
     const balances = calculateRunningBalances(txs);
     expect(balances['early']).toBe(500);
@@ -175,8 +174,8 @@ describe('calculateRunningBalances', () => {
 
   it('createdAt com objeto {seconds, nanoseconds} é usado como tiebreaker (linha 86-90)', () => {
     const txs = [
-      tx({ id: 'b', type: 'entrada', value_cents: cents(1000), date: '2026-05-01', createdAt: { seconds: 2, nanoseconds: 0 } as any }),
-      tx({ id: 'a', type: 'entrada', value_cents: cents(500),  date: '2026-05-01', createdAt: { seconds: 1, nanoseconds: 0 } as any }),
+      tx({ id: 'b', type: 'entrada', value_cents: cents(1000), date: '2026-05-01', createdAt: { seconds: 2, nanoseconds: 0 } as unknown as Exclude<Transaction['createdAt'], undefined> }),
+      tx({ id: 'a', type: 'entrada', value_cents: cents(500),  date: '2026-05-01', createdAt: { seconds: 1, nanoseconds: 0 } as unknown as Exclude<Transaction['createdAt'], undefined> }),
     ];
     const balances = calculateRunningBalances(txs);
     expect(balances['a']).toBe(500);
@@ -185,8 +184,8 @@ describe('calculateRunningBalances', () => {
 
   it('createdAt com nanoseconds contribui para resolução sub-segundo', () => {
     const txs = [
-      tx({ id: 'b', type: 'entrada', value_cents: cents(1000), date: '2026-05-01', createdAt: { seconds: 1, nanoseconds: 500_000_000 } as any }),
-      tx({ id: 'a', type: 'entrada', value_cents: cents(500),  date: '2026-05-01', createdAt: { seconds: 1, nanoseconds: 0 } as any }),
+      tx({ id: 'b', type: 'entrada', value_cents: cents(1000), date: '2026-05-01', createdAt: { seconds: 1, nanoseconds: 500_000_000 } as unknown as Exclude<Transaction['createdAt'], undefined> }),
+      tx({ id: 'a', type: 'entrada', value_cents: cents(500),  date: '2026-05-01', createdAt: { seconds: 1, nanoseconds: 0 } as unknown as Exclude<Transaction['createdAt'], undefined> }),
     ];
     const balances = calculateRunningBalances(txs);
     expect(balances['a']).toBe(500);
@@ -195,8 +194,8 @@ describe('calculateRunningBalances', () => {
 
   it('createdAt null/undefined cai para tiebreaker por id', () => {
     const txs = [
-      tx({ id: 'zzz', type: 'entrada', value_cents: cents(1000), date: '2026-05-01', createdAt: undefined as any }),
-      tx({ id: 'aaa', type: 'entrada', value_cents: cents(500),  date: '2026-05-01', createdAt: undefined as any }),
+      tx({ id: 'zzz', type: 'entrada', value_cents: cents(1000), date: '2026-05-01', createdAt: undefined as unknown as Exclude<Transaction['createdAt'], undefined> }),
+      tx({ id: 'aaa', type: 'entrada', value_cents: cents(500),  date: '2026-05-01', createdAt: undefined as unknown as Exclude<Transaction['createdAt'], undefined> }),
     ];
     const balances = calculateRunningBalances(txs);
     // 'aaa' < 'zzz' lexicograficamente → aaa primeiro
