@@ -77,6 +77,14 @@ export default defineConfig({
           }
 
           if (
+            normalizedId.includes('/node_modules/react/') ||
+            normalizedId.includes('/node_modules/react-dom/') ||
+            normalizedId.includes('/node_modules/scheduler/')
+          ) {
+            return 'vendor-react';
+          }
+
+          if (
             normalizedId.includes('/node_modules/recharts/') ||
             normalizedId.includes('/node_modules/chart.js/') ||
             normalizedId.includes('/node_modules/react-chartjs-2/') ||

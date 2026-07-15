@@ -201,7 +201,8 @@ test.describe('Agente — transferência confirmada (propor → confirmar → gr
   });
 
   /**
-   * Boota o app e seeda 2 contas. Navega para "Contas" e aguarda os nomes para garantir
+   * Boota o app e seeda 2 contas. Navega para Movimentações → aba "Contas" (consolidação
+   * F-12 PR-C1) e aguarda os nomes para garantir
    * que o `onSnapshot` de `useAccounts` já populou o estado do React (a guarda de
    * transferência depende da lista de contas estar disponível ao chat) — sem reload,
    * preservando a sessão/uid anônimo do seed.
@@ -212,7 +213,8 @@ test.describe('Agente — transferência confirmada (propor → confirmar → gr
       { id: 'acc-poupanca-e2e', name: 'Poupança', type: 'poupanca' },
       { id: 'acc-corrente-e2e', name: 'Corrente', type: 'corrente' },
     ]);
-    await page.getByRole('button', { name: 'Contas' }).first().click();
+    await page.getByRole('button', { name: 'Movimentações' }).first().click();
+    await page.getByRole('tab', { name: 'Contas' }).first().click();
     await expect(page.getByRole('main').getByText('Poupança').first())
       .toBeVisible({ timeout: 10_000 });
   }
