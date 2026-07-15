@@ -157,6 +157,9 @@ export default defineConfig({
         'src/features/ai-agent/intentRegistry.ts',
         'src/features/transactions/import/processResolvedImportBatch.ts',
         'src/features/transactions/importCandidateSearch.ts',
+        // F-13 fase RTL: componentes de entrada de dinheiro com testes dedicados
+        'src/features/transactions/TransactionForm.tsx',
+        'src/features/transactions/TransferForm.tsx',
       ],
       exclude: [
         '**/*.test.ts',
@@ -210,6 +213,9 @@ export default defineConfig({
       // F-13 2026-07-15: scope +2 (processResolvedImportBatch, importCandidateSearch) com 31 testes.
       // Real pós-expansão: stmts 78.41 / branches 68.98 / funcs 80.04 / lines 81.64.
       // Melhora <0,5% em todos os eixos vs. base → sem ratchet. Gates mantidos.
+      // F-13 fase RTL 2026-07-15: scope +2 tsx (TransactionForm, TransferForm) com 17 testes RTL.
+      // Real pós-expansão: stmts 78.62 / branches 69.22 / funcs 80.09 / lines 81.88.
+      // Melhora <0,5% em todos os eixos → sem ratchet. Gates mantidos.
       thresholds: {
         lines: 80,
         functions: 79,
