@@ -3,7 +3,7 @@ import { auth } from './shared/api/firebase/index';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
 import type { MultiFactorError, User } from 'firebase/auth';
 import { isMfaRequiredError, resolveTotpSignIn } from './shared/lib/mfa';
-import { BrainCircuit, AlertTriangle, Loader2 } from 'lucide-react';
+import { BrainCircuit, AlertTriangle, Loader2, X } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
 import { useTheme } from './contexts/ThemeContext';
@@ -17,6 +17,7 @@ import { useCategoryRules } from './hooks/useCategoryRules';
 import { useCategories } from './hooks/useCategories';
 import { useAppLogic } from './hooks/useAppLogic';
 import { useCreditCards } from './hooks/useCreditCards';
+import { useAiConsent } from './hooks/useAiConsent';
 import { logSanitizedFirebaseError } from './shared/lib/firebaseErrorHandling';
 import { toCentavos as toBalanceCents } from './shared/schemas/financialSchemas';
 import type { Centavos } from './shared/types/money';
@@ -35,6 +36,7 @@ import TransferForm from './features/transactions/TransferForm';
 import { ConversationMemory } from './features/ai-chat/ConversationMemory';
 import CategorySettings from './components/CategorySettings';
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
+import { AiConsentGate } from './components/AiConsentGate';
 import type { Transaction } from './shared/types/transaction';
 
 // ─── Lazy-loaded pages ───────────────────────────────────────────────────────
@@ -197,6 +199,8 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   } = useTransactions(safeUID, userCategoryRules, undefined, serverSearch);
   const { accounts, loadingAccounts } = useAccounts(safeUID);
   const { recurringTasks } = useRecurring(safeUID);
+  // Espelho realtime do consentimento de IA (gate real é server-trusted, fail-closed).
+  const { aiGranted: aiConsentGranted, loading: aiConsentLoading } = useAiConsent(safeUID);
   // totalFaturaCents: faturas abertas de cartões — passivo corrente para o net worth
   const { totalFaturaCents, cards: creditCards } = useCreditCards(safeUID, transactions);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
@@ -414,17 +418,23 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                       activeTab={currentPage}
                       onTabChange={setCurrentPage}
                     />
-                    {currentPage === 'copilot'     && <CopilotPage uid={safeUID} />}
-                    {currentPage === 'quantum'     && (
-                      <QuantumAIPage
-                        transactions={displayedTransactions}
-                        allTransactions={allTransactions}
-                        balances={moduleBalances}
-                        currentMonth={currentMonth}
-                        currentYear={currentYear}
-                      />
-                    )}
-                    {currentPage === 'anti-tarifa' && <AntiTarifaPage uid={safeUID} />}
+                    <AiConsentGate
+                      aiGranted={aiConsentGranted}
+                      loading={aiConsentLoading}
+                      onOpenPrivacy={() => setCurrentPage('cofre')}
+                    >
+                      {currentPage === 'copilot'     && <CopilotPage uid={safeUID} />}
+                      {currentPage === 'quantum'     && (
+                        <QuantumAIPage
+                          transactions={displayedTransactions}
+                          allTransactions={allTransactions}
+                          balances={moduleBalances}
+                          currentMonth={currentMonth}
+                          currentYear={currentYear}
+                        />
+                      )}
+                      {currentPage === 'anti-tarifa' && <AntiTarifaPage uid={safeUID} />}
+                    </AiConsentGate>
                   </>
                 )}
                 {(['reports', 'timeline', 'calendar', 'ir'] as const).some(t => t === currentPage) && (
@@ -526,28 +536,48 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
           <CategorySettings uid={safeUID} onClose={() => setIsSettingsOpen(false)} />
         </ErrorBoundary>
       )}
-      <ErrorBoundary>
-        <Suspense fallback={null}>
-          <AIAssistantChat
-            uid={safeUID}
-            transactions={displayedTransactions}
-            balances={moduleBalances}
-            accounts={accounts}
-            recurringTasks={recurringTasks}
-            isOpen={isAIChatOpen}
-            onClose={() => setIsAIChatOpen(false)}
-            onRegisterPurchase={(prefill) => {
-              setTransactionToEdit(prefill as Transaction);
-              setIsFormOpen(true);
-              setIsAIChatOpen(false);
-            }}
-            // Movimentações/Dashboard derivam do listener realtime (`useTransactions`
-            // → onSnapshot), então a escrita do agente já aparece automaticamente.
-            // Hook explícito mantido para futura invalidação de caches não-realtime.
-            onActionExecuted={() => {}}
-          />
-        </Suspense>
-      </ErrorBoundary>
+      {isAIChatOpen && !aiConsentLoading && !aiConsentGranted ? (
+        <div className="fixed bottom-24 right-6 md:right-8 w-[90vw] md:w-[420px] z-50" role="dialog" aria-label="Consentimento de IA necessário">
+          <button
+            type="button"
+            onClick={() => setIsAIChatOpen(false)}
+            aria-label="Fechar aviso de consentimento"
+            className="absolute top-3 right-3 z-10 p-1.5 rounded-full text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/5 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+          <AiConsentGate
+            aiGranted={false}
+            loading={false}
+            onOpenPrivacy={() => { setIsAIChatOpen(false); setCurrentPage('cofre'); }}
+          >
+            <span />
+          </AiConsentGate>
+        </div>
+      ) : (
+        <ErrorBoundary>
+          <Suspense fallback={null}>
+            <AIAssistantChat
+              uid={safeUID}
+              transactions={displayedTransactions}
+              balances={moduleBalances}
+              accounts={accounts}
+              recurringTasks={recurringTasks}
+              isOpen={isAIChatOpen}
+              onClose={() => setIsAIChatOpen(false)}
+              onRegisterPurchase={(prefill) => {
+                setTransactionToEdit(prefill as Transaction);
+                setIsFormOpen(true);
+                setIsAIChatOpen(false);
+              }}
+              // Movimentações/Dashboard derivam do listener realtime (`useTransactions`
+              // → onSnapshot), então a escrita do agente já aparece automaticamente.
+              // Hook explícito mantido para futura invalidação de caches não-realtime.
+              onActionExecuted={() => {}}
+            />
+          </Suspense>
+        </ErrorBoundary>
+      )}
       <ErrorBoundary>
         <Suspense fallback={null}>
           <CommandPalette
