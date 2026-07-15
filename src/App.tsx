@@ -25,6 +25,7 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import { AppShell } from './shared/components/layout/AppShell';
 import { MobileBottomNav } from './shared/components/layout/MobileBottomNav';
+import { TopTabs } from './shared/components/layout/TopTabs';
 import OfflineIndicator from './shared/components/OfflineIndicator';
 import LoginScreen from './components/LoginScreen';
 import QuantumBackground from './components/QuantumBackground';
@@ -352,15 +353,56 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     totalFaturaCents={totalFaturaCents}
                   />
                 )}
-                {currentPage === 'accounts'   && <AccountsManager   uid={safeUID} />}
-                {currentPage === 'cards'      && (
-                  <CreditCardManager
-                    uid={safeUID}
-                    transactions={allTransactions}
-                    accounts={accounts}
-                  />
+                {(['history', 'accounts', 'cards', 'recurring'] as const).some(t => t === currentPage) && (
+                  <>
+                    <TopTabs
+                      tabs={[
+                        { id: 'history',   label: 'Movimentações' },
+                        { id: 'accounts',  label: 'Contas'        },
+                        { id: 'cards',     label: 'Cartões'       },
+                        { id: 'recurring', label: 'Despesas Fixas' },
+                      ]}
+                      activeTab={currentPage}
+                      onTabChange={setCurrentPage}
+                    />
+                    {currentPage === 'accounts'  && <AccountsManager uid={safeUID} />}
+                    {currentPage === 'cards'     && (
+                      <CreditCardManager
+                        uid={safeUID}
+                        transactions={allTransactions}
+                        accounts={accounts}
+                      />
+                    )}
+                    {currentPage === 'recurring' && <RecurringManager uid={safeUID} />}
+                    {currentPage === 'history'   && (
+                      <HistoryPage
+                        transactions={displayedTransactions}
+                        loading={loading}
+                        onEdit={openEditTransaction}
+                        onDeleteRequest={setTransactionToDelete}
+                        onBatchDelete={handleBatchDelete}
+                        onBatchImport={handleImport}
+                        onBulkUpdate={bulkUpdateTransactions}
+                        isBulkUpdating={isBulkUpdating}
+                        undoLastBulkUpdate={undoLastBulkUpdate}
+                        isUndoing={isUndoing}
+                        hasUndoSnapshot={hasUndoSnapshot}
+                        clearBulkSnapshot={clearBulkSnapshot}
+                        uid={safeUID}
+                        categories={categories}
+                        hasMoreTransactions={hasMoreTransactions}
+                        isLoadingMore={isLoadingMore}
+                        loadedCount={loadedCount}
+                        loadMoreTransactions={loadMoreTransactions}
+                        serverSearchTerm={serverSearchTerm}
+                        onServerSearch={setServerSearchTerm}
+                        serverCategoryFilter={serverCategoryFilter}
+                        onServerCategoryFilter={setServerCategoryFilter}
+                        onAddNew={() => setIsFormOpen(true)}
+                      />
+                    )}
+                  </>
                 )}
-                {currentPage === 'recurring'  && <RecurringManager  uid={safeUID} />}
                 {currentPage === 'quantum'    && (
                   <QuantumAIPage
                     transactions={displayedTransactions}
@@ -368,33 +410,6 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     balances={moduleBalances}
                     currentMonth={currentMonth}
                     currentYear={currentYear}
-                  />
-                )}
-                {currentPage === 'history' && (
-                  <HistoryPage
-                    transactions={displayedTransactions}
-                    loading={loading}
-                    onEdit={openEditTransaction}
-                    onDeleteRequest={setTransactionToDelete}
-                    onBatchDelete={handleBatchDelete}
-                    onBatchImport={handleImport}
-                    onBulkUpdate={bulkUpdateTransactions}
-                    isBulkUpdating={isBulkUpdating}
-                    undoLastBulkUpdate={undoLastBulkUpdate}
-                    isUndoing={isUndoing}
-                    hasUndoSnapshot={hasUndoSnapshot}
-                    clearBulkSnapshot={clearBulkSnapshot}
-                    uid={safeUID}
-                    categories={categories}
-                    hasMoreTransactions={hasMoreTransactions}
-                    isLoadingMore={isLoadingMore}
-                    loadedCount={loadedCount}
-                    loadMoreTransactions={loadMoreTransactions}
-                    serverSearchTerm={serverSearchTerm}
-                    onServerSearch={setServerSearchTerm}
-                    serverCategoryFilter={serverCategoryFilter}
-                    onServerCategoryFilter={setServerCategoryFilter}
-                    onAddNew={() => setIsFormOpen(true)}
                   />
                 )}
                 {currentPage === 'reports' && (
