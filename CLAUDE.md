@@ -22,7 +22,7 @@
 - **Offline:** `persistentLocalCache`+`persistentMultipleTabManager` (leituras + escritas diretas) e outbox IndexedDB (`src/shared/lib/offlineOutbox.ts`) para criação via callable.
 - **Logs/auditoria 100% server-trusted** onde viável (#336/#337). Mantidos client-side por decisão: recorrentes (P3 controlado) e `IMPORT_TRANSACTION` (acoplado ao `runTransaction` atômico do Modelo A).
 - **`OnboardingWizard.tsx`** (#342) abre quando `accounts.length === 0 && transactions.length === 0`. **E2E precisa descartá-lo:** helper `e2e/helpers/onboarding.ts` (`dismissOnboardingIfPresent`) nos specs (#345).
-- Bundle principal 484 KB (budget 500 KB, gate no CI).
+- Bundle principal 324 KB + `vendor-react` 188 KB (budget 500 KB/chunk, gate no CI) — split em 2026-07-15; antes o index estava a 499/500 KB.
 - Stashes locais podem existir; não são estado canônico da `main`.
 
 ## Agente — Contrato de Mutação Confirmada
