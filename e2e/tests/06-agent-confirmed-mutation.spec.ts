@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { clearEmulatorData, countAgentTransactions, seedAccounts } from '../helpers/emulator';
+import { clearEmulatorData, countAgentTransactions, seedAccounts, seedAiConsent } from '../helpers/emulator';
 import { dismissOnboardingIfPresent } from '../helpers/onboarding';
 
 /**
@@ -31,12 +31,14 @@ const EXPENSE_DESCRIPTION = 'CafeteriaQuantumE2E';
 const SUCCESS_TEXT = 'Compra registrada pelo assistente.';
 const SHEET_TITLE = 'Registrar compra';
 
-/** Aguarda o app carregar (auth anônimo concluído). */
+/** Aguarda o app carregar (auth anônimo concluído) e concede o consentimento de IA. */
 async function bootApp(page: Page): Promise<void> {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Centro de Comando' }).first())
     .toBeVisible({ timeout: 20_000 });
   await dismissOnboardingIfPresent(page);
+  // UI mirror do F-01: sem consents/current.ai=true o AiConsentGate substitui o chat.
+  await seedAiConsent();
 }
 
 /** Abre o chat e envia um comando. */

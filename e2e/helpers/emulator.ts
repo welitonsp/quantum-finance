@@ -134,6 +134,34 @@ export async function seedAccounts(accounts: SeedAccount[]): Promise<void> {
   }
 }
 
+/**
+ * Concede o consentimento de IA (`users/{uid}/consents/current.ai = true`) para o
+ * usuário anônimo ativo. Necessário desde o UI mirror do F-01: sem consentimento o
+ * `AiConsentGate` substitui o chat/telas de IA pelo aviso LGPD (o gate server-side
+ * `assertAiConsent` já era fail-closed; o E2E do Agente usa o caminho determinístico,
+ * mas a UI do chat agora exige o espelho do consentimento).
+ */
+export async function seedAiConsent(): Promise<void> {
+  const user = await getAnonUser();
+  if (!user) throw new Error('[seedAiConsent] usuário anônimo não encontrado no Auth Emulator.');
+  const { project, uid } = user;
+
+  const url = `${FS_HOST}/v1/projects/${project}/databases/(default)/documents/users/${uid}/consents/current`;
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+    body: JSON.stringify({
+      fields: {
+        ai:        { booleanValue: true },
+        analytics: { booleanValue: false },
+      },
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`[seedAiConsent] falha ao gravar consentimento: HTTP ${res.status}`);
+  }
+}
+
 /** Verifica se o Firestore Emulator está acessível. */
 export async function isEmulatorReady(): Promise<boolean> {
   try {
