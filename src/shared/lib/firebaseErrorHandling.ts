@@ -60,6 +60,7 @@ export const FIREBASE_ERROR_OPERATIONS = [
   'data_processing_log_read',
   'user_consents_read',
   'user_consents_save',
+  'ai_consent_read',
   'score_history_persist',
   'score_history_load',
   'challenges_load',
