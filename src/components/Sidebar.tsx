@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigation } from '../contexts/NavigationContext';
 import {
-  LayoutDashboard, Clock, CalendarRange, CalendarDays, Target, Wallet, ShieldCheck, Settings, LogOut,
-  Landmark, BrainCircuit, Repeat, CreditCard, TrendingDown, ShoppingBag,
-  Receipt, ShieldAlert, Users, Cpu, FlaskConical, ShoppingCart,
+  LayoutDashboard, Clock, Target, ShieldCheck, Settings, LogOut,
+  BrainCircuit, ShoppingBag,
   PieChart, X, ChevronRight, Search,
   type LucideIcon,
 } from 'lucide-react';
@@ -30,58 +29,20 @@ interface Props {
 }
 
 const SIDEBAR_GROUPS_STORAGE_KEY = 'quantum_sidebar_groups';
-const DEFAULT_OPEN = new Set(['Principal']); // só Principal aberto por padrão
+const DEFAULT_OPEN = new Set(['Navegação']); // grupo único sempre aberto
 
-/** Navegação alinhada aos 8 módulos oficiais do Quantum Finance 2.0 */
+/** Navegação final: 7 destinos principais (F-12 PR-C6) */
 const NAV_GROUPS: NavGroup[] = [
   {
-    title: 'Principal',
+    title: 'Navegação',
     items: [
-      { id: 'dashboard', icon: LayoutDashboard, label: 'Centro de Comando'  },
-      { id: 'history',   icon: Clock,           label: 'Movimentações'      },
-      { id: 'timeline',  icon: CalendarRange,   label: 'Timeline Financeira'  },
-      { id: 'calendar',  icon: CalendarDays,    label: 'Calendário Financeiro'},
-    ],
-  },
-  {
-    title: 'Planejamento',
-    items: [
-      { id: 'planning',   icon: Target,       label: 'Planejamento'          },
-      { id: 'recurring',  icon: Repeat,       label: 'Despesas Fixas'        },
-      { id: 'debts',      icon: TrendingDown, label: 'Dívidas'               },
-      { id: 'simulation', icon: FlaskConical, label: 'Simulação Monte Carlo' },
-    ],
-  },
-  {
-    title: 'Patrimônio & Objetivos',
-    items: [
-      { id: 'patrimonio', icon: Wallet,     label: 'Patrimônio & Objetivos' },
-      { id: 'accounts',   icon: Landmark,   label: 'Contas'                 },
-      { id: 'cards',      icon: CreditCard, label: 'Cartões'                },
-      { id: 'ir',         icon: Receipt,    label: 'Módulo IR'              },
-    ],
-  },
-  {
-    title: 'Compras & Comunidade',
-    items: [
-      { id: 'shopping',           icon: ShoppingBag,  label: 'Compras Inteligentes'    },
-      { id: 'purchase-simulator', icon: ShoppingCart, label: 'Simulador de Compra'     },
-      { id: 'shared-finance',     icon: Users,        label: 'Finanças Compartilhadas' },
-    ],
-  },
-  {
-    title: 'Copilot IA',
-    items: [
-      { id: 'copilot',     icon: BrainCircuit, label: 'Copilot IA'        },
-      { id: 'quantum',     icon: Cpu,          label: 'Quantum AI'        },
-      { id: 'anti-tarifa', icon: ShieldAlert,  label: 'Agente Anti-Tarifa'},
-    ],
-  },
-  {
-    title: 'Cofre & Governança',
-    items: [
-      { id: 'cofre',   icon: ShieldCheck, label: 'Cofre & Governança' },
-      { id: 'reports', icon: PieChart,    label: 'BI & Relatórios'   },
+      { id: 'dashboard', icon: LayoutDashboard, label: 'Hoje'            },
+      { id: 'history',   icon: Clock,           label: 'Movimentações'   },
+      { id: 'planning',  icon: Target,          label: 'Planejamento'    },
+      { id: 'reports',   icon: PieChart,        label: 'Análises'        },
+      { id: 'shopping',  icon: ShoppingBag,     label: 'Compras'         },
+      { id: 'copilot',   icon: BrainCircuit,    label: 'IA'              },
+      { id: 'cofre',     icon: ShieldCheck,     label: 'Governança'      },
     ],
   },
 ];
