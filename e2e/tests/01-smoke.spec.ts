@@ -23,7 +23,7 @@ test.describe('Smoke — carregamento da app', () => {
     await page.goto('/');
     await dismissOnboardingIfPresent(page);
 
-    await expect(page.getByRole('button', { name: 'Centro de Comando' }).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: 'Hoje' }).first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('button', { name: 'Movimentações' }).first()).toBeVisible({ timeout: 5_000 });
   });
 
