@@ -11,8 +11,8 @@
 
 | # | Item | Origem | Escopo | Status |
 |---|------|--------|--------|--------|
-| 1 | **F-12 restante (a11y + UI premium)** — 23 warnings inventariados 1 a 1 + gaps além do lint (Esc/focus trap/skip-link/reduced-motion) + navegação minimalista (sidebar 20 itens → sem scroll; consolidação p/ 7 destinos aguarda decisão do owner). **Plano e checklist: `docs/product/FASE_F12_UI_PREMIUM_A11Y_2026-07-14.md`** (PRs A1–A4, B, C). | Ext. F-12 | `src/` UI | 🔄 em execução |
-| 2 | **F-13 — cobertura risk-based** — cobrir `components/**`/`features/**` críticos (hoje fora do gate) antes de expandir o scope de coverage. Regra viva: só ratchetar gate com ≥0,5% de margem real medida no CI. | Ext. F-13 | testes | ⬜ |
+| 1 | **F-12** — **FECHADO** (PRs #434–#442): 23 warnings a11y → 0, ESLint gate ativo, sidebar 7 destinos, TopTabs ARIA, focus programático. | Ext. F-12 | `src/` UI | ✅ |
+| 2 | **F-13 — cobertura risk-based** — PR #443 (27 testes pure-logic + scope +3 arquivos): `forecastMonteCarlo`, `importHelpers`, `intentRegistry` ✅. Restam: hooks Firebase (`useShoppingLists`, `usePriceObservations`, `useGroups`) + `processResolvedImportBatch` + `importCandidateSearch` (deferred — sem fake-firebase) + `src/components/**` (RTL, próxima fase). | Ext. F-13 | testes | 🔄 parcial |
 | 3 | **F-01 follow-up — UI mirror do consent IA** — refletir no cliente o gate server-side `assertAiConsent` (hoje o usuário sem consentimento só descobre no erro da callable). | Ext. F-01 | UI | ⬜ |
 | 4 | **L-04 — ErrorBoundaries por feature** — hoje há 1 único boundary na raiz; falha em subárvore derruba o app. | Big Four L-04 | UI | ⬜ |
 | 5 | **L-03 — higiene de tipos** — reduzir 21 usos de `any`/`as any` e 3 `@ts-ignore` em `src/` para <10. | Big Four L-03 | `src/` | ⬜ |
