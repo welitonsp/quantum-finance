@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, lazy, Suspense, useCallback } from 'react';
+import { useEffect, useRef, useState, lazy, Suspense, useCallback } from 'react';
 import { auth } from './shared/api/firebase/index';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
 import type { MultiFactorError, User } from 'firebase/auth';
@@ -37,6 +37,7 @@ import { ConversationMemory } from './features/ai-chat/ConversationMemory';
 import CategorySettings from './components/CategorySettings';
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 import { AiConsentGate } from './components/AiConsentGate';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import type { Transaction } from './shared/types/transaction';
 
 // ─── Lazy-loaded pages ───────────────────────────────────────────────────────
@@ -124,34 +125,19 @@ const ConfirmDeleteModal = ({ transaction, onCancel, onConfirm }: ConfirmDeleteM
   );
 };
 
-// ─── ErrorBoundary ────────────────────────────────────────────────────────────
-interface ErrorBoundaryState { hasError: boolean }
-class ErrorBoundary extends React.Component<React.PropsWithChildren, ErrorBoundaryState> {
-  constructor(props: React.PropsWithChildren) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError(): ErrorBoundaryState { return { hasError: true }; }
-  componentDidCatch(error: Error) {
-    logSanitizedFirebaseError('app_error_boundary', error);
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="p-8 m-4 bg-quantum-card/80 border border-red-500/30 rounded-3xl flex flex-col items-center justify-center text-center backdrop-blur-md">
-          <AlertTriangle className="w-16 h-16 text-red-500 mb-4 animate-pulse" />
-          <h2 className="text-xl font-bold text-quantum-fg mb-2">Anomalia Detetada</h2>
-          <button
-            onClick={() => this.setState({ hasError: false })}
-            className="px-6 py-3 bg-red-600 hover:bg-red-700 text-quantum-fg rounded-xl text-sm font-bold transition-all shadow-lg shadow-red-500/20"
-          >
-            Reiniciar Módulo
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
+// ─── Page → label do grupo da sidebar ─────────────────────────────────────────
+// Cada página herda o rótulo do seu grupo de navegação; usado no fallback do
+// ErrorBoundary de conteúdo ("Anomalia em {label}").
+const PAGE_GROUP_LABELS: Record<string, string> = {
+  history: 'Movimentações', accounts: 'Movimentações', cards: 'Movimentações', recurring: 'Movimentações',
+  copilot: 'IA', quantum: 'IA', 'anti-tarifa': 'IA',
+  reports: 'Análises', timeline: 'Análises', calendar: 'Análises', ir: 'Análises',
+  planning: 'Planejamento', debts: 'Planejamento', simulation: 'Planejamento', 'purchase-simulator': 'Planejamento',
+  cofre: 'Governança', 'shared-finance': 'Governança',
+  shopping: 'Compras',
+};
+function pageGroupLabel(page: string): string {
+  return PAGE_GROUP_LABELS[page] ?? 'Hoje';
 }
 
 // ─── AuthenticatedApp ─────────────────────────────────────────────────────────
@@ -328,7 +314,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
           />
         }
       >
-        <ErrorBoundary>
+        <ErrorBoundary label={pageGroupLabel(currentPage)} resetKey={currentPage}>
           <Suspense fallback={<QuantumLoader />}>
                 {currentPage === 'dashboard' && (
                   <DashboardContent
@@ -532,7 +518,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
       </button>
 
       {isSettingsOpen && (
-        <ErrorBoundary>
+        <ErrorBoundary label="Configurações">
           <CategorySettings uid={safeUID} onClose={() => setIsSettingsOpen(false)} />
         </ErrorBoundary>
       )}
@@ -555,7 +541,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
           </AiConsentGate>
         </div>
       ) : (
-        <ErrorBoundary>
+        <ErrorBoundary label="Assistente IA">
           <Suspense fallback={null}>
             <AIAssistantChat
               uid={safeUID}
@@ -578,7 +564,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
           </Suspense>
         </ErrorBoundary>
       )}
-      <ErrorBoundary>
+      <ErrorBoundary label="Busca ⌘K">
         <Suspense fallback={null}>
           <CommandPalette
             isOpen={isCommandPaletteOpen}
@@ -691,7 +677,7 @@ export default function App() {
 
   return (
     <NavigationProvider>
-      <ErrorBoundary>
+      <ErrorBoundary label="Quantum Finance">
         <AuthenticatedApp user={user} handleLogout={handleLogout} />
       </ErrorBoundary>
     </NavigationProvider>

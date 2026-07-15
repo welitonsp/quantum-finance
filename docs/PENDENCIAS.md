@@ -14,7 +14,7 @@
 | 1 | **F-12** — **FECHADO** (PRs #434–#442): 23 warnings a11y → 0, ESLint gate ativo, sidebar 7 destinos, TopTabs ARIA, focus programático. | Ext. F-12 | `src/` UI | ✅ |
 | 2 | **F-13 — FECHADO (risk-based)** — pure-logic (#443) + hooks Firebase (#444) + import modules (#445) + RTL money-forms (#448) = 116 testes. RTL de componentes secundários (GoalsPanel, RecurringManager, CreditCardManager) fica como reforço opcional pós-re-auditoria. **Dossiê de re-auditoria pronto** em `docs/audit/AUDITORIA_EXTERNA_2026-07-11.md`. | Ext. F-13 | testes | ✅ |
 | 3 | **F-01 follow-up — UI mirror do consent IA — FECHADO** — `useAiConsent` (realtime) + `AiConsentGate` nas 3 abas de IA e no chat flutuante, CTA para Governança/Privacidade. Follow-up menor: gate na categorização em lote do import (avaliar no L-03). | Ext. F-01 | UI | ✅ |
-| 4 | **L-04 — ErrorBoundaries por feature** — hoje há 1 único boundary na raiz; falha em subárvore derruba o app. | Big Four L-04 | UI | ⬜ |
+| 4 | **L-04 — ErrorBoundaries por feature — FECHADO** — `ErrorBoundary` extraído para componente com `label` (fallback nomeado por grupo da sidebar) e `resetKey={currentPage}` (crash numa página não trava mais a navegação; navegar recupera). Boundaries do chat/palette/settings com labels próprios. | Big Four L-04 | UI | ✅ |
 | 5 | **L-03 — higiene de tipos** — reduzir 21 usos de `any`/`as any` e 3 `@ts-ignore` em `src/` para <10. | Big Four L-03 | `src/` | ⬜ |
 | 6 | **M-01 reforço opcional de cobertura** — utils a 0% (`financialData`, `categoryRules`, `importActions`, `timingEvents`), branches soltos de `insightsEngine`; `useForecast`/workers (`parserWorker`, `pdfParser`) não são exercitáveis em jsdom (documentar exclusão ou testar via node). | Big Four M-01 | testes | ⬜ |
 
