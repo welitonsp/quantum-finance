@@ -143,6 +143,10 @@ export default defineConfig({
         'src/lib/**/*.ts',
         'src/utils/**/*.ts',
         'src/hooks/**/*.ts',
+        // F-13: módulos pure-logic em features/ com testes dedicados
+        'src/features/simulation/forecastMonteCarlo.ts',
+        'src/features/transactions/import/importHelpers.ts',
+        'src/features/ai-agent/intentRegistry.ts',
       ],
       exclude: [
         '**/*.test.ts',
@@ -190,6 +194,9 @@ export default defineConfig({
       // real stmts 77.48 / branches 68.19 / funcs 79.40 / lines 80.78 → gates → 75 / 67 / 78 / 79.
       // Reforço 2026-07-11 (pós-#402 updateRecurringWithHistory + #403 recurringRepo):
       // real stmts 78.03 / branches 68.55 / funcs 79.83 / lines 81.29 → gates → 77 / 68 / 79 / 80.
+      // F-13 2026-07-14: scope expandido (+3 features pure-logic: forecastMonteCarlo, importHelpers,
+      // intentRegistry). Real pós-expansão: stmts 78.13 / branches 68.61 / funcs 79.89 / lines 81.37.
+      // Melhora <0,5% em todos os eixos → sem ratchet (regra: ≥0,5% margem real medida). Gates mantidos.
       thresholds: {
         lines: 80,
         functions: 79,
