@@ -41,8 +41,13 @@ const SCENARIO_COLORS: Record<IncomeScenario, string> = {
   optimistic:  '#34D399',
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CustomTooltip({ active, payload, label }: any) {
+interface TooltipEvent { direction: string; description: string; amountCents: number }
+interface CustomTooltipProps {
+  active?:  boolean;
+  label?:   string;
+  payload?: Array<{ value?: number; payload?: { events?: TooltipEvent[] } }>;
+}
+function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!active || !payload?.length) return null;
 
   const balance: number = payload[0]?.value ?? 0;
@@ -57,7 +62,7 @@ function CustomTooltip({ active, payload, label }: any) {
       </p>
       {events.length > 0 && (
         <div className="space-y-1 border-t border-quantum-border/50 pt-2">
-          {events.slice(0, 5).map((ev: { direction: string; description: string; amountCents: number }, idx: number) => (
+          {events.slice(0, 5).map((ev, idx) => (
             <div key={idx} className="flex items-center justify-between gap-3 text-[10px]">
               <span className="text-quantum-fgMuted truncate max-w-[120px]">{ev.description}</span>
               <span className={`font-mono font-bold ${ev.direction === 'in' ? 'text-emerald-400' : 'text-red-400'}`}>

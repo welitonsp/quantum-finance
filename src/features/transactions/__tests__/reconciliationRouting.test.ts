@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { toCentavos } from '../../../shared/types/money';
 import type { Centavos } from '../../../shared/types/money';
 import type { Transaction } from '../../../shared/types/transaction';
+import type { ParsedTransaction } from '../import/importTypes';
 
 // ─── Mocks hoisted (executam antes dos vi.mock) ───────────────────────────────
 const { mockUpdateTransactionWithHistory } = vi.hoisted(() => ({
@@ -86,8 +87,7 @@ describe('processResolvedImportBatch — roteamento de reconciliação', () => {
     const reconciledTx  = makeTx({ id: existingDocId, _reconciled: true, _mergedWith: 'imported-hash-abc' });
     const onImport      = vi.fn().mockResolvedValue({ added: 0, duplicates: 0 });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await processResolvedImportBatch(uid, [reconciledTx] as any, onImport);
+    const result = await processResolvedImportBatch(uid, [reconciledTx] as unknown as ParsedTransaction[], onImport);
 
     // Deve atualizar o doc existente atomicamente (batch + history) — sem criar doc novo no caminho hash
     expect(mockUpdateTransactionWithHistory).toHaveBeenCalledOnce();
@@ -117,8 +117,7 @@ describe('processResolvedImportBatch — roteamento de reconciliação', () => {
     const newTx   = makeTx({ id: '__temp_123_abc' });
     const onImport = vi.fn().mockResolvedValue({ added: 1, duplicates: 0 });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await processResolvedImportBatch(uid, [newTx] as any, onImport);
+    const result = await processResolvedImportBatch(uid, [newTx] as unknown as ParsedTransaction[], onImport);
 
     expect(mockUpdateTransactionWithHistory).not.toHaveBeenCalled();
     expect(onImport).toHaveBeenCalledOnce();
@@ -137,8 +136,7 @@ describe('processResolvedImportBatch — roteamento de reconciliação', () => {
     const newTx        = makeTx({ id: '__temp_999_xyz', description: 'Nova importação' });
     const onImport     = vi.fn().mockResolvedValue({ added: 1, duplicates: 0 });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await processResolvedImportBatch(uid, [reconciledTx, newTx] as any, onImport);
+    const result = await processResolvedImportBatch(uid, [reconciledTx, newTx] as unknown as ParsedTransaction[], onImport);
 
     // Existente: update atômico no ID original (batch + history)
     expect(mockUpdateTransactionWithHistory).toHaveBeenCalledOnce();
@@ -156,8 +154,7 @@ describe('processResolvedImportBatch — roteamento de reconciliação', () => {
     const tempTx   = makeTx({ id: '__temp_456_def', _reconciled: true });
     const onImport = vi.fn().mockResolvedValue({ added: 1, duplicates: 0 });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await processResolvedImportBatch(uid, [tempTx] as any, onImport);
+    await processResolvedImportBatch(uid, [tempTx] as unknown as ParsedTransaction[], onImport);
 
     // ID temporário NÃO deve acionar update
     expect(mockUpdateTransactionWithHistory).not.toHaveBeenCalled();
@@ -169,8 +166,7 @@ describe('processResolvedImportBatch — roteamento de reconciliação', () => {
     const reconciledTx = makeTx({ id: existingId, _reconciled: true });
     const onImport     = vi.fn();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await processResolvedImportBatch(uid, [reconciledTx] as any, onImport);
+    await processResolvedImportBatch(uid, [reconciledTx] as unknown as ParsedTransaction[], onImport);
 
     expect(mockUpdateTransactionWithHistory).toHaveBeenCalledOnce();
     expect(mockUpdateTransactionWithHistory).toHaveBeenCalledWith(
@@ -211,8 +207,7 @@ describe('processResolvedImportBatch — roteamento de reconciliação', () => {
     });
     const onImport = vi.fn();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await processResolvedImportBatch(uid, [reconciledTx] as any, onImport, [beforeTx]);
+    await processResolvedImportBatch(uid, [reconciledTx] as unknown as ParsedTransaction[], onImport, [beforeTx]);
 
     expect(mockUpdateTransactionWithHistory).toHaveBeenCalledOnce();
     expect(onImport).not.toHaveBeenCalled();
@@ -294,8 +289,7 @@ describe('processResolvedImportBatch — roteamento de reconciliação', () => {
     const reconciledTx = makeTx({ id: 'someDocId', _reconciled: true });
     const onImport     = vi.fn().mockResolvedValue({ added: 0 });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await expect(processResolvedImportBatch(undefined, [reconciledTx] as any, onImport)).resolves.not.toThrow();
+    await expect(processResolvedImportBatch(undefined, [reconciledTx] as unknown as ParsedTransaction[], onImport)).resolves.not.toThrow();
     expect(mockUpdateTransactionWithHistory).not.toHaveBeenCalled();
   });
 });
