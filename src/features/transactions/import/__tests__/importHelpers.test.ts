@@ -3,11 +3,12 @@ import {
   buildReconciliationHistoryDelta,
   calculatePreviewTotals,
 } from '../importHelpers';
-import type { Transaction } from '../../../shared/types/transaction';
+import type { Transaction } from '../../../../shared/types/transaction';
+import type { Centavos } from '../../../../shared/types/money';
 import type { PreviewTotalSource } from '../importTypes';
 
 // Partial fixtures cast to Transaction: the helper only reads tracked fields.
-function makeBefore(overrides: Partial<Transaction>): Transaction {
+function makeBefore(overrides: Record<string, unknown>): Transaction {
   return {
     category: 'Alimentação',
     description: 'Compra',
@@ -31,7 +32,7 @@ describe('buildReconciliationHistoryDelta', () => {
     const result = buildReconciliationHistoryDelta(before, {
       category: 'Alimentação',
       value_cents: 5000,
-    });
+    } as Partial<Transaction>);
     expect(result).toEqual({ changedFields: [] });
     expect(result.before).toBeUndefined();
     expect(result.after).toBeUndefined();
@@ -69,7 +70,7 @@ describe('buildReconciliationHistoryDelta', () => {
     const before = makeBefore({ category: 'Alimentação' });
     const result = buildReconciliationHistoryDelta(before, {
       category: undefined,
-    } as Partial<Transaction>);
+    } as unknown as Partial<Transaction>);
     expect(result.changedFields).toContain('category');
     expect(result.before?.category).toBe('Alimentação');
     expect(result.after?.category).toBeNull();
@@ -86,13 +87,13 @@ describe('buildReconciliationHistoryDelta', () => {
 describe('calculatePreviewTotals', () => {
   const entry = (cents: number): PreviewTotalSource => ({
     type: 'entrada',
-    value_cents: cents,
+    value_cents: cents as Centavos,
     value: cents / 100,
     schemaVersion: 2,
   });
   const exit = (cents: number): PreviewTotalSource => ({
     type: 'saida',
-    value_cents: cents,
+    value_cents: cents as Centavos,
     value: cents / 100,
     schemaVersion: 2,
   });

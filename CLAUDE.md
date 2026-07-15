@@ -5,8 +5,8 @@
 
 ## Estado Atual — 2026-07-14 (F-12 fechado + F-13 parcial)
 
-- Branch principal: `main` — PRs #363–#442 mergeados. **PR aberto: #443 (F-13 pure-logic tests).**
-- Suíte: **1893+ unit + 227 rules + 303 functions + 28 E2E**. Gates de cobertura: **stmts 77 / branches 68 / funcs 79 / lines 80** — regra permanente: só ratchetar com ≥0,5% de margem real medida no CI (incidente #382/#383).
+- Branch principal: `main` — PRs #363–#443 mergeados.
+- Suíte: **1934 unit + 227 rules + 303 functions + 28 E2E**. Gates de cobertura: **stmts 77 / branches 68 / funcs 79 / lines 80** — regra permanente: só ratchetar com ≥0,5% de margem real medida no CI (incidente #382/#383).
 - **Pendências: fonte única em [docs/PENDENCIAS.md](docs/PENDENCIAS.md).** Resumo: código = F-13 parcial (27 testes pure-logic ✅; hooks Firebase + components RTL deferred), UI mirror consent IA, ErrorBoundaries por feature, higiene de `any`; owner/infra = M-03 (verificações reais em dispositivo — [roteiro](docs/audit/M03_CHECKLIST_VERIFICACOES_REAIS.md)), F-09 restante (billing/quotas), F-15 (SLOs/alertas); produto = fases 2–5 da Tese (próxima: **Ação de 1 Toque**).
 - **Auditorias (concluídas e registradas):**
   - Big Four 2026-07-09 — **8.7/10** ([laudo](docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md)); M-01/M-02/L-01 fechados; M-03 owner-pending.
