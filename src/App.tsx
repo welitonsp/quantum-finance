@@ -403,75 +403,110 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     )}
                   </>
                 )}
-                {currentPage === 'quantum'    && (
-                  <QuantumAIPage
-                    transactions={displayedTransactions}
-                    allTransactions={allTransactions}
-                    balances={moduleBalances}
-                    currentMonth={currentMonth}
-                    currentYear={currentYear}
-                  />
+                {(['copilot', 'quantum', 'anti-tarifa'] as const).some(t => t === currentPage) && (
+                  <>
+                    <TopTabs
+                      tabs={[
+                        { id: 'copilot',     label: 'Copilot IA'        },
+                        { id: 'quantum',     label: 'Quantum AI'         },
+                        { id: 'anti-tarifa', label: 'Agente Anti-Tarifa' },
+                      ]}
+                      activeTab={currentPage}
+                      onTabChange={setCurrentPage}
+                    />
+                    {currentPage === 'copilot'     && <CopilotPage uid={safeUID} />}
+                    {currentPage === 'quantum'     && (
+                      <QuantumAIPage
+                        transactions={displayedTransactions}
+                        allTransactions={allTransactions}
+                        balances={moduleBalances}
+                        currentMonth={currentMonth}
+                        currentYear={currentYear}
+                      />
+                    )}
+                    {currentPage === 'anti-tarifa' && <AntiTarifaPage uid={safeUID} />}
+                  </>
                 )}
-                {currentPage === 'reports' && (
-                  <ReportsContent
-                    transactions={displayedTransactions}
-                    accounts={accounts}
-                    categories={categories}
-                  />
+                {(['reports', 'timeline', 'calendar', 'ir'] as const).some(t => t === currentPage) && (
+                  <>
+                    <TopTabs
+                      tabs={[
+                        { id: 'reports',  label: 'BI & Relatórios'      },
+                        { id: 'timeline', label: 'Timeline Financeira'   },
+                        { id: 'calendar', label: 'Calendário Financeiro' },
+                        { id: 'ir',       label: 'Módulo IR'             },
+                      ]}
+                      activeTab={currentPage}
+                      onTabChange={setCurrentPage}
+                    />
+                    {currentPage === 'reports'  && (
+                      <ReportsContent
+                        transactions={displayedTransactions}
+                        accounts={accounts}
+                        categories={categories}
+                      />
+                    )}
+                    {currentPage === 'timeline' && (
+                      <TimelinePage
+                        uid={safeUID}
+                        currentBalanceCents={toBalanceCents(moduleBalances?.geral?.saldo ?? 0) as Centavos}
+                      />
+                    )}
+                    {currentPage === 'calendar' && <CalendarPage uid={safeUID} />}
+                    {currentPage === 'ir'       && <IRPage uid={safeUID} />}
+                  </>
                 )}
-                {currentPage === 'simulation' && (
-                  <SimulationCenter
-                    transactions={displayedTransactions}
-                    balances={moduleBalances}
-                  />
+                {(['planning', 'debts', 'simulation', 'purchase-simulator'] as const).some(t => t === currentPage) && (
+                  <>
+                    <TopTabs
+                      tabs={[
+                        { id: 'planning',           label: 'Planejamento'          },
+                        { id: 'debts',              label: 'Dívidas'               },
+                        { id: 'simulation',         label: 'Simulação Monte Carlo' },
+                        { id: 'purchase-simulator', label: 'Simulador de Compra'   },
+                      ]}
+                      activeTab={currentPage}
+                      onTabChange={setCurrentPage}
+                    />
+                    {currentPage === 'planning'           && <PlanningPage uid={safeUID} />}
+                    {currentPage === 'debts'              && <DebtModule uid={safeUID} />}
+                    {currentPage === 'simulation'         && (
+                      <SimulationCenter
+                        transactions={displayedTransactions}
+                        balances={moduleBalances}
+                      />
+                    )}
+                    {currentPage === 'purchase-simulator' && (
+                      <PurchaseSimulator
+                        transactions={displayedTransactions}
+                        balances={moduleBalances}
+                        uid={safeUID}
+                        creditCards={creditCards}
+                        onRegisterPurchase={(prefill) => {
+                          setTransactionToEdit(prefill as Transaction);
+                          setIsFormOpen(true);
+                        }}
+                      />
+                    )}
+                  </>
                 )}
-                {currentPage === 'debts' && (
-                  <DebtModule uid={safeUID} />
-                )}
-                {currentPage === 'purchase-simulator' && (
-                  <PurchaseSimulator
-                    transactions={displayedTransactions}
-                    balances={moduleBalances}
-                    uid={safeUID}
-                    creditCards={creditCards}
-                    onRegisterPurchase={(prefill) => {
-                      setTransactionToEdit(prefill as Transaction);
-                      setIsFormOpen(true);
-                    }}
-                  />
-                )}
-                {currentPage === 'shopping' && (
-                  <ShoppingPage uid={safeUID} />
-                )}
-                {currentPage === 'ir' && (
-                  <IRPage uid={safeUID} />
-                )}
-                {currentPage === 'anti-tarifa' && (
-                  <AntiTarifaPage uid={safeUID} />
-                )}
-                {currentPage === 'shared-finance' && (
-                  <SharedFinancePage uid={safeUID} displayName={user?.displayName ?? 'Você'} />
-                )}
-                {currentPage === 'timeline' && (
-                  <TimelinePage
-                    uid={safeUID}
-                    currentBalanceCents={toBalanceCents(moduleBalances?.geral?.saldo ?? 0) as Centavos}
-                  />
-                )}
-                {currentPage === 'planning' && (
-                  <PlanningPage uid={safeUID} />
-                )}
-                {currentPage === 'patrimonio' && (
-                  <PatrimonioPage uid={safeUID} />
-                )}
-                {currentPage === 'copilot' && (
-                  <CopilotPage uid={safeUID} />
-                )}
-                {currentPage === 'cofre' && (
-                  <GovernancePage uid={safeUID} />
-                )}
-                {currentPage === 'calendar' && (
-                  <CalendarPage uid={safeUID} />
+                {currentPage === 'shopping'   && <ShoppingPage uid={safeUID} />}
+                {currentPage === 'patrimonio' && <PatrimonioPage uid={safeUID} />}
+                {(['cofre', 'shared-finance'] as const).some(t => t === currentPage) && (
+                  <>
+                    <TopTabs
+                      tabs={[
+                        { id: 'cofre',          label: 'Cofre & Governança'      },
+                        { id: 'shared-finance', label: 'Finanças Compartilhadas' },
+                      ]}
+                      activeTab={currentPage}
+                      onTabChange={setCurrentPage}
+                    />
+                    {currentPage === 'cofre'          && <GovernancePage uid={safeUID} />}
+                    {currentPage === 'shared-finance' && (
+                      <SharedFinancePage uid={safeUID} displayName={user?.displayName ?? 'Você'} />
+                    )}
+                  </>
                 )}
           </Suspense>
         </ErrorBoundary>
