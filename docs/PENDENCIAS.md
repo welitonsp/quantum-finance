@@ -12,7 +12,7 @@
 | # | Item | Origem | Escopo | Status |
 |---|------|--------|--------|--------|
 | 1 | **F-12** — **FECHADO** (PRs #434–#442): 23 warnings a11y → 0, ESLint gate ativo, sidebar 7 destinos, TopTabs ARIA, focus programático. | Ext. F-12 | `src/` UI | ✅ |
-| 2 | **F-13 — cobertura risk-based** — pure-logic (#443) ✅ · hooks Firebase (#444) ✅ · import modules (#445) ✅ · RTL fase 1: `TransactionForm`+`TransferForm` (17 testes, superfícies de entrada de dinheiro) ✅. Restam componentes RTL secundários (GoalsPanel, RecurringManager, CreditCardManager — avaliar custo/benefício vs. re-auditoria). | Ext. F-13 | testes | 🔄 parcial |
+| 2 | **F-13 — FECHADO (risk-based)** — pure-logic (#443) + hooks Firebase (#444) + import modules (#445) + RTL money-forms (#448) = 116 testes. RTL de componentes secundários (GoalsPanel, RecurringManager, CreditCardManager) fica como reforço opcional pós-re-auditoria. **Dossiê de re-auditoria pronto** em `docs/audit/AUDITORIA_EXTERNA_2026-07-11.md`. | Ext. F-13 | testes | ✅ |
 | 3 | **F-01 follow-up — UI mirror do consent IA** — refletir no cliente o gate server-side `assertAiConsent` (hoje o usuário sem consentimento só descobre no erro da callable). | Ext. F-01 | UI | ⬜ |
 | 4 | **L-04 — ErrorBoundaries por feature** — hoje há 1 único boundary na raiz; falha em subárvore derruba o app. | Big Four L-04 | UI | ⬜ |
 | 5 | **L-03 — higiene de tipos** — reduzir 21 usos de `any`/`as any` e 3 `@ts-ignore` em `src/` para <10. | Big Four L-03 | `src/` | ⬜ |

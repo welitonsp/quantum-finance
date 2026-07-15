@@ -3,14 +3,14 @@
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 > **Histórico de fases/PRs:** [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md) · **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md)
 
-## Estado Atual — 2026-07-14 (F-12 fechado + F-13 parcial)
+## Estado Atual — 2026-07-15 (F-12 e F-13 fechados; pronto p/ re-auditoria)
 
-- Branch principal: `main` — PRs #363–#443 mergeados.
-- Suíte: **1934 unit + 227 rules + 303 functions + 28 E2E**. Gates de cobertura: **stmts 77 / branches 68 / funcs 79 / lines 80** — regra permanente: só ratchetar com ≥0,5% de margem real medida no CI (incidente #382/#383).
-- **Pendências: fonte única em [docs/PENDENCIAS.md](docs/PENDENCIAS.md).** Resumo: código = F-13 parcial (27 testes pure-logic ✅; hooks Firebase + components RTL deferred), UI mirror consent IA, ErrorBoundaries por feature, higiene de `any`; owner/infra = M-03 (verificações reais em dispositivo — [roteiro](docs/audit/M03_CHECKLIST_VERIFICACOES_REAIS.md)), F-09 restante (billing/quotas), F-15 (SLOs/alertas); produto = fases 2–5 da Tese (próxima: **Ação de 1 Toque**).
+- Branch principal: `main` — PRs #363–#448 mergeados. **CI verde** (incidente #440→#447 resolvido: E2E realinhado à navegação 7 destinos + code-split `vendor-react`).
+- Suíte: **1982 unit + 227 rules + 303 functions + 28 E2E**. Gates de cobertura: **stmts 77 / branches 68 / funcs 79 / lines 80** — regra permanente: só ratchetar com ≥0,5% de margem real medida no CI (incidente #382/#383).
+- **Pendências: fonte única em [docs/PENDENCIAS.md](docs/PENDENCIAS.md).** Resumo: código = UI mirror consent IA, ErrorBoundaries por feature, higiene de `any` (incl. `cardId` inerte no TransactionForm); owner/infra = required checks no branch protection, M-03 (verificações reais em dispositivo — [roteiro](docs/audit/M03_CHECKLIST_VERIFICACOES_REAIS.md)), F-09 restante (billing/quotas), F-15 (SLOs/alertas); produto = fases 2–5 da Tese (próxima: **Ação de 1 Toque**).
 - **Auditorias (concluídas e registradas):**
   - Big Four 2026-07-09 — **8.7/10** ([laudo](docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md)); M-01/M-02/L-01 fechados; M-03 owner-pending.
-  - Externa independente 2026-07-11 — **6,2/10 pré-remediação** ([registro + tabela F-01…F-15](docs/audit/AUDITORIA_EXTERNA_2026-07-11.md)); **F-12 fechado (#434–#442), F-13 parcial (#443), 2 abertos (F-09/F-15)**; re-auditoria após fechar os restantes.
+  - Externa independente 2026-07-11 — **6,2/10 pré-remediação** ([registro + dossiê de re-auditoria](docs/audit/AUDITORIA_EXTERNA_2026-07-11.md)); **placar 2026-07-15: 13 fechados · 1 parcial (F-09) · 1 aberto (F-15)** — pendências de código zeradas; **solicitar re-auditoria**.
 - **Tese de produto:** [docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md](docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md) — fase 1 (Radar de Compras) entregue (#363).
 - **Nota de processo:** rodar `npm run typecheck` antes de pushar — vitest/coverage usam esbuild e não type-checam (branded types como `Centavos` escapam localmente).
 - Detalhe completo dos ciclos #346–#430 (NFC-e, Cesta, FCM, segurança comercial, remediações): [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md).
