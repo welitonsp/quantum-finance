@@ -37,8 +37,8 @@
 | 12 | **Gêmeo Financeiro** | `useGemeloData` + `GemeloFinanceiro` — Monte Carlo com DNA real. | ✅ (`c5176d7`) |
 | 13 | **Selo de Integridade** | `useDecisions` + GovernancePage — 4 pilares + Diário de Decisões IA. | ✅ (`acbdc54`) |
 | 14 | **Copiloto que Cumpre** | `AIJournalDrawer` — drawer com stats, filtros e track record do agente. | ✅ (`b6bee7b`) |
-| 15 | **Dashboard "Posso gastar hoje?"** | Hero number: saldo − compromissos fixos pendentes − fatura corrente. Resposta em <1s, colorida por zona (verde/âmbar/vermelho). | ⬜ próxima |
-| 16 | **Voice Capture** | Botão de microfone no chat: Web Speech API → transcript → GeminiIntentClassifier → `ActionConfirmationSheet`. Fallback gracioso quando não suportado. | ⬜ |
+| 15 | **Dashboard "Posso gastar hoje?"** | `useSpendingPower` (saldo − fixos pendentes − fatura) + `SpendingPowerBadge` com zona safe/caution/danger. Inserido no DashboardContent após DashboardHero. | ✅ (`2aed47e`) |
+| 16 | **Voice Capture** | `useSpeechRecognition` (pt-BR, SSR-safe, cleanup) + botão Mic/MicOff no AIAssistantChat. Oculto quando não suportado. | ✅ (`5a184bd`) |
 
 ## 4. Bloqueados por decisão (NÃO iniciar sem nova decisão explícita do owner)
 
@@ -50,7 +50,5 @@
 
 ## Ordem de execução recomendada
 
-1. **Item 15** — Dashboard "Posso gastar hoje?": maior ROI imediato, frontend puro.
-2. **Item 16** — Voice Capture: UX premium, zero backend.
-3. **Item 6** — M-01 cobertura: reforço opcional, só se re-auditoria exigir.
-4. **Itens 7–10** — owner/infra: agendar com o owner (M-03 é pré-requisito para re-auditoria Big Four).
+1. **Item 6** — M-01 cobertura: reforço opcional, só se re-auditoria exigir.
+2. **Itens 7–10** — owner/infra: agendar com o owner (M-03 é pré-requisito para re-auditoria Big Four).
