@@ -39,6 +39,8 @@
 | 14 | **Copiloto que Cumpre** | `AIJournalDrawer` — drawer com stats, filtros e track record do agente. | ✅ (`b6bee7b`) |
 | 15 | **Dashboard "Posso gastar hoje?"** | `useSpendingPower` (saldo − fixos pendentes − fatura) + `SpendingPowerBadge` com zona safe/caution/danger. Inserido no DashboardContent após DashboardHero. | ✅ (`2aed47e`) |
 | 16 | **Voice Capture** | `useSpeechRecognition` (pt-BR, SSR-safe, cleanup) + botão Mic/MicOff no AIAssistantChat. Oculto quando não suportado. | ✅ (`5a184bd`) |
+| 17 | **Briefing Diário** | `DailyBriefingCard` — top 3 insights determinísticos (anomalia, taxa de poupança, projeção) via `insightsEngine`. Acima da dobra, zero API. | ✅ (`8e54b2a`) |
+| 18 | **Próximos 7 Dias** | `UpcomingEventsStrip` — strip horizontal de recorrentes a vencer + fechamento/vencimento de fatura de cartão nos próximos 7 dias. | ✅ (`8c128fd`) |
 
 ## 4. Bloqueados por decisão (NÃO iniciar sem nova decisão explícita do owner)
 
