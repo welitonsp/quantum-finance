@@ -190,7 +190,7 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'ai',
-      text: 'Olá, Comandante! Sou a Quantum AI — Auditora Financeira de Elite. Posso cruzar os seus dados, detetar anomalias e calcular o seu Burn Rate. Como posso ajudar?',
+      text: 'Olá! Sou sua assistente financeira. Como posso ajudar hoje?',
     },
   ]);
   const [inputMessage, setInputMessage] = useState('');
@@ -541,11 +541,6 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [
           transition={{ type: 'spring', stiffness: 380, damping: 30 }}
           className="fixed bottom-24 right-6 md:right-8 w-[90vw] md:w-[420px] h-[560px] bg-quantum-card/95 backdrop-blur-xl border border-quantum-accent/20 rounded-3xl shadow-[0_0_40px_rgba(0,230,138,0.1)] flex flex-col z-50 overflow-hidden"
         >
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute -top-10 -right-10 w-40 h-40 bg-cyan-500/10 rounded-full blur-3xl" />
-            <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-quantum-accent/8 rounded-full blur-3xl" />
-          </div>
-
           {/* Header */}
           <div className="p-4 bg-quantum-bg/80 border-b border-quantum-border flex items-center justify-between relative z-10">
             <div className="flex items-center gap-3">
@@ -652,7 +647,7 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [
                 type="text"
                 value={inputMessage}
                 onChange={e => setInputMessage(e.target.value)}
-                placeholder={rateLimitReached ? 'Limite atingido. Tente novamente em breve.' : 'Analise os meus gastos, Comandante...'}
+                placeholder={rateLimitReached ? 'Limite atingido. Tente novamente em breve.' : 'Pergunte sobre seu saldo, gastos, metas...'}
                 disabled={isLoading || rateLimitReached}
                 className="flex-1 bg-quantum-bgSecondary border border-quantum-border rounded-xl px-4 py-2.5 text-sm text-quantum-fg placeholder:text-quantum-fgMuted focus:outline-none focus:border-quantum-accent/50 focus:shadow-[0_0_0_2px_rgba(0,230,138,0.1)] transition-all disabled:opacity-50"
               />

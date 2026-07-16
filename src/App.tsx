@@ -160,7 +160,6 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   const [monthlyGoal,            setMonthlyGoal]            = useState(() => Number(safeStorageGet('quantum_monthly_goal', 0)));
   const [isMobileMenuOpen,       setIsMobileMenuOpen]       = useState(false);
   const [isCommandPaletteOpen,   setIsCommandPaletteOpen]   = useState(false);
-  const [isCommanderMode,        setIsCommanderMode]        = useState(false);
   const [onboardingDismissed,    setOnboardingDismissed]    = useState(() => safeStorageGet('quantum_onboarding_dismissed', false));
 
   useEffect(() => safeStorageSet('quantum_sidebar_collapsed', isSidebarCollapsed), [isSidebarCollapsed]);
@@ -226,15 +225,8 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key?.toLowerCase() === 'k') {
+      if ((e.ctrlKey || e.metaKey) && e.key?.toLowerCase() === 'k') {
         e.preventDefault();
-        setIsCommanderMode(true);
-        setIsCommandPaletteOpen(true);
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key?.toLowerCase() === 'k') {
-        e.preventDefault();
-        setIsCommanderMode(false);
         setIsCommandPaletteOpen(prev => !prev);
         return;
       }
@@ -244,7 +236,6 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
       if (e.altKey && e.key?.toLowerCase() === 'n') { e.preventDefault(); setIsFormOpen(true); }
       if (e.key === 'Escape') {
         setIsCommandPaletteOpen(false);
-        setIsCommanderMode(false);
         setIsFormOpen(false);
         setIsAIChatOpen(false);
         setTransactionToDelete(null);
@@ -582,8 +573,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
         <Suspense fallback={null}>
           <CommandPalette
             isOpen={isCommandPaletteOpen}
-            onClose={() => { setIsCommandPaletteOpen(false); setIsCommanderMode(false); }}
-            isCommanderMode={isCommanderMode}
+            onClose={() => setIsCommandPaletteOpen(false)}
           />
         </Suspense>
       </ErrorBoundary>
@@ -639,7 +629,7 @@ export default function App() {
   const handleLogin = async () => {
     try {
       await signInWithPopup(auth, new GoogleAuthProvider());
-      toast.success('Acesso Autorizado, Comandante!');
+      toast.success('Bem-vindo de volta.');
     } catch (error) {
       if (isMfaRequiredError(error)) {
         setMfaError(error);
@@ -658,7 +648,7 @@ export default function App() {
     try {
       await resolveTotpSignIn(auth, mfaError, code);
       setMfaError(null);
-      toast.success('Acesso Autorizado, Comandante!');
+      toast.success('Bem-vindo de volta.');
     } catch (error) {
       logSanitizedFirebaseError('auth_mfa_resolve', error);
       toast.error('Código inválido ou expirado. Tente novamente.');

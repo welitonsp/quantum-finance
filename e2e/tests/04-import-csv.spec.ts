@@ -9,9 +9,9 @@ import { dismissOnboardingIfPresent } from '../helpers/onboarding';
 
 test.describe('Importação CSV', () => {
   test.beforeEach(async ({ page }) => {
-    // O ImportButton está no Header, visível na página Centro de Comando.
+    // O ImportButton está no Header, visível no Dashboard.
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Centro de Comando' }).first())
+    await expect(page.getByRole('heading', { name: 'Hoje' }).first())
       .toBeVisible({ timeout: 20_000 });
     await dismissOnboardingIfPresent(page);
   });
