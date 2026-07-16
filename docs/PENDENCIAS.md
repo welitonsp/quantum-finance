@@ -41,6 +41,8 @@
 | 16 | **Voice Capture** | `useSpeechRecognition` (pt-BR, SSR-safe, cleanup) + botão Mic/MicOff no AIAssistantChat. Oculto quando não suportado. | ✅ (`5a184bd`) |
 | 17 | **Briefing Diário** | `DailyBriefingCard` — top 3 insights determinísticos (anomalia, taxa de poupança, projeção) via `insightsEngine`. Acima da dobra, zero API. | ✅ (`8e54b2a`) |
 | 18 | **Próximos 7 Dias** | `UpcomingEventsStrip` — strip horizontal de recorrentes a vencer + fechamento/vencimento de fatura de cartão nos próximos 7 dias. | ✅ (`8c128fd`) |
+| 19 | **Score Hero 2.0** | `ScoreHeroCard` — ring SVG compacto com score 0-100, trend vs mês anterior e hint do próximo nível (pilar mais fraco). Acima da dobra após IntelStrip. | ✅ (`e7e2f36`) |
+| 20 | **Patrimônio Hero** | `PatrimonioHeroCard` — patrimônio líquido com breakdown ativos/passivos/reserva em meses. Acima da dobra após SpendingPowerBadge. | ✅ (`e7e2f36`) |
 
 ## 4. Bloqueados por decisão (NÃO iniciar sem nova decisão explícita do owner)
 
