@@ -24,11 +24,11 @@
 | F-14 | Média | Performance/CWV sem medição | Workflow `lighthouse.yml` report-only, perfil móvel (#427). Evolução: RUM + budgets por rota | ✅ FECHADO |
 | F-15 | Média | Observabilidade (sem SLO/alertas) | — (infra/owner) | ⬜ ABERTO |
 
-**Placar (2026-07-15): 13 fechados · 1 parcial (F-09, resto é console/owner) · 1 aberto (F-15, infra/owner).** Todas as pendências **de código** da auditoria estão fechadas.
+**Placar (2026-07-16): 13 fechados · 1 parcial (F-09, resto é console/owner) · 1 aberto (F-15, infra/owner).** Todas as pendências **de código** da auditoria estão fechadas.
 
-## Dossiê para re-auditoria (2026-07-15)
+## Dossiê para re-auditoria (2026-07-16)
 
-- **Escopo remediado desde a nota 6,2:** PRs #406–#448. Fechados hoje: F-12 (a11y zerada + gate de regressão + navegação consolidada) e F-13 (116 testes novos risk-based; suíte em 1982 unit + 227 rules + 303 functions + 28 E2E).
+- **Escopo remediado desde a nota 6,2:** PRs #406–#448 + commits diretos `2aed47e`/`5a184bd`/`c8485d7`. Fechados: F-12 (a11y zerada + gate + navegação consolidada), F-13 (116 testes novos risk-based) e M-01 Big Four (21 testes adicionais para hooks a 0% — `useSpendingPower`, `useCategoryRules`, `useImportActions`).
 - **Hardening adicional descoberto e corrigido durante o F-13:** `npm run typecheck` quebrado na main (branded type `Centavos` escapando do vitest/esbuild — #444) e incidente de CI vermelho #440→#447 (E2E desalinhado da navegação nova + bundle budget estourado no runner; corrigido com specs atualizados + code-split `vendor-react`, index 499→324 KB).
 - **Fora do alcance de código (declarar como roadmap na re-auditoria):** F-09 restante (billing alerts/quotas — console GCP) e F-15 (SLOs/alertas — infra), ambos owner-pending em `docs/PENDENCIAS.md` §2.
 - **Processo recomendado ao owner antes da re-auditoria:** required checks (`Typecheck, Lint, Test, Build` + `E2E Tests (Playwright)`) no branch protection da `main`.
