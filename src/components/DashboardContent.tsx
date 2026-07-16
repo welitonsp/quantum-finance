@@ -52,6 +52,7 @@ import { DashboardHero } from './dashboard/DashboardHero';
 import { useSpendingPower } from '../hooks/useSpendingPower';
 import { SpendingPowerBadge } from './dashboard/SpendingPowerBadge';
 import { DailyBriefingCard } from './dashboard/DailyBriefingCard';
+import { UpcomingEventsStrip } from './dashboard/UpcomingEventsStrip';
 
 interface Props {
   user: { uid: string } | null;
@@ -265,6 +266,16 @@ export default function DashboardContent({
           accounts={accounts}
           cardOpenInvoicesCents={totalFaturaCents}
           currentMonth={currentYYYYMM}
+        />
+      </motion.div>
+
+      {/* ── PRÓXIMOS 7 DIAS — eventos financeiros iminentes ────── */}
+      <motion.div variants={itemVariants}>
+        <UpcomingEventsStrip
+          recurringTasks={recurringTasks}
+          creditCards={creditCards}
+          currentMonth={currentMonth}
+          currentYear={currentYear}
         />
       </motion.div>
 
