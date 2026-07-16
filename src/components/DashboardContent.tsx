@@ -51,6 +51,7 @@ import { BudgetAlertsPanel } from './dashboard/BudgetAlertsPanel';
 import { DashboardHero } from './dashboard/DashboardHero';
 import { useSpendingPower } from '../hooks/useSpendingPower';
 import { SpendingPowerBadge } from './dashboard/SpendingPowerBadge';
+import { DailyBriefingCard } from './dashboard/DailyBriefingCard';
 
 interface Props {
   user: { uid: string } | null;
@@ -255,6 +256,16 @@ export default function DashboardContent({
       {/* ── POSSO GASTAR HOJE? — saldo disponível real por zona ── */}
       <motion.div variants={itemVariants}>
         <SpendingPowerBadge power={spendingPower} />
+      </motion.div>
+
+      {/* ── BRIEFING DIÁRIO — top 3 insights determinísticos ──── */}
+      <motion.div variants={itemVariants}>
+        <DailyBriefingCard
+          transactions={txSet}
+          accounts={accounts}
+          cardOpenInvoicesCents={totalFaturaCents}
+          currentMonth={currentYYYYMM}
+        />
       </motion.div>
 
       {/* ── KPI CARDS — receita, despesa, saldo, projeção ─────── */}
