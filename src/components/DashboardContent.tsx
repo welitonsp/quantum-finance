@@ -8,6 +8,7 @@ import {
 import { useNavigation } from '../contexts/NavigationContext';
 import { useDashboardData } from '../hooks/useFinancialData';
 import ProactiveBriefing from './ProactiveBriefing';
+import OneTouchActionsCard from './OneTouchActionsCard';
 // Widgets analíticos pesados (gráficos) — code-split via lazy; só carregam ao expandir
 // as seções recolhíveis "Saúde Financeira & Insights" / "Análises & Projeções" (PR 8).
 const ForecastWidget   = lazy(() => import('./ForecastWidget'));
@@ -323,6 +324,10 @@ export default function DashboardContent({
             mcLoading:       forecast.mcLoading,
           }}
         />
+      </motion.div>
+
+      <motion.div variants={itemVariants}>
+        <OneTouchActionsCard recurringTasks={recurringTasks} />
       </motion.div>
 
         </Suspense>
