@@ -47,7 +47,6 @@ import CentroComandoWidget from './CentroComandoWidget';
 import { DashboardSection, Spinner } from '../shared/components/ui';
 import type { TimeRange } from '../hooks/useFinancialData';
 import type { UserCategory } from '../shared/schemas/categorySchemas';
-import { BudgetAlertsPanel } from './dashboard/BudgetAlertsPanel';
 import { DashboardHero } from './dashboard/DashboardHero';
 import { useSpendingPower } from '../hooks/useSpendingPower';
 import { SpendingPowerBadge } from './dashboard/SpendingPowerBadge';
@@ -233,6 +232,7 @@ export default function DashboardContent({
           budgetAlerts={budgetAlerts}
           recurringTasks={recurringTasks}
           cards={creditCards}
+          loading={budgetsLoading}
         />
       </motion.div>
 
@@ -316,16 +316,6 @@ export default function DashboardContent({
       {/* ── KPI CARDS — receita, despesa, saldo, projeção ─────── */}
       <motion.div variants={itemVariants}>
         <KPICards transactions={transactions} />
-      </motion.div>
-
-      {/* ── ALERTAS DE ORÇAMENTO (acima da dobra — decisão agora) ── */}
-      <motion.div variants={itemVariants}>
-        <BudgetAlertsPanel
-          alerts={budgetAlerts}
-          budgetsCount={budgets.length}
-          loading={budgetsLoading}
-          hasTransactions={txSet.length > 0}
-        />
       </motion.div>
 
       {/* ── METAS DE POUPANÇA (acima da dobra — objetivos visíveis) ── */}
