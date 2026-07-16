@@ -35,8 +35,8 @@ Fase 1 (Radar de Compras) entregue (#363). Restam, em ordem:
 |---|------|---------------|--------|
 | 11 | **Ação de 1 Toque** | `OneTouchActionsCard` filtra recorrentes a vencer em 7 dias → proposta pré-preenchida → `ActionConfirmationSheet` → `executeAgentAction`. Integrado ao DashboardContent. | ✅ (`83deafc`) |
 | 12 | **Gêmeo Financeiro** | `useGemeloData` agrega DNA de compromissos reais (recorrentes + PMT de dívidas + parcelas futuras de cartão); `GemeloFinanceiro.tsx` cria cone Monte Carlo enriquecido + 3 presets. Aba "Gêmeo" no grupo Planejamento. | ✅ (`c5176d7`) |
-| 13 | **Selo de Integridade** | Painel de verificabilidade para o usuário (rastreabilidade centavo a centavo, IA revalidada, LGPD hard-delete). | ⬜ próxima |
-| 14 | **Copiloto que Cumpre** | Compromissos verificáveis auditados no Diário de Decisões (`/decisions`). | ⬜ |
+| 13 | **Selo de Integridade** | `useDecisions` + GovernancePage com 4 pilares (Rastreabilidade, IA Verificável, LGPD, Idempotência) + seção "Diário de Decisões IA" com track record. | ✅ (`acbdc54`) |
+| 14 | **Copiloto que Cumpre** | `decisionHelpers.ts` (KIND_LABELS/OUTCOME_CONFIG compartilhados) + `AIJournalDrawer` (drawer com stats, 4 filtros, timeline animada, empty state a11y) + botão "Ver Diário Completo" na GovernancePage. | ✅ (`b6bee7b`) |
 
 ## 4. Bloqueados por decisão (NÃO iniciar sem nova decisão explícita do owner)
 

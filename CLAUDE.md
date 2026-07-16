@@ -3,15 +3,15 @@
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 > **Histórico de fases/PRs:** [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md) · **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md)
 
-## Estado Atual — 2026-07-16 (Tese fases 2–3 entregues; próxima: Selo de Integridade)
+## Estado Atual — 2026-07-16 (Tese Extraordinária COMPLETA — 5/5 fases entregues)
 
-- Branch principal: `main` — PRs #363–#452 mergeados + commits diretos `83deafc`/`c5176d7` (Tese fases 2 e 3).
+- Branch principal: `main` — PRs #363–#452 mergeados + commits diretos `83deafc`/`c5176d7`/`acbdc54`/`b6bee7b` (Tese fases 2–5). **Tese Extraordinária 5/5 entregue.**
 - Suíte: **1982 unit + 227 rules + 303 functions + 28 E2E**. Gates de cobertura: **stmts 77 / branches 68 / funcs 79 / lines 80** — regra permanente: só ratchetar com ≥0,5% de margem real medida no CI (incidente #382/#383).
-- **Pendências: fonte única em [docs/PENDENCIAS.md](docs/PENDENCIAS.md).** Resumo: código = zerado (itens 1–5 fechados; fases 2–3 da Tese entregues); produto = fases 4–5 da Tese (próxima: **Selo de Integridade**); owner/infra = M-03, F-09, F-15.
+- **Pendências: fonte única em [docs/PENDENCIAS.md](docs/PENDENCIAS.md).** Resumo: código = zerado (itens 1–5 + Tese 5/5 fechados); owner/infra = M-03, F-09, F-15; produto = nova fase (Voice capture, Dashboard Hero, ou próximo ciclo).
 - **Auditorias (concluídas e registradas):**
   - Big Four 2026-07-09 — **8.7/10** ([laudo](docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md)); M-01/M-02/L-01 fechados; M-03 owner-pending.
   - Externa independente 2026-07-11 — **6,2/10 pré-remediação** ([registro + dossiê de re-auditoria](docs/audit/AUDITORIA_EXTERNA_2026-07-11.md)); **placar 2026-07-16: 13 fechados · 1 parcial (F-09) · 1 aberto (F-15)** — pendências de código zeradas; **solicitar re-auditoria**.
-- **Tese de produto:** [docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md](docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md) — fase 1 (Radar de Compras) `#363` ✅ · fase 2 (Ação de 1 Toque) `83deafc` ✅ · fase 3 (Gêmeo Financeiro) `c5176d7` ✅ · fase 4 (Selo de Integridade) ⬜ próxima · fase 5 (Copiloto que Cumpre) ⬜.
+- **Tese de produto:** [docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md](docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md) — fase 1 (Radar de Compras) `#363` ✅ · fase 2 (Ação de 1 Toque) `83deafc` ✅ · fase 3 (Gêmeo Financeiro) `c5176d7` ✅ · fase 4 (Selo de Integridade) `acbdc54` ✅ · fase 5 (Copiloto que Cumpre) `b6bee7b` ✅. **Tese COMPLETA — 5/5 fases entregues.**
 - **Nota de processo:** rodar `npm run typecheck` antes de pushar — vitest/coverage usam esbuild e não type-checam (branded types como `Centavos` escapam localmente).
 - Detalhe completo dos ciclos #346–#430 (NFC-e, Cesta, FCM, segurança comercial, remediações): [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md).
 
