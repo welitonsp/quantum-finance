@@ -49,6 +49,8 @@ import type { TimeRange } from '../hooks/useFinancialData';
 import type { UserCategory } from '../shared/schemas/categorySchemas';
 import { BudgetAlertsPanel } from './dashboard/BudgetAlertsPanel';
 import { DashboardHero } from './dashboard/DashboardHero';
+import { useSpendingPower } from '../hooks/useSpendingPower';
+import { SpendingPowerBadge } from './dashboard/SpendingPowerBadge';
 
 interface Props {
   user: { uid: string } | null;
@@ -139,6 +141,15 @@ export default function DashboardContent({
   );
 
   const { status, color, rec, score, savingsRate, debtRatio, goalProgress } = st;
+
+  const currentYYYYMM = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+
+  const spendingPower = useSpendingPower({
+    saldo,
+    recurringTasks,
+    cardInvoiceCents: totalFaturaCents,
+    currentYYYYMM,
+  });
 
   const { metrics, loadingMetrics } = useFinancialMetrics(
     user?.uid ?? '',
@@ -239,6 +250,11 @@ export default function DashboardContent({
           goalProgress={goalProgress}
           savingsGoalPercent={metaEcon}
         />
+      </motion.div>
+
+      {/* ── POSSO GASTAR HOJE? — saldo disponível real por zona ── */}
+      <motion.div variants={itemVariants}>
+        <SpendingPowerBadge power={spendingPower} />
       </motion.div>
 
       {/* ── KPI CARDS — receita, despesa, saldo, projeção ─────── */}

@@ -27,16 +27,18 @@
 | 9 | **F-15 — observabilidade** — métricas estruturadas, SLOs e alertas de falha/custo para scheduled functions e callables (hoje jobs só logam contadores). | Ext. F-15 | infra | ⬜ |
 | 10 | **L-05 — APM/tracing distribuído** — gap vs. Big Tech, explicitamente aceitável no estágio atual. Evolução: Web-Vitals RUM + budgets por rota (follow-up do F-14). | Big Four L-05 | infra | ⬜ |
 
-## 3. Produto — sequência da Tese Extraordinária
+## 3. Produto — Tese Extraordinária (COMPLETA) + Nova Onda
 
-Fase 1 (Radar de Compras) entregue (#363). Restam, em ordem:
+**Tese 5/5 entregue.** Nova onda de produto (Big Tech premium):
 
-| # | Fase | Ideia central | Status |
-|---|------|---------------|--------|
-| 11 | **Ação de 1 Toque** | `OneTouchActionsCard` filtra recorrentes a vencer em 7 dias → proposta pré-preenchida → `ActionConfirmationSheet` → `executeAgentAction`. Integrado ao DashboardContent. | ✅ (`83deafc`) |
-| 12 | **Gêmeo Financeiro** | `useGemeloData` agrega DNA de compromissos reais (recorrentes + PMT de dívidas + parcelas futuras de cartão); `GemeloFinanceiro.tsx` cria cone Monte Carlo enriquecido + 3 presets. Aba "Gêmeo" no grupo Planejamento. | ✅ (`c5176d7`) |
-| 13 | **Selo de Integridade** | `useDecisions` + GovernancePage com 4 pilares (Rastreabilidade, IA Verificável, LGPD, Idempotência) + seção "Diário de Decisões IA" com track record. | ✅ (`acbdc54`) |
-| 14 | **Copiloto que Cumpre** | `decisionHelpers.ts` (KIND_LABELS/OUTCOME_CONFIG compartilhados) + `AIJournalDrawer` (drawer com stats, 4 filtros, timeline animada, empty state a11y) + botão "Ver Diário Completo" na GovernancePage. | ✅ (`b6bee7b`) |
+| # | Feature | Ideia central | Status |
+|---|---------|---------------|--------|
+| 11 | **Ação de 1 Toque** | `OneTouchActionsCard` — recorrentes a vencer → confirmação 1 toque. | ✅ (`83deafc`) |
+| 12 | **Gêmeo Financeiro** | `useGemeloData` + `GemeloFinanceiro` — Monte Carlo com DNA real. | ✅ (`c5176d7`) |
+| 13 | **Selo de Integridade** | `useDecisions` + GovernancePage — 4 pilares + Diário de Decisões IA. | ✅ (`acbdc54`) |
+| 14 | **Copiloto que Cumpre** | `AIJournalDrawer` — drawer com stats, filtros e track record do agente. | ✅ (`b6bee7b`) |
+| 15 | **Dashboard "Posso gastar hoje?"** | Hero number: saldo − compromissos fixos pendentes − fatura corrente. Resposta em <1s, colorida por zona (verde/âmbar/vermelho). | ⬜ próxima |
+| 16 | **Voice Capture** | Botão de microfone no chat: Web Speech API → transcript → GeminiIntentClassifier → `ActionConfirmationSheet`. Fallback gracioso quando não suportado. | ⬜ |
 
 ## 4. Bloqueados por decisão (NÃO iniciar sem nova decisão explícita do owner)
 
@@ -48,8 +50,7 @@ Fase 1 (Radar de Compras) entregue (#363). Restam, em ordem:
 
 ## Ordem de execução recomendada
 
-1. **Itens 1–2** (F-12 restante + F-13): fecham as duas últimas pendências de código da auditoria externa — pré-requisito para pedir re-auditoria e subir a nota (6,2 → alvo ≥9).
-2. **Item 7 (M-03)**: agendar com o owner — destrava o "FECHADO" da Big Four Sprint 1.
-3. **Itens 3–5**: hardening incremental de UX/robustez, PRs pequenos.
-4. **Item 11 (Ação de 1 Toque)**: primeira fase de produto nova — maior ROI com o que já existe.
-5. **Itens 8–10**: trilha infra/observabilidade, conforme disponibilidade do owner no console.
+1. **Item 15** — Dashboard "Posso gastar hoje?": maior ROI imediato, frontend puro.
+2. **Item 16** — Voice Capture: UX premium, zero backend.
+3. **Item 6** — M-01 cobertura: reforço opcional, só se re-auditoria exigir.
+4. **Itens 7–10** — owner/infra: agendar com o owner (M-03 é pré-requisito para re-auditoria Big Four).
