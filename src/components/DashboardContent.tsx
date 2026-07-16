@@ -2,7 +2,7 @@ import { useMemo, useCallback, lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowRightLeft, AlertTriangle,
-  CheckCircle2, Activity, Landmark, Info,
+  CheckCircle2, Activity, Landmark, Info, Target,
 } from 'lucide-react';
 
 import { useNavigation } from '../contexts/NavigationContext';
@@ -226,7 +226,12 @@ export default function DashboardContent({
       animate="visible"
       className="max-w-[1800px] mx-auto px-4 md:px-6 py-8 space-y-6"
     >
-      {/* ── CENTRO DE COMANDO — alertas acionáveis no topo ───── */}
+      {/* ════════════════════════════════════════════════════════
+          ACIMA DA DOBRA — 4 elementos fixos
+          1. Alertas urgentes  2. Hero  3. Posso gastar?  4. Próximos 7 dias
+          ════════════════════════════════════════════════════════ */}
+
+      {/* 1. Alertas acionáveis */}
       <motion.div variants={itemVariants}>
         <CentroComandoWidget
           budgetAlerts={budgetAlerts}
@@ -236,7 +241,7 @@ export default function DashboardContent({
         />
       </motion.div>
 
-      {/* ── HERO ──────────────────────────────────────────────── */}
+      {/* 2. Hero — saldo + CTA principal */}
       <DashboardHero
         saldo={saldo}
         receitas={receitas}
@@ -253,26 +258,7 @@ export default function DashboardContent({
         onNewTransaction={() => setIsFormOpen(true)}
       />
 
-      {/* ── INTEL STRIP ───────────────────────────────────────── */}
-      <motion.div variants={itemVariants}>
-        <IntelStrip
-          savingsRate={savingsRate}
-          debtRatio={debtRatio}
-          goalProgress={goalProgress}
-          savingsGoalPercent={metaEcon}
-        />
-      </motion.div>
-
-      {/* ── SCORE DE SAÚDE — ring compacto + trend + próximo nível ── */}
-      <motion.div variants={itemVariants}>
-        <ScoreHeroCard
-          metrics={metrics}
-          loading={loadingMetrics}
-          history={scoreHistory}
-        />
-      </motion.div>
-
-      {/* ── MODO CRISE — ativo apenas quando disponível ≤ 0 ─────── */}
+      {/* Modo crise — condicional, substitui/complementa SpendingPower em danger */}
       {spendingPower.zone === 'danger' && (
         <motion.div variants={itemVariants}>
           <CrisisModeCard
@@ -282,28 +268,12 @@ export default function DashboardContent({
         </motion.div>
       )}
 
-      {/* ── POSSO GASTAR HOJE? — saldo disponível real por zona ── */}
+      {/* 3. Posso gastar hoje? */}
       <motion.div variants={itemVariants}>
         <SpendingPowerBadge power={spendingPower} remainingDays={remainingDays} />
       </motion.div>
 
-      {/* ── PATRIMÔNIO LÍQUIDO — ativos vs passivos ────────────── */}
-      <motion.div variants={itemVariants}>
-        <PatrimonioHeroCard metrics={metrics} loading={loadingMetrics} />
-      </motion.div>
-
-      {/* ── BRIEFING DIÁRIO — top 3 insights determinísticos ──── */}
-      <motion.div variants={itemVariants}>
-        <DailyBriefingCard
-          transactions={txSet}
-          accounts={accounts}
-          cardOpenInvoicesCents={totalFaturaCents}
-          currentMonth={currentYYYYMM}
-          onNavigate={setCurrentPage}
-        />
-      </motion.div>
-
-      {/* ── PRÓXIMOS 7 DIAS — eventos financeiros iminentes ────── */}
+      {/* 4. Próximos 7 dias — eventos financeiros iminentes */}
       <motion.div variants={itemVariants}>
         <UpcomingEventsStrip
           recurringTasks={recurringTasks}
@@ -313,28 +283,75 @@ export default function DashboardContent({
         />
       </motion.div>
 
-      {/* ── KPI CARDS — receita, despesa, saldo, projeção ─────── */}
-      <motion.div variants={itemVariants}>
-        <KPICards transactions={transactions} />
-      </motion.div>
+      {/* ════════════════════════════════════════════════════════
+          INSIGHTS & METAS — aberto por padrão, abaixo da dobra
+          ════════════════════════════════════════════════════════ */}
+      <DashboardSection title="Insights & Metas" icon={Target} collapsible defaultCollapsed={false}>
+        <div className="space-y-6 pt-2">
+          <Suspense fallback={<div className="py-10 flex justify-center"><Spinner /></div>}>
 
-      {/* ── METAS DE POUPANÇA (acima da dobra — objetivos visíveis) ── */}
-      <motion.div variants={itemVariants}>
-        <Suspense fallback={<div className="py-10 flex justify-center"><Spinner /></div>}>
-          <GoalsPanel
-            uid={user?.uid ?? ''}
-            {...(metrics ? { ativosCents: metrics.ativosCents } : {})}
-            {...(metrics && metrics.despesa > 0
-              ? { monthlyExpensesCents: toCentavos(metrics.despesa) as Centavos }
-              : {})}
-          />
-        </Suspense>
-      </motion.div>
+            {/* Briefing diário — top 3 insights determinísticos */}
+            <motion.div variants={itemVariants}>
+              <DailyBriefingCard
+                transactions={txSet}
+                accounts={accounts}
+                cardOpenInvoicesCents={totalFaturaCents}
+                currentMonth={currentYYYYMM}
+                onNavigate={setCurrentPage}
+              />
+            </motion.div>
 
-      {/* ── SAÚDE FINANCEIRA & INSIGHTS (recolhível — Command Center) ── */}
-      <DashboardSection title="Saúde Financeira & Insights" icon={Activity} collapsible defaultCollapsed>
+            {/* Metas de poupança */}
+            <motion.div variants={itemVariants}>
+              <GoalsPanel
+                uid={user?.uid ?? ''}
+                {...(metrics ? { ativosCents: metrics.ativosCents } : {})}
+                {...(metrics && metrics.despesa > 0
+                  ? { monthlyExpensesCents: toCentavos(metrics.despesa) as Centavos }
+                  : {})}
+              />
+            </motion.div>
+
+            {/* Ação de 1 Toque — recorrentes a vencer */}
+            <motion.div variants={itemVariants}>
+              <OneTouchActionsCard recurringTasks={recurringTasks} />
+            </motion.div>
+
+          </Suspense>
+        </div>
+      </DashboardSection>
+
+      {/* ════════════════════════════════════════════════════════
+          SAÚDE FINANCEIRA & INSIGHTS — recolhido por padrão
+          ════════════════════════════════════════════════════════ */}
+      <DashboardSection title="Saúde Financeira" icon={Activity} collapsible defaultCollapsed>
         <div className="space-y-6 pt-2">
         <Suspense fallback={<div className="py-10 flex justify-center"><Spinner /></div>}>
+
+      {/* KPIs de saúde — taxa poupança, endividamento, metas */}
+      <motion.div variants={itemVariants}>
+        <IntelStrip
+          savingsRate={savingsRate}
+          debtRatio={debtRatio}
+          goalProgress={goalProgress}
+          savingsGoalPercent={metaEcon}
+        />
+      </motion.div>
+
+      {/* Score de saúde — ring compacto + trend */}
+      <motion.div variants={itemVariants}>
+        <ScoreHeroCard
+          metrics={metrics}
+          loading={loadingMetrics}
+          history={scoreHistory}
+        />
+      </motion.div>
+
+      {/* Patrimônio líquido — ativos vs passivos */}
+      <motion.div variants={itemVariants}>
+        <PatrimonioHeroCard metrics={metrics} loading={loadingMetrics} />
+      </motion.div>
+
       <QuantumInsights metrics={metrics} loading={loadingMetrics} />
 
       <motion.div variants={itemVariants}>
@@ -357,7 +374,6 @@ export default function DashboardContent({
         />
       </motion.div>
 
-      {/* ── QUANTUM COPILOT — insights proativos ─────────────── */}
       {copilotInsights.length > 0 && (
         <motion.div variants={itemVariants}>
           <QuantumCopilotCards insights={copilotInsights} loading={loading} />
@@ -368,7 +384,6 @@ export default function DashboardContent({
         <AnomalyAlerts transactions={allTransactions} />
       </motion.div>
 
-      {/* ── BRIEFING IA — acima dos gráficos ──────────────────── */}
       <motion.div variants={itemVariants}>
         <ProactiveBriefing
           uid={user?.uid ?? ''}
@@ -388,20 +403,23 @@ export default function DashboardContent({
         />
       </motion.div>
 
-      <motion.div variants={itemVariants}>
-        <OneTouchActionsCard recurringTasks={recurringTasks} />
-      </motion.div>
-
         </Suspense>
         </div>
       </DashboardSection>
 
-      {/* ── ANÁLISES & PROJEÇÕES (recolhível — Command Center) ── */}
+      {/* ════════════════════════════════════════════════════════
+          ANÁLISES & PROJEÇÕES — recolhido por padrão
+          ════════════════════════════════════════════════════════ */}
       <DashboardSection title="Análises & Projeções" icon={Landmark} collapsible defaultCollapsed>
         <div className="space-y-6 pt-2">
         <Suspense fallback={<div className="py-10 flex justify-center"><Spinner /></div>}>
 
-      {/* ── KPIs + GRÁFICOS (dados reais com filtro de tempo) ─── */}
+      {/* KPIs de período — receita, despesa, saldo, projeção */}
+      <motion.div variants={itemVariants}>
+        <KPICards transactions={transactions} />
+      </motion.div>
+
+      {/* KPIs + Gráficos com filtro de tempo */}
       <motion.div variants={itemVariants} className="space-y-4">
         {/* Seletor de período */}
         <div className="flex items-center gap-2 flex-wrap">
