@@ -33,9 +33,9 @@ Fase 1 (Radar de Compras) entregue (#363). Restam, em ordem:
 
 | # | Fase | Ideia central | Status |
 |---|------|---------------|--------|
-| 11 | **Ação de 1 Toque** | Briefing/radar propõe ação já pronta, confirmável em 1 toque (reutiliza `ActionConfirmationSheet` + `executeAgentAction`; zero backend novo). | ⬜ próxima fase de produto |
-| 12 | **Gêmeo Financeiro** | Simulador de cenários unificado (`cardProjection` + `insightsEngine` + `forecast` + recorrentes, centavos inteiros, 24 meses). | ⬜ |
-| 13 | **Selo de Integridade** | Painel de verificabilidade para o usuário (rastreabilidade centavo a centavo, IA revalidada, LGPD hard-delete). | ⬜ |
+| 11 | **Ação de 1 Toque** | `OneTouchActionsCard` filtra recorrentes a vencer em 7 dias → proposta pré-preenchida → `ActionConfirmationSheet` → `executeAgentAction`. Integrado ao DashboardContent. | ✅ (`83deafc`) |
+| 12 | **Gêmeo Financeiro** | `useGemeloData` agrega DNA de compromissos reais (recorrentes + PMT de dívidas + parcelas futuras de cartão); `GemeloFinanceiro.tsx` cria cone Monte Carlo enriquecido + 3 presets. Aba "Gêmeo" no grupo Planejamento. | ✅ (`c5176d7`) |
+| 13 | **Selo de Integridade** | Painel de verificabilidade para o usuário (rastreabilidade centavo a centavo, IA revalidada, LGPD hard-delete). | ⬜ próxima |
 | 14 | **Copiloto que Cumpre** | Compromissos verificáveis auditados no Diário de Decisões (`/decisions`). | ⬜ |
 
 ## 4. Bloqueados por decisão (NÃO iniciar sem nova decisão explícita do owner)
