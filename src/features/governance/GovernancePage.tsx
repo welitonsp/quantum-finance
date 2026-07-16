@@ -2,13 +2,14 @@ import { useState } from 'react';
 import {
   ShieldCheck, ScrollText, Clock, BrainCircuit, Tag, ChevronRight,
   CheckCircle2, AlertTriangle, Lock, Bell, BellOff,
-  Award, TrendingUp, ShieldCheck as ShieldFull,
-  RotateCcw, XCircle, Clock as ClockIcon,
+  Award, TrendingUp, ShieldCheck as ShieldFull, History,
 } from 'lucide-react';
 import { useAuditLogs } from '../../hooks/useAuditLogs';
 import { useDecisions } from '../../hooks/useDecisions';
 import type { AIDecision } from '../../hooks/useDecisions';
 import AuditTimeline from '../../components/AuditTimeline';
+import AIJournalDrawer from './AIJournalDrawer';
+import { getOutcomeCfg, getKindLabel } from './decisionHelpers';
 import DataPrivacyPanel from '../settings/DataPrivacyPanel';
 import { LoadingPage, Spinner } from '../../shared/components/ui';
 import { usePushNotifications } from '../../shared/hooks/usePushNotifications';
@@ -17,26 +18,9 @@ interface Props {
   uid: string;
 }
 
-const KIND_LABELS: Record<string, string> = {
-  register_purchase:     'Compra registrada',
-  register_income:       'Renda registrada',
-  contribute_to_goal:    'Meta contribuída',
-  register_debt_payment: 'Dívida quitada',
-  create_budget:         'Orçamento criado',
-  register_transfer:     'Transferência',
-};
-
-const OUTCOME_CONFIG = {
-  applied:  { icon: CheckCircle2, cls: 'text-emerald-400',        label: 'Aplicada' },
-  reverted: { icon: RotateCcw,    cls: 'text-amber-400',          label: 'Revertida' },
-  pending:  { icon: ClockIcon,    cls: 'text-blue-400',           label: 'Pendente' },
-  'n/a':    { icon: XCircle,      cls: 'text-quantum-fgMuted',    label: 'N/A' },
-} as const;
-
 function DecisionRow({ decision }: { decision: AIDecision }) {
-  const kind = decision.proposedAction.kind;
-  const label = KIND_LABELS[kind] ?? (kind || decision.intent);
-  const cfg = OUTCOME_CONFIG[decision.outcomeStatus] ?? OUTCOME_CONFIG['n/a'];
+  const label = getKindLabel(decision.proposedAction.kind, decision.intent);
+  const cfg = getOutcomeCfg(decision.outcomeStatus);
   const Icon = cfg.icon;
   const dateStr = decision.createdAt
     ? decision.createdAt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
@@ -77,6 +61,7 @@ export default function GovernancePage({ uid }: Props) {
   const { logs, loading: loadingLogs } = useAuditLogs(uid);
   const { decisions, loading: loadingDecisions, stats } = useDecisions(uid);
   const [showAuditTimeline, setShowAuditTimeline] = useState(false);
+  const [showJournal, setShowJournal] = useState(false);
   const {
     permission: pushPermission,
     loading:    pushLoading,
@@ -272,18 +257,28 @@ export default function GovernancePage({ uid }: Props) {
                 </p>
               )}
             </div>
-            {stats.total > 0 && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400">
-                  {stats.confirmed} aplicadas
-                </span>
-                {stats.reverted > 0 && (
-                  <span className="text-[9px] font-bold px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-400">
-                    {stats.reverted} revertidas
+            <div className="flex items-center gap-2 shrink-0">
+              {stats.total > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400">
+                    {stats.confirmed} aplicadas
                   </span>
-                )}
-              </div>
-            )}
+                  {stats.reverted > 0 && (
+                    <span className="text-[9px] font-bold px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-400">
+                      {stats.reverted} revertidas
+                    </span>
+                  )}
+                </div>
+              )}
+              <button
+                onClick={() => setShowJournal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-quantum-bgSecondary border border-quantum-border rounded-xl text-xs font-bold text-quantum-fg hover:border-quantum-accent/40 transition-all"
+              >
+                <History className="w-3.5 h-3.5" />
+                Ver Diário Completo
+                <ChevronRight className="w-3.5 h-3.5 text-quantum-fgMuted" />
+              </button>
+            </div>
           </div>
 
           {/* Recent decisions list */}
@@ -385,6 +380,16 @@ export default function GovernancePage({ uid }: Props) {
 
       {/* AuditTimeline drawer */}
       <AuditTimeline uid={uid} open={showAuditTimeline} onClose={() => setShowAuditTimeline(false)} />
+
+      {/* Diário de Decisões IA — drawer completo */}
+      <AIJournalDrawer
+        uid={uid}
+        decisions={decisions}
+        stats={stats}
+        loading={loadingDecisions}
+        open={showJournal}
+        onClose={() => setShowJournal(false)}
+      />
     </div>
   );
 }
