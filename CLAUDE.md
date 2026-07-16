@@ -142,6 +142,13 @@ lastExecutedMonth?: string;        // formato YYYY-MM
 - Delegação só quando o usuário pedir ou nomear o agente (subagente parte "do zero" e re-deriva
   contexto — é o caminho caro do plano; não disparar para poll de trabalho já rastreado).
 
+## Divisão Orquestrador/Worker
+
+- O modelo da sessão principal (**Fable 5**) É RESPONSÁVEL POR: planejamento, decisão de arquitetura, revisão final.
+- NUNCA escreva código diretamente na sessão principal para tarefas mecânicas — delegue ao subagente `worker`.
+- Delegue ao `worker` sempre que a tarefa for: correção pontual, aplicar um diff já decidido, rodar buscas, formatar/testar.
+- **Regra crítica de custo:** subagente herda o modelo da sessão — sempre fixe `model: sonnet` (worker) ou `model: opus` (builder) no frontmatter do agente.
+
 ## Processo Operacional Permanente
 
 - Read-only antes de implementação.
