@@ -4,13 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { GeminiService } from './GeminiService';
 import { ConversationMemory } from './ConversationMemory';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
-import { fromCentavos } from '../../shared/types/money';
+import { fromCentavos, toCentavos, type Centavos } from '../../shared/types/money';
 import { getTransactionAbsCentavos } from '../../utils/transactionUtils';
 import type { Transaction, ModuleBalances, RecurringTask } from '../../shared/types/transaction';
 import { geminiIntentClassifier } from '../ai-agent/geminiIntentClassifier';
 import { routeIntent } from '../ai-agent/intentRouter';
 import { buildQueryContext } from '../ai-agent/queryContextBuilder';
-import { presentProposal, formatMissingInfoMessage, type PresentationHints } from '../ai-agent/proposalPresentation';
+import { presentProposal, proposalImpact, formatMissingInfoMessage, type PresentationHints } from '../ai-agent/proposalPresentation';
 import { ActionConfirmationSheet } from '../ai-agent/ActionConfirmationSheet';
 import { interpretMutationCommand, parseConfirmationReply } from '../ai-agent/mutationCommandGuard';
 import type { AccountRef } from '../ai-agent/accountResolution';
@@ -258,6 +258,18 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [
     () => getSuggestedQuestions(transactions, balances),
     [transactions, balances]
   );
+
+  /**
+   * Saldo disponível atual em centavos inteiros — fonte do preview "Impacto no saldo"
+   * na ActionConfirmationSheet. `balances.geral.saldo` é o saldo consolidado (reais);
+   * a conversão para centavos usa `toCentavos` (Decimal, sem heurística float). Sem
+   * saldo disponível (balances nulo), o preview simplesmente não renderiza.
+   */
+  const currentBalanceCents = useMemo<Centavos | undefined>(() => {
+    const saldo = balances?.geral?.saldo;
+    if (saldo === undefined || !Number.isFinite(saldo)) return undefined;
+    return toCentavos(saldo);
+  }, [balances]);
 
   // Acrescenta uma fala do assistente ao chat e à memória de conversa.
   const pushAiMessage = useCallback((text: string) => {
@@ -694,6 +706,13 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [
           label: 'Abrir formulário de transações',
           onClick: handleInstallmentRoute,
         }}
+        {...(currentBalanceCents !== undefined
+          ? {
+              currentBalanceCents,
+              impactAmountCents: proposalImpact(pendingAction.proposal).amountCents,
+              impactDirection: proposalImpact(pendingAction.proposal).direction,
+            }
+          : {})}
         {...presentProposal(pendingAction.proposal, pendingAction.displayHints)}
       />
     )}

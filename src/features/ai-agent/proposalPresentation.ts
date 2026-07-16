@@ -9,9 +9,9 @@
  * partir dos slots faltantes — só o RÓTULO do que falta, nunca conteúdo financeiro.
  * 100% determinístico e testável: sem I/O, sem LLM.
  */
-import { formatBRL } from '../../shared/types/money';
+import { formatBRL, type Centavos } from '../../shared/types/money';
 import type { ActionProposal } from '../../shared/schemas/agentSchemas';
-import type { ActionSummaryRow } from './ActionConfirmationSheet';
+import type { ActionSummaryRow, ImpactDirection } from './ActionConfirmationSheet';
 
 export interface ProposalPresentation {
   title: string;
@@ -122,6 +122,32 @@ export function presentProposal(proposal: ActionProposal, hints?: PresentationHi
         ],
       };
     }
+  }
+}
+
+/**
+ * Impacto no saldo de uma proposta confirmável (puro, sem I/O).
+ *
+ * `amountCents` já vem em centavos inteiros do payload validado (`safeCentsSchema`),
+ * então não há conversão float aqui. `create_budget` não movimenta caixa → `none`.
+ */
+export interface ProposalImpact {
+  direction: ImpactDirection;
+  amountCents: Centavos;
+}
+
+export function proposalImpact(proposal: ActionProposal): ProposalImpact {
+  switch (proposal.kind) {
+    case 'register_purchase':
+    case 'register_debt_payment':
+      return { direction: 'outflow', amountCents: proposal.payload.amountCents };
+    case 'register_income':
+    case 'contribute_to_goal':
+      return { direction: 'inflow', amountCents: proposal.payload.amountCents };
+    case 'register_transfer':
+      return { direction: 'neutral', amountCents: proposal.payload.amountCents };
+    case 'create_budget':
+      return { direction: 'none', amountCents: proposal.payload.limitCents };
   }
 }
 
