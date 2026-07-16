@@ -53,6 +53,8 @@ import { useSpendingPower } from '../hooks/useSpendingPower';
 import { SpendingPowerBadge } from './dashboard/SpendingPowerBadge';
 import { DailyBriefingCard } from './dashboard/DailyBriefingCard';
 import { UpcomingEventsStrip } from './dashboard/UpcomingEventsStrip';
+import { ScoreHeroCard } from './dashboard/ScoreHeroCard';
+import { PatrimonioHeroCard } from './dashboard/PatrimonioHeroCard';
 
 interface Props {
   user: { uid: string } | null;
@@ -254,9 +256,23 @@ export default function DashboardContent({
         />
       </motion.div>
 
+      {/* ── SCORE DE SAÚDE — ring compacto + trend + próximo nível ── */}
+      <motion.div variants={itemVariants}>
+        <ScoreHeroCard
+          metrics={metrics}
+          loading={loadingMetrics}
+          history={scoreHistory}
+        />
+      </motion.div>
+
       {/* ── POSSO GASTAR HOJE? — saldo disponível real por zona ── */}
       <motion.div variants={itemVariants}>
         <SpendingPowerBadge power={spendingPower} />
+      </motion.div>
+
+      {/* ── PATRIMÔNIO LÍQUIDO — ativos vs passivos ────────────── */}
+      <motion.div variants={itemVariants}>
+        <PatrimonioHeroCard metrics={metrics} loading={loadingMetrics} />
       </motion.div>
 
       {/* ── BRIEFING DIÁRIO — top 3 insights determinísticos ──── */}
