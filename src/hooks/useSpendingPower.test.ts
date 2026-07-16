@@ -42,7 +42,7 @@ describe('useSpendingPower', () => {
         saldo: 1000,
         recurringTasks: [
           task({ id: 'a', value_cents: 30000 as Centavos, lastExecutedMonth: '2026-06' }),
-          task({ id: 'b', value: 200, lastExecutedMonth: undefined }),
+          task({ id: 'b', value: 200 }),
         ],
         cardInvoiceCents: 0 as Centavos,
         currentYYYYMM: '2026-07',

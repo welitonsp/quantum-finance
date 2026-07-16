@@ -64,9 +64,9 @@ describe('useImportActions', () => {
     const [uidArg, dataArg] = mockSaveAll.mock.calls[0] as [string, Array<Partial<Transaction>>];
     expect(uidArg).toBe('u1');
     expect(dataArg).toHaveLength(2);
-    expect(dataArg[0].value_cents).toBe(1000);
-    expect(dataArg[0].schemaVersion).toBe(2);
-    expect(dataArg[1].value_cents).toBe(2000);
+    expect(dataArg[0]!.value_cents).toBe(1000);
+    expect(dataArg[0]!.schemaVersion).toBe(2);
+    expect(dataArg[1]!.value_cents).toBe(2000);
     expect(mockToast.success).toHaveBeenCalledWith(
       '2 transações adicionadas ao cofre.',
       { id: 'toast-id' },
@@ -91,7 +91,7 @@ describe('useImportActions', () => {
       { value: 10, value_cents: 555 } as Partial<Transaction>,
     ]);
     const [, dataArg] = mockSaveAll.mock.calls[0] as [string, Array<Partial<Transaction>>];
-    expect(dataArg[0].value_cents).toBe(555);
+    expect(dataArg[0]!.value_cents).toBe(555);
   });
 
   it('erro no save: log sanitizado + toast de erro e retorna undefined', async () => {

@@ -56,7 +56,7 @@ describe('useCategoryRules', () => {
     withSnapshot([{ id: 'r1', data: { keyword: 'FOOD', category: 'Alimentação' } }]);
     const { result } = renderHook(() => useCategoryRules('u1'));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.rules[0].keyword).toBe('food');
+    expect(result.current.rules[0]!.keyword).toBe('food');
   });
 
   it('descarta docs com keyword ou category vazios', async () => {
