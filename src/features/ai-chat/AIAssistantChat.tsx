@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { X, Send, BrainCircuit, User, ChevronDown, AlertTriangle } from 'lucide-react';
+import { X, Send, BrainCircuit, User, ChevronDown, AlertTriangle, Mic, MicOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GeminiService } from './GeminiService';
 import { ConversationMemory } from './ConversationMemory';
@@ -17,6 +17,7 @@ import type { AccountRef } from '../ai-agent/accountResolution';
 import { useAgentAction, type AgentActionResult } from '../../hooks/useAgentAction';
 import type { ActionProposal, AgentIntent } from '../../shared/schemas/agentSchemas';
 import { INTENT_REGISTRY, type AgentTool } from '../ai-agent/intentRegistry';
+import { useSpeechRecognition } from '../../shared/hooks/useSpeechRecognition';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -193,6 +194,9 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [
     },
   ]);
   const [inputMessage, setInputMessage] = useState('');
+  const { isListening, isSupported: isVoiceSupported, startListening, stopListening } = useSpeechRecognition(
+    useCallback((transcript: string) => setInputMessage(transcript), []),
+  );
   const [isLoading,    setIsLoading]    = useState(false);
   const [callCount,    setCallCount]    = useState(0);
 
@@ -640,6 +644,21 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [
                 disabled={isLoading || rateLimitReached}
                 className="flex-1 bg-quantum-bgSecondary border border-quantum-border rounded-xl px-4 py-2.5 text-sm text-quantum-fg placeholder:text-quantum-fgMuted focus:outline-none focus:border-quantum-accent/50 focus:shadow-[0_0_0_2px_rgba(0,230,138,0.1)] transition-all disabled:opacity-50"
               />
+              {isVoiceSupported && (
+                <button
+                  type="button"
+                  onClick={isListening ? stopListening : startListening}
+                  aria-label={isListening ? 'Parar gravação' : 'Gravar mensagem por voz'}
+                  title={isListening ? 'Parar' : 'Gravar por voz (Chrome)'}
+                  className={`flex-shrink-0 p-2.5 rounded-xl border transition-all ${
+                    isListening
+                      ? 'bg-red-500/20 border-red-500/40 text-red-400 animate-pulse'
+                      : 'bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted hover:text-quantum-fg hover:border-quantum-accent/40'
+                  }`}
+                >
+                  {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                </button>
+              )}
               <button
                 type="submit"
                 disabled={isLoading || !inputMessage.trim() || rateLimitReached}
