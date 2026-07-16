@@ -5,11 +5,11 @@
 
 ## Estado Atual — 2026-07-16 (Tese Extraordinária COMPLETA — 5/5 fases entregues)
 
-- Branch principal: `main` — PRs #363–#452 mergeados + commits diretos `83deafc`/`c5176d7`/`acbdc54`/`b6bee7b` (Tese fases 2–5). **Tese Extraordinária 5/5 entregue.**
-- Suíte: **1982 unit + 227 rules + 303 functions + 28 E2E**. Gates de cobertura: **stmts 77 / branches 68 / funcs 79 / lines 80** — regra permanente: só ratchetar com ≥0,5% de margem real medida no CI (incidente #382/#383).
-- **Pendências: fonte única em [docs/PENDENCIAS.md](docs/PENDENCIAS.md).** Resumo: código = zerado (itens 1–5 + Tese 5/5 fechados); owner/infra = M-03, F-09, F-15; produto = nova fase (Voice capture, Dashboard Hero, ou próximo ciclo).
+- Branch principal: `main` — PRs #363–#452 mergeados + commits diretos `83deafc`/`c5176d7`/`acbdc54`/`b6bee7b`/`2aed47e`/`5a184bd`/`c8485d7` (Tese fases 2–5 + SpendingPower + Voice + M-01). **Tese Extraordinária 5/5 entregue. Código zerado.**
+- Suíte: **2028 unit + 227 rules + 303 functions + 28 E2E**. Gates de cobertura: **stmts 77 / branches 68 / funcs 79 / lines 80** — regra permanente: só ratchetar com ≥0,5% de margem real medida no CI (incidente #382/#383).
+- **Pendências: fonte única em [docs/PENDENCIAS.md](docs/PENDENCIAS.md).** Resumo: código = zerado (itens 1–6 + Tese 5/5 fechados); owner/infra = M-03, F-09, F-15; produto = nova onda Big Tech premium.
 - **Auditorias (concluídas e registradas):**
-  - Big Four 2026-07-09 — **8.7/10** ([laudo](docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md)); M-01/M-02/L-01 fechados; M-03 owner-pending.
+  - Big Four 2026-07-09 — **8.7/10** ([laudo](docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md)); M-01/M-02/L-01/L-03/L-04 fechados (`c8485d7`); M-03 owner-pending.
   - Externa independente 2026-07-11 — **6,2/10 pré-remediação** ([registro + dossiê de re-auditoria](docs/audit/AUDITORIA_EXTERNA_2026-07-11.md)); **placar 2026-07-16: 13 fechados · 1 parcial (F-09) · 1 aberto (F-15)** — pendências de código zeradas; **solicitar re-auditoria**.
 - **Tese de produto:** [docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md](docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md) — fase 1 (Radar de Compras) `#363` ✅ · fase 2 (Ação de 1 Toque) `83deafc` ✅ · fase 3 (Gêmeo Financeiro) `c5176d7` ✅ · fase 4 (Selo de Integridade) `acbdc54` ✅ · fase 5 (Copiloto que Cumpre) `b6bee7b` ✅. **Tese COMPLETA — 5/5 fases entregues.**
 - **Nota de processo:** rodar `npm run typecheck` antes de pushar — vitest/coverage usam esbuild e não type-checam (branded types como `Centavos` escapam localmente).
