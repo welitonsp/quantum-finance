@@ -16,7 +16,7 @@
 | 3 | **F-01 follow-up — UI mirror do consent IA — FECHADO** — `useAiConsent` (realtime) + `AiConsentGate` nas 3 abas de IA e no chat flutuante, CTA para Governança/Privacidade. Follow-up menor: gate na categorização em lote do import (avaliar no L-03). | Ext. F-01 | UI | ✅ |
 | 4 | **L-04 — ErrorBoundaries por feature — FECHADO** — `ErrorBoundary` extraído para componente com `label` (fallback nomeado por grupo da sidebar) e `resetKey={currentPage}` (crash numa página não trava mais a navegação; navegar recupera). Boundaries do chat/palette/settings com labels próprios. | Big Four L-04 | UI | ✅ |
 | 5 | **L-03 — higiene de tipos — FECHADO** — 21 `any` → **0** (meta era <10); `@ts-ignore` já estava zerado. Tooltip do TimelineWidget tipado; casts de fixture de teste convertidos para `as unknown as T`; todos os `eslint-disable` de `no-explicit-any` removidos. Pendente de decisão de produto (fora deste item): `cardId` inerte no `TransactionForm` — ganhar UI de seleção de cartão ou remover os ramos. | Big Four L-03 | `src/` | ✅ |
-| 6 | **M-01 reforço opcional de cobertura** — utils a 0% (`financialData`, `categoryRules`, `importActions`, `timingEvents`), branches soltos de `insightsEngine`; `useForecast`/workers (`parserWorker`, `pdfParser`) não são exercitáveis em jsdom (documentar exclusão ou testar via node). | Big Four M-01 | testes | ⬜ |
+| 6 | **M-01 reforço de cobertura — FECHADO** — 21 testes adicionados (`c8485d7`): `useSpendingPower` (9), `useCategoryRules` (6), `useImportActions` (6). Workers/parsers excluídos por design (jsdom incompatível). | Big Four M-01 | testes | ✅ |
 
 ## 2. Owner / infra (fora do alcance de CI)
 
@@ -50,5 +50,4 @@
 
 ## Ordem de execução recomendada
 
-1. **Item 6** — M-01 cobertura: reforço opcional, só se re-auditoria exigir.
-2. **Itens 7–10** — owner/infra: agendar com o owner (M-03 é pré-requisito para re-auditoria Big Four).
+1. **Itens 7–10** — owner/infra: agendar com o owner (M-03 é pré-requisito para re-auditoria Big Four). Item 6 fechado (`c8485d7`).
