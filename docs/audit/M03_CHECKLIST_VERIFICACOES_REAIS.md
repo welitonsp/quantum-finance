@@ -13,8 +13,7 @@ Legenda de status: ⬜ pendente · ✅ verificado OK · ❌ falhou (abrir issue)
 
 ## 1. MFA TOTP — fluxo ponta a ponta
 
-Código já entregue e habilitado em produção: PRs #349/#351/#353; TOTP ativo no projeto
-(`docs/security/ENABLE_TOTP_MFA_2026-07-04.md`). Falta a **prova de ponta a ponta em dispositivo real**.
+Código já entregue e habilitado em produção: PRs #349/#351/#353; TOTP ativo no projeto (M-02 fechado). Falta a **prova de ponta a ponta em dispositivo real**.
 
 Pré-requisitos: um app autenticador (Google Authenticator, Authy, 1Password, etc.) e uma conta de teste.
 

@@ -1,6 +1,6 @@
 # Quantum Finance — Decisões de Arquitetura
 
-> Registra o **porquê** de escolhas técnicas relevantes. Regras ativas derivadas dessas decisões estão em `CLAUDE.md`. Cronologia de implementação em `docs/HISTORICO-FASES.md`.
+> Registra o **porquê** de escolhas técnicas relevantes. Regras ativas derivadas dessas decisões estão em `CLAUDE.md`. Cronologia de implementação disponível no `git log`.
 
 ---
 

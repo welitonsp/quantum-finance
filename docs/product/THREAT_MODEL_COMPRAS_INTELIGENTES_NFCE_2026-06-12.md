@@ -11,8 +11,6 @@ NFC-e real permanece bloqueada. Este documento não autoriza implementação, fe
 Referências consultadas:
 
 - `docs/product/QUANTUM_FINANCE_VISAO_ESTRATEGICA_2_0.md`
-- `docs/product/INVENTARIO_UI_PRODUTO_QUANTUM_2026-06-12.md`
-- `docs/product/INVENTARIO_COMPARATIVO_QUANTUM_SGC_2026-06-12.md`
 - `CLAUDE.md`
 
 ## 1. Sumário executivo

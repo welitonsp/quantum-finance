@@ -11,8 +11,6 @@ Esta política não autoriza implementação, alteração de código, alteraçã
 Referências de base:
 
 - `docs/product/QUANTUM_FINANCE_VISAO_ESTRATEGICA_2_0.md`
-- `docs/product/INVENTARIO_UI_PRODUTO_QUANTUM_2026-06-12.md`
-- `docs/product/INVENTARIO_COMPARATIVO_QUANTUM_SGC_2026-06-12.md`
 - `docs/product/THREAT_MODEL_COMPRAS_INTELIGENTES_NFCE_2026-06-12.md`
 - `CLAUDE.md`
 

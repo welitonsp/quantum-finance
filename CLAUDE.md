@@ -1,7 +1,7 @@
 # Quantum Finance — Base de Conhecimento do Projeto
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
-> **Histórico de fases/PRs:** [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md) · **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md)
+> **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md) · **Pendências:** [docs/PENDENCIAS.md](docs/PENDENCIAS.md)
 
 ## Estado Atual — 2026-07-16 (Tese Extraordinária COMPLETA — 5/5 fases entregues)
 
@@ -13,7 +13,6 @@
   - Externa independente 2026-07-11 — **6,2/10 pré-remediação** ([registro + dossiê de re-auditoria](docs/audit/AUDITORIA_EXTERNA_2026-07-11.md)); **placar 2026-07-16: 13 fechados · 1 parcial (F-09) · 1 aberto (F-15)** — pendências de código zeradas; **solicitar re-auditoria**.
 - **Tese de produto:** [docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md](docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md) — fase 1 (Radar de Compras) `#363` ✅ · fase 2 (Ação de 1 Toque) `83deafc` ✅ · fase 3 (Gêmeo Financeiro) `c5176d7` ✅ · fase 4 (Selo de Integridade) `acbdc54` ✅ · fase 5 (Copiloto que Cumpre) `b6bee7b` ✅. **Tese COMPLETA — 5/5 fases entregues.**
 - **Nota de processo:** rodar `npm run typecheck` antes de pushar — vitest/coverage usam esbuild e não type-checam (branded types como `Centavos` escapam localmente).
-- Detalhe completo dos ciclos #346–#430 (NFC-e, Cesta, FCM, segurança comercial, remediações): [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md).
 
 ### Fatos vivos herdados dos ciclos anteriores
 
@@ -248,7 +247,6 @@ Recorrentes (`ADD_RECURRING`/`UPDATE_RECURRING`/`DELETE_RECURRING`) permanecem *
 - **Intent router:** `docs/AI_TOOL_ROUTER.md`
 - **Threat Model NFC-e:** `docs/product/THREAT_MODEL_COMPRAS_INTELIGENTES_NFCE_2026-06-12.md`
 - **LGPD/RIPD:** `docs/RIPD.md`
-- **Histórico de fases e PRs:** [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md)
 - **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md)
 
 ## Collections Firestore

@@ -1,7 +1,7 @@
 # Quantum Finance — Backlog Único de Pendências
 
 > **Fonte de verdade do que está ABERTO.** Consolidado em 2026-07-14 a partir de: Auditoria Big Four (`docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md`), Auditoria Externa Independente (`docs/audit/AUDITORIA_EXTERNA_2026-07-11.md`) e Tese Extraordinária (`docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md`).
-> Tudo que foi **concluído** sai deste arquivo (histórico em `docs/HISTORICO-FASES.md` e no git). Atualizar a cada PR que fechar um item.
+> Tudo que foi **concluído** sai deste arquivo (histórico no `git log`). Atualizar a cada PR que fechar um item.
 >
 > Status: ⬜ pendente · 🔄 em andamento · 🚧 bloqueado por decisão
 
