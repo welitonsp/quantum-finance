@@ -5,6 +5,8 @@ import type { SpendingPower } from '../../hooks/useSpendingPower';
 
 interface Props {
   power: SpendingPower;
+  /** Days remaining in current month — if provided, shows daily spending rate. */
+  remainingDays?: number;
 }
 
 const ZONE_CONFIG = {
@@ -13,7 +15,7 @@ const ZONE_CONFIG = {
   danger:  { bg: 'bg-red-500/10',     border: 'border-red-500/25',     text: 'text-red-400',     label: 'Comprometido' },
 } as const;
 
-export function SpendingPowerBadge({ power }: Props) {
+export function SpendingPowerBadge({ power, remainingDays }: Props) {
   const cfg = ZONE_CONFIG[power.zone];
   const isNegative = power.availableCents < 0;
   const absCents = Math.abs(power.availableCents) as Centavos;
@@ -38,6 +40,11 @@ export function SpendingPowerBadge({ power }: Props) {
           prefix="R$ "
         />
       </p>
+      {remainingDays && remainingDays > 0 && power.availableCents > 0 && (
+        <p className="text-[10px] text-quantum-fgMuted mt-1">
+          {formatBRL(Math.floor(power.availableCents / remainingDays) as Centavos)}/dia por {remainingDays} dias restantes
+        </p>
+      )}
       <div className="flex items-center gap-3 mt-2.5">
         <span className="text-[10px] text-quantum-fgMuted">
           Saldo <span className="font-bold text-quantum-fg">{formatBRL(power.saldoCents)}</span>

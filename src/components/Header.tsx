@@ -11,7 +11,7 @@ import { getTransactionAbsCentavos, isIncome, isExpense, isInvoicePayment } from
 import { fromCentavos } from '../shared/types/money';
 
 const PAGE_TITLES: Record<string, string> = {
-  dashboard:          'Centro de Comando',
+  dashboard:          'Hoje',
   history:            'Movimentações',
   reports:            'BI & Relatórios',
   accounts:           'Contas',

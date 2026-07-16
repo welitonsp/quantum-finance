@@ -54,6 +54,7 @@ import { SpendingPowerBadge } from './dashboard/SpendingPowerBadge';
 import { DailyBriefingCard } from './dashboard/DailyBriefingCard';
 import { UpcomingEventsStrip } from './dashboard/UpcomingEventsStrip';
 import { ScoreHeroCard } from './dashboard/ScoreHeroCard';
+import { CrisisModeCard } from './dashboard/CrisisModeCard';
 import { PatrimonioHeroCard } from './dashboard/PatrimonioHeroCard';
 
 interface Props {
@@ -116,7 +117,7 @@ export default function DashboardContent({
   creditCards,
   totalFaturaCents,
 }: Props) {
-  const { currentMonth, currentYear } = useNavigation();
+  const { currentMonth, currentYear, setCurrentPage } = useNavigation();
   // ── Hero metrics from existing moduleBalances prop ────────────────────────
   const saldo    = moduleBalances?.geral?.saldo    ?? 0;
   const receitas = moduleBalances?.geral?.receitas ?? 0;
@@ -147,6 +148,12 @@ export default function DashboardContent({
   const { status, color, rec, score, savingsRate, debtRatio, goalProgress } = st;
 
   const currentYYYYMM = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+
+  const remainingDays = useMemo(() => {
+    const today = new Date();
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    return Math.max(0, daysInMonth - today.getDate());
+  }, []);
 
   const spendingPower = useSpendingPower({
     saldo,
@@ -265,9 +272,19 @@ export default function DashboardContent({
         />
       </motion.div>
 
+      {/* ── MODO CRISE — ativo apenas quando disponível ≤ 0 ─────── */}
+      {spendingPower.zone === 'danger' && (
+        <motion.div variants={itemVariants}>
+          <CrisisModeCard
+            availableCents={spendingPower.availableCents}
+            onNavigate={setCurrentPage}
+          />
+        </motion.div>
+      )}
+
       {/* ── POSSO GASTAR HOJE? — saldo disponível real por zona ── */}
       <motion.div variants={itemVariants}>
-        <SpendingPowerBadge power={spendingPower} />
+        <SpendingPowerBadge power={spendingPower} remainingDays={remainingDays} />
       </motion.div>
 
       {/* ── PATRIMÔNIO LÍQUIDO — ativos vs passivos ────────────── */}
@@ -282,6 +299,7 @@ export default function DashboardContent({
           accounts={accounts}
           cardOpenInvoicesCents={totalFaturaCents}
           currentMonth={currentYYYYMM}
+          onNavigate={setCurrentPage}
         />
       </motion.div>
 

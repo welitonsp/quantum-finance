@@ -15,6 +15,8 @@ interface Props {
   accounts: Account[];
   cardOpenInvoicesCents: Centavos;
   currentMonth: string; // YYYY-MM format
+  /** Optional navigation callback — if provided, each item shows a CTA link. */
+  onNavigate?: (page: string) => void;
 }
 
 type BriefingSeverity = 'ok' | 'warn' | 'critical';
@@ -25,6 +27,7 @@ interface BriefingItem {
   title: string;
   value: string;
   severity: BriefingSeverity;
+  navTarget: string; // page id to navigate to
 }
 
 const SEV: Record<BriefingSeverity, { border: string; icon: string; badge: string; label: string }> = {
@@ -38,6 +41,7 @@ export function DailyBriefingCard({
   accounts,
   cardOpenInvoicesCents,
   currentMonth,
+  onNavigate,
 }: Props): JSX.Element | null {
   const { items, forecast } = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
@@ -58,6 +62,7 @@ export function DailyBriefingCard({
         title: `${topAnomaly.category} ${topAnomaly.deltaPct > 0 ? '+' : ''}${topAnomaly.deltaPct}% vs. média`,
         value: formatBRL(Math.abs(topAnomaly.currentCents) as Centavos),
         severity: topAnomaly.severity === 'high' ? 'critical' : 'warn',
+        navTarget: 'history',
       });
     }
 
@@ -69,6 +74,7 @@ export function DailyBriefingCard({
         title: 'Taxa de poupança do mês',
         value: `${kpis.savingsRatePct.toFixed(1)}%`,
         severity: kpis.savingsRatePct >= 20 ? 'ok' : kpis.savingsRatePct >= 5 ? 'warn' : 'critical',
+        navTarget: 'planning',
       });
     }
 
@@ -85,6 +91,7 @@ export function DailyBriefingCard({
             : fc.projectedBalanceCents < kpis.monthlyIncomeCents * 0.1
               ? 'warn'
               : 'ok',
+        navTarget: 'simulation',
       });
     }
 
@@ -112,6 +119,14 @@ export function DailyBriefingCard({
                 {item.id === 'forecast' && forecast.projectedBalanceCents < 0 && <span className="mr-0.5">−</span>}
                 {item.value}
               </p>
+              {onNavigate && (
+                <button
+                  onClick={() => onNavigate(item.navTarget)}
+                  className={`text-[9px] font-bold mt-0.5 ${sev.icon} opacity-70 hover:opacity-100 transition-opacity`}
+                >
+                  Ver →
+                </button>
+              )}
             </div>
             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border shrink-0 ${sev.badge}`}>
               {sev.label}
