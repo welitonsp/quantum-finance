@@ -1,5 +1,5 @@
 import { useMemo, type ComponentType, type JSX } from 'react';
-import { TrendingUp, TrendingDown, PiggyBank, CalendarDays, Sparkles } from 'lucide-react';
+import { TrendingUp, TrendingDown, PiggyBank, CalendarDays, Sparkles, ChevronRight } from 'lucide-react';
 
 import {
   computeAnomalies,
@@ -9,6 +9,14 @@ import {
 } from '../../lib/insightsEngine';
 import { formatBRL, type Centavos } from '../../shared/types/money';
 import type { Transaction, Account } from '../../shared/types/transaction';
+import type { ActionProposal } from '../../shared/schemas/agentSchemas';
+import type { ActionSummaryRow } from '../../features/ai-agent/ActionConfirmationSheet';
+
+export interface BudgetProposalPresentation {
+  title: string;
+  question: string;
+  rows: ActionSummaryRow[];
+}
 
 interface Props {
   transactions: Transaction[];
@@ -17,6 +25,8 @@ interface Props {
   currentMonth: string; // YYYY-MM format
   /** Optional navigation callback — if provided, each item shows a CTA link. */
   onNavigate?: (page: string) => void;
+  /** Optional — when set, anomaly items show a "Criar orçamento" CTA. */
+  onPropose?: (proposal: ActionProposal, pres: BudgetProposalPresentation) => void;
 }
 
 type BriefingSeverity = 'ok' | 'warn' | 'critical';
@@ -27,7 +37,9 @@ interface BriefingItem {
   title: string;
   value: string;
   severity: BriefingSeverity;
-  navTarget: string; // page id to navigate to
+  navTarget: string;
+  /** Present only for anomaly items when a create_budget proposal can be generated. */
+  budgetProposal?: { proposal: ActionProposal; pres: BudgetProposalPresentation };
 }
 
 const SEV: Record<BriefingSeverity, { border: string; icon: string; badge: string; label: string }> = {
@@ -42,6 +54,7 @@ export function DailyBriefingCard({
   cardOpenInvoicesCents,
   currentMonth,
   onNavigate,
+  onPropose,
 }: Props): JSX.Element | null {
   const { items, forecast } = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
@@ -53,9 +66,32 @@ export function DailyBriefingCard({
 
     const built: BriefingItem[] = [];
 
-    // A. Top anomaly
+    // A. Top anomaly — gera create_budget proposal quando gasto está acima da média
     const topAnomaly = anomalies[0];
     if (topAnomaly && topAnomaly.severity !== 'low') {
+      // avgCents é média de valores inteiros (value_cents); Math.round garante int sem
+      // infringir a proibição de Math.round(reais*100) — aqui já estamos em centavos.
+      const limitCents = Math.round(topAnomaly.avgCents) as Centavos;
+      const budgetProposal: BriefingItem['budgetProposal'] = limitCents > 0
+        ? {
+            proposal: {
+              kind: 'create_budget',
+              status: 'pending',
+              payload: { category: topAnomaly.category, limitCents, competencia: currentMonth },
+            },
+            pres: {
+              title: 'Criar orçamento',
+              question: `Definir limite de ${formatBRL(limitCents)} para "${topAnomaly.category}" em ${currentMonth}?`,
+              rows: [
+                { label: 'Categoria', value: topAnomaly.category },
+                { label: 'Limite sugerido', value: formatBRL(limitCents), emphasis: true },
+                { label: 'Competência', value: currentMonth },
+                { label: 'Gasto atual', value: formatBRL(Math.abs(topAnomaly.currentCents) as Centavos) },
+              ],
+            },
+          }
+        : undefined;
+
       built.push({
         id: 'anomaly-0',
         Icon: topAnomaly.deltaPct > 0 ? TrendingUp : TrendingDown,
@@ -63,6 +99,7 @@ export function DailyBriefingCard({
         value: formatBRL(Math.abs(topAnomaly.currentCents) as Centavos),
         severity: topAnomaly.severity === 'high' ? 'critical' : 'warn',
         navTarget: 'history',
+        budgetProposal,
       });
     }
 
@@ -119,14 +156,24 @@ export function DailyBriefingCard({
                 {item.id === 'forecast' && forecast.projectedBalanceCents < 0 && <span className="mr-0.5">−</span>}
                 {item.value}
               </p>
-              {onNavigate && (
-                <button
-                  onClick={() => onNavigate(item.navTarget)}
-                  className={`text-[9px] font-bold mt-0.5 ${sev.icon} opacity-70 hover:opacity-100 transition-opacity`}
-                >
-                  Ver →
-                </button>
-              )}
+              <div className="flex items-center gap-3 mt-0.5">
+                {onNavigate && (
+                  <button
+                    onClick={() => onNavigate(item.navTarget)}
+                    className={`text-[9px] font-bold ${sev.icon} opacity-70 hover:opacity-100 transition-opacity`}
+                  >
+                    Ver →
+                  </button>
+                )}
+                {onPropose && item.budgetProposal && (
+                  <button
+                    onClick={() => onPropose(item.budgetProposal!.proposal, item.budgetProposal!.pres)}
+                    className="text-[9px] font-bold text-quantum-accent opacity-80 hover:opacity-100 transition-opacity flex items-center gap-0.5"
+                  >
+                    Criar orçamento <ChevronRight className="w-2.5 h-2.5" />
+                  </button>
+                )}
+              </div>
             </div>
             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border shrink-0 ${sev.badge}`}>
               {sev.label}

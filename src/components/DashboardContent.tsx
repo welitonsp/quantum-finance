@@ -1,4 +1,4 @@
-import { useMemo, useCallback, lazy, Suspense } from 'react';
+import { useMemo, useCallback, useState, lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowRightLeft, AlertTriangle,
@@ -50,7 +50,10 @@ import type { UserCategory } from '../shared/schemas/categorySchemas';
 import { DashboardHero } from './dashboard/DashboardHero';
 import { useSpendingPower } from '../hooks/useSpendingPower';
 import { SpendingPowerBadge } from './dashboard/SpendingPowerBadge';
-import { DailyBriefingCard } from './dashboard/DailyBriefingCard';
+import { DailyBriefingCard, type BudgetProposalPresentation } from './dashboard/DailyBriefingCard';
+import { ActionConfirmationSheet } from '../features/ai-agent/ActionConfirmationSheet';
+import { useAgentAction } from '../hooks/useAgentAction';
+import type { ActionProposal } from '../shared/schemas/agentSchemas';
 import { UpcomingEventsStrip } from './dashboard/UpcomingEventsStrip';
 import { ScoreHeroCard } from './dashboard/ScoreHeroCard';
 import { CrisisModeCard } from './dashboard/CrisisModeCard';
@@ -219,6 +222,32 @@ export default function DashboardContent({
 
   const { weeks: cashflowWeeks, futureEvents } = useWeeklyCashflow(allTransactions, recurringTasks);
 
+  // ── Insight → ActionProposal (create_budget via DailyBriefingCard) ───────────
+  const [insightProposal, setInsightProposal] = useState<{
+    proposal: ActionProposal;
+    title: string;
+    question: string;
+    rows: BudgetProposalPresentation['rows'];
+  } | null>(null);
+
+  const { status: insightAgentStatus, error: insightAgentError, runAction: runInsightAction, reset: resetInsightAgent } = useAgentAction();
+
+  const handleInsightPropose = useCallback((
+    proposal: ActionProposal,
+    pres: BudgetProposalPresentation,
+  ) => {
+    resetInsightAgent();
+    setInsightProposal({ proposal, ...pres });
+  }, [resetInsightAgent]);
+
+  const handleInsightConfirm = useCallback(async () => {
+    if (!insightProposal || !user?.uid) return;
+    await runInsightAction(insightProposal.proposal, {
+      uid: user.uid,
+      question: insightProposal.question,
+    });
+  }, [insightProposal, user?.uid, runInsightAction]);
+
   return (
     <motion.div
       variants={containerVariants}
@@ -298,6 +327,7 @@ export default function DashboardContent({
                 cardOpenInvoicesCents={totalFaturaCents}
                 currentMonth={currentYYYYMM}
                 onNavigate={setCurrentPage}
+                onPropose={handleInsightPropose}
               />
             </motion.div>
 
@@ -488,6 +518,22 @@ export default function DashboardContent({
         </Suspense>
         </div>
       </DashboardSection>
+
+      {/* ── CONFIRMAÇÃO DE ORÇAMENTO VIA INSIGHT ─────────────── */}
+      {insightProposal && (
+        <ActionConfirmationSheet
+          open={!!insightProposal}
+          onClose={() => { setInsightProposal(null); resetInsightAgent(); }}
+          onConfirm={handleInsightConfirm}
+          title={insightProposal.title}
+          question={insightProposal.question}
+          rows={insightProposal.rows}
+          status={insightAgentStatus}
+          error={insightAgentError}
+          confirmLabel="Definir orçamento"
+          successMessage="Orçamento criado com sucesso."
+        />
+      )}
 
       {/* ── FAB MOBILE ────────────────────────────────────────── */}
       <button
