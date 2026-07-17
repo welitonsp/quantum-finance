@@ -65,13 +65,14 @@ describe('useSpendingPower', () => {
     expect(result.current.pendingCommitmentsCents).toBe(12345);
   });
 
-  it('ignora tarefas inativas, entrada, anuais e já executadas neste mês', () => {
+  it('ignora tarefas inativas, entradas legadas, anuais e já executadas neste mês', () => {
     const { result } = renderHook(() =>
       useSpendingPower({
         saldo: 1000,
         recurringTasks: [
           task({ id: 'inactive', active: false, value: 100 }),
           task({ id: 'entrada', type: 'entrada', value: 100 }),
+          task({ id: 'receita', type: 'receita', value: 100 }),
           task({ id: 'anual', frequency: 'anual', value: 100 }),
           task({ id: 'executed', lastExecutedMonth: '2026-07', value: 100 }),
         ],

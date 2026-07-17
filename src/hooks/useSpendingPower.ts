@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { toCentavos } from '../shared/types/money';
 import type { Centavos } from '../shared/types/money';
 import type { RecurringTask } from '../shared/types/transaction';
+import { isIncome } from '../utils/transactionUtils';
 
 export type SpendingZone = 'safe' | 'caution' | 'danger';
 
@@ -43,7 +44,7 @@ export function useSpendingPower({
     const pendingCommitmentsCents = recurringTasks
       .filter(t =>
         t.active &&
-        t.type !== 'entrada' &&
+        !isIncome(t.type ?? '') &&
         t.frequency !== 'anual' &&
         t.lastExecutedMonth !== currentYYYYMM,
       )

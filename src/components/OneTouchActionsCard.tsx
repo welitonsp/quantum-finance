@@ -10,6 +10,7 @@ import { useAgentAction } from '../hooks/useAgentAction';
 import { buildProposal } from '../features/ai-agent/proposalBuilders';
 import { buildActionQuestion } from '../features/ai-agent/intentRouter';
 import type { ActionProposal } from '../shared/schemas/agentSchemas';
+import { isIncome } from '../utils/transactionUtils';
 
 interface Props {
   uid: string;
@@ -97,7 +98,7 @@ export default function OneTouchActionsCard({ uid, recurringTasks }: Props) {
 
   const handleRegister = (task: RecurringTask) => {
     const amountCents = task.value_cents ?? toCentavos(task.value);
-    const kind = task.type === 'entrada' ? 'register_income' : 'register_purchase';
+    const kind = isIncome(task.type ?? '') ? 'register_income' : 'register_purchase';
     const result = buildProposal(kind, {
       description: task.description,
       amountCents,

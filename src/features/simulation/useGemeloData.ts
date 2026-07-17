@@ -9,6 +9,7 @@ import type {
 import type { Debt } from '../../hooks/useDebts';
 import { calcMonthlyPaymentCents } from '../../hooks/useDebts';
 import { projectCardInvoices } from '../../lib/cardProjection';
+import { isIncome } from '../../utils/transactionUtils';
 
 export interface GemeloDNA {
   fixedIncomeCents: Centavos;
@@ -45,11 +46,11 @@ export function useGemeloData({
     const today = new Date().toISOString().slice(0, 10);
 
     const fixedIncomeCents = recurringTasks
-      .filter(t => t.active && t.type === 'entrada' && t.frequency !== 'anual')
+      .filter(t => t.active && isIncome(t.type ?? '') && t.frequency !== 'anual')
       .reduce((sum, t) => sum + (t.value_cents ?? toCentavos(t.value)), 0) as Centavos;
 
     const fixedExpensesCents = recurringTasks
-      .filter(t => t.active && t.type !== 'entrada' && t.frequency !== 'anual')
+      .filter(t => t.active && !isIncome(t.type ?? '') && t.frequency !== 'anual')
       .reduce((sum, t) => sum + (t.value_cents ?? toCentavos(t.value)), 0) as Centavos;
 
     const activeDebts = debts.filter(d => d.active);
