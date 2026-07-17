@@ -1,13 +1,14 @@
-import { useMemo, useCallback, lazy, Suspense } from 'react';
+import { useMemo, useCallback, useState, lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowRightLeft, AlertTriangle,
-  CheckCircle2, Activity, Landmark, Info,
+  CheckCircle2, Activity, Landmark, Info, Target,
 } from 'lucide-react';
 
 import { useNavigation } from '../contexts/NavigationContext';
 import { useDashboardData } from '../hooks/useFinancialData';
 import ProactiveBriefing from './ProactiveBriefing';
+import OneTouchActionsCard from './OneTouchActionsCard';
 // Widgets analíticos pesados (gráficos) — code-split via lazy; só carregam ao expandir
 // as seções recolhíveis "Saúde Financeira & Insights" / "Análises & Projeções" (PR 8).
 const ForecastWidget   = lazy(() => import('./ForecastWidget'));
@@ -46,8 +47,17 @@ import CentroComandoWidget from './CentroComandoWidget';
 import { DashboardSection, Spinner } from '../shared/components/ui';
 import type { TimeRange } from '../hooks/useFinancialData';
 import type { UserCategory } from '../shared/schemas/categorySchemas';
-import { BudgetAlertsPanel } from './dashboard/BudgetAlertsPanel';
 import { DashboardHero } from './dashboard/DashboardHero';
+import { useSpendingPower } from '../hooks/useSpendingPower';
+import { SpendingPowerBadge } from './dashboard/SpendingPowerBadge';
+import { DailyBriefingCard, type BudgetProposalPresentation } from './dashboard/DailyBriefingCard';
+import { ActionConfirmationSheet } from '../features/ai-agent/ActionConfirmationSheet';
+import { useAgentAction } from '../hooks/useAgentAction';
+import type { ActionProposal } from '../shared/schemas/agentSchemas';
+import { UpcomingEventsStrip } from './dashboard/UpcomingEventsStrip';
+import { ScoreHeroCard } from './dashboard/ScoreHeroCard';
+import { CrisisModeCard } from './dashboard/CrisisModeCard';
+import { PatrimonioHeroCard } from './dashboard/PatrimonioHeroCard';
 
 interface Props {
   user: { uid: string } | null;
@@ -109,7 +119,7 @@ export default function DashboardContent({
   creditCards,
   totalFaturaCents,
 }: Props) {
-  const { currentMonth, currentYear } = useNavigation();
+  const { currentMonth, currentYear, setCurrentPage } = useNavigation();
   // ── Hero metrics from existing moduleBalances prop ────────────────────────
   const saldo    = moduleBalances?.geral?.saldo    ?? 0;
   const receitas = moduleBalances?.geral?.receitas ?? 0;
@@ -138,6 +148,21 @@ export default function DashboardContent({
   );
 
   const { status, color, rec, score, savingsRate, debtRatio, goalProgress } = st;
+
+  const currentYYYYMM = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+
+  const remainingDays = useMemo(() => {
+    const today = new Date();
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    return Math.max(0, daysInMonth - today.getDate());
+  }, []);
+
+  const spendingPower = useSpendingPower({
+    saldo,
+    recurringTasks,
+    cardInvoiceCents: totalFaturaCents,
+    currentYYYYMM,
+  });
 
   const { metrics, loadingMetrics } = useFinancialMetrics(
     user?.uid ?? '',
@@ -197,6 +222,32 @@ export default function DashboardContent({
 
   const { weeks: cashflowWeeks, futureEvents } = useWeeklyCashflow(allTransactions, recurringTasks);
 
+  // ── Insight → ActionProposal (create_budget via DailyBriefingCard) ───────────
+  const [insightProposal, setInsightProposal] = useState<{
+    proposal: ActionProposal;
+    title: string;
+    question: string;
+    rows: BudgetProposalPresentation['rows'];
+  } | null>(null);
+
+  const { status: insightAgentStatus, error: insightAgentError, runAction: runInsightAction, reset: resetInsightAgent } = useAgentAction();
+
+  const handleInsightPropose = useCallback((
+    proposal: ActionProposal,
+    pres: BudgetProposalPresentation,
+  ) => {
+    resetInsightAgent();
+    setInsightProposal({ proposal, ...pres });
+  }, [resetInsightAgent]);
+
+  const handleInsightConfirm = useCallback(async () => {
+    if (!insightProposal || !user?.uid) return;
+    await runInsightAction(insightProposal.proposal, {
+      intent: 'create_budget_proposal',
+      question: insightProposal.question,
+    });
+  }, [insightProposal, user?.uid, runInsightAction]);
+
   return (
     <motion.div
       variants={containerVariants}
@@ -204,16 +255,22 @@ export default function DashboardContent({
       animate="visible"
       className="max-w-[1800px] mx-auto px-4 md:px-6 py-8 space-y-6"
     >
-      {/* ── CENTRO DE COMANDO — alertas acionáveis no topo ───── */}
+      {/* ════════════════════════════════════════════════════════
+          ACIMA DA DOBRA — 4 elementos fixos
+          1. Alertas urgentes  2. Hero  3. Posso gastar?  4. Próximos 7 dias
+          ════════════════════════════════════════════════════════ */}
+
+      {/* 1. Alertas acionáveis */}
       <motion.div variants={itemVariants}>
         <CentroComandoWidget
           budgetAlerts={budgetAlerts}
           recurringTasks={recurringTasks}
           cards={creditCards}
+          loading={budgetsLoading}
         />
       </motion.div>
 
-      {/* ── HERO ──────────────────────────────────────────────── */}
+      {/* 2. Hero — saldo + CTA principal */}
       <DashboardHero
         saldo={saldo}
         receitas={receitas}
@@ -230,7 +287,79 @@ export default function DashboardContent({
         onNewTransaction={() => setIsFormOpen(true)}
       />
 
-      {/* ── INTEL STRIP ───────────────────────────────────────── */}
+      {/* Modo crise — condicional, substitui/complementa SpendingPower em danger */}
+      {spendingPower.zone === 'danger' && (
+        <motion.div variants={itemVariants}>
+          <CrisisModeCard
+            availableCents={spendingPower.availableCents}
+            onNavigate={setCurrentPage}
+          />
+        </motion.div>
+      )}
+
+      {/* 3. Posso gastar hoje? */}
+      <motion.div variants={itemVariants}>
+        <SpendingPowerBadge power={spendingPower} remainingDays={remainingDays} />
+      </motion.div>
+
+      {/* 4. Próximos 7 dias — eventos financeiros iminentes */}
+      <motion.div variants={itemVariants}>
+        <UpcomingEventsStrip
+          recurringTasks={recurringTasks}
+          creditCards={creditCards}
+          currentMonth={currentMonth}
+          currentYear={currentYear}
+        />
+      </motion.div>
+
+      {/* ════════════════════════════════════════════════════════
+          INSIGHTS & METAS — aberto por padrão, abaixo da dobra
+          ════════════════════════════════════════════════════════ */}
+      <DashboardSection title="Insights & Metas" icon={Target} collapsible defaultCollapsed={false}>
+        <div className="space-y-6 pt-2">
+          <Suspense fallback={<div className="py-10 flex justify-center"><Spinner /></div>}>
+
+            {/* Briefing diário — top 3 insights determinísticos */}
+            <motion.div variants={itemVariants}>
+              <DailyBriefingCard
+                transactions={txSet}
+                accounts={accounts}
+                cardOpenInvoicesCents={totalFaturaCents}
+                currentMonth={currentYYYYMM}
+                budgets={budgets}
+                onNavigate={setCurrentPage}
+                onPropose={handleInsightPropose}
+              />
+            </motion.div>
+
+            {/* Metas de poupança */}
+            <motion.div variants={itemVariants}>
+              <GoalsPanel
+                uid={user?.uid ?? ''}
+                {...(metrics ? { ativosCents: metrics.ativosCents } : {})}
+                {...(metrics && metrics.despesa > 0
+                  ? { monthlyExpensesCents: toCentavos(metrics.despesa) as Centavos }
+                  : {})}
+              />
+            </motion.div>
+
+            {/* Ação de 1 Toque — recorrentes a vencer */}
+            <motion.div variants={itemVariants}>
+              <OneTouchActionsCard uid={user?.uid ?? ''} recurringTasks={recurringTasks} />
+            </motion.div>
+
+          </Suspense>
+        </div>
+      </DashboardSection>
+
+      {/* ════════════════════════════════════════════════════════
+          SAÚDE FINANCEIRA & INSIGHTS — recolhido por padrão
+          ════════════════════════════════════════════════════════ */}
+      <DashboardSection title="Saúde Financeira" icon={Activity} collapsible defaultCollapsed>
+        <div className="space-y-6 pt-2">
+        <Suspense fallback={<div className="py-10 flex justify-center"><Spinner /></div>}>
+
+      {/* KPIs de saúde — taxa poupança, endividamento, metas */}
       <motion.div variants={itemVariants}>
         <IntelStrip
           savingsRate={savingsRate}
@@ -240,38 +369,20 @@ export default function DashboardContent({
         />
       </motion.div>
 
-      {/* ── KPI CARDS — receita, despesa, saldo, projeção ─────── */}
+      {/* Score de saúde — ring compacto + trend */}
       <motion.div variants={itemVariants}>
-        <KPICards transactions={transactions} />
-      </motion.div>
-
-      {/* ── ALERTAS DE ORÇAMENTO (acima da dobra — decisão agora) ── */}
-      <motion.div variants={itemVariants}>
-        <BudgetAlertsPanel
-          alerts={budgetAlerts}
-          budgetsCount={budgets.length}
-          loading={budgetsLoading}
-          hasTransactions={txSet.length > 0}
+        <ScoreHeroCard
+          metrics={metrics}
+          loading={loadingMetrics}
+          history={scoreHistory}
         />
       </motion.div>
 
-      {/* ── METAS DE POUPANÇA (acima da dobra — objetivos visíveis) ── */}
+      {/* Patrimônio líquido — ativos vs passivos */}
       <motion.div variants={itemVariants}>
-        <Suspense fallback={<div className="py-10 flex justify-center"><Spinner /></div>}>
-          <GoalsPanel
-            uid={user?.uid ?? ''}
-            {...(metrics ? { ativosCents: metrics.ativosCents } : {})}
-            {...(metrics && metrics.despesa > 0
-              ? { monthlyExpensesCents: toCentavos(metrics.despesa) as Centavos }
-              : {})}
-          />
-        </Suspense>
+        <PatrimonioHeroCard metrics={metrics} loading={loadingMetrics} />
       </motion.div>
 
-      {/* ── SAÚDE FINANCEIRA & INSIGHTS (recolhível — Command Center) ── */}
-      <DashboardSection title="Saúde Financeira & Insights" icon={Activity} collapsible defaultCollapsed>
-        <div className="space-y-6 pt-2">
-        <Suspense fallback={<div className="py-10 flex justify-center"><Spinner /></div>}>
       <QuantumInsights metrics={metrics} loading={loadingMetrics} />
 
       <motion.div variants={itemVariants}>
@@ -294,7 +405,6 @@ export default function DashboardContent({
         />
       </motion.div>
 
-      {/* ── QUANTUM COPILOT — insights proativos ─────────────── */}
       {copilotInsights.length > 0 && (
         <motion.div variants={itemVariants}>
           <QuantumCopilotCards insights={copilotInsights} loading={loading} />
@@ -305,7 +415,6 @@ export default function DashboardContent({
         <AnomalyAlerts transactions={allTransactions} />
       </motion.div>
 
-      {/* ── BRIEFING IA — acima dos gráficos ──────────────────── */}
       <motion.div variants={itemVariants}>
         <ProactiveBriefing
           uid={user?.uid ?? ''}
@@ -329,12 +438,19 @@ export default function DashboardContent({
         </div>
       </DashboardSection>
 
-      {/* ── ANÁLISES & PROJEÇÕES (recolhível — Command Center) ── */}
+      {/* ════════════════════════════════════════════════════════
+          ANÁLISES & PROJEÇÕES — recolhido por padrão
+          ════════════════════════════════════════════════════════ */}
       <DashboardSection title="Análises & Projeções" icon={Landmark} collapsible defaultCollapsed>
         <div className="space-y-6 pt-2">
         <Suspense fallback={<div className="py-10 flex justify-center"><Spinner /></div>}>
 
-      {/* ── KPIs + GRÁFICOS (dados reais com filtro de tempo) ─── */}
+      {/* KPIs de período — receita, despesa, saldo, projeção */}
+      <motion.div variants={itemVariants}>
+        <KPICards transactions={transactions} />
+      </motion.div>
+
+      {/* KPIs + Gráficos com filtro de tempo */}
       <motion.div variants={itemVariants} className="space-y-4">
         {/* Seletor de período */}
         <div className="flex items-center gap-2 flex-wrap">
@@ -403,6 +519,22 @@ export default function DashboardContent({
         </Suspense>
         </div>
       </DashboardSection>
+
+      {/* ── CONFIRMAÇÃO DE ORÇAMENTO VIA INSIGHT ─────────────── */}
+      {insightProposal && (
+        <ActionConfirmationSheet
+          open={!!insightProposal}
+          onClose={() => { setInsightProposal(null); resetInsightAgent(); }}
+          onConfirm={handleInsightConfirm}
+          title={insightProposal.title}
+          question={insightProposal.question}
+          rows={insightProposal.rows}
+          status={insightAgentStatus}
+          error={insightAgentError}
+          confirmLabel="Definir orçamento"
+          successMessage="Orçamento criado com sucesso."
+        />
+      )}
 
       {/* ── FAB MOBILE ────────────────────────────────────────── */}
       <button

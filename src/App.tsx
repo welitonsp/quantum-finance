@@ -17,6 +17,7 @@ import { useCategoryRules } from './hooks/useCategoryRules';
 import { useCategories } from './hooks/useCategories';
 import { useAppLogic } from './hooks/useAppLogic';
 import { useCreditCards } from './hooks/useCreditCards';
+import { useDebts } from './hooks/useDebts';
 import { useAiConsent } from './hooks/useAiConsent';
 import { logSanitizedFirebaseError } from './shared/lib/firebaseErrorHandling';
 import { toCentavos as toBalanceCents } from './shared/schemas/financialSchemas';
@@ -52,6 +53,7 @@ const QuantumAIPage     = lazy(() => import('./components/QuantumAIPage'));
 const HistoryPage       = lazy(() => import('./components/HistoryPage'));
 const CommandPalette    = lazy(() => import('./components/CommandPalette'));
 const SimulationCenter  = lazy(() => import('./features/simulation/SimulationCenter'));
+const GemeloFinanceiro  = lazy(() => import('./features/simulation/GemeloFinanceiro'));
 const PurchaseSimulator = lazy(() => import('./features/simulation/PurchaseSimulator'));
 const DebtModule        = lazy(() => import('./features/debts/DebtModule'));
 const ShoppingPage      = lazy(() => import('./features/shopping/ShoppingPage'));
@@ -132,7 +134,7 @@ const PAGE_GROUP_LABELS: Record<string, string> = {
   history: 'Movimentações', accounts: 'Movimentações', cards: 'Movimentações', recurring: 'Movimentações',
   copilot: 'IA', quantum: 'IA', 'anti-tarifa': 'IA',
   reports: 'Análises', timeline: 'Análises', calendar: 'Análises', ir: 'Análises',
-  planning: 'Planejamento', debts: 'Planejamento', simulation: 'Planejamento', 'purchase-simulator': 'Planejamento',
+  planning: 'Planejamento', debts: 'Planejamento', simulation: 'Planejamento', gemelo: 'Planejamento', 'purchase-simulator': 'Planejamento',
   cofre: 'Governança', 'shared-finance': 'Governança',
   shopping: 'Compras',
 };
@@ -158,7 +160,6 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   const [monthlyGoal,            setMonthlyGoal]            = useState(() => Number(safeStorageGet('quantum_monthly_goal', 0)));
   const [isMobileMenuOpen,       setIsMobileMenuOpen]       = useState(false);
   const [isCommandPaletteOpen,   setIsCommandPaletteOpen]   = useState(false);
-  const [isCommanderMode,        setIsCommanderMode]        = useState(false);
   const [onboardingDismissed,    setOnboardingDismissed]    = useState(() => safeStorageGet('quantum_onboarding_dismissed', false));
 
   useEffect(() => safeStorageSet('quantum_sidebar_collapsed', isSidebarCollapsed), [isSidebarCollapsed]);
@@ -189,6 +190,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   const { aiGranted: aiConsentGranted, loading: aiConsentLoading } = useAiConsent(safeUID);
   // totalFaturaCents: faturas abertas de cartões — passivo corrente para o net worth
   const { totalFaturaCents, cards: creditCards } = useCreditCards(safeUID, transactions);
+  const { debts } = useDebts(safeUID);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
     useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts, categories, totalFaturaCents);
 
@@ -223,15 +225,8 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key?.toLowerCase() === 'k') {
+      if ((e.ctrlKey || e.metaKey) && e.key?.toLowerCase() === 'k') {
         e.preventDefault();
-        setIsCommanderMode(true);
-        setIsCommandPaletteOpen(true);
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key?.toLowerCase() === 'k') {
-        e.preventDefault();
-        setIsCommanderMode(false);
         setIsCommandPaletteOpen(prev => !prev);
         return;
       }
@@ -241,7 +236,6 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
       if (e.altKey && e.key?.toLowerCase() === 'n') { e.preventDefault(); setIsFormOpen(true); }
       if (e.key === 'Escape') {
         setIsCommandPaletteOpen(false);
-        setIsCommanderMode(false);
         setIsFormOpen(false);
         setIsAIChatOpen(false);
         setTransactionToDelete(null);
@@ -452,12 +446,13 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     {currentPage === 'ir'       && <IRPage uid={safeUID} />}
                   </>
                 )}
-                {(['planning', 'debts', 'simulation', 'purchase-simulator'] as const).some(t => t === currentPage) && (
+                {(['planning', 'debts', 'simulation', 'gemelo', 'purchase-simulator'] as const).some(t => t === currentPage) && (
                   <>
                     <TopTabs
                       tabs={[
                         { id: 'planning',           label: 'Planejamento'          },
                         { id: 'debts',              label: 'Dívidas'               },
+                        { id: 'gemelo',             label: 'Gêmeo'                 },
                         { id: 'simulation',         label: 'Simulação Monte Carlo' },
                         { id: 'purchase-simulator', label: 'Simulador de Compra'   },
                       ]}
@@ -466,6 +461,16 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     />
                     {currentPage === 'planning'           && <PlanningPage uid={safeUID} />}
                     {currentPage === 'debts'              && <DebtModule uid={safeUID} />}
+                    {currentPage === 'gemelo'             && (
+                      <GemeloFinanceiro
+                        uid={safeUID}
+                        recurringTasks={recurringTasks}
+                        debts={debts}
+                        creditCards={creditCards}
+                        transactions={allTransactions}
+                        balances={moduleBalances}
+                      />
+                    )}
                     {currentPage === 'simulation'         && (
                       <SimulationCenter
                         transactions={displayedTransactions}
@@ -568,8 +573,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
         <Suspense fallback={null}>
           <CommandPalette
             isOpen={isCommandPaletteOpen}
-            onClose={() => { setIsCommandPaletteOpen(false); setIsCommanderMode(false); }}
-            isCommanderMode={isCommanderMode}
+            onClose={() => setIsCommandPaletteOpen(false)}
           />
         </Suspense>
       </ErrorBoundary>
@@ -625,7 +629,7 @@ export default function App() {
   const handleLogin = async () => {
     try {
       await signInWithPopup(auth, new GoogleAuthProvider());
-      toast.success('Acesso Autorizado, Comandante!');
+      toast.success('Bem-vindo de volta.');
     } catch (error) {
       if (isMfaRequiredError(error)) {
         setMfaError(error);
@@ -644,7 +648,7 @@ export default function App() {
     try {
       await resolveTotpSignIn(auth, mfaError, code);
       setMfaError(null);
-      toast.success('Acesso Autorizado, Comandante!');
+      toast.success('Bem-vindo de volta.');
     } catch (error) {
       logSanitizedFirebaseError('auth_mfa_resolve', error);
       toast.error('Código inválido ou expirado. Tente novamente.');
