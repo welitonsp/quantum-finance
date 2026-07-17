@@ -43,10 +43,6 @@ function monthKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function currentLocalMonthKey(date = new Date()): string {
-  return monthKey(date);
-}
-
 function currentLocalDateKey(date = new Date()): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
@@ -58,7 +54,7 @@ function recurringTaskSnapshot(task: RecurringTask): Record<string, unknown> {
     category: task.category,
     dueDay: task.dueDay,
     active: task.active,
-    frequency: task.frequency,
+    frequency: task.frequency ?? 'mensal',
     schemaVersion: 2,
   };
   if (task.value_cents !== undefined) snapshot['value_cents'] = task.value_cents;
@@ -77,6 +73,19 @@ function nextMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth() + 1, 1);
 }
 
+function todayAtStartOfDay(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function nextOneTouchOccurrence(task: RecurringTask, today = todayAtStartOfDay()): Date {
+  const dueDate = dueDateForMonth(today, task.dueDay);
+  if (task.lastExecutedMonth === monthKey(dueDate)) {
+    return dueDateForMonth(nextMonth(today), task.dueDay);
+  }
+  return dueDate;
+}
+
 export default function OneTouchActionsCard({ uid, recurringTasks }: Props) {
   const [activeTask, setActiveTask] = useState<RecurringTask | null>(null);
   const [activeProposal, setActiveProposal] = useState<ActionProposal | null>(null);
@@ -86,27 +95,19 @@ export default function OneTouchActionsCard({ uid, recurringTasks }: Props) {
   const { status, error, runAction, reset } = useAgentAction();
 
   const dueTasks = useMemo<DueTask[]>(() => {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const today = todayAtStartOfDay();
     const currentMonth = today.getMonth() + 1;
     const daysUntil = (date: Date): number => Math.round((date.getTime() - today.getTime()) / 86_400_000);
-    const nextOccurrence = (task: RecurringTask): Date => {
-      const dueDate = dueDateForMonth(today, task.dueDay);
-      if (task.lastExecutedMonth === monthKey(dueDate)) {
-        return dueDateForMonth(nextMonth(today), task.dueDay);
-      }
-      return dueDate;
-    };
 
     return recurringTasks
       .filter((task) => {
         if (!task.active) return false;
         if (task.frequency === 'anual' && task.dueMonth !== currentMonth) return false;
-        const occurrence = nextOccurrence(task);
+        const occurrence = nextOneTouchOccurrence(task, today);
         if (task.lastExecutedMonth === monthKey(occurrence)) return false;
         return daysUntil(occurrence) <= 7;
       })
-      .map((task) => ({ task, daysUntilDue: daysUntil(nextOccurrence(task)) }))
+      .map((task) => ({ task, daysUntilDue: daysUntil(nextOneTouchOccurrence(task, today)) }))
       .sort((a, b) => a.daysUntilDue - b.daysUntilDue)
       .slice(0, 5);
   }, [recurringTasks]);
@@ -142,27 +143,34 @@ export default function OneTouchActionsCard({ uid, recurringTasks }: Props) {
         toolsUsed: ['recurring_task_briefing'],
       });
       if (uid) {
-        const lastExecutedMonth = currentLocalMonthKey();
+        const lastExecutedMonth = monthKey(nextOneTouchOccurrence(activeTask));
         const opId = crypto.randomUUID();
         const taskRef = doc(db, 'users', uid, 'recurringTasks', activeTask.id);
         const historyRef = doc(db, 'users', uid, 'recurringTasks', activeTask.id, 'history', opId);
         const before = recurringTaskSnapshot(activeTask);
         const after = {
           ...before,
+          frequency: activeTask.frequency ?? 'mensal',
           lastExecutedMonth,
         };
-        const batch = writeBatch(db);
-        batch.update(taskRef, {
+        const updatePayload: Record<string, unknown> = {
           lastExecutedMonth,
           _lastOpId: opId,
           updatedAt: serverTimestamp(),
-        });
+        };
+        const changedFields = ['lastExecutedMonth'];
+        if (!activeTask.frequency) {
+          updatePayload['frequency'] = 'mensal';
+          changedFields.push('frequency');
+        }
+        const batch = writeBatch(db);
+        batch.update(taskRef, updatePayload);
         batch.set(historyRef, {
           action: 'UPDATE',
           recurringTaskId: activeTask.id,
           before,
           after,
-          changedFields: ['lastExecutedMonth'],
+          changedFields,
           origin: 'manual',
           correlationId: opId,
           createdAt: serverTimestamp(),
