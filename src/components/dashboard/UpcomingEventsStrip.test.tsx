@@ -89,4 +89,26 @@ describe('UpcomingEventsStrip', () => {
     expect(screen.getByText('IPTU')).toBeTruthy();
     expect(screen.getByText('Amanhã')).toBeTruthy();
   });
+
+  it('does not show legacy recurring incomes as upcoming commitments', () => {
+    const { container } = render(
+      <UpcomingEventsStrip
+        recurringTasks={[
+          recurringTask({
+            id: 'salary',
+            description: 'Salário',
+            type: 'receita',
+            dueDay: 20,
+          }),
+        ]}
+        creditCards={[]}
+        currentMonth={7}
+        currentYear={2026}
+        today="2026-07-19"
+      />,
+    );
+
+    expect(screen.queryByText('Salário')).toBeNull();
+    expect(container.firstChild).toBeNull();
+  });
 });

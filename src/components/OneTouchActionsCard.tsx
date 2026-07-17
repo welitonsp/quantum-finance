@@ -43,6 +43,10 @@ function currentLocalMonthKey(date = new Date()): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
+function currentLocalDateKey(date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 function recurringTaskSnapshot(task: RecurringTask): Record<string, unknown> {
   const snapshot: Record<string, unknown> = {
     description: task.description,
@@ -102,7 +106,7 @@ export default function OneTouchActionsCard({ uid, recurringTasks }: Props) {
     const result = buildProposal(kind, {
       description: task.description,
       amountCents,
-      date: new Date().toISOString().slice(0, 10),
+      date: currentLocalDateKey(),
       category: task.category,
     });
     if (!result.ok) return;

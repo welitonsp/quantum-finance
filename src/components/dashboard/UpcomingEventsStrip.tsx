@@ -3,6 +3,7 @@ import { CalendarClock, CreditCard, Wallet } from 'lucide-react';
 
 import { formatBRL, toCentavos, type Centavos } from '../../shared/types/money';
 import type { RecurringTask, CreditCardWithMetrics } from '../../shared/types/transaction';
+import { isIncome } from '../../utils/transactionUtils';
 
 interface Props {
   recurringTasks: RecurringTask[];
@@ -84,7 +85,7 @@ export function UpcomingEventsStrip({
     // ── Recurring tasks ──────────────────────────────────────────────────────
     for (const t of recurringTasks) {
       if (!t.active) continue;
-      if (t.type === 'entrada') continue;
+      if (isIncome(t.type ?? '')) continue;
 
       const dueDate = t.frequency === 'anual'
         ? nextAnnualOccurrence(todayDate, t.dueMonth ?? todayDate.getMonth() + 1, t.dueDay)
