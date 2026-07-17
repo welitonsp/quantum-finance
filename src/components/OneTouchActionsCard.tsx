@@ -39,8 +39,12 @@ function daysInMonth(year: number, monthOneBased: number): number {
   return new Date(year, monthOneBased, 0).getDate();
 }
 
-function currentLocalMonthKey(date = new Date()): string {
+function monthKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function currentLocalMonthKey(date = new Date()): string {
+  return monthKey(date);
 }
 
 function currentLocalDateKey(date = new Date()): string {
@@ -63,6 +67,16 @@ function recurringTaskSnapshot(task: RecurringTask): Record<string, unknown> {
   return snapshot;
 }
 
+function dueDateForMonth(date: Date, dueDay: number): Date {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  return new Date(year, month - 1, Math.min(dueDay, daysInMonth(year, month)));
+}
+
+function nextMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 1);
+}
+
 export default function OneTouchActionsCard({ uid, recurringTasks }: Props) {
   const [activeTask, setActiveTask] = useState<RecurringTask | null>(null);
   const [activeProposal, setActiveProposal] = useState<ActionProposal | null>(null);
@@ -72,23 +86,27 @@ export default function OneTouchActionsCard({ uid, recurringTasks }: Props) {
   const { status, error, runAction, reset } = useAgentAction();
 
   const dueTasks = useMemo<DueTask[]>(() => {
-    const today = new Date();
-    const dayOfMonth = today.getDate();
-    const currentYearMonth = currentLocalMonthKey(today);
-    const currentYear = today.getFullYear();
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const currentMonth = today.getMonth() + 1;
-    const lastDay = daysInMonth(currentYear, currentMonth);
-
-    const effectiveDueDay = (task: RecurringTask) => Math.min(task.dueDay, lastDay);
+    const daysUntil = (date: Date): number => Math.round((date.getTime() - today.getTime()) / 86_400_000);
+    const nextOccurrence = (task: RecurringTask): Date => {
+      const dueDate = dueDateForMonth(today, task.dueDay);
+      if (task.lastExecutedMonth === monthKey(dueDate)) {
+        return dueDateForMonth(nextMonth(today), task.dueDay);
+      }
+      return dueDate;
+    };
 
     return recurringTasks
       .filter((task) => {
         if (!task.active) return false;
         if (task.frequency === 'anual' && task.dueMonth !== currentMonth) return false;
-        if (task.lastExecutedMonth === currentYearMonth) return false;
-        return effectiveDueDay(task) - dayOfMonth <= 7;
+        const occurrence = nextOccurrence(task);
+        if (task.lastExecutedMonth === monthKey(occurrence)) return false;
+        return daysUntil(occurrence) <= 7;
       })
-      .map((task) => ({ task, daysUntilDue: effectiveDueDay(task) - dayOfMonth }))
+      .map((task) => ({ task, daysUntilDue: daysUntil(nextOccurrence(task)) }))
       .sort((a, b) => a.daysUntilDue - b.daysUntilDue)
       .slice(0, 5);
   }, [recurringTasks]);
