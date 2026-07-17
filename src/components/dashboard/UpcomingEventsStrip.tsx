@@ -88,7 +88,7 @@ export function UpcomingEventsStrip({
       if (isIncome(t.type ?? '')) continue;
 
       const dueDate = t.frequency === 'anual'
-        ? nextAnnualOccurrence(todayDate, t.dueMonth ?? todayDate.getMonth() + 1, t.dueDay)
+        ? nextAnnualOccurrence(todayDate, t.dueMonth ?? 1, t.dueDay)
         : nextMonthlyOccurrence(todayDate, t.dueDay);
       if (t.lastExecutedMonth === monthKey(dueDate)) continue;
 

@@ -111,4 +111,26 @@ describe('UpcomingEventsStrip', () => {
     expect(screen.queryByText('Salário')).toBeNull();
     expect(container.firstChild).toBeNull();
   });
+
+  it('defaults annual recurring tasks without dueMonth to January', () => {
+    const { container } = render(
+      <UpcomingEventsStrip
+        recurringTasks={[
+          recurringTask({
+            id: 'insurance',
+            description: 'Seguro anual',
+            frequency: 'anual',
+            dueDay: 20,
+          }),
+        ]}
+        creditCards={[]}
+        currentMonth={7}
+        currentYear={2026}
+        today="2026-07-19"
+      />,
+    );
+
+    expect(screen.queryByText('Seguro anual')).toBeNull();
+    expect(container.firstChild).toBeNull();
+  });
 });

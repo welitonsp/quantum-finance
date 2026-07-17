@@ -46,6 +46,17 @@ interface SimStats {
   despesaTotalCents:   number;
 }
 
+function transactionMonthKey(tx: Transaction): string | null {
+  const rawDate = tx.date ?? (tx as Transaction & { createdAt?: string }).createdAt ?? '';
+  if (typeof rawDate === 'string') {
+    const match = rawDate.match(/^(\d{4})-(\d{2})/);
+    if (match) return `${match[1]}-${match[2]}`;
+  }
+  const date = new Date(rawDate);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${date.getFullYear()}-${String(date.getMonth()).padStart(2, '0')}`;
+}
+
 interface MonteCarloResult {
   success:                    boolean;
   error?:                     string;
@@ -222,10 +233,9 @@ export default function GemeloFinanceiro({
 
     const byMonth: Record<string, { r: number; d: number }> = {};
     transactions.forEach(tx => {
-      const d   = new Date(tx.date ?? (tx as Transaction & { createdAt?: string }).createdAt ?? '');
-      const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
+      const key = transactionMonthKey(tx);
+      if (!key) return;
       if (!byMonth[key]) byMonth[key] = { r: 0, d: 0 };
-      if (tx.value_cents === undefined) return;
       const valCents = getTransactionAbsCentavos(tx);
       if (isIncome(tx.type)) byMonth[key]!.r += valCents;
       else if (isConsumptionExpense(tx)) byMonth[key]!.d += valCents;
