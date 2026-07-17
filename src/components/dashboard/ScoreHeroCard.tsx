@@ -6,7 +6,7 @@ import type { ScoreHistoryEntry } from '../../hooks/useScoreHistory';
 interface Props {
   metrics: FinancialMetrics | null;
   loading: boolean;
-  /** Last months of score history (ordered newest first). */
+  /** Last months of score history (ordered oldest first for the chart). */
   history: ScoreHistoryEntry[];
 }
 
@@ -35,11 +35,23 @@ function scoreColor(s: number): { text: string; ring: string; badge: string } {
   return         { text: 'text-red-400',     ring: 'stroke-red-500',     badge: 'bg-red-500/10 text-red-400 border-red-500/25'         };
 }
 
+function currentMonthKey(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function previousScore(history: ScoreHistoryEntry[]): number | null {
+  const currentMonth = currentMonthKey();
+  const priorEntries = history.filter(entry => entry.month < currentMonth);
+  const previous = priorEntries.length > 0 ? priorEntries[priorEntries.length - 1] : null;
+  return previous?.score ?? null;
+}
+
 export function ScoreHeroCard({ metrics, loading, history }: Props): JSX.Element | null {
   const { score, delta, hint, colors } = useMemo(() => {
     if (!metrics) return { score: 0, prevScore: null, delta: null, hint: '', colors: scoreColor(0) };
     const score = computeScore(metrics);
-    const prevScore = history[0]?.score ?? null;
+    const prevScore = previousScore(history);
     const delta = prevScore !== null ? score - prevScore : null;
     const hint = nextLevelHint(metrics);
     return { score, prevScore, delta, hint, colors: scoreColor(score) };

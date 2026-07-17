@@ -19,7 +19,7 @@ import type {
   Transaction, ModuleBalances, RecurringTask, CreditCardWithMetrics,
 } from '../../shared/types/transaction';
 import type { Debt } from '../../hooks/useDebts';
-import { getTransactionAbsCentavos, isIncome } from '../../utils/transactionUtils';
+import { getTransactionAbsCentavos, isConsumptionExpense, isIncome } from '../../utils/transactionUtils';
 import { toCentavos } from '../../shared/types/money';
 import type { Centavos } from '../../shared/types/money';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
@@ -228,7 +228,7 @@ export default function GemeloFinanceiro({
       if (tx.value_cents === undefined) return;
       const valCents = getTransactionAbsCentavos(tx);
       if (isIncome(tx.type)) byMonth[key]!.r += valCents;
-      else byMonth[key]!.d += valCents;
+      else if (isConsumptionExpense(tx)) byMonth[key]!.d += valCents;
     });
 
     const months = Object.values(byMonth);
