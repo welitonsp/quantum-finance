@@ -1,7 +1,7 @@
 # Quantum Finance — Backlog Único de Pendências
 
 > **Fonte de verdade do que está ABERTO.** Consolidado em 2026-07-14 a partir de: Auditoria Big Four (`docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md`), Auditoria Externa Independente (`docs/audit/AUDITORIA_EXTERNA_2026-07-11.md`) e Tese Extraordinária (`docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md`).
-> Tudo que foi **concluído** sai deste arquivo (histórico no `git log`). Atualizar a cada PR que fechar um item.
+> Tudo que foi **concluído** sai deste arquivo (histórico em `docs/HISTORICO-FASES.md` e no git). Atualizar a cada PR que fechar um item.
 >
 > Status: ⬜ pendente · 🔄 em andamento · 🚧 bloqueado por decisão
 
@@ -16,7 +16,7 @@
 | 3 | **F-01 follow-up — UI mirror do consent IA — FECHADO** — `useAiConsent` (realtime) + `AiConsentGate` nas 3 abas de IA e no chat flutuante, CTA para Governança/Privacidade. Follow-up menor: gate na categorização em lote do import (avaliar no L-03). | Ext. F-01 | UI | ✅ |
 | 4 | **L-04 — ErrorBoundaries por feature — FECHADO** — `ErrorBoundary` extraído para componente com `label` (fallback nomeado por grupo da sidebar) e `resetKey={currentPage}` (crash numa página não trava mais a navegação; navegar recupera). Boundaries do chat/palette/settings com labels próprios. | Big Four L-04 | UI | ✅ |
 | 5 | **L-03 — higiene de tipos — FECHADO** — 21 `any` → **0** (meta era <10); `@ts-ignore` já estava zerado. Tooltip do TimelineWidget tipado; casts de fixture de teste convertidos para `as unknown as T`; todos os `eslint-disable` de `no-explicit-any` removidos. Pendente de decisão de produto (fora deste item): `cardId` inerte no `TransactionForm` — ganhar UI de seleção de cartão ou remover os ramos. | Big Four L-03 | `src/` | ✅ |
-| 6 | **M-01 reforço de cobertura — FECHADO** — 21 testes adicionados (`c8485d7`): `useSpendingPower` (9), `useCategoryRules` (6), `useImportActions` (6). Workers/parsers excluídos por design (jsdom incompatível). | Big Four M-01 | testes | ✅ |
+| 6 | **M-01 reforço opcional de cobertura** — utils a 0% (`financialData`, `categoryRules`, `importActions`, `timingEvents`), branches soltos de `insightsEngine`; `useForecast`/workers (`parserWorker`, `pdfParser`) não são exercitáveis em jsdom (documentar exclusão ou testar via node). | Big Four M-01 | testes | ⬜ |
 
 ## 2. Owner / infra (fora do alcance de CI)
 
@@ -27,22 +27,16 @@
 | 9 | **F-15 — observabilidade** — métricas estruturadas, SLOs e alertas de falha/custo para scheduled functions e callables (hoje jobs só logam contadores). | Ext. F-15 | infra | ⬜ |
 | 10 | **L-05 — APM/tracing distribuído** — gap vs. Big Tech, explicitamente aceitável no estágio atual. Evolução: Web-Vitals RUM + budgets por rota (follow-up do F-14). | Big Four L-05 | infra | ⬜ |
 
-## 3. Produto — Tese Extraordinária (COMPLETA) + Nova Onda
+## 3. Produto — sequência da Tese Extraordinária
 
-**Tese 5/5 entregue.** Nova onda de produto (Big Tech premium):
+Fase 1 (Radar de Compras) entregue (#363). Restam, em ordem:
 
-| # | Feature | Ideia central | Status |
-|---|---------|---------------|--------|
-| 11 | **Ação de 1 Toque** | `OneTouchActionsCard` — recorrentes a vencer → confirmação 1 toque. | ✅ (`83deafc`) |
-| 12 | **Gêmeo Financeiro** | `useGemeloData` + `GemeloFinanceiro` — Monte Carlo com DNA real. | ✅ (`c5176d7`) |
-| 13 | **Selo de Integridade** | `useDecisions` + GovernancePage — 4 pilares + Diário de Decisões IA. | ✅ (`acbdc54`) |
-| 14 | **Copiloto que Cumpre** | `AIJournalDrawer` — drawer com stats, filtros e track record do agente. | ✅ (`b6bee7b`) |
-| 15 | **Dashboard "Posso gastar hoje?"** | `useSpendingPower` (saldo − fixos pendentes − fatura) + `SpendingPowerBadge` com zona safe/caution/danger. Inserido no DashboardContent após DashboardHero. | ✅ (`2aed47e`) |
-| 16 | **Voice Capture** | `useSpeechRecognition` (pt-BR, SSR-safe, cleanup) + botão Mic/MicOff no AIAssistantChat. Oculto quando não suportado. | ✅ (`5a184bd`) |
-| 17 | **Briefing Diário** | `DailyBriefingCard` — top 3 insights determinísticos (anomalia, taxa de poupança, projeção) via `insightsEngine`. Acima da dobra, zero API. | ✅ (`8e54b2a`) |
-| 18 | **Próximos 7 Dias** | `UpcomingEventsStrip` — strip horizontal de recorrentes a vencer + fechamento/vencimento de fatura de cartão nos próximos 7 dias. | ✅ (`8c128fd`) |
-| 19 | **Score Hero 2.0** | `ScoreHeroCard` — ring SVG compacto com score 0-100, trend vs mês anterior e hint do próximo nível (pilar mais fraco). Acima da dobra após IntelStrip. | ✅ (`e7e2f36`) |
-| 20 | **Patrimônio Hero** | `PatrimonioHeroCard` — patrimônio líquido com breakdown ativos/passivos/reserva em meses. Acima da dobra após SpendingPowerBadge. | ✅ (`e7e2f36`) |
+| # | Fase | Ideia central | Status |
+|---|------|---------------|--------|
+| 11 | **Ação de 1 Toque** | Briefing/radar propõe ação já pronta, confirmável em 1 toque (reutiliza `ActionConfirmationSheet` + `executeAgentAction`; zero backend novo). | ⬜ próxima fase de produto |
+| 12 | **Gêmeo Financeiro** | Simulador de cenários unificado (`cardProjection` + `insightsEngine` + `forecast` + recorrentes, centavos inteiros, 24 meses). | ⬜ |
+| 13 | **Selo de Integridade** | Painel de verificabilidade para o usuário (rastreabilidade centavo a centavo, IA revalidada, LGPD hard-delete). | ⬜ |
+| 14 | **Copiloto que Cumpre** | Compromissos verificáveis auditados no Diário de Decisões (`/decisions`). | ⬜ |
 
 ## 4. Bloqueados por decisão (NÃO iniciar sem nova decisão explícita do owner)
 
@@ -54,4 +48,8 @@
 
 ## Ordem de execução recomendada
 
-1. **Itens 7–10** — owner/infra: agendar com o owner (M-03 é pré-requisito para re-auditoria Big Four). Item 6 fechado (`c8485d7`).
+1. **Itens 1–2** (F-12 restante + F-13): fecham as duas últimas pendências de código da auditoria externa — pré-requisito para pedir re-auditoria e subir a nota (6,2 → alvo ≥9).
+2. **Item 7 (M-03)**: agendar com o owner — destrava o "FECHADO" da Big Four Sprint 1.
+3. **Itens 3–5**: hardening incremental de UX/robustez, PRs pequenos.
+4. **Item 11 (Ação de 1 Toque)**: primeira fase de produto nova — maior ROI com o que já existe.
+5. **Itens 8–10**: trilha infra/observabilidade, conforme disponibilidade do owner no console.

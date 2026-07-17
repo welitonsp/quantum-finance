@@ -4,7 +4,6 @@ import {
 } from 'lucide-react';
 import { useNavigation } from '../contexts/NavigationContext';
 import { formatBRL } from '../shared/types/money';
-import { formatCurrency } from '../utils/formatters';
 import type { RecurringTask, CreditCard as CreditCardType } from '../shared/types/transaction';
 import type { DashboardBudgetAlert } from '../utils/dashboardUtils';
 
@@ -12,7 +11,6 @@ interface Props {
   budgetAlerts: DashboardBudgetAlert[];
   recurringTasks: RecurringTask[];
   cards: CreditCardType[];
-  loading?: boolean;
 }
 
 interface ActionItem {
@@ -22,10 +20,6 @@ interface ActionItem {
   descricao: string;
   urgencia: 'critica' | 'alta' | 'media';
   navTarget?: string;
-  /** Presentes apenas em itens de orçamento (tipo 'orcamento') para a barra de progresso. */
-  percentUsed?: number;
-  spentCents?: number;
-  limitCents?: number;
 }
 
 function diasParaFechamento(closingDay: number): number {
@@ -54,37 +48,22 @@ function diasParaRecorrente(task: RecurringTask): number | null {
   return diff;
 }
 
-export default function CentroComandoWidget({ budgetAlerts, recurringTasks, cards, loading = false }: Props) {
+export default function CentroComandoWidget({ budgetAlerts, recurringTasks, cards }: Props) {
   const { setCurrentPage } = useNavigation();
 
   const actionItems = useMemo<ActionItem[]>(() => {
     const items: ActionItem[] = [];
 
-    // 1. Orçamentos — críticos (>100%, urgência crítica) e em atenção (≥80%, urgência média)
+    // 1. Orçamentos críticos (acima de 100%)
     for (const alert of budgetAlerts) {
       if (alert.status === 'critical') {
         items.push({
-          id:          `budget-${alert.id}`,
-          tipo:        'orcamento',
-          titulo:      `Orçamento estourado: ${alert.category}`,
-          descricao:   `${alert.percentUsed.toFixed(0)}% do limite atingido em ${alert.month}`,
-          urgencia:    'critica',
-          navTarget:   'reports',
-          percentUsed: alert.percentUsed,
-          spentCents:  alert.spentCents,
-          limitCents:  alert.limitCents,
-        });
-      } else if (alert.status === 'attention') {
-        items.push({
-          id:          `budget-${alert.id}`,
-          tipo:        'orcamento',
-          titulo:      `Orçamento em atenção: ${alert.category}`,
-          descricao:   `${alert.percentUsed.toFixed(0)}% do limite usado em ${alert.month}`,
-          urgencia:    'media',
-          navTarget:   'reports',
-          percentUsed: alert.percentUsed,
-          spentCents:  alert.spentCents,
-          limitCents:  alert.limitCents,
+          id:        `budget-${alert.id}`,
+          tipo:      'orcamento',
+          titulo:    `Orçamento estourado: ${alert.category}`,
+          descricao: `${alert.percentUsed.toFixed(0)}% do limite atingido em ${alert.month}`,
+          urgencia:  'critica',
+          navTarget: 'reports',
         });
       }
     }
@@ -126,28 +105,12 @@ export default function CentroComandoWidget({ budgetAlerts, recurringTasks, card
     return items.sort((a, b) => order[a.urgencia] - order[b.urgencia]);
   }, [budgetAlerts, recurringTasks, cards]);
 
-  if (loading) {
-    return (
-      <section
-        className="rounded-2xl border border-quantum-border bg-quantum-card/40 backdrop-blur-sm overflow-hidden"
-        aria-label="Alertas e ações urgentes"
-        aria-busy="true"
-      >
-        <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {[0, 1, 2].map(item => (
-            <div key={item} className="h-24 rounded-xl bg-quantum-bgSecondary animate-pulse" />
-          ))}
-        </div>
-      </section>
-    );
-  }
-
   if (actionItems.length === 0) {
     return (
       <div className="flex items-center gap-3 px-5 py-4 bg-quantum-accent/5 border border-quantum-accent/20 rounded-2xl">
         <CheckCircle2 className="w-5 h-5 text-quantum-accent shrink-0" />
         <div>
-          <p className="text-sm font-bold text-quantum-fg">Alertas — Tudo sob controle</p>
+          <p className="text-sm font-bold text-quantum-fg">Centro de Comando — Tudo sob controle</p>
           <p className="text-xs text-quantum-fgMuted">Sem alertas críticos, faturas próximas ou despesas vencendo.</p>
         </div>
       </div>
@@ -171,7 +134,7 @@ export default function CentroComandoWidget({ budgetAlerts, recurringTasks, card
   return (
     <section
       className="rounded-2xl border border-quantum-border bg-quantum-card/40 backdrop-blur-sm overflow-hidden"
-      aria-label="Alertas e ações urgentes"
+      aria-label="Centro de Comando — Ações urgentes"
     >
       {/* Cabeçalho */}
       <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-quantum-border">
@@ -180,7 +143,7 @@ export default function CentroComandoWidget({ budgetAlerts, recurringTasks, card
             <Zap className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="text-sm font-black text-quantum-fg">Alertas</h2>
+            <h2 className="text-sm font-black text-quantum-fg">Centro de Comando</h2>
             <p className="text-[10px] text-quantum-fgMuted">
               {criticas > 0
                 ? `${criticas} ação${criticas > 1 ? 'ões' : ''} crítica${criticas > 1 ? 's' : ''} — atenção imediata`
@@ -196,52 +159,25 @@ export default function CentroComandoWidget({ budgetAlerts, recurringTasks, card
         {actionItems.map((item) => {
           const cfg = URGENCIA_CONFIG[item.urgencia];
           const Icon = TIPO_ICON[item.tipo];
-          const showBudgetBar =
-            item.tipo === 'orcamento' &&
-            item.percentUsed !== undefined &&
-            item.spentCents !== undefined &&
-            item.limitCents !== undefined;
-          const barColor = item.urgencia === 'critica' ? 'bg-red-400' : 'bg-amber-400';
           return (
             <button
               key={item.id}
               onClick={() => item.navTarget && setCurrentPage(item.navTarget)}
-              className={`text-left flex flex-col p-4 rounded-xl border ${cfg.border} ${cfg.bg} hover:brightness-110 transition-all group`}
+              className={`text-left flex items-start gap-3 p-4 rounded-xl border ${cfg.border} ${cfg.bg} hover:brightness-110 transition-all group`}
               aria-label={item.titulo}
             >
-              <div className="flex items-start gap-3 w-full">
-                <div className={`p-1.5 rounded-lg bg-white/5 ${cfg.icon} shrink-0`}>
-                  <Icon className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-quantum-fg truncate group-hover:text-white transition-colors">
-                    {item.titulo}
-                  </p>
-                  <p className="text-xs text-quantum-fgMuted mt-0.5 truncate">{item.descricao}</p>
-                </div>
-                <span className={`ml-auto shrink-0 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${cfg.badge}`}>
-                  {item.urgencia === 'critica' ? 'Urgente' : item.urgencia === 'alta' ? 'Hoje' : 'Esta semana'}
-                </span>
+              <div className={`p-1.5 rounded-lg bg-white/5 ${cfg.icon} shrink-0`}>
+                <Icon className="w-4 h-4" />
               </div>
-
-              {showBudgetBar && (
-                <>
-                  <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-quantum-border/50">
-                    <div
-                      className={`h-full rounded-full ${barColor}`}
-                      style={{ width: `${Math.min(item.percentUsed as number, 100)}%` }}
-                    />
-                  </div>
-                  <div className="mt-2 flex items-baseline justify-between gap-3 text-[11px] w-full">
-                    <span className="font-mono font-bold text-quantum-fg">
-                      {formatCurrency(item.spentCents, { cents: true })}
-                    </span>
-                    <span className="text-quantum-fgMuted">
-                      de {formatCurrency(item.limitCents, { cents: true })}
-                    </span>
-                  </div>
-                </>
-              )}
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-quantum-fg truncate group-hover:text-white transition-colors">
+                  {item.titulo}
+                </p>
+                <p className="text-xs text-quantum-fgMuted mt-0.5 truncate">{item.descricao}</p>
+              </div>
+              <span className={`ml-auto shrink-0 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${cfg.badge}`}>
+                {item.urgencia === 'critica' ? 'Urgente' : item.urgencia === 'alta' ? 'Hoje' : 'Esta semana'}
+              </span>
             </button>
           );
         })}

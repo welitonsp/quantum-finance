@@ -1,18 +1,19 @@
 # Quantum Finance — Base de Conhecimento do Projeto
 
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
-> **Base de conhecimento consolidada:** [docs/KNOWLEDGE_BASE.md](docs/KNOWLEDGE_BASE.md) · **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md) · **Pendências:** [docs/PENDENCIAS.md](docs/PENDENCIAS.md)
+> **Histórico de fases/PRs:** [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md) · **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md)
 
-## Estado Atual — 2026-07-16 (Tese Extraordinária COMPLETA — 5/5 fases entregues)
+## Estado Atual — 2026-07-15 (F-12 e F-13 fechados; pronto p/ re-auditoria)
 
-- Branch principal: `main` — PRs #363–#452 mergeados + commits diretos `83deafc`/`c5176d7`/`acbdc54`/`b6bee7b`/`2aed47e`/`5a184bd`/`c8485d7`/`8e54b2a`/`8c128fd`/`e7e2f36` (Tese 5/5 + onda Big Tech Premium itens 17–20). **Tese COMPLETA. Onda Big Tech Premium 2026-07-16: 4 features entregues.**
-- Suíte: **2034 unit + 227 rules + 303 functions + 28 E2E**. Gates de cobertura: **stmts 77 / branches 68 / funcs 79 / lines 80** — regra permanente: só ratchetar com ≥0,5% de margem real medida no CI (incidente #382/#383).
-- **Pendências: fonte única em [docs/PENDENCIAS.md](docs/PENDENCIAS.md).** Resumo: código = zerado (itens 1–6 + Tese 5/5 + onda Big Tech itens 17–20); owner/infra = M-03, F-09, F-15; produto = próxima onda.
+- Branch principal: `main` — PRs #363–#448 mergeados. **CI verde** (incidente #440→#447 resolvido: E2E realinhado à navegação 7 destinos + code-split `vendor-react`).
+- Suíte: **1982 unit + 227 rules + 303 functions + 28 E2E**. Gates de cobertura: **stmts 77 / branches 68 / funcs 79 / lines 80** — regra permanente: só ratchetar com ≥0,5% de margem real medida no CI (incidente #382/#383).
+- **Pendências: fonte única em [docs/PENDENCIAS.md](docs/PENDENCIAS.md).** Resumo: código = zerado (itens 1–5 fechados; resta decisão de produto sobre `cardId` inerte no TransactionForm); owner/infra = required checks no branch protection, M-03 (verificações reais em dispositivo — [roteiro](docs/audit/M03_CHECKLIST_VERIFICACOES_REAIS.md)), F-09 restante (billing/quotas), F-15 (SLOs/alertas); produto = fases 2–5 da Tese (próxima: **Ação de 1 Toque**).
 - **Auditorias (concluídas e registradas):**
-  - Big Four 2026-07-09 — **8.7/10** ([laudo](docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md)); M-01/M-02/L-01/L-03/L-04 fechados (`c8485d7`); M-03 owner-pending.
-  - Externa independente 2026-07-11 — **6,2/10 pré-remediação** ([registro + dossiê de re-auditoria](docs/audit/AUDITORIA_EXTERNA_2026-07-11.md)); **placar 2026-07-16: 13 fechados · 1 parcial (F-09) · 1 aberto (F-15)** — pendências de código zeradas; **solicitar re-auditoria**.
-- **Tese de produto (5/5 COMPLETA):** Radar de Compras `#363` ✅ · Ação de 1 Toque `83deafc` ✅ · Gêmeo Financeiro `c5176d7` ✅ · Selo de Integridade `acbdc54` ✅ · Copiloto que Cumpre `b6bee7b` ✅. Histórico em `docs/KNOWLEDGE_BASE.md §2`.
+  - Big Four 2026-07-09 — **8.7/10** ([laudo](docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md)); M-01/M-02/L-01 fechados; M-03 owner-pending.
+  - Externa independente 2026-07-11 — **6,2/10 pré-remediação** ([registro + dossiê de re-auditoria](docs/audit/AUDITORIA_EXTERNA_2026-07-11.md)); **placar 2026-07-15: 13 fechados · 1 parcial (F-09) · 1 aberto (F-15)** — pendências de código zeradas; **solicitar re-auditoria**.
+- **Tese de produto:** [docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md](docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md) — fase 1 (Radar de Compras) entregue (#363).
 - **Nota de processo:** rodar `npm run typecheck` antes de pushar — vitest/coverage usam esbuild e não type-checam (branded types como `Centavos` escapam localmente).
+- Detalhe completo dos ciclos #346–#430 (NFC-e, Cesta, FCM, segurança comercial, remediações): [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md).
 
 ### Fatos vivos herdados dos ciclos anteriores
 
@@ -33,7 +34,7 @@
 - **Query enrichment (PR #326):** quando o router retorna `type: 'answer'`, `buildQueryContext` injeta bloco estruturado (saldo, resumo mensal, cashflow ou cartão) antes do prompt Gemini.
 - **Contexto de recorrentes (PR #327):** `recurringTasks` passados ao `AIAssistantChat` e incluídos no `FinancialContext` do `GeminiService`.
 - **E2E:** `e2e/tests/06-agent-confirmed-mutation.spec.ts` cobre despesa e receita, determinístico, sem LLM real.
-- **Doc normativo:** ver `docs/KNOWLEDGE_BASE.md §4` (fluxo de mutação e intent router).
+- **Doc normativo:** `docs/AI_AGENT_CONFIRMED_MUTATION_FLOW.md` e `docs/AI_TOOL_ROUTER.md`.
 
 ## Bloqueios Estruturais (não iniciar sem decisão)
 
@@ -141,13 +142,6 @@ lastExecutedMonth?: string;        // formato YYYY-MM
 - Delegação só quando o usuário pedir ou nomear o agente (subagente parte "do zero" e re-deriva
   contexto — é o caminho caro do plano; não disparar para poll de trabalho já rastreado).
 
-## Divisão Orquestrador/Worker
-
-- O modelo da sessão principal (**Fable 5**) É RESPONSÁVEL POR: planejamento, decisão de arquitetura, revisão final.
-- NUNCA escreva código diretamente na sessão principal para tarefas mecânicas — delegue ao subagente `worker`.
-- Delegue ao `worker` sempre que a tarefa for: correção pontual, aplicar um diff já decidido, rodar buscas, formatar/testar.
-- **Regra crítica de custo:** subagente herda o modelo da sessão — sempre fixe `model: sonnet` (worker) ou `model: opus` (builder) no frontmatter do agente.
-
 ## Processo Operacional Permanente
 
 - Read-only antes de implementação.
@@ -240,13 +234,15 @@ Recorrentes (`ADD_RECURRING`/`UPDATE_RECURRING`/`DELETE_RECURRING`) permanecem *
 
 ## Diretrizes e Documentos de Referência
 
-- **Base de conhecimento (referência completa):** [`docs/KNOWLEDGE_BASE.md`](docs/KNOWLEDGE_BASE.md) — histórico de fases, contratos técnicos, agente IA, LGPD, segurança, riscos, produto, checklists.
-- **Política IA Copilot (resumo):** ver `docs/KNOWLEDGE_BASE.md §5` — todo PR com IA deve declarar: dados usados, auditoria, idempotência, App Check, Zod, centavos, fallback de baixa confiança.
-- **Arquitetura UI/UX:** sem `react-router`, navegação por `currentPage`/`NavigationContext`; sem migrar libs de gráficos. (F-12 entregue — estado canônico no código.)
-- **Agente — fluxo de mutação e intent router:** `docs/KNOWLEDGE_BASE.md §4`
-- **NFC-e (fetch automático ADIADO):** gate SSRF pronto; fluxo manual entregue (PRs #352–#356); decisão de produto 2026-07-04.
-- **LGPD/RIPD:** `docs/KNOWLEDGE_BASE.md §7`
-- **Decisões arquiteturais:** [`docs/DECISOES-ARQUITETURA.md`](docs/DECISOES-ARQUITETURA.md)
+- **Documento Mestre:** `docs/product/QUANTUM_FINANCE_VISAO_ESTRATEGICA_2_0.md`
+- **Política IA Copilot:** `docs/product/POLITICA_COPILOT_IA_QUANTUM_2026-06-12.md` — todo PR com IA deve declarar: dados usados, auditoria, idempotência, App Check, Zod, centavos, fallback de baixa confiança.
+- **Arquitetura UI/UX:** `docs/UI_UX_ARCHITECTURE.md` — sem `react-router`, navegação por `currentPage`/`NavigationContext`; sem migrar libs de gráficos.
+- **Agente — fluxo de mutação:** `docs/AI_AGENT_CONFIRMED_MUTATION_FLOW.md`
+- **Intent router:** `docs/AI_TOOL_ROUTER.md`
+- **Threat Model NFC-e:** `docs/product/THREAT_MODEL_COMPRAS_INTELIGENTES_NFCE_2026-06-12.md`
+- **LGPD/RIPD:** `docs/RIPD.md`
+- **Histórico de fases e PRs:** [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md)
+- **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md)
 
 ## Collections Firestore
 
