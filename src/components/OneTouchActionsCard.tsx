@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Zap } from 'lucide-react';
-import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { formatBRL, toCentavos } from '../shared/types/money';
 import type { Centavos } from '../shared/types/money';
 import type { RecurringTask } from '../shared/types/transaction';
@@ -38,6 +38,26 @@ function daysInMonth(year: number, monthOneBased: number): number {
   return new Date(year, monthOneBased, 0).getDate();
 }
 
+function currentLocalMonthKey(date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function recurringTaskSnapshot(task: RecurringTask): Record<string, unknown> {
+  const snapshot: Record<string, unknown> = {
+    description: task.description,
+    type: task.type,
+    category: task.category,
+    dueDay: task.dueDay,
+    active: task.active,
+    frequency: task.frequency,
+    schemaVersion: 2,
+  };
+  if (task.value_cents !== undefined) snapshot['value_cents'] = task.value_cents;
+  if (task.dueMonth !== undefined) snapshot['dueMonth'] = task.dueMonth;
+  if (task.lastExecutedMonth !== undefined) snapshot['lastExecutedMonth'] = task.lastExecutedMonth;
+  return snapshot;
+}
+
 export default function OneTouchActionsCard({ uid, recurringTasks }: Props) {
   const [activeTask, setActiveTask] = useState<RecurringTask | null>(null);
   const [activeProposal, setActiveProposal] = useState<ActionProposal | null>(null);
@@ -49,7 +69,7 @@ export default function OneTouchActionsCard({ uid, recurringTasks }: Props) {
   const dueTasks = useMemo<DueTask[]>(() => {
     const today = new Date();
     const dayOfMonth = today.getDate();
-    const currentYearMonth = today.toISOString().slice(0, 7);
+    const currentYearMonth = currentLocalMonthKey(today);
     const currentYear = today.getFullYear();
     const currentMonth = today.getMonth() + 1;
     const lastDay = daysInMonth(currentYear, currentMonth);
@@ -99,10 +119,33 @@ export default function OneTouchActionsCard({ uid, recurringTasks }: Props) {
         toolsUsed: ['recurring_task_briefing'],
       });
       if (uid) {
-        await updateDoc(doc(db, 'users', uid, 'recurringTasks', activeTask.id), {
-          lastExecutedMonth: new Date().toISOString().slice(0, 7),
+        const lastExecutedMonth = currentLocalMonthKey();
+        const opId = crypto.randomUUID();
+        const taskRef = doc(db, 'users', uid, 'recurringTasks', activeTask.id);
+        const historyRef = doc(db, 'users', uid, 'recurringTasks', activeTask.id, 'history', opId);
+        const before = recurringTaskSnapshot(activeTask);
+        const after = {
+          ...before,
+          lastExecutedMonth,
+        };
+        const batch = writeBatch(db);
+        batch.update(taskRef, {
+          lastExecutedMonth,
+          _lastOpId: opId,
           updatedAt: serverTimestamp(),
         });
+        batch.set(historyRef, {
+          action: 'UPDATE',
+          recurringTaskId: activeTask.id,
+          before,
+          after,
+          changedFields: ['lastExecutedMonth'],
+          origin: 'manual',
+          correlationId: opId,
+          createdAt: serverTimestamp(),
+          schemaVersion: 1,
+        });
+        await batch.commit();
       }
       setDismissed((prev) => {
         const next = new Set(prev);

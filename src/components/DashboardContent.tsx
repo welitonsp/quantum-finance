@@ -150,6 +150,10 @@ export default function DashboardContent({
   const { status, color, rec, score, savingsRate, debtRatio, goalProgress } = st;
 
   const currentYYYYMM = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+  const todayYYYYMM = useMemo(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  }, []);
 
   const remainingDays = useMemo(() => {
     const today = new Date();
@@ -161,7 +165,7 @@ export default function DashboardContent({
     saldo,
     recurringTasks,
     cardInvoiceCents: totalFaturaCents,
-    currentYYYYMM,
+    currentYYYYMM: todayYYYYMM,
   });
 
   const { metrics, loadingMetrics } = useFinancialMetrics(
