@@ -79,6 +79,14 @@ function todayAtStartOfDay(): Date {
 }
 
 function nextOneTouchOccurrence(task: RecurringTask, today = todayAtStartOfDay()): Date {
+  if (task.frequency === 'anual') {
+    const dueMonth = task.dueMonth ?? 1;
+    const dueDate = new Date(today.getFullYear(), dueMonth - 1, Math.min(task.dueDay, daysInMonth(today.getFullYear(), dueMonth)));
+    if (task.lastExecutedMonth === monthKey(dueDate)) {
+      return new Date(today.getFullYear() + 1, dueMonth - 1, Math.min(task.dueDay, daysInMonth(today.getFullYear() + 1, dueMonth)));
+    }
+    return dueDate;
+  }
   const dueDate = dueDateForMonth(today, task.dueDay);
   if (task.lastExecutedMonth === monthKey(dueDate)) {
     return dueDateForMonth(nextMonth(today), task.dueDay);
@@ -102,8 +110,8 @@ export default function OneTouchActionsCard({ uid, recurringTasks }: Props) {
     return recurringTasks
       .filter((task) => {
         if (!task.active) return false;
-        if (task.frequency === 'anual' && task.dueMonth !== currentMonth) return false;
         const occurrence = nextOneTouchOccurrence(task, today);
+        if (task.frequency === 'anual' && occurrence.getMonth() + 1 !== currentMonth) return false;
         if (task.lastExecutedMonth === monthKey(occurrence)) return false;
         return daysUntil(occurrence) <= 7;
       })

@@ -270,7 +270,9 @@ export default function GemeloFinanceiro({
   const saldoCents = toCentavos(balances?.geral?.saldo ?? 0);
 
   const workerInputs = useMemo(() => {
-    const receitaMensalCents = Math.max(dna.fixedIncomeCents, histStats.receitaMensalCents);
+    const receitaMensalCents = dna.fixedIncomeCents > 0
+      ? dna.fixedIncomeCents
+      : histStats.receitaMensalCents;
     const despesaFixaCents   = dna.fixedExpensesCents + dna.debtPaymentsCents + dna.cardCommittedCents;
     const mediaVariavelCents = Math.max(
       dna.discretionaryCents,
