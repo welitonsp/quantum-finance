@@ -33,6 +33,27 @@ function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
 
+function monthKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function dateForDay(year: number, monthOneBased: number, day: number): Date {
+  return new Date(year, monthOneBased - 1, Math.min(day, daysInMonth(year, monthOneBased)));
+}
+
+function nextMonthlyOccurrence(todayDate: Date, dueDay: number): Date {
+  const thisMonth = todayDate.getMonth() + 1;
+  const candidate = dateForDay(todayDate.getFullYear(), thisMonth, dueDay);
+  if (candidate >= todayDate) return candidate;
+  return dateForDay(todayDate.getFullYear(), thisMonth + 1, dueDay);
+}
+
+function nextAnnualOccurrence(todayDate: Date, dueMonth: number, dueDay: number): Date {
+  const candidate = dateForDay(todayDate.getFullYear(), dueMonth, dueDay);
+  if (candidate >= todayDate) return candidate;
+  return dateForDay(todayDate.getFullYear() + 1, dueMonth, dueDay);
+}
+
 function relLabel(d: number): string {
   if (d === 0) return 'Hoje';
   if (d === 1) return 'Amanhã';
@@ -42,8 +63,6 @@ function relLabel(d: number): string {
 export function UpcomingEventsStrip({
   recurringTasks,
   creditCards,
-  currentMonth,
-  currentYear,
   today,
 }: Props): JSX.Element | null {
   const events = useMemo<UpcomingEvent[]>(() => {
@@ -61,20 +80,17 @@ export function UpcomingEventsStrip({
       Math.round((target.getTime() - todayDate.getTime()) / 86_400_000);
 
     const result: UpcomingEvent[] = [];
-    const currentMonthKey = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
 
     // ── Recurring tasks ──────────────────────────────────────────────────────
     for (const t of recurringTasks) {
       if (!t.active) continue;
       if (t.type === 'entrada') continue;
-      if (!(t.frequency === 'mensal' || t.frequency === undefined)) continue;
-      if (t.lastExecutedMonth === currentMonthKey) continue;
 
-      const dueDate = new Date(
-        currentYear,
-        currentMonth - 1,
-        Math.min(t.dueDay, daysInMonth(currentYear, currentMonth)),
-      );
+      const dueDate = t.frequency === 'anual'
+        ? nextAnnualOccurrence(todayDate, t.dueMonth ?? todayDate.getMonth() + 1, t.dueDay)
+        : nextMonthlyOccurrence(todayDate, t.dueDay);
+      if (t.lastExecutedMonth === monthKey(dueDate)) continue;
+
       const days = daysDiff(dueDate);
       if (days < 0 || days > 7) continue;
 
@@ -94,11 +110,7 @@ export function UpcomingEventsStrip({
       const faturaCents = card.metrics.faturaCents;
 
       // Closing day
-      const closingDate = new Date(
-        currentYear,
-        currentMonth - 1,
-        Math.min(card.closingDay, daysInMonth(currentYear, currentMonth)),
-      );
+      const closingDate = nextMonthlyOccurrence(todayDate, card.closingDay);
       const closingDays = daysDiff(closingDate);
       if (faturaCents !== 0 && closingDays >= 0 && closingDays <= 7) {
         result.push({
@@ -111,18 +123,7 @@ export function UpcomingEventsStrip({
       }
 
       // Due day
-      let dueDate = new Date(
-        currentYear,
-        currentMonth - 1,
-        Math.min(card.dueDay, daysInMonth(currentYear, currentMonth)),
-      );
-      if (card.dueDay < card.closingDay) {
-        dueDate = new Date(
-          currentYear,
-          currentMonth,
-          Math.min(card.dueDay, daysInMonth(currentYear, currentMonth + 1)),
-        );
-      }
+      const dueDate = nextMonthlyOccurrence(todayDate, card.dueDay);
       const dueDays = daysDiff(dueDate);
       if (faturaCents !== 0 && dueDays >= 0 && dueDays <= 7) {
         result.push({
@@ -137,7 +138,7 @@ export function UpcomingEventsStrip({
 
     result.sort((a, b) => a.daysFromNow - b.daysFromNow);
     return result;
-  }, [recurringTasks, creditCards, currentMonth, currentYear, today]);
+  }, [recurringTasks, creditCards, today]);
 
   if (events.length === 0) return null;
 
