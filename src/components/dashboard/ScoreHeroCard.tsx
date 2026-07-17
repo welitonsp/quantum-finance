@@ -1,7 +1,8 @@
-import { useMemo, type JSX } from 'react';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { useMemo, useState, type JSX } from 'react';
+import { TrendingUp, TrendingDown, Minus, ChevronDown } from 'lucide-react';
 import type { FinancialMetrics } from '../../hooks/useFinancialMetrics';
 import type { ScoreHistoryEntry } from '../../hooks/useScoreHistory';
+import { computeHealthScore, computePillars, nextLevelHint, type PillarStatus } from '../../lib/healthScore';
 
 interface Props {
   metrics: FinancialMetrics | null;
@@ -10,24 +11,14 @@ interface Props {
   history: ScoreHistoryEntry[];
 }
 
-function computeScore(m: FinancialMetrics): number {
-  const s1 = m.taxaPoupanca >= 30 ? 25 : m.taxaPoupanca >= 20 ? 20 : m.taxaPoupanca >= 10 ? 12 : m.taxaPoupanca >= 5 ? 6 : 0;
-  const s2 = m.endividamento <= 10 ? 25 : m.endividamento <= 30 ? 20 : m.endividamento <= 50 ? 12 : m.endividamento <= 70 ? 6 : 0;
-  const s3 = m.reservaMeses >= 6 ? 25 : m.reservaMeses >= 3 ? 18 : m.reservaMeses >= 1 ? 8 : 0;
-  const s4 = m.comprometimento <= 20 ? 25 : m.comprometimento <= 35 ? 18 : m.comprometimento <= 50 ? 8 : 0;
-  return s1 + s2 + s3 + s4;
-}
+const STATUS_COLORS: Record<PillarStatus, { bar: string; text: string; badge: string }> = {
+  great:    { bar: 'bg-emerald-500', text: 'text-emerald-400', badge: 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400' },
+  ok:       { bar: 'bg-blue-500',    text: 'text-blue-400',    badge: 'bg-blue-500/10 border-blue-500/25 text-blue-400'         },
+  warn:     { bar: 'bg-amber-500',   text: 'text-amber-400',   badge: 'bg-amber-500/10 border-amber-500/25 text-amber-400'      },
+  critical: { bar: 'bg-red-500',     text: 'text-red-400',     badge: 'bg-red-500/10 border-red-500/25 text-red-400'           },
+};
 
-function nextLevelHint(m: FinancialMetrics): string {
-  const pillars = [
-    { score: m.taxaPoupanca >= 30 ? 25 : m.taxaPoupanca >= 20 ? 20 : m.taxaPoupanca >= 10 ? 12 : m.taxaPoupanca >= 5 ? 6 : 0,    hint: 'Aumente a poupança para 20% da renda' },
-    { score: m.endividamento <= 10 ? 25 : m.endividamento <= 30 ? 20 : m.endividamento <= 50 ? 12 : m.endividamento <= 70 ? 6 : 0, hint: 'Reduza dívidas abaixo de 30% do patrimônio' },
-    { score: m.reservaMeses >= 6 ? 25 : m.reservaMeses >= 3 ? 18 : m.reservaMeses >= 1 ? 8 : 0,                                   hint: 'Construa 3 meses de reserva de emergência' },
-    { score: m.comprometimento <= 20 ? 25 : m.comprometimento <= 35 ? 18 : m.comprometimento <= 50 ? 8 : 0,                       hint: 'Reduza custos fixos abaixo de 35% da renda' },
-  ];
-  const lowest = pillars.reduce((a, b) => (b.score < a.score ? b : a));
-  return lowest.hint;
-}
+const STATUS_LABEL: Record<PillarStatus, string> = { great: 'Ótimo', ok: 'Bom', warn: 'Atenção', critical: 'Crítico' };
 
 function scoreColor(s: number): { text: string; ring: string; badge: string } {
   if (s >= 75) return { text: 'text-emerald-400', ring: 'stroke-emerald-500', badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25' };
@@ -36,13 +27,15 @@ function scoreColor(s: number): { text: string; ring: string; badge: string } {
 }
 
 export function ScoreHeroCard({ metrics, loading, history }: Props): JSX.Element | null {
-  const { score, delta, hint, colors } = useMemo(() => {
-    if (!metrics) return { score: 0, prevScore: null, delta: null, hint: '', colors: scoreColor(0) };
-    const score = computeScore(metrics);
+  const [expanded, setExpanded] = useState(false);
+
+  const { score, delta, hint, colors, pillars } = useMemo(() => {
+    if (!metrics) return { score: 0, prevScore: null, delta: null, hint: '', colors: scoreColor(0), pillars: [] };
+    const score = computeHealthScore(metrics);
     const prevScore = history[0]?.score ?? null;
     const delta = prevScore !== null ? score - prevScore : null;
     const hint = nextLevelHint(metrics);
-    return { score, prevScore, delta, hint, colors: scoreColor(score) };
+    return { score, prevScore, delta, hint, colors: scoreColor(score), pillars: computePillars(metrics) };
   }, [metrics, history]);
 
   if (loading && !metrics) return <div className="rounded-2xl border border-quantum-border bg-quantum-card p-4 h-20 animate-pulse" />;
@@ -90,6 +83,51 @@ export function ScoreHeroCard({ metrics, loading, history }: Props): JSX.Element
           <p className="text-[10px] text-quantum-fgMuted leading-tight">{hint}</p>
         </div>
       </div>
+
+      {/* Detalhes por pilar — expansível, recolhido por padrão */}
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        aria-expanded={expanded}
+        className="mt-3 w-full flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-quantum-fgMuted hover:text-quantum-fg transition-colors"
+      >
+        {expanded ? 'Ocultar decomposição' : 'Ver decomposição por pilar'}
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+
+      {expanded && (
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {pillars.map(p => {
+            const c   = STATUS_COLORS[p.status];
+            const pct = (p.score / p.maxScore) * 100;
+            return (
+              <div key={p.label} className="bg-quantum-bgSecondary/60 border border-quantum-border rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <p.icon className={`w-4 h-4 ${c.text}`} />
+                    <span className="text-xs font-bold text-quantum-fg">{p.label}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded-md border ${c.badge}`}>
+                      {STATUS_LABEL[p.status]}
+                    </span>
+                    <span className={`text-sm font-black font-mono ${c.text}`}>
+                      {p.score}<span className="text-quantum-fgMuted font-normal text-[10px]">/{p.maxScore}</span>
+                    </span>
+                  </div>
+                </div>
+                <div className="h-1.5 rounded-full bg-quantum-card mb-2 overflow-hidden">
+                  <div className={`h-full rounded-full ${c.bar}`} style={{ width: `${pct}%` }} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] text-quantum-fgMuted leading-snug">{p.tip}</p>
+                  <span className={`text-[11px] font-bold ml-3 shrink-0 ${c.text}`}>{p.value}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

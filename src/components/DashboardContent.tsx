@@ -33,7 +33,7 @@ import QuantumInsights from './QuantumInsights';
 import QuantumCopilotCards from './QuantumCopilotCards';
 import { useQuantumCopilot } from '../hooks/useQuantumCopilot';
 import { useScoreHistory } from '../hooks/useScoreHistory';
-const FinancialHealthScore = lazy(() => import('./FinancialHealthScore'));
+import { computeHealthScore } from '../lib/healthScore';
 import WeeklyCashflowWidget from './WeeklyCashflowWidget';
 import { useWeeklyCashflow } from '../hooks/useWeeklyCashflow';
 const TimelineWidget   = lazy(() => import('./TimelineWidget'));
@@ -173,6 +173,10 @@ export default function DashboardContent({
     totalFaturaCents,
   );
 
+  // Score canônico (fonte única = motor de pilares). Fallback para o score do
+  // calcStatus enquanto metrics é null, para não quebrar o primeiro paint.
+  const canonicalScore = metrics ? computeHealthScore(metrics) : score;
+
   const StatusIcon  = status === 'CRÍTICO' ? AlertTriangle : status === 'ATENÇÃO' ? Activity : CheckCircle2;
   const incomeDelta = receitas > 0 ? ((receitas - despesas) / receitas * 100) : 0;
 
@@ -276,7 +280,7 @@ export default function DashboardContent({
         receitas={receitas}
         despesas={despesas}
         incomeDelta={incomeDelta}
-        score={score}
+        score={canonicalScore}
         color={color}
         status={status}
         rec={rec}
@@ -383,10 +387,6 @@ export default function DashboardContent({
       </motion.div>
 
       <QuantumInsights metrics={metrics} loading={loadingMetrics} />
-
-      <motion.div variants={itemVariants}>
-        <FinancialHealthScore metrics={metrics} loading={loadingMetrics} history={scoreHistory} />
-      </motion.div>
 
       <motion.div variants={itemVariants}>
         <WeeklyCashflowWidget
