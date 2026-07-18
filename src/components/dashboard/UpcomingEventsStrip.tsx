@@ -2,12 +2,14 @@ import { useMemo, type JSX } from 'react';
 import { CalendarClock, CreditCard, Wallet } from 'lucide-react';
 
 import { formatBRL, toCentavos, type Centavos } from '../../shared/types/money';
-import type { RecurringTask, CreditCardWithMetrics } from '../../shared/types/transaction';
-import { isIncome } from '../../utils/transactionUtils';
+import type { RecurringTask, CreditCardWithMetrics, Transaction } from '../../shared/types/transaction';
+import { getTransactionAbsCentavos, isExpense, isIncome, isInvoicePayment } from '../../utils/transactionUtils';
+import { invoiceCompetenciaForDate } from '../../lib/cardProjection';
 
 interface Props {
   recurringTasks: RecurringTask[];
   creditCards: CreditCardWithMetrics[];
+  transactions: Transaction[];
   currentMonth: number; // 1–12
   currentYear: number;
   /** YYYY-MM-DD, injected for testability; defaults to real today */
@@ -42,6 +44,10 @@ function dateForDay(year: number, monthOneBased: number, day: number): Date {
   return new Date(year, monthOneBased - 1, Math.min(day, daysInMonth(year, monthOneBased)));
 }
 
+function localDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 function nextMonthlyOccurrence(todayDate: Date, dueDay: number): Date {
   const thisMonth = todayDate.getMonth() + 1;
   const candidate = dateForDay(todayDate.getFullYear(), thisMonth, dueDay);
@@ -61,9 +67,42 @@ function relLabel(d: number): string {
   return `em ${d} dias`;
 }
 
+function dueInvoiceCompetencia(dueDate: Date, closingDay: number): string {
+  const dueMonth = dueDate.getMonth() + 1;
+  const closingDate = dueDate.getDate() > closingDay
+    ? dateForDay(dueDate.getFullYear(), dueMonth, closingDay)
+    : dateForDay(dueDate.getFullYear(), dueMonth - 1, closingDay);
+  const lastDayInInvoice = new Date(closingDate.getFullYear(), closingDate.getMonth(), closingDate.getDate() - 1);
+  return invoiceCompetenciaForDate(localDateKey(lastDayInInvoice), closingDay);
+}
+
+function invoiceAmountForCompetencia(
+  transactions: Transaction[],
+  cardId: string,
+  closingDay: number,
+  competencia: string,
+): Centavos {
+  let chargesCents = 0;
+  let paymentsCents = 0;
+  for (const tx of transactions) {
+    if (tx.cardId !== cardId || tx.isDeleted === true || tx.deletedAt) continue;
+    const cents = getTransactionAbsCentavos(tx);
+    if (isInvoicePayment(tx)) {
+      if (tx.paidInvoiceMonth === competencia) paymentsCents += cents;
+      continue;
+    }
+    if (!isExpense(tx.type)) continue;
+    const txDate = String(tx.date ?? tx.createdAt ?? '').slice(0, 10);
+    if (!txDate) continue;
+    if (invoiceCompetenciaForDate(txDate, closingDay) === competencia) chargesCents += cents;
+  }
+  return Math.max(0, chargesCents - paymentsCents) as Centavos;
+}
+
 export function UpcomingEventsStrip({
   recurringTasks,
   creditCards,
+  transactions,
   today,
 }: Props): JSX.Element | null {
   const events = useMemo<UpcomingEvent[]>(() => {
@@ -126,12 +165,18 @@ export function UpcomingEventsStrip({
       // Due day
       const dueDate = nextMonthlyOccurrence(todayDate, card.dueDay);
       const dueDays = daysDiff(dueDate);
-      if (faturaCents !== 0 && dueDays >= 0 && dueDays <= 7) {
+      const dueInvoiceCents = invoiceAmountForCompetencia(
+        transactions,
+        card.id,
+        card.closingDay,
+        dueInvoiceCompetencia(dueDate, card.closingDay),
+      );
+      if (dueInvoiceCents !== 0 && dueDays >= 0 && dueDays <= 7) {
         result.push({
           id: `due-${card.id}`,
           kind: 'card-due',
           label: card.name,
-          valueCents: faturaCents,
+          valueCents: dueInvoiceCents,
           daysFromNow: dueDays,
         });
       }
@@ -139,7 +184,7 @@ export function UpcomingEventsStrip({
 
     result.sort((a, b) => a.daysFromNow - b.daysFromNow);
     return result;
-  }, [recurringTasks, creditCards, today]);
+  }, [recurringTasks, creditCards, transactions, today]);
 
   if (events.length === 0) return null;
 

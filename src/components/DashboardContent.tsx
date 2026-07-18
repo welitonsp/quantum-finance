@@ -311,6 +311,7 @@ export default function DashboardContent({
         <UpcomingEventsStrip
           recurringTasks={recurringTasks}
           creditCards={creditCards}
+          transactions={txSet}
           currentMonth={currentMonth}
           currentYear={currentYear}
         />
@@ -329,7 +330,7 @@ export default function DashboardContent({
                 transactions={txSet}
                 accounts={accounts}
                 cardOpenInvoicesCents={totalFaturaCents}
-                currentMonth={currentYYYYMM}
+                currentMonth={todayYYYYMM}
                 budgets={budgets}
                 onNavigate={setCurrentPage}
                 onPropose={handleInsightPropose}

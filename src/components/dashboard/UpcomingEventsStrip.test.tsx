@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { UpcomingEventsStrip } from './UpcomingEventsStrip';
-import type { CreditCardWithMetrics, RecurringTask } from '../../shared/types/transaction';
+import type { CreditCardWithMetrics, RecurringTask, Transaction } from '../../shared/types/transaction';
 import type { Centavos } from '../../shared/types/money';
 
 const cents = (value: number): Centavos => value as Centavos;
@@ -51,12 +51,27 @@ function card(overrides: Partial<CreditCardWithMetrics>): CreditCardWithMetrics 
   };
 }
 
+function transaction(overrides: Partial<Transaction>): Transaction {
+  return {
+    id: 'tx-card',
+    description: 'Compra cartão',
+    value_cents: cents(10_000),
+    schemaVersion: 2,
+    type: 'saida',
+    category: 'Cartão',
+    date: '2026-07-15',
+    cardId: 'card',
+    ...overrides,
+  } as Transaction;
+}
+
 describe('UpcomingEventsStrip', () => {
   it('rolls monthly recurring and card events into the next month window', () => {
     render(
       <UpcomingEventsStrip
         recurringTasks={[recurringTask({ id: 'rent', description: 'Aluguel', dueDay: 2 })]}
         creditCards={[card({ closingDay: 1, dueDay: 2 })]}
+        transactions={[transaction({})]}
         currentMonth={7}
         currentYear={2026}
         today="2026-07-29"
@@ -80,6 +95,7 @@ describe('UpcomingEventsStrip', () => {
           }),
         ]}
         creditCards={[]}
+        transactions={[]}
         currentMonth={7}
         currentYear={2026}
         today="2026-07-19"
@@ -102,6 +118,7 @@ describe('UpcomingEventsStrip', () => {
           }),
         ]}
         creditCards={[]}
+        transactions={[]}
         currentMonth={7}
         currentYear={2026}
         today="2026-07-19"
@@ -124,6 +141,7 @@ describe('UpcomingEventsStrip', () => {
           }),
         ]}
         creditCards={[]}
+        transactions={[]}
         currentMonth={7}
         currentYear={2026}
         today="2026-07-19"

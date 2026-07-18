@@ -54,7 +54,7 @@ function transactionMonthKey(tx: Transaction): string | null {
   }
   const date = new Date(rawDate);
   if (Number.isNaN(date.getTime())) return null;
-  return `${date.getFullYear()}-${String(date.getMonth()).padStart(2, '0')}`;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
 interface MonteCarloResult {
