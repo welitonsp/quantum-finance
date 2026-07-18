@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Zap } from 'lucide-react';
-import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { formatBRL, toCentavos } from '../shared/types/money';
 import type { Centavos } from '../shared/types/money';
 import type { RecurringTask } from '../shared/types/transaction';
@@ -11,6 +11,7 @@ import { buildProposal } from '../features/ai-agent/proposalBuilders';
 import { buildActionQuestion } from '../features/ai-agent/intentRouter';
 import type { ActionProposal } from '../shared/schemas/agentSchemas';
 import { isIncome } from '../utils/transactionUtils';
+import { transactionRepo } from '../shared/services/transactionRepo';
 
 interface Props {
   uid: string;
@@ -143,12 +144,29 @@ export default function OneTouchActionsCard({ uid, recurringTasks }: Props) {
   const handleConfirm = async () => {
     if (!activeProposal || !activeTask) return;
     try {
-      await runAction(activeProposal, {
+      const actionResult = await runAction(activeProposal, {
         intent: activeProposal.kind === 'register_income' ? 'register_income_proposal' : 'cashflow_briefing',
         question: activeQuestion,
         toolsUsed: ['recurring_task_briefing'],
       });
       if (uid) {
+        const createdTxRef = doc(db, 'users', uid, 'transactions', actionResult.id);
+        const createdTxSnap = await getDoc(createdTxRef);
+        if (createdTxSnap.exists()) {
+          const before = { id: actionResult.id, ...createdTxSnap.data() };
+          await transactionRepo.updateTransactionWithHistory(
+            uid,
+            actionResult.id,
+            { isRecurring: true },
+            {
+              before,
+              after: { ...before, isRecurring: true },
+              changedFields: ['isRecurring'],
+              origin: 'ai',
+            },
+          );
+        }
+
         const lastExecutedMonth = monthKey(nextOneTouchOccurrence(activeTask));
         const opId = crypto.randomUUID();
         const taskRef = doc(db, 'users', uid, 'recurringTasks', activeTask.id);

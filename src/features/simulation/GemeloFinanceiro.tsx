@@ -57,6 +57,10 @@ function transactionMonthKey(tx: Transaction): string | null {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
+function localMonthKey(date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
 interface MonteCarloResult {
   success:                    boolean;
   error?:                     string;
@@ -232,9 +236,11 @@ export default function GemeloFinanceiro({
     if (!transactions || transactions.length === 0) return DEFAULT_STATS;
 
     const byMonth: Record<string, { r: number; d: number }> = {};
+    const currentMonthKey = localMonthKey();
     transactions.forEach(tx => {
       const key = transactionMonthKey(tx);
       if (!key) return;
+      if (key > currentMonthKey) return;
       if (!byMonth[key]) byMonth[key] = { r: 0, d: 0 };
       const valCents = getTransactionAbsCentavos(tx);
       if (isIncome(tx.type)) byMonth[key]!.r += valCents;
