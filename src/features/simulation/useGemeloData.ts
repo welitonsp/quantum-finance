@@ -34,6 +34,10 @@ interface Props {
   historicalExpenseCents: Centavos;
 }
 
+function localDateKey(date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 export function useGemeloData({
   recurringTasks,
   debts,
@@ -43,7 +47,7 @@ export function useGemeloData({
   historicalExpenseCents,
 }: Props): GemeloDNA {
   return useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateKey();
 
     const fixedIncomeCents = recurringTasks
       .filter(t => t.active && isIncome(t.type ?? '') && t.frequency !== 'anual')

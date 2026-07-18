@@ -104,14 +104,12 @@ export default function OneTouchActionsCard({ uid, recurringTasks }: Props) {
 
   const dueTasks = useMemo<DueTask[]>(() => {
     const today = todayAtStartOfDay();
-    const currentMonth = today.getMonth() + 1;
     const daysUntil = (date: Date): number => Math.round((date.getTime() - today.getTime()) / 86_400_000);
 
     return recurringTasks
       .filter((task) => {
         if (!task.active) return false;
         const occurrence = nextOneTouchOccurrence(task, today);
-        if (task.frequency === 'anual' && occurrence.getMonth() + 1 !== currentMonth) return false;
         if (task.lastExecutedMonth === monthKey(occurrence)) return false;
         return daysUntil(occurrence) <= 7;
       })

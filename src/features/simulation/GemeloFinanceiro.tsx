@@ -298,15 +298,23 @@ export default function GemeloFinanceiro({
       logSanitizedFirebaseError('simulation_crash', e.message);
     };
     workerRef.current = worker;
-    return () => { worker.terminate(); workerRef.current = null; };
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      worker.terminate();
+      workerRef.current = null;
+    };
   }, []);
 
   const runSimulation = useCallback(() => {
     if (!workerRef.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
+      if (!workerRef.current) return;
       setIsCalculating(true);
-      workerRef.current!.postMessage({
+      workerRef.current.postMessage({
         saldoCents,
         receitaMensalCents:  workerInputs.receitaMensalCents,
         despesaFixaCents:    workerInputs.despesaFixaCents,
