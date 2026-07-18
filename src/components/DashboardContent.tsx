@@ -379,6 +379,7 @@ export default function DashboardContent({
           metrics={metrics}
           loading={loadingMetrics}
           history={scoreHistory}
+          selectedMonth={currentYYYYMM}
         />
       </motion.div>
 

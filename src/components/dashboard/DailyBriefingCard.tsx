@@ -50,6 +50,10 @@ const SEV: Record<BriefingSeverity, { border: string; icon: string; badge: strin
   critical: { border: 'border-l-red-500',     icon: 'text-red-400',     badge: 'bg-red-500/10 text-red-400 border-red-500/25',         label: 'Alerta' },
 };
 
+function localDateKey(date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 export function DailyBriefingCard({
   transactions,
   accounts,
@@ -60,7 +64,7 @@ export function DailyBriefingCard({
   onPropose,
 }: Props): JSX.Element | null {
   const { items, forecast } = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const today = localDateKey(); // YYYY-MM-DD local
     const ctx: InsightContext = { transactions, accounts, today, currentMonth, cardOpenInvoicesCents };
 
     const anomalies = computeAnomalies(ctx);

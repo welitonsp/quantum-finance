@@ -8,6 +8,8 @@ interface Props {
   loading: boolean;
   /** Last months of score history (ordered oldest first for the chart). */
   history: ScoreHistoryEntry[];
+  /** Selected dashboard month in YYYY-MM format. */
+  selectedMonth: string;
 }
 
 function computeScore(m: FinancialMetrics): number {
@@ -35,27 +37,21 @@ function scoreColor(s: number): { text: string; ring: string; badge: string } {
   return         { text: 'text-red-400',     ring: 'stroke-red-500',     badge: 'bg-red-500/10 text-red-400 border-red-500/25'         };
 }
 
-function currentMonthKey(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function previousScore(history: ScoreHistoryEntry[]): number | null {
-  const currentMonth = currentMonthKey();
-  const priorEntries = history.filter(entry => entry.month < currentMonth);
+function previousScore(history: ScoreHistoryEntry[], selectedMonth: string): number | null {
+  const priorEntries = history.filter(entry => entry.month < selectedMonth);
   const previous = priorEntries.length > 0 ? priorEntries[priorEntries.length - 1] : null;
   return previous?.score ?? null;
 }
 
-export function ScoreHeroCard({ metrics, loading, history }: Props): JSX.Element | null {
+export function ScoreHeroCard({ metrics, loading, history, selectedMonth }: Props): JSX.Element | null {
   const { score, delta, hint, colors } = useMemo(() => {
     if (!metrics) return { score: 0, prevScore: null, delta: null, hint: '', colors: scoreColor(0) };
     const score = computeScore(metrics);
-    const prevScore = previousScore(history);
+    const prevScore = previousScore(history, selectedMonth);
     const delta = prevScore !== null ? score - prevScore : null;
     const hint = nextLevelHint(metrics);
     return { score, prevScore, delta, hint, colors: scoreColor(score) };
-  }, [metrics, history]);
+  }, [metrics, history, selectedMonth]);
 
   if (loading && !metrics) return <div className="rounded-2xl border border-quantum-border bg-quantum-card p-4 h-20 animate-pulse" />;
   if (!metrics) return null;
