@@ -1,5 +1,7 @@
 # Auditoria 360 Security & Systems — Quantum Finance
 
+> **Complemento estratégico:** a reauditoria ampliada de segurança, integridade financeira, UI e agente de IA está consolidada em `docs/audit/AUDITORIA_720_BIG_TECH_FINANCIAL_AI_2026-07-18.md`. Este documento 360 permanece como baseline dos achados `QF-360-*`; o dossiê 720 adiciona novos achados e o roadmap de evolução premium sem remover escopo existente.
+
 > Data: 2026-07-18  
 > Escopo: auditoria técnica profunda do checkout local `main @ 93d5c6e`  
 > Perfil: Principal Security & Systems Auditor  

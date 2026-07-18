@@ -3,14 +3,15 @@
 > Este arquivo é o ponto de entrada de contexto para qualquer agente de IA (Claude, Codex, etc.) que trabalhe no projeto. Mantenha-o atualizado a cada marco relevante. Não use este arquivo para guardar credenciais ou dados sensíveis.
 > **Histórico de fases/PRs:** [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md) · **Decisões arquiteturais:** [docs/DECISOES-ARQUITETURA.md](docs/DECISOES-ARQUITETURA.md)
 
-## Estado Atual — 2026-07-15 (F-12 e F-13 fechados; pronto p/ re-auditoria)
+## Estado Atual — 2026-07-18 (Reauditoria 720 concluída; remediação P0 aberta)
 
-- Branch principal: `main` — PRs #363–#448 mergeados. **CI verde** (incidente #440→#447 resolvido: E2E realinhado à navegação 7 destinos + code-split `vendor-react`).
-- Suíte: **1982 unit + 227 rules + 303 functions + 28 E2E**. Gates de cobertura: **stmts 77 / branches 68 / funcs 79 / lines 80** — regra permanente: só ratchetar com ≥0,5% de margem real medida no CI (incidente #382/#383).
-- **Pendências: fonte única em [docs/PENDENCIAS.md](docs/PENDENCIAS.md).** Resumo: código = zerado (itens 1–5 fechados; resta decisão de produto sobre `cardId` inerte no TransactionForm); owner/infra = required checks no branch protection, M-03 (verificações reais em dispositivo — [roteiro](docs/audit/M03_CHECKLIST_VERIFICACOES_REAIS.md)), F-09 restante (billing/quotas), F-15 (SLOs/alertas); produto = fases 2–5 da Tese (próxima: **Ação de 1 Toque**).
+- Branch principal auditada: `main @ f90659d`. A Auditoria 720 encontrou gaps P0 de integridade contábil, idempotência, LGPD, IA e integração entre módulos; portanto, “código zerado/pronto para produto novo” não é mais um estado válido.
+- Validação local da reauditoria: **2.038 testes de aplicação aprovados + 227 ignorados; 304 testes de Functions aprovados; typecheck, lint e build aprovados**. Testes verdes não anulam os achados de integração.
+- **Pendências: fonte única em [docs/PENDENCIAS.md](docs/PENDENCIAS.md).** A ordem e os gates de execução vivem em [docs/CHECKLISTS.md](docs/CHECKLISTS.md); a base técnica é [Auditoria 720](docs/audit/AUDITORIA_720_BIG_TECH_FINANCIAL_AI_2026-07-18.md).
+- **Regra temporária:** nenhuma evolução premium/P1 antes de `QF720-P0-CERT`. Preservar todos os módulos; corrigir primeiro verdade financeira, controles e contratos.
 - **Auditorias (concluídas e registradas):**
   - Big Four 2026-07-09 — **8.7/10** ([laudo](docs/audit/AUDITORIA_BIG_FOUR_2026-07-09.md)); M-01/M-02/L-01 fechados; M-03 owner-pending.
-  - Externa independente 2026-07-11 — **6,2/10 pré-remediação** ([registro + dossiê de re-auditoria](docs/audit/AUDITORIA_EXTERNA_2026-07-11.md)); **placar 2026-07-15: 13 fechados · 1 parcial (F-09) · 1 aberto (F-15)** — pendências de código zeradas; **solicitar re-auditoria**.
+  - Externa independente 2026-07-11 — **6,2/10 pré-remediação** ([registro + dossiê de re-auditoria](docs/audit/AUDITORIA_EXTERNA_2026-07-11.md)); placar histórico de 2026-07-15: 13 fechados · 1 parcial · 1 aberto. Esse estado foi superado pela Auditoria 720.
 - **Tese de produto:** [docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md](docs/product/QUANTUM_FINANCE_TESE_EXTRAORDINARIA_2026-07-09.md) — fase 1 (Radar de Compras) entregue (#363).
 - **Nota de processo:** rodar `npm run typecheck` antes de pushar — vitest/coverage usam esbuild e não type-checam (branded types como `Centavos` escapam localmente).
 - Detalhe completo dos ciclos #346–#430 (NFC-e, Cesta, FCM, segurança comercial, remediações): [docs/HISTORICO-FASES.md](docs/HISTORICO-FASES.md).
@@ -20,7 +21,7 @@
 - **Cloud Functions: 12 callables** (`createTransaction`, `executeAgentAction`, `createTransfer`, `deleteUserData`, `categorizeTransactionsBatch`, `chatWithQuantumAI`, `generateAuditReport`, `logAuditEvent`, `recordPriceObservation`, `acceptGroupInvite`, `createGroupExpense`, `settleGroupExpenseShare`) + **2 scheduled** (`executeScheduledRecurrents` 04:00 UTC; `sendPushReminders` 11:00 UTC — briefing FCM sem PII).
 - **Hardening ativo:** `assertAiConsent` fail-closed nas callables de IA; step-up (`auth_time` ≤5 min) no `deleteUserData`; rate limit por uid nas callables de escrita; MFA TOTP ativo em produção; `maxInstances: 20`; Actions pinadas por SHA + `firebase-tools@15.23.0`.
 - **Offline:** `persistentLocalCache`+`persistentMultipleTabManager` (leituras + escritas diretas) e outbox IndexedDB (`src/shared/lib/offlineOutbox.ts`) para criação via callable.
-- **Logs/auditoria 100% server-trusted** onde viável (#336/#337). Mantidos client-side por decisão: recorrentes (P3 controlado) e `IMPORT_TRANSACTION` (acoplado ao `runTransaction` atômico do Modelo A).
+- **Logs/auditoria são parciais:** existem trilhas server-trusted em fluxos importantes, mas a Auditoria 720 encontrou gaps em consentimento/processamento, compartilhamento, recorrências e ciclo completo do agente. Nunca declarar cobertura de 100% sem atestação calculada.
 - **`OnboardingWizard.tsx`** (#342) abre quando `accounts.length === 0 && transactions.length === 0`. **E2E precisa descartá-lo:** helper `e2e/helpers/onboarding.ts` (`dismissOnboardingIfPresent`) nos specs (#345).
 - Bundle principal 324 KB + `vendor-react` 188 KB (budget 500 KB/chunk, gate no CI) — split em 2026-07-15; antes o index estava a 499/500 KB.
 - Stashes locais podem existir; não são estado canônico da `main`.
@@ -100,7 +101,7 @@ Replay protection (`consumeAppCheckToken`) **ativo** em todas em produção.
 
 - `DataPrivacyService.ts`: `exportAllUserData()` + `deleteUserAccount()`.
 - `DataPrivacyPanel.tsx`: acessível via Settings na sidebar.
-- **Hard delete:** `deleteUserData` callable usa `adminDb.recursiveDelete(users/{uid})` + `admin.auth().deleteUser(uid)`. **ATIVO** (requer Blaze — upgrade realizado).
+- `deleteUserData` usa `adminDb.recursiveDelete(users/{uid})` + `admin.auth().deleteUser(uid)`, mas **a completude não está comprovada** para grupos, convites, despesas compartilhadas, falhas parciais e dados locais. Seguir `QF720-PRIV-01/02`; não usar “hard-delete completo” antes da certificação.
 
 ## Tipos em `Transaction`
 
@@ -121,26 +122,17 @@ lastExecutedMonth?: string;        // formato YYYY-MM
 - Script de diagnóstico read-only: `functions/scripts/diagnoseLegacyTransactions.js`.
 - Migração automática de float → `value_cents` continua **bloqueada**.
 
-## Orquestração de Modelos (Fable 5 analisa, Opus executa)
+## Orquestração de agentes — modelo independente
 
-**Regra de ouro:** Fable 5 decide → builder (Opus) implementa → Fable 5 revisa o diff → Weliton autoriza merge.
+O processo não depende de um fornecedor ou nome de modelo:
 
-- **Sessão principal = Fable 5 (orquestrador):** planeja, investiga, decide arquitetura e **revisa
-  o diff linha a linha antes de qualquer merge**. **Não escreve código** na própria sessão — delega
-  ao `builder`. (Rode `/model` e selecione **Fable 5** para a sessão de orquestração.)
-- **Executor principal = `builder` — Opus 4.8** (`model: opus`): toda implementação já especificada
-  — features, correções de lógica, escrita de testes, aplicar diffs decididos. É o caminho padrão
-  de execução neste projeto.
-- **Executor auxiliar = `worker` — Sonnet** (`model: sonnet`): **apenas** tarefas puramente
-  mecânicas sem nenhuma decisão de código — buscas (`grep`/`glob`), rodar suíte de testes,
-  verificar lint. Nenhuma edição de arquivo.
-- **Regra crítica de custo:** subagente herda o modelo da sessão. **Sempre fixe `model:` no
-  frontmatter** (`opus`/`sonnet`), senão a execução roda ao preço do Fable 5.
-- **Guardrails dos executores:** nunca fazem commit/merge (trabalho fica na branch para revisão);
-  nunca decidem arquitetura nem tocam lógica financeira/Rules/Functions sem diff já decidido;
-  em ambiguidade, **param e perguntam ao orquestrador**.
-- Delegação só quando o usuário pedir ou nomear o agente (subagente parte "do zero" e re-deriva
-  contexto — é o caminho caro do plano; não disparar para poll de trabalho já rastreado).
+- a sessão principal responde pelo preflight, plano, seleção de um único ID, integração e revisão final;
+- subtarefas paralelas são permitidas apenas quando independentes e sem sobreposição de arquivos/contratos;
+- decisões contábeis, jurídicas, regulatórias, de migração, infraestrutura e produto permanecem humanas;
+- executor nenhum faz merge, deploy, migração ou ação destrutiva sem autorização explícita;
+- toda pausa produz o handoff definido em `docs/CHECKLISTS.md`;
+- em ambiguidade ou conflito, parar e registrar `🚧`, sem inventar requisitos;
+- a fonte de ordem, DoR, DoD e evidências é `docs/CHECKLISTS.md`, independentemente da IA utilizada.
 
 ## Processo Operacional Permanente
 
@@ -158,7 +150,7 @@ lastExecutedMonth?: string;        // formato YYYY-MM
 ```bash
 npm run typecheck
 npm run lint
-npm run test -- --run
+npm run test:run
 npm run test:rules          # requer emulator Firestore (Java/JDK Temurin 21)
 npm run build
 npm --prefix functions test
@@ -192,7 +184,7 @@ npm run test:e2e
 **Checklist para novas implementações:**
 - Antes de criar `console.*`, prefira o helper sanitizado central.
 - Log de depuração local: envolva em `if (import.meta.env.DEV)`.
-- Rodar `npm run test -- --run` para validar política de logging.
+- Rodar `npm run test:run` para validar política de logging.
 - Rodar `npm run test:rules` se houver alteração em Firestore Rules ou auditoria.
 
 ## Modelo A — Explicação Técnica
