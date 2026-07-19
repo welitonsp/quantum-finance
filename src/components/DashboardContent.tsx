@@ -33,6 +33,7 @@ import QuantumInsights from './QuantumInsights';
 import QuantumCopilotCards from './QuantumCopilotCards';
 import { useQuantumCopilot } from '../hooks/useQuantumCopilot';
 import { useScoreHistory } from '../hooks/useScoreHistory';
+import { computeHealthScore } from '../lib/healthScore';
 const FinancialHealthScore = lazy(() => import('./FinancialHealthScore'));
 import WeeklyCashflowWidget from './WeeklyCashflowWidget';
 import { useWeeklyCashflow } from '../hooks/useWeeklyCashflow';
@@ -179,6 +180,7 @@ export default function DashboardContent({
 
   const StatusIcon  = status === 'CRÍTICO' ? AlertTriangle : status === 'ATENÇÃO' ? Activity : CheckCircle2;
   const incomeDelta = receitas > 0 ? ((receitas - despesas) / receitas * 100) : 0;
+  const canonicalScore = metrics ? computeHealthScore(metrics) : score;
 
   const badgeColor = ({
     emerald: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
@@ -280,7 +282,7 @@ export default function DashboardContent({
         receitas={receitas}
         despesas={despesas}
         incomeDelta={incomeDelta}
-        score={score}
+        score={canonicalScore}
         color={color}
         status={status}
         rec={rec}
