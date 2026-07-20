@@ -21,8 +21,8 @@
     "bundlecheck": "node scripts/check-bundle-size.mjs"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.101.2",
-    "@tanstack/react-virtual": "^3.14.6",
+    "@tanstack/react-query": "^5.101.3",
+    "@tanstack/react-virtual": "^3.14.7",
     "decimal.js": "^10.6.0",
     "firebase": "^10.8.0",
     "framer-motion": "^12.42.2",
