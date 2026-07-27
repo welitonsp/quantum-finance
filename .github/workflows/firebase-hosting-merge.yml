@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Wait for Quality Gates to pass
-        uses: lewagon/wait-on-check-action@1d57e2c51a58d812d2765e036a028b6bdb5a6154 # v1.8.1
+        uses: lewagon/wait-on-check-action@2271c86c146b96545b4e871b855e10ffa6f50773 # v1.9.0
         with:
           ref: ${{ github.sha }}
           check-name: 'E2E Tests (Playwright)'
@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: wait_for_ci
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: wait_for_ci
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -112,7 +112,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: wait_for_ci
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
