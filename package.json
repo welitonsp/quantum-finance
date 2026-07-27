@@ -21,19 +21,19 @@
     "bundlecheck": "node scripts/check-bundle-size.mjs"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.101.2",
-    "@tanstack/react-virtual": "^3.14.6",
+    "@tanstack/react-query": "^5.101.4",
+    "@tanstack/react-virtual": "^3.14.8",
     "decimal.js": "^10.6.0",
     "firebase": "^10.8.0",
     "framer-motion": "^12.42.2",
     "lucide-react": "^0.577.0",
     "pdfjs-dist": "^5.7.284",
-    "react": "^19.2.7",
+    "react": "^19.2.8",
     "react-countup": "^6.5.3",
-    "react-dom": "^19.2.7",
+    "react-dom": "^19.2.8",
     "react-hot-toast": "^2.6.0",
     "react-markdown": "^10.1.0",
-    "recharts": "^3.9.2",
+    "recharts": "^3.10.1",
     "zod": "^4.4.3"
   },
   "overrides": {
