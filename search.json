@@ -1,0 +1,174 @@
+[
+  {
+    "objectID": "conclusao.html",
+    "href": "conclusao.html",
+    "title": "Conclusão e Recomendações",
+    "section": "",
+    "text": "Considerações Finais\nA análise dos dados da 19ª RISP - Caldas Novas permite concluir que:\n\nPredomínio de Crimes contra o Patrimônio: Os furtos (residência, comércio e veículos) representam a maior fatia do volume total de ocorrências.\nConcentração Urbana: Caldas Novas, por ser o polo turístico e econômico da região, naturalmente concentra o maior número absoluto de registros.\nPadrão Temporal: Existem picos claros de atividade criminal que coincidem com períodos de maior movimentação comercial e turística.\n\n\n\nRecomendações Estratégicas\n\nReforço no Policiamento Ostensivo: Intensificar patrulhas nos bairros identificados como hotspots no mapa de calor.\nCampanhas de Prevenção: Realizar ações educativas junto aos comerciantes e residentes dos bairros com maiores índices de furtos.\nMonitoramento Contínuo: Manter a atualização deste relatório digital mensalmente para acompanhar a eficácia das medidas implementadas.\n\n\nEste relatório foi gerado automaticamente utilizando tecnologias de Ciência de Dados e Visualização Interativa para a 19ª RISP.\n\nBaixar este relatório em PDF (Link disponível após a publicação final)",
+    "crumbs": [
+      "Conclusão",
+      "Conclusão e Recomendações"
+    ]
+  },
+  {
+    "objectID": "analise_temporal.html",
+    "href": "analise_temporal.html",
+    "title": "Análise Temporal e Horária",
+    "section": "",
+    "text": "Compreender quando os crimes ocorrem é fundamental para o planejamento do policiamento ostensivo.\n\n\nO gráfico de linha abaixo mostra a variação diária das ocorrências no período analisado.\n\n\nCode\ntemp_df = pd.DataFrame(data['serie_temporal'], columns=['Data', 'Ocorrências'])\nfig_temp = px.line(temp_df, x='Data', y='Ocorrências', markers=True)\nfig_temp.update_layout(xaxis_title=\"Data do Fato\", yaxis_title=\"Quantidade\")\nfig_temp.show()\n\n\n\n\n\n\n\n        \n        \n        \n\n\n(a) Evolução Diária de Ocorrências\n\n\n\n\n\n\n                            \n                                            \n\n\n(b)\n\n\n\n\n\nFigure 1\n\n\n\n\n\n\n\nA distribuição das ocorrências ao longo das 24 horas do dia revela os períodos de maior vulnerabilidade.\n\n\nCode\nhora_df = pd.DataFrame(list(data['dist_hora'].items()), columns=['Hora', 'Total'])\nfig_hora = px.bar(hora_df, x='Hora', y='Total', color='Total', color_continuous_scale='Plasma')\nfig_hora.update_layout(xaxis_title=\"Hora (0-23h)\", yaxis_title=\"Total de Ocorrências\")\nfig_hora.show()\n\n\n\n\n                            \n                                            \n\n\nFigure 2: Distribuição por Hora do Dia\n\n\n\n\n\n\n\n\n\n\nInsight Analítico\n\n\n\nObserva-se que a maioria das ocorrências de furto e roubo tendem a se concentrar em janelas específicas, o que permite o redirecionamento de viaturas para os horários de pico identificados.",
+    "crumbs": [
+      "Análise Estatística",
+      "Análise Temporal e Horária"
+    ]
+  },
+  {
+    "objectID": "analise_temporal.html#evolução-diária",
+    "href": "analise_temporal.html#evolução-diária",
+    "title": "Análise Temporal e Horária",
+    "section": "",
+    "text": "O gráfico de linha abaixo mostra a variação diária das ocorrências no período analisado.\n\n\nCode\ntemp_df = pd.DataFrame(data['serie_temporal'], columns=['Data', 'Ocorrências'])\nfig_temp = px.line(temp_df, x='Data', y='Ocorrências', markers=True)\nfig_temp.update_layout(xaxis_title=\"Data do Fato\", yaxis_title=\"Quantidade\")\nfig_temp.show()\n\n\n\n\n\n\n\n        \n        \n        \n\n\n(a) Evolução Diária de Ocorrências\n\n\n\n\n\n\n                            \n                                            \n\n\n(b)\n\n\n\n\n\nFigure 1",
+    "crumbs": [
+      "Análise Estatística",
+      "Análise Temporal e Horária"
+    ]
+  },
+  {
+    "objectID": "analise_temporal.html#mancha-horária",
+    "href": "analise_temporal.html#mancha-horária",
+    "title": "Análise Temporal e Horária",
+    "section": "",
+    "text": "A distribuição das ocorrências ao longo das 24 horas do dia revela os períodos de maior vulnerabilidade.\n\n\nCode\nhora_df = pd.DataFrame(list(data['dist_hora'].items()), columns=['Hora', 'Total'])\nfig_hora = px.bar(hora_df, x='Hora', y='Total', color='Total', color_continuous_scale='Plasma')\nfig_hora.update_layout(xaxis_title=\"Hora (0-23h)\", yaxis_title=\"Total de Ocorrências\")\nfig_hora.show()\n\n\n\n\n                            \n                                            \n\n\nFigure 2: Distribuição por Hora do Dia\n\n\n\n\n\n\n\n\n\n\nInsight Analítico\n\n\n\nObserva-se que a maioria das ocorrências de furto e roubo tendem a se concentrar em janelas específicas, o que permite o redirecionamento de viaturas para os horários de pico identificados.",
+    "crumbs": [
+      "Análise Estatística",
+      "Análise Temporal e Horária"
+    ]
+  },
+  {
+    "objectID": "about.html",
+    "href": "about.html",
+    "title": "About",
+    "section": "",
+    "text": "About this site"
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Relatório de Segurança Pública",
+    "section": "",
+    "text": "Este relatório digital apresenta uma análise detalhada dos indicadores criminais da 19ª Região Integrada de Segurança Pública (RISP), sediada em Caldas Novas. O objetivo deste documento é fornecer uma visão transparente e interativa dos dados estatísticos, auxiliando na tomada de decisões estratégicas e na formulação de políticas públicas de segurança.\n\n\nOs dados analisados compreendem o período a partir de 01/01/2026, abrangendo diversos municípios da região, incluindo: - Caldas Novas - Morrinhos - Piracanjuba - Pontalina - Rio Quente - Entre outros.\n\n\n\nO relatório está dividido em seções que abordam desde a análise quantitativa geral até a distribuição espacial das ocorrências. Utilize o menu lateral para navegar entre os capítulos.\n\nEste relatório é interativo. Você pode passar o mouse sobre os gráficos para ver detalhes e utilizar as ferramentas de zoom e filtro integradas.",
+    "crumbs": [
+      "Introdução",
+      "Relatório de Segurança Pública"
+    ]
+  },
+  {
+    "objectID": "index.html#escopo-dos-dados",
+    "href": "index.html#escopo-dos-dados",
+    "title": "Relatório de Segurança Pública",
+    "section": "",
+    "text": "Os dados analisados compreendem o período a partir de 01/01/2026, abrangendo diversos municípios da região, incluindo: - Caldas Novas - Morrinhos - Piracanjuba - Pontalina - Rio Quente - Entre outros.",
+    "crumbs": [
+      "Introdução",
+      "Relatório de Segurança Pública"
+    ]
+  },
+  {
+    "objectID": "index.html#estrutura-do-relatório",
+    "href": "index.html#estrutura-do-relatório",
+    "title": "Relatório de Segurança Pública",
+    "section": "",
+    "text": "O relatório está dividido em seções que abordam desde a análise quantitativa geral até a distribuição espacial das ocorrências. Utilize o menu lateral para navegar entre os capítulos.\n\nEste relatório é interativo. Você pode passar o mouse sobre os gráficos para ver detalhes e utilizar as ferramentas de zoom e filtro integradas.",
+    "crumbs": [
+      "Introdução",
+      "Relatório de Segurança Pública"
+    ]
+  },
+  {
+    "objectID": "analise_geral.html",
+    "href": "analise_geral.html",
+    "title": "Análise Estatística Geral",
+    "section": "",
+    "text": "/usr/local/lib/python3.12/dist-packages/openpyxl/styles/stylesheet.py:237: UserWarning: Workbook contains no default style, apply openpyxl's default\n  warn(\"Workbook contains no default style, apply openpyxl's default\")",
+    "crumbs": [
+      "Análise Estatística",
+      "Análise Estatística Geral"
+    ]
+  },
+  {
+    "objectID": "analise_geral.html#indicadores-chave-kpis",
+    "href": "analise_geral.html#indicadores-chave-kpis",
+    "title": "Análise Estatística Geral",
+    "section": "Indicadores Chave (KPIs)",
+    "text": "Indicadores Chave (KPIs)\n\n\n\n\n\n\nTotal de Ocorrências\n{python} data[‘total’]\n\n\nMunicípios Atendidos\n{python} len(data[‘municipios’])\n\n\nPrincipal Natureza\n{python} list(data[‘grupos’].keys())[0]",
+    "crumbs": [
+      "Análise Estatística",
+      "Análise Estatística Geral"
+    ]
+  },
+  {
+    "objectID": "analise_geral.html#distribuição-por-natureza-criminal",
+    "href": "analise_geral.html#distribuição-por-natureza-criminal",
+    "title": "Análise Estatística Geral",
+    "section": "Distribuição por Natureza Criminal",
+    "text": "Distribuição por Natureza Criminal\nO gráfico abaixo apresenta a volumetria de cada grupo de crime reativo na 19ª RISP.\n\n\nCode\ngrupos_df = pd.DataFrame(list(data['grupos'].items()), columns=['Natureza', 'Total'])\nfig = px.pie(grupos_df, values='Total', names='Natureza', hole=.3,\n             color_discrete_sequence=px.colors.sequential.RdBu)\nfig.update_layout(margin=dict(t=0, b=0, l=0, r=0))\nfig.show()\n\n\n\n\n\n\n\n        \n        \n        \n\n\n(a) Distribuição de Ocorrências por Grupo\n\n\n\n\n\n\n                            \n                                            \n\n\n(b)\n\n\n\n\n\nFigure 1",
+    "crumbs": [
+      "Análise Estatística",
+      "Análise Estatística Geral"
+    ]
+  },
+  {
+    "objectID": "analise_geral.html#ocorrências-por-município",
+    "href": "analise_geral.html#ocorrências-por-município",
+    "title": "Análise Estatística Geral",
+    "section": "Ocorrências por Município",
+    "text": "Ocorrências por Município\nAbaixo, observamos a concentração de registros nos principais municípios da região.\n\n\nCode\nmun_df = pd.DataFrame(list(data['dist_municipio'].items()), columns=['Município', 'Total']).head(10)\nfig_mun = px.bar(mun_df, x='Total', y='Município', orientation='h',\n                 color='Total', color_continuous_scale='Viridis')\nfig_mun.update_layout(yaxis={'categoryorder':'total ascending'})\nfig_mun.show()\n\n\n\n\n                            \n                                            \n\n\nFigure 2: Top Municípios por Volume de Ocorrências",
+    "crumbs": [
+      "Análise Estatística",
+      "Análise Estatística Geral"
+    ]
+  },
+  {
+    "objectID": "analise_geral.html#tabela-detalhada",
+    "href": "analise_geral.html#tabela-detalhada",
+    "title": "Análise Estatística Geral",
+    "section": "Tabela Detalhada",
+    "text": "Tabela Detalhada\n\n\nCode\nfrom IPython.display import display, Markdown\nresumo_tab = df.groupby(['MUNICIPIO_NOME', 'GRUPO_REATIVAS']).size().unstack(fill_value=0)\n# Mostrar apenas os top 10 municípios para não poluir\ndisplay(resumo_tab.head(10))\n\n\n\n\n\n\n\n\n\nGRUPO_REATIVAS\nESTUPRO\nFEMINICÍDIO\nFURTO A TRANSEUNTE\nFURTO DE VEÍCULOS\nFURTO EM COMÉRCIO\nFURTO EM RESIDÊNCIA\nHOMICÍDIO DOLOSO\nLESAO SEGUIDA DE MORTE\nROUBO A TRANSEUNTE\nROUBO DE VEÍCULOS\nROUBO EM COMÉRCIO\nROUBO EM RESIDÊNCIA\n\n\nMUNICIPIO_NOME\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nCALDAS NOVAS\n7\n0\n28\n59\n96\n226\n5\n1\n13\n5\n5\n1\n\n\nCORUMBAÍBA\n0\n0\n2\n2\n3\n11\n0\n0\n0\n0\n0\n1\n\n\nCRISTIANÓPOLIS\n0\n0\n0\n1\n0\n5\n0\n0\n0\n0\n1\n0\n\n\nCROMÍNIA\n0\n0\n0\n1\n3\n6\n0\n0\n0\n0\n0\n1\n\n\nMAIRIPOTABA\n0\n0\n0\n0\n1\n1\n0\n0\n0\n0\n0\n0\n\n\nMARZAGÃO\n0\n0\n0\n0\n1\n2\n0\n0\n0\n0\n0\n0\n\n\nMORRINHOS\n1\n1\n9\n14\n25\n41\n2\n1\n5\n1\n1\n1\n\n\nPIRACANJUBA\n1\n0\n4\n5\n11\n14\n2\n2\n0\n0\n2\n0\n\n\nPONTALINA\n1\n0\n4\n2\n6\n14\n0\n0\n0\n0\n1\n0\n\n\nPROFESSOR JAMIL\n2\n0\n1\n2\n4\n3\n0\n0\n0\n0\n0\n0",
+    "crumbs": [
+      "Análise Estatística",
+      "Análise Estatística Geral"
+    ]
+  },
+  {
+    "objectID": "mapa.html",
+    "href": "mapa.html",
+    "title": "Distribuição Geográfica",
+    "section": "",
+    "text": "Nesta seção, apresentamos a distribuição espacial dos crimes na 19ª RISP.\n\n\n\n\n\n\nNota sobre Coordenadas\n\n\n\nComo a base de dados original não contém latitude e longitude exatas, as ocorrências estão agrupadas por Município e Bairro. O mapa abaixo utiliza uma representação simbólica baseada na densidade por localidade.\n\n\n\n\n\n\nCode\ntop_bairros = mapa_df.sort_values(by='COUNT', ascending=False).head(20)\nfig_mapa = px.treemap(top_bairros, path=['MUNICIPIO_NOME', 'BAIRRO'], values='COUNT',\n                      color='COUNT', color_continuous_scale='YlOrRd')\nfig_mapa.update_layout(margin=dict(t=30, l=10, r=10, b=10))\nfig_mapa.show()\n\n\n\n\n\n\n\n        \n        \n        \n\n\n(a) Densidade de Ocorrências por Bairro\n\n\n\n\n\n\n                            \n                                            \n\n\n(b)\n\n\n\n\n\nFigure 1\n\n\n\n\n\n\n\nO uso de Treemaps permite visualizar rapidamente quais bairros dentro de cada município possuem a maior concentração de registros, facilitando a identificação de “hotspots” criminais.\n\n\n\n\n\n\n\n\n\n\nMUNICIPIO_NOME\nBAIRRO\nCOUNT\n\n\n\n\n68\nCALDAS NOVAS\nSANTA EFIGÊNIA\n56\n\n\n3\nCALDAS NOVAS\nCENTRO\n47\n\n\n103\nMORRINHOS\nCENTRO\n29\n\n\n2\nCALDAS NOVAS\nCALDAS DO OESTE\n27\n\n\n51\nCALDAS NOVAS\nPARQUE REAL\n20\n\n\n17\nCALDAS NOVAS\nESTÂNCIA ITAICI\n19\n\n\n38\nCALDAS NOVAS\nJARDIM TANGARÁ\n18\n\n\n11\nCALDAS NOVAS\nDO TURISTA\n13\n\n\n45\nCALDAS NOVAS\nNOVA VILA\n13\n\n\n35\nCALDAS NOVAS\nJARDIM PRIVÊ DAS CALDAS\n12\n\n\n18\nCALDAS NOVAS\nESTÂNCIA ITAICI II\n9\n\n\n136\nPIRACANJUBA\nCENTRO\n9\n\n\n28\nCALDAS NOVAS\nJARDIM ESMERALDA\n9\n\n\n171\nRIO QUENTE\nESPLANADA\n8\n\n\n157\nPONTALINA\nCENTRO\n8",
+    "crumbs": [
+      "Georreferenciamento",
+      "Distribuição Geográfica"
+    ]
+  },
+  {
+    "objectID": "mapa.html#mapa-de-calor-por-bairro-top-20",
+    "href": "mapa.html#mapa-de-calor-por-bairro-top-20",
+    "title": "Distribuição Geográfica",
+    "section": "",
+    "text": "Code\ntop_bairros = mapa_df.sort_values(by='COUNT', ascending=False).head(20)\nfig_mapa = px.treemap(top_bairros, path=['MUNICIPIO_NOME', 'BAIRRO'], values='COUNT',\n                      color='COUNT', color_continuous_scale='YlOrRd')\nfig_mapa.update_layout(margin=dict(t=30, l=10, r=10, b=10))\nfig_mapa.show()\n\n\n\n\n\n\n\n        \n        \n        \n\n\n(a) Densidade de Ocorrências por Bairro\n\n\n\n\n\n\n                            \n                                            \n\n\n(b)\n\n\n\n\n\nFigure 1",
+    "crumbs": [
+      "Georreferenciamento",
+      "Distribuição Geográfica"
+    ]
+  },
+  {
+    "objectID": "mapa.html#análise-por-localidade",
+    "href": "mapa.html#análise-por-localidade",
+    "title": "Distribuição Geográfica",
+    "section": "",
+    "text": "O uso de Treemaps permite visualizar rapidamente quais bairros dentro de cada município possuem a maior concentração de registros, facilitando a identificação de “hotspots” criminais.\n\n\n\n\n\n\n\n\n\n\nMUNICIPIO_NOME\nBAIRRO\nCOUNT\n\n\n\n\n68\nCALDAS NOVAS\nSANTA EFIGÊNIA\n56\n\n\n3\nCALDAS NOVAS\nCENTRO\n47\n\n\n103\nMORRINHOS\nCENTRO\n29\n\n\n2\nCALDAS NOVAS\nCALDAS DO OESTE\n27\n\n\n51\nCALDAS NOVAS\nPARQUE REAL\n20\n\n\n17\nCALDAS NOVAS\nESTÂNCIA ITAICI\n19\n\n\n38\nCALDAS NOVAS\nJARDIM TANGARÁ\n18\n\n\n11\nCALDAS NOVAS\nDO TURISTA\n13\n\n\n45\nCALDAS NOVAS\nNOVA VILA\n13\n\n\n35\nCALDAS NOVAS\nJARDIM PRIVÊ DAS CALDAS\n12\n\n\n18\nCALDAS NOVAS\nESTÂNCIA ITAICI II\n9\n\n\n136\nPIRACANJUBA\nCENTRO\n9\n\n\n28\nCALDAS NOVAS\nJARDIM ESMERALDA\n9\n\n\n171\nRIO QUENTE\nESPLANADA\n8\n\n\n157\nPONTALINA\nCENTRO\n8",
+    "crumbs": [
+      "Georreferenciamento",
+      "Distribuição Geográfica"
+    ]
+  }
+]
