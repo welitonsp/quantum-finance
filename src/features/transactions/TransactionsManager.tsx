@@ -32,27 +32,27 @@ const CAT_STYLE = {
   'Diversos':       { bg: 'bg-white/5',         text: 'text-quantum-fgMuted', border: 'border-white/10'   },
   'Outros':         { bg: 'bg-white/5',         text: 'text-quantum-fgMuted', border: 'border-white/10'   },
 };
-const catStyle = (cat) => CAT_STYLE[cat] || CAT_STYLE['Diversos'];
+const catStyle = (cat: string) => (CAT_STYLE as Record<string, any>)[cat] || CAT_STYLE['Diversos'];
 
 // ─── Label amigável para datas ────────────────────────────────────────────
-function getDateLabel(dateStr) {
+function getDateLabel(dateStr: string) {
   if (!dateStr) return 'Sem Data';
   const today = new Date();
   const d = new Date(dateStr + 'T12:00:00');
-  const diff = Math.round((today - d) / 86400000);
+  const diff = Math.round((today.getTime() - d.getTime()) / 86400000);
   if (diff === 0) return 'Hoje';
   if (diff === 1) return 'Ontem';
   if (diff === -1) return 'Amanhã';
   return d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function formatDateShort(dateStr) {
+function formatDateShort(dateStr: string) {
   if (!dateStr) return '—';
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
 
 // ─── Chip de Filtro Ativo ─────────────────────────────────────────────────
-function FilterChip({ label, onRemove }) {
+function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
     <motion.span
       initial={{ opacity: 0, scale: 0.85 }}
@@ -69,7 +69,7 @@ function FilterChip({ label, onRemove }) {
 }
 
 // ─── Cabeçalho de Grupo ────────────────────────────────────────────────────
-function GroupHeader({ label, count, totalIn, totalOut }) {
+function GroupHeader({ label, count, totalIn, totalOut }: { label: string; count: number; totalIn: number; totalOut: number }) {
   const net = totalIn - totalOut;
   return (
     <div className="flex items-center gap-3 py-2 px-1 select-none">
@@ -94,7 +94,14 @@ function GroupHeader({ label, count, totalIn, totalOut }) {
 }
 
 // ─── Linha de Transação ────────────────────────────────────────────────────
-const TransactionRow = React.memo(({ tx, isSelected, onToggle, onEdit, onDelete }) => {
+interface TransactionRowProps {
+  tx: any;
+  isSelected: boolean;
+  onToggle: (id: string) => void;
+  onEdit: (tx: any) => void;
+  onDelete: (tx: any) => void;
+}
+const TransactionRow = React.memo(({ tx, isSelected, onToggle, onEdit, onDelete }: TransactionRowProps) => {
   const isIncome = tx.type === 'receita' || tx.type === 'entrada';
   const cs = catStyle(tx.category);
 
@@ -171,32 +178,39 @@ const TransactionRow = React.memo(({ tx, isSelected, onToggle, onEdit, onDelete 
 TransactionRow.displayName = 'TransactionRow';
 
 // ─── Componente Principal ─────────────────────────────────────────────────
+interface TransactionsManagerProps {
+  transactions?: any[];
+  loading?: boolean;
+  onEdit: (tx: any) => void;
+  onDeleteRequest: (tx: any) => void;
+  onBatchDelete: (ids: string[]) => Promise<void>;
+}
 export default function TransactionsManager({
   transactions = [],
   loading,
   onEdit,
   onDeleteRequest,
   onBatchDelete,
-}) {
+}: TransactionsManagerProps) {
   // ── Filtros ──────────────────────────────────────────────────────────────
   const [search,      setSearch]      = useState('');
-  const [filterType,  setFilterType]  = useState('all');   // 'all' | 'entrada' | 'saida'
-  const [filterCat,   setFilterCat]   = useState('');      // '' = todos
-  const [sortBy,      setSortBy]      = useState('date_desc'); // 'date_desc|date_asc|value_desc|value_asc|cat'
-  const [groupBy,     setGroupBy]     = useState('date'); // 'date' | 'category' | 'none'
+  const [filterType,  setFilterType]  = useState<string>('all');
+  const [filterCat,   setFilterCat]   = useState<string>('');
+  const [sortBy,      setSortBy]      = useState<string>('date_desc');
+  const [groupBy,     setGroupBy]     = useState<string>('date');
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   // ── Seleção ───────────────────────────────────────────────────────────────
-  const [selected,      setSelected]      = useState(new Set());
-  const [batchAction,   setBatchAction]   = useState(null); // null | 'delete' | 'recategorize'
-  const [newCat,        setNewCat]        = useState(ALLOWED_CATEGORIES[0]);
+  const [selected,      setSelected]      = useState<Set<string>>(new Set());
+  const [batchAction,   setBatchAction]   = useState<string | null>(null);
+  const [newCat,        setNewCat]        = useState<string>(ALLOWED_CATEGORIES[0]);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const searchRef = useRef(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   // ── Keyboard shortcut: Alt+F foca pesquisa ───────────────────────────────
   useEffect(() => {
-    const handler = (e) => {
+    const handler = (e: KeyboardEvent) => {
       if (e.altKey && e.key?.toLowerCase() === 'f') {
         e.preventDefault();
         searchRef.current?.focus();
@@ -213,24 +227,24 @@ export default function TransactionsManager({
 
     if (search.trim()) {
       const q = search.toLowerCase();
-      list = list.filter(tx =>
+      list = list.filter((tx: any) =>
         (tx.description || '').toLowerCase().includes(q) ||
         (tx.category    || '').toLowerCase().includes(q)
       );
     }
     if (filterType !== 'all') {
-      list = list.filter(tx =>
+      list = list.filter((tx: any) =>
         filterType === 'entrada'
           ? (tx.type === 'entrada' || tx.type === 'receita')
           : (tx.type === 'saida'   || tx.type === 'despesa')
       );
     }
     if (filterCat) {
-      list = list.filter(tx => tx.category === filterCat);
+      list = list.filter((tx: any) => tx.category === filterCat);
     }
 
     // Ordenação
-    list = [...list].sort((a, b) => {
+    list = [...list].sort((a: any, b: any) => {
       if (sortBy === 'date_desc')  return (b.date || '').localeCompare(a.date || '');
       if (sortBy === 'date_asc')   return (a.date || '').localeCompare(b.date || '');
       if (sortBy === 'value_desc') return Math.abs(Number(b.value)) - Math.abs(Number(a.value));
@@ -246,13 +260,13 @@ export default function TransactionsManager({
   const groups = useMemo(() => {
     if (groupBy === 'none') return [{ key: '', label: '', items: filtered }];
 
-    const map = new Map();
-    filtered.forEach(tx => {
+    const map = new Map<string, any[]>();
+    filtered.forEach((tx: any) => {
       const key = groupBy === 'date'
         ? (tx.date || 'sem-data')
         : (tx.category || 'Outros');
       if (!map.has(key)) map.set(key, []);
-      map.get(key).push(tx);
+      map.get(key)!.push(tx);
     });
 
     let keys = [...map.keys()];
@@ -262,14 +276,14 @@ export default function TransactionsManager({
     return keys.map(k => ({
       key:   k,
       label: groupBy === 'date' ? getDateLabel(k) : k,
-      items: map.get(k),
+      items: map.get(k)!,
     }));
   }, [filtered, groupBy]);
 
   // ── Stats em tempo real ───────────────────────────────────────────────────
   const stats = useMemo(() => {
     let totalIn = 0, totalOut = 0;
-    filtered.forEach(tx => {
+    filtered.forEach((tx: any) => {
       const v = Math.abs(Number(tx.value || 0));
       if (tx.type === 'entrada' || tx.type === 'receita') totalIn  += v;
       else                                                totalOut += v;
@@ -279,8 +293,8 @@ export default function TransactionsManager({
 
   // ── Categorias disponíveis com contagem ───────────────────────────────────
   const catCounts = useMemo(() => {
-    const map = {};
-    transactions.forEach(tx => {
+    const map: Record<string, number> = {};
+    transactions.forEach((tx: any) => {
       const c = tx.category || 'Outros';
       map[c] = (map[c] || 0) + 1;
     });
@@ -288,36 +302,36 @@ export default function TransactionsManager({
   }, [transactions]);
 
   // ── Helpers de seleção ────────────────────────────────────────────────────
-  const toggleOne      = useCallback(id => setSelected(s => {
+  const toggleOne      = useCallback((id: string) => setSelected(s => {
     const n = new Set(s);
     n.has(id) ? n.delete(id) : n.add(id);
     return n;
   }), []);
 
-  const selectAll      = useCallback(() => setSelected(new Set(filtered.map(t => t.id))), [filtered]);
+  const selectAll      = useCallback(() => setSelected(new Set(filtered.map((t: any) => t.id))), [filtered]);
   const clearSelected  = useCallback(() => { setSelected(new Set()); setBatchAction(null); setConfirmDelete(false); }, []);
 
-  const selectByType   = useCallback((type) => {
+  const selectByType   = useCallback((type: string) => {
     setSelected(new Set(
-      filtered.filter(tx =>
+      filtered.filter((tx: any) =>
         type === 'entrada'
           ? (tx.type === 'entrada' || tx.type === 'receita')
           : (tx.type === 'saida'   || tx.type === 'despesa')
-      ).map(t => t.id)
+      ).map((t: any) => t.id)
     ));
   }, [filtered]);
 
-  const selectByCategory = useCallback((cat) => {
-    setSelected(new Set(filtered.filter(tx => tx.category === cat).map(t => t.id)));
+  const selectByCategory = useCallback((cat: string) => {
+    setSelected(new Set(filtered.filter((tx: any) => tx.category === cat).map((t: any) => t.id)));
   }, [filtered]);
 
   // Seleciona TODOS os lançamentos (incluindo fora dos filtros ativos)
   const selectAllTransactions = useCallback(() => {
-    setSelected(new Set(transactions.map(t => t.id)));
+    setSelected(new Set(transactions.map((t: any) => t.id)));
   }, [transactions]);
 
-  const allFilteredSelected    = filtered.length > 0 && filtered.every(t => selected.has(t.id));
-  const allTransactionsSelected = transactions.length > 0 && transactions.every(t => selected.has(t.id));
+  const allFilteredSelected    = filtered.length > 0 && filtered.every((t: any) => selected.has(t.id));
+  const allTransactionsSelected = transactions.length > 0 && transactions.every((t: any) => selected.has(t.id));
   const someSelected           = selected.size > 0 && !allFilteredSelected;
 
   // ── Batch delete ──────────────────────────────────────────────────────────
@@ -325,7 +339,7 @@ export default function TransactionsManager({
     const ids = Array.from(selected);
     if (!ids.length) return;
     try {
-      await onBatchDelete(ids);
+      await onBatchDelete(ids as string[]);
       clearSelected();
       setConfirmDelete(false);
     } catch (e) {
@@ -339,7 +353,7 @@ export default function TransactionsManager({
     if (!ids.length || !newCat) return;
     const toastId = toast.loading(`A re-categorizar ${ids.length} transações...`);
     try {
-      await FirestoreService.batchUpdateTransactions(ids, { category: newCat });
+      await (FirestoreService as any).batchUpdateTransactions(ids, { category: newCat });
       toast.success(`${ids.length} transações movidas para "${newCat}".`, { id: toastId });
       clearSelected();
       setBatchAction(null);
@@ -349,11 +363,11 @@ export default function TransactionsManager({
   }, [selected, newCat, clearSelected]);
 
   // ── Filtros activos ───────────────────────────────────────────────────────
-  const activeFilters = [
+  const activeFilters = ([
     filterType !== 'all' && { label: filterType === 'entrada' ? '↑ Entradas' : '↓ Saídas', clear: () => setFilterType('all') },
     filterCat           && { label: filterCat, clear: () => setFilterCat('') },
     search.trim()       && { label: `"${search.trim()}"`, clear: () => setSearch('') },
-  ].filter(Boolean);
+  ].filter(Boolean)) as { label: string; clear: () => void }[];
 
   const clearAllFilters = () => { setSearch(''); setFilterType('all'); setFilterCat(''); };
 
@@ -770,8 +784,8 @@ export default function TransactionsManager({
             {groups.map(group => (
               <div key={group.key || 'ungrouped'}>
                 {group.key && (() => {
-                  const gIn  = group.items.reduce((a, t) => (t.type === 'entrada' || t.type === 'receita') ? a + Math.abs(Number(t.value||0)) : a, 0);
-                  const gOut = group.items.reduce((a, t) => (t.type === 'saida'   || t.type === 'despesa') ? a + Math.abs(Number(t.value||0)) : a, 0);
+                  const gIn  = group.items.reduce((a: number, t: any) => (t.type === 'entrada' || t.type === 'receita') ? a + Math.abs(Number(t.value||0)) : a, 0);
+                  const gOut = group.items.reduce((a: number, t: any) => (t.type === 'saida'   || t.type === 'despesa') ? a + Math.abs(Number(t.value||0)) : a, 0);
                   return (
                     <GroupHeader
                       label={group.label}
@@ -782,7 +796,7 @@ export default function TransactionsManager({
                   );
                 })()}
                 <div className="space-y-1.5 mb-2">
-                  {group.items.map(tx => (
+                  {group.items.map((tx: any) => (
                     <TransactionRow
                       key={tx.id}
                       tx={tx}

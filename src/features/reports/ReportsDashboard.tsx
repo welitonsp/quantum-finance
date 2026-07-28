@@ -1,18 +1,37 @@
-// src/features/reports/ReportsDashboard.jsx
-import { useMemo } from "react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
-import { TrendingUp, TrendingDown, Target, BrainCircuit, AlertTriangle } from "lucide-react";
+import { useMemo } from 'react';
+import {
+  PieChart, Pie, Cell, ResponsiveContainer,
+  Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
+} from 'recharts';
+import { TrendingUp, TrendingDown, Target, BrainCircuit, AlertTriangle } from 'lucide-react';
 import Decimal from 'decimal.js';
 
-const CustomTooltip = ({ active, payload, label }) => {
+type AnyRecord = Record<string, unknown>;
+
+interface Balances { entradas?: number; saidas?: number; }
+interface ReportsDashboardProps { transactions: AnyRecord[]; balances: Balances; }
+interface CategoryEntry { name: string; value: number; color: string; }
+
+interface TooltipPayloadItem {
+  color?: string;
+  payload?: { fill?: string };
+  value: number;
+}
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayloadItem[];
+  label?: string;
+}
+
+const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-slate-900/95 border border-white/10 p-3 rounded-xl shadow-2xl backdrop-blur-xl z-50">
         <p className="text-slate-300 text-xs font-bold mb-2 uppercase">{label}</p>
         {payload.map((entry, index) => (
           <div key={index} className="flex items-center gap-2 text-sm font-mono">
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || entry.payload.fill }}></span>
-            <span className="text-white">R$ {entry.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || entry.payload?.fill }} />
+            <span className="text-white">R$ {entry.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
           </div>
         ))}
       </div>
@@ -21,24 +40,23 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-export default function ReportsDashboard({ transactions, balances }) {
-  // ✅ CORREÇÃO: Cálculos rigorosos de Saldo e Poupança
-  const rec = new Decimal(balances.entradas || 0);
-  const desp = new Decimal(balances.saidas || 0);
+export default function ReportsDashboard({ transactions, balances }: ReportsDashboardProps) {
+  const rec  = new Decimal(balances.entradas || 0);
+  const desp = new Decimal(balances.saidas   || 0);
   const saldoDecimal = rec.minus(desp);
-  
-  const savingsRate = rec.greaterThan(0) 
+
+  const savingsRate = rec.greaterThan(0)
     ? saldoDecimal.dividedBy(rec).times(100).toDecimalPlaces(1).toNumber()
     : 0;
-    
+
   const receitas = rec.toNumber();
   const despesas = desp.toNumber();
-  
+
   const categoryMap = useMemo(() => {
-    const map = {};
+    const map: Record<string, number> = {};
     transactions.forEach(tx => {
       if (tx.type === 'saida') {
-        const cat = tx.category || 'Diversos';
+        const cat = (tx.category as string) || 'Diversos';
         const val = new Decimal(Math.abs(Number(tx.value)));
         map[cat] = map[cat] ? new Decimal(map[cat]).plus(val).toNumber() : val.toNumber();
       }
@@ -47,20 +65,20 @@ export default function ReportsDashboard({ transactions, balances }) {
   }, [transactions]);
 
   const COLORS = ['#ef4444', '#06b6d4', '#a855f7', '#f59e0b', '#10b981', '#3b82f6'];
-  const categoryData = Object.keys(categoryMap).map((key, index) => ({
-    name: key,
+  const categoryData: CategoryEntry[] = Object.keys(categoryMap).map((key, index) => ({
+    name:  key,
     value: categoryMap[key],
-    color: COLORS[index % COLORS.length]
+    color: COLORS[index % COLORS.length],
   })).sort((a, b) => b.value - a.value);
 
   const cashflowData = [
-    { name: 'Fluxo Mensal', Receitas: receitas, Despesas: despesas }
+    { name: 'Fluxo Mensal', Receitas: receitas, Despesas: despesas },
   ];
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        
+
         <div className="glass-card-quantum p-6 gradient-border-indigo flex flex-col justify-center">
           <div className="flex items-center gap-2 mb-2">
             <Target className="w-5 h-5 text-indigo-400" />
@@ -80,7 +98,7 @@ export default function ReportsDashboard({ transactions, balances }) {
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Custo de Vida</h3>
           </div>
           <p className="text-3xl font-black font-mono text-white">
-            R$ {despesas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            R$ {despesas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-[10px] text-slate-500 uppercase mt-2">Total queimado neste mês</p>
         </div>
@@ -94,13 +112,15 @@ export default function ReportsDashboard({ transactions, balances }) {
             {savingsRate < 10 && (
               <p className="text-sm text-slate-300 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
-                A sua taxa de poupança está abaixo de 10%. Recomendamos reduzir despesas na sua categoria principal: <strong className="text-white">{categoryData[0]?.name || 'Diversos'}</strong>.
+                A sua taxa de poupança está abaixo de 10%. Recomendamos reduzir despesas na sua categoria principal:{' '}
+                <strong className="text-white">{categoryData[0]?.name || 'Diversos'}</strong>.
               </p>
             )}
             {savingsRate >= 10 && (
               <p className="text-sm text-slate-300 flex items-start gap-2">
                 <TrendingUp className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                Ótima performance! Com uma retenção de {savingsRate.toFixed(1)}%, você tem margem para focar em Investimentos ou aumentar a sua Reserva de Emergência.
+                Ótima performance! Com uma retenção de {savingsRate.toFixed(1)}%, você tem margem para focar em
+                Investimentos ou aumentar a sua Reserva de Emergência.
               </p>
             )}
           </div>
@@ -115,7 +135,7 @@ export default function ReportsDashboard({ transactions, balances }) {
               <BarChart data={cashflowData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                 <XAxis dataKey="name" stroke="#64748b" tick={{ fill: '#94a3b8', fontSize: 12 }} />
-                <YAxis stroke="#64748b" tick={{ fill: '#94a3b8', fontSize: 12 }} tickFormatter={(val) => `R$ ${val}`} />
+                <YAxis stroke="#64748b" tick={{ fill: '#94a3b8', fontSize: 12 }} tickFormatter={(val: number) => `R$ ${val}`} />
                 <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b', opacity: 0.4 }} />
                 <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '20px' }} />
                 <Bar dataKey="Receitas" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={60} />
@@ -140,7 +160,7 @@ export default function ReportsDashboard({ transactions, balances }) {
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-10">
                 <span className="text-[10px] text-slate-500 uppercase tracking-widest">Total Gasto</span>
-                <span className="text-xl font-bold font-mono text-white">R$ {despesas.toLocaleString("pt-BR")}</span>
+                <span className="text-xl font-bold font-mono text-white">R$ {despesas.toLocaleString('pt-BR')}</span>
               </div>
             </div>
           ) : (

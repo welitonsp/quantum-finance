@@ -1,25 +1,25 @@
-// src/features/transactions/AccountsManager.jsx
-import { useState, useMemo } from 'react';
+// src/features/transactions/AccountsManager.tsx
+import React, { useState, useMemo } from 'react';
 import { Plus, Building2, PiggyBank, TrendingUp, CreditCard, Landmark, Trash2, Wallet } from 'lucide-react';
 import { useAccounts } from '../../hooks/useAccounts';
 import Decimal from 'decimal.js'; 
 // ✅ CORREÇÃO: Importando a função centralizada do nosso novo utilitário
 import { formatCurrency } from '../../utils/formatters';
 
-export default function AccountsManager({ uid }) {
-  const { accounts, loadingAccounts, addAccount, removeAccount } = useAccounts(uid);
+export default function AccountsManager({ uid }: { uid: string }) {
+  const { accounts, loadingAccounts, addAccount, removeAccount } = useAccounts(uid) as any;
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [accountToDelete, setAccountToDelete] = useState(null);
+  const [accountToDelete, setAccountToDelete] = useState<any>(null);
 
   const [name, setName] = useState('');
-  const [type, setType] = useState('corrente');
+  const [type, setType] = useState<string>('corrente');
   const [balance, setBalance] = useState('');
 
   const { totalAtivos, totalPassivos, patrimonioLiquido } = useMemo(() => {
     let ativos = new Decimal(0);
     let passivos = new Decimal(0);
 
-    accounts.forEach(acc => {
+    accounts.forEach((acc: any) => {
       const val = new Decimal(acc.balance || 0);
       if (['corrente', 'poupanca', 'investimento'].includes(acc.type)) {
         ativos = ativos.plus(val);
@@ -35,7 +35,7 @@ export default function AccountsManager({ uid }) {
     };
   }, [accounts]);
 
-  const handleSave = async (e) => {
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!name.trim() || !balance) return;
 
@@ -55,7 +55,7 @@ export default function AccountsManager({ uid }) {
     }
   };
 
-  const getIcon = (type) => {
+  const getIcon = (type: string) => {
     switch (type) {
       case 'corrente': return <Building2 className="text-emerald-500" />;
       case 'poupanca': return <PiggyBank className="text-blue-500" />;
@@ -130,7 +130,7 @@ export default function AccountsManager({ uid }) {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {accounts.map(acc => (
+          {accounts.map((acc: any) => (
             <div key={acc.id} className="bg-white dark:bg-slate-900/60 p-5 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm hover:border-indigo-500/30 transition-colors group relative overflow-hidden">
                <div className={`absolute -right-6 -bottom-6 w-24 h-24 rounded-full blur-2xl opacity-10 pointer-events-none 
                   ${['cartao', 'divida'].includes(acc.type) ? 'bg-red-500' : 'bg-emerald-500'}`}>

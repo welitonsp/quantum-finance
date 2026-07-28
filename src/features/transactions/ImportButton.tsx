@@ -36,13 +36,13 @@ const CAT_COLORS = {
   'Outros':        'text-quantum-fgMuted bg-white/5   border-white/10',
 };
 
-const catClass = (cat) => CAT_COLORS[cat] || CAT_COLORS['Diversos'];
+const catClass = (cat: string) => (CAT_COLORS as Record<string, string>)[cat] || CAT_COLORS['Diversos'];
 
 // ─── Barra de Progresso dos Passos ───────────────────────────────────────────
 const STEPS = ['Ficheiro', 'Categorizar', 'Pré-visualizar', 'Importar'];
 
-function StepBar({ current }) {
-  const map = { parsing: 0, col_mapping: 0, ai_processing: 1, preview: 2, importing: 3 };
+function StepBar({ current }: { current: string }) {
+  const map: Record<string, number> = { parsing: 0, col_mapping: 0, ai_processing: 1, preview: 2, importing: 3 };
   const active = map[current] ?? -1;
   return (
     <div className="flex items-center gap-1 px-6 py-3 bg-quantum-bg/50 border-b border-white/5">
@@ -70,7 +70,7 @@ function StepBar({ current }) {
 }
 
 // ─── Painel: Drop Zone ────────────────────────────────────────────────────────
-function DropZone({ onFile, fileInputRef }) {
+function DropZone({ onFile, fileInputRef }: { onFile: (f: File) => void; fileInputRef: React.RefObject<HTMLInputElement> }) {
   const [dragging, setDragging] = useState(false);
   return (
     <div
@@ -115,12 +115,13 @@ function DropZone({ onFile, fileInputRef }) {
 }
 
 // ─── Painel: Loading ──────────────────────────────────────────────────────────
-function LoadingPanel({ status }) {
-  const msg = {
+function LoadingPanel({ status }: { status: string }) {
+  const msg: Record<string, { title: string; sub: string }> = {
     parsing:       { title: 'A Extrair Dados...', sub: 'A ler e filtrar duplicados do extrato.' },
     ai_processing: { title: 'Motor Híbrido Ativo', sub: 'Bayesiano local + Cloud AI a categorizar transações.' },
     importing:     { title: 'A Sincronizar com o Cofre', sub: 'A gravar as transações no Firestore.' },
-  }[status] || { title: 'A processar...', sub: '' };
+  };
+  const info = msg[status] || { title: 'A processar...', sub: '' };
 
   return (
     <div className="py-14 flex flex-col items-center text-center gap-4">
@@ -132,22 +133,28 @@ function LoadingPanel({ status }) {
         }
       </div>
       <div>
-        <h4 className="text-sm font-black text-white tracking-widest uppercase mb-1">{msg.title}</h4>
-        <p className="text-xs text-quantum-fgMuted">{msg.sub}</p>
+        <h4 className="text-sm font-black text-white tracking-widest uppercase mb-1">{info.title}</h4>
+        <p className="text-xs text-quantum-fgMuted">{info.sub}</p>
       </div>
     </div>
   );
 }
 
 // ─── Painel: Mapeamento de Colunas ────────────────────────────────────────────
-function ColumnMapper({ headers, previewRows, autoMap, onApply, onCancel }) {
-  const [mapping, setMapping] = useState({
+function ColumnMapper({ headers, previewRows, autoMap, onApply, onCancel }: {
+  headers: string[];
+  previewRows: string[][];
+  autoMap: { dateIdx: number; descIdx: number; valueIdx: number };
+  onApply: (m: { dateIdx: number; descIdx: number; valueIdx: number }) => void;
+  onCancel: () => void;
+}) {
+  const [mapping, setMapping] = useState<{ dateIdx: number | ''; descIdx: number | ''; valueIdx: number | '' }>({
     dateIdx:  autoMap.dateIdx  >= 0 ? autoMap.dateIdx  : '',
     descIdx:  autoMap.descIdx  >= 0 ? autoMap.descIdx  : '',
     valueIdx: autoMap.valueIdx >= 0 ? autoMap.valueIdx : '',
   });
 
-  const set = (k, v) => setMapping(m => ({ ...m, [k]: v }));
+  const set = (k: string, v: number | '') => setMapping(m => ({ ...m, [k]: v }));
   const ready = mapping.dateIdx !== '' && mapping.descIdx !== '' && mapping.valueIdx !== '';
 
   const FIELDS = [
@@ -171,7 +178,7 @@ function ColumnMapper({ headers, previewRows, autoMap, onApply, onCancel }) {
           <div key={key}>
             <label className={`text-xs font-bold uppercase tracking-wider mb-1.5 block ${color}`}>{label}</label>
             <select
-              value={mapping[key]}
+              value={(mapping as Record<string, number | ''>)[key]}
               onChange={e => set(key, Number(e.target.value))}
               className="input-quantum appearance-none pr-8"
             >
@@ -236,21 +243,25 @@ function ColumnMapper({ headers, previewRows, autoMap, onApply, onCancel }) {
 }
 
 // ─── Painel: Preview das Transações ──────────────────────────────────────────
-function PreviewPanel({ transactions, onConfirm, onCancel }) {
-  const [items, setItems] = useState(() => transactions.map(tx => ({ ...tx, _selected: true })));
-  const [editingId, setEditingId] = useState(null);
+function PreviewPanel({ transactions, onConfirm, onCancel }: {
+  transactions: any[];
+  onConfirm: (txs: any[]) => void;
+  onCancel: () => void;
+}) {
+  const [items, setItems] = useState<any[]>(() => transactions.map((tx: any) => ({ ...tx, _selected: true })));
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  const selected   = items.filter(t => t._selected);
+  const selected   = items.filter((t: any) => t._selected);
   const allChecked = selected.length === items.length;
 
-  const toggle    = id => setItems(prev => prev.map(t => t.id === id ? { ...t, _selected: !t._selected } : t));
-  const toggleAll = () => setItems(prev => prev.map(t => ({ ...t, _selected: !allChecked })));
-  const setCat    = (id, cat) => setItems(prev => prev.map(t => t.id === id ? { ...t, category: cat } : t));
+  const toggle    = (id: string) => setItems(prev => prev.map((t: any) => t.id === id ? { ...t, _selected: !t._selected } : t));
+  const toggleAll = () => setItems(prev => prev.map((t: any) => ({ ...t, _selected: !allChecked })));
+  const setCat    = (id: string, cat: string) => setItems(prev => prev.map((t: any) => t.id === id ? { ...t, category: cat } : t));
 
-  const totEntry = selected.filter(t => t.type === 'entrada' || t.type === 'receita').reduce((a, t) => a + t.value, 0);
-  const totExit  = selected.filter(t => t.type === 'saida'   || t.type === 'despesa').reduce((a, t) => a + t.value, 0);
+  const totEntry = selected.filter((t: any) => t.type === 'entrada' || t.type === 'receita').reduce((a: number, t: any) => a + t.value, 0);
+  const totExit  = selected.filter((t: any) => t.type === 'saida'   || t.type === 'despesa').reduce((a: number, t: any) => a + t.value, 0);
 
-  const fmt = v => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
@@ -363,7 +374,7 @@ function PreviewPanel({ transactions, onConfirm, onCancel }) {
           <RotateCcw className="w-3.5 h-3.5" /> Recomeçar
         </button>
         <button
-          onClick={() => onConfirm(selected.map(({ _selected, ...tx }) => tx))}
+          onClick={() => onConfirm(selected.map(({ _selected, ...tx }: any) => tx))}
           disabled={selected.length === 0}
           className="btn-quantum-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-40"
         >
@@ -376,7 +387,7 @@ function PreviewPanel({ transactions, onConfirm, onCancel }) {
 }
 
 // ─── Painel: Sucesso ──────────────────────────────────────────────────────────
-function SuccessPanel({ stats }) {
+function SuccessPanel({ stats }: { stats: { total: number; added: number; duplicates: number } }) {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -410,7 +421,7 @@ function SuccessPanel({ stats }) {
 }
 
 // ─── Painel: Erro ─────────────────────────────────────────────────────────────
-function ErrorPanel({ message, onRetry }) {
+function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -432,24 +443,30 @@ function ErrorPanel({ message, onRetry }) {
 }
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
-export default function ImportButton({ onImportTransactions, existingTransactions = [] }) {
-  const [isOpen,              setIsOpen]              = useState(false);
-  const [status,              setStatus]              = useState('idle');
-  const [errorMessage,        setErrorMessage]        = useState('');
-  const [preview,             setPreview]             = useState([]);
-  const [stats,               setStats]               = useState({ total: 0, added: 0, duplicates: 0 });
-  const [colMapState,         setColMapState]         = useState(null); // { headers, previewRows, autoMap, file }
-  const [reconciliationQueue, setReconciliationQueue] = useState([]);
+interface ImportButtonProps {
+  onImportTransactions: (txs: any[]) => Promise<{ added?: number; duplicates?: number } | void>;
+  existingTransactions?: any[];
+  uid?: string;
+}
 
-  const fileInputRef = useRef(null);
+export default function ImportButton({ onImportTransactions, existingTransactions = [] }: ImportButtonProps) {
+  const [isOpen,              setIsOpen]              = useState(false);
+  const [status,              setStatus]              = useState<string>('idle');
+  const [errorMessage,        setErrorMessage]        = useState('');
+  const [preview,             setPreview]             = useState<any[]>([]);
+  const [stats,               setStats]               = useState({ total: 0, added: 0, duplicates: 0 });
+  const [colMapState,         setColMapState]         = useState<any>(null);
+  const [reconciliationQueue, setReconciliationQueue] = useState<any[]>([]);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ─── Web Worker para parse off-thread ────────────────────────────────────
   const { parseFile, parseFileWithMapping } = useParserWorker();
 
   // ─── Deduplicação local (antes de ir à IA) ────────────────────────────────
-  const deduplicate = useCallback((parsed) => {
-    const existingHashes = new Set();
-    existingTransactions.forEach(t => {
+  const deduplicate = useCallback((parsed: any[]) => {
+    const existingHashes = new Set<string>();
+    existingTransactions.forEach((t: any) => {
       const val  = Number(t.value || 0);
       const desc = (t.description || '').substring(0, 12).toLowerCase().trim();
       const date = (t.date || '').substring(0, 10);
@@ -458,7 +475,7 @@ export default function ImportButton({ onImportTransactions, existingTransaction
     });
 
     let duplicates = 0;
-    const fresh = parsed.filter(tx => {
+    const fresh = parsed.filter((tx: any) => {
       const val  = Math.round(Number(tx.value) * 100);
       const desc = tx.description.substring(0, 12).toLowerCase().trim();
       const date = (tx.date || '').substring(0, 10);
@@ -472,18 +489,19 @@ export default function ImportButton({ onImportTransactions, existingTransaction
   }, [existingTransactions]);
 
   // ─── Pipeline principal (off-thread via Web Worker) ───────────────────────
-  const processFile = useCallback(async (file, customMapping = null, pdfPassword = null) => {
+  const processFile = useCallback(async (file: File, customMapping: any = null, pdfPassword: string | null = null) => {
     setStatus('parsing');
     setErrorMessage('');
 
     try {
       // 1. PARSE — corre 100% no Web Worker (main thread livre a 60fps)
-      let parsed;
+      let parsed: any[];
       try {
         parsed = customMapping
           ? await parseFileWithMapping(file, customMapping)
           : await parseFile(file, pdfPassword ? { password: pdfPassword } : {});
-      } catch (err) {
+      } catch (e: any) {
+        const err = e;
         // CSV sem colunas identificáveis → mostrar mapeamento manual
         if (err.code === 'COLUMNS_NOT_FOUND') {
           setColMapState({
@@ -524,10 +542,10 @@ export default function ImportButton({ onImportTransactions, existingTransaction
         existingTransactions.filter(t => t.description && t.category)
       );
 
-      const needsAI = [];
+      const needsAI: any[] = [];
       let bayesianCount = 0;
 
-      fresh.forEach(tx => {
+      fresh.forEach((tx: any) => {
         const { category, confidence } = classifier.classify(tx.description);
         if (confidence >= 0.75) {
           tx.category = category;
@@ -545,7 +563,7 @@ export default function ImportButton({ onImportTransactions, existingTransaction
       if (needsAI.length > 0) {
         try {
           const txLines = needsAI
-            .map(tx => `- id: "${tx.id}", descrição: "${tx.description}", valor: ${tx.value}, tipo: ${tx.type}`)
+            .map((tx: any) => `- id: "${tx.id}", descrição: "${tx.description}", valor: ${tx.value}, tipo: ${tx.type}`)
             .join('\n');
 
           const prompt =
@@ -568,9 +586,9 @@ export default function ImportButton({ onImportTransactions, existingTransaction
           if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0]);
             if (Array.isArray(parsed.results)) {
-              const newTrainingData = [];
-              parsed.results.forEach(r => {
-                const tx = fresh.find(t => t.id === r.id);
+              const newTrainingData: any[] = [];
+              parsed.results.forEach((r: any) => {
+                const tx = fresh.find((t: any) => t.id === r.id);
                 if (tx && r.category && ALLOWED_CATEGORIES.includes(r.category)) {
                   tx.category = r.category;
                   newTrainingData.push({ description: tx.description, category: r.category });
@@ -581,7 +599,7 @@ export default function ImportButton({ onImportTransactions, existingTransaction
           }
         } catch (aiErr) {
           console.warn('[ImportButton] Batch IA falhou, aplicando fallback "Outros":', aiErr);
-          needsAI.forEach(tx => { if (!tx.category) tx.category = 'Outros'; });
+          needsAI.forEach((tx: any) => { if (!tx.category) tx.category = 'Outros'; });
         }
       }
 
@@ -590,7 +608,7 @@ export default function ImportButton({ onImportTransactions, existingTransaction
       setStats(prev => ({ ...prev, total: parsed.length, duplicates }));
       setStatus('reconciliation');
 
-    } catch (err) {
+    } catch (err: any) {
       console.error('Importação falhou:', err);
       setErrorMessage(err.message || 'Falha desconhecida ao processar o ficheiro.');
       setStatus('error');
@@ -598,7 +616,7 @@ export default function ImportButton({ onImportTransactions, existingTransaction
   }, [deduplicate]);
 
   // ─── Confirmar importação após preview ────────────────────────────────────
-  const handleConfirmImport = useCallback(async (selectedTxs) => {
+  const handleConfirmImport = useCallback(async (selectedTxs: any[]) => {
     setStatus('importing');
     try {
       const result = await onImportTransactions(selectedTxs);
@@ -607,7 +625,7 @@ export default function ImportButton({ onImportTransactions, existingTransaction
       setStats(prev => ({ ...prev, added, duplicates }));
       setStatus('success');
       setTimeout(() => closeModal(), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao gravar no Firestore:', err);
       setErrorMessage(err.message || 'Falha ao guardar as transações. Tente novamente.');
       setStatus('error');
@@ -616,7 +634,7 @@ export default function ImportButton({ onImportTransactions, existingTransaction
 
   // ─── Aplicar mapeamento manual de colunas ─────────────────────────────────
   // Reutiliza processFile com o mapping explícito — worker recebe de volta
-  const handleApplyMapping = useCallback((mapping) => {
+  const handleApplyMapping = useCallback((mapping: any) => {
     if (colMapState?.file) processFile(colMapState.file, mapping);
   }, [colMapState, processFile]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -646,7 +664,7 @@ export default function ImportButton({ onImportTransactions, existingTransaction
           <ReconciliationEngine
             queue={reconciliationQueue}
             existingTransactions={existingTransactions}
-            onComplete={(resolvedTxs) => {
+            onComplete={(resolvedTxs: any[]) => {
               // Fila resolvida → confirmar importação directamente
               handleConfirmImport(resolvedTxs);
             }}

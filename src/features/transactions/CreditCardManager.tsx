@@ -10,11 +10,11 @@ import { useCreditCards } from '../../hooks/useCreditCards';
 import { fromCentavos } from '../../shared/schemas/financialSchemas';
 
 // ─── Visual do Cartão Físico ─────────────────────────────────────────────────
-function CardVisual({ card }) {
+function CardVisual({ card }: { card: any }) {
   const { metrics } = card;
   const color = card.color || '#00E68A';
 
-  const alertColors = {
+  const alertColors: Record<string, { bar: string; text: string }> = {
     safe:     { bar: color,     text: 'text-emerald-400' },
     warning:  { bar: '#FFB800', text: 'text-yellow-400'  },
     critical: { bar: '#FF4757', text: 'text-red-400'     },
@@ -118,8 +118,8 @@ function CardVisual({ card }) {
 // ─── Formulário de Cartão ────────────────────────────────────────────────────
 const CARD_COLORS = ['#00E68A', '#A855F7', '#06B6D4', '#FFB800', '#FF4757', '#3B82F6', '#F43F5E'];
 
-function CardForm({ initial, onSave, onCancel }) {
-  const [form, setForm] = useState({
+function CardForm({ initial, onSave, onCancel }: { initial: any; onSave: (data: any) => void; onCancel: () => void }) {
+  const [form, setForm] = useState<any>({
     name:       initial?.name        || '',
     limit:      initial ? fromCentavos(initial.limit) : '',
     closingDay: initial?.closingDay  || 1,
@@ -128,9 +128,9 @@ function CardForm({ initial, onSave, onCancel }) {
     active:     initial?.active !== false,
   });
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!form.name.trim() || !form.limit) {
       toast.error('Preencha nome e limite.');
@@ -226,13 +226,14 @@ function CardForm({ initial, onSave, onCancel }) {
 }
 
 // ─── Componente Principal ────────────────────────────────────────────────────
-export default function CreditCardManager({ uid, transactions = [] }) {
-  const { cards, loading, addCard, updateCard, removeCard } = useCreditCards(uid, transactions);
+interface CreditCardManagerProps { uid: string; transactions?: any[]; }
+export default function CreditCardManager({ uid, transactions = [] }: CreditCardManagerProps) {
+  const { cards, loading, addCard, updateCard, removeCard } = useCreditCards(uid, transactions) as any;
   const [showForm,   setShowForm]   = useState(false);
-  const [editingCard, setEditingCard] = useState(null);
-  const [deletingId,  setDeletingId]  = useState(null);
+  const [editingCard, setEditingCard] = useState<any>(null);
+  const [deletingId,  setDeletingId]  = useState<string | null>(null);
 
-  const handleSave = async (data) => {
+  const handleSave = async (data: any) => {
     try {
       if (editingCard) {
         await updateCard(editingCard.id, data);
@@ -249,7 +250,7 @@ export default function CreditCardManager({ uid, transactions = [] }) {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (id: string) => {
     try {
       await removeCard(id);
       toast.success('Cartão removido.');
@@ -260,7 +261,7 @@ export default function CreditCardManager({ uid, transactions = [] }) {
     }
   };
 
-  const alertIcon = (level) => {
+  const alertIcon = (level: string) => {
     if (level === 'critical') return <ShieldAlert className="w-4 h-4 text-quantum-red" />;
     if (level === 'warning')  return <AlertTriangle className="w-4 h-4 text-quantum-gold" />;
     return <CheckCircle className="w-4 h-4 text-quantum-accent" />;
@@ -329,7 +330,7 @@ export default function CreditCardManager({ uid, transactions = [] }) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           <AnimatePresence>
-            {cards.map((card, i) => (
+            {cards.map((card: any, i: number) => (
               <motion.div
                 key={card.id}
                 initial={{ opacity: 0, y: 20 }}

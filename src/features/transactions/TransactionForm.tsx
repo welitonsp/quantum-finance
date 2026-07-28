@@ -1,49 +1,64 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, Variants } from 'framer-motion';
 import {
   X, Save, AlertCircle, TrendingDown, TrendingUp,
-  Calendar, DollarSign, Tag, FileText, CheckCircle
+  Calendar, DollarSign, Tag, FileText, CheckCircle,
 } from 'lucide-react';
 import { ALLOWED_CATEGORIES } from '../../shared/schemas/financialSchemas';
 
-// ─── Mapa visual das categorias ────────────────────────────────────────────────
-const CAT_META = {
-  'Alimentação':    { emoji: '🍽️',  color: 'from-orange-500/20 to-orange-600/10 border-orange-500/30 text-orange-300' },
-  'Transporte':     { emoji: '🚗',  color: 'from-blue-500/20 to-blue-600/10 border-blue-500/30 text-blue-300' },
-  'Assinaturas':    { emoji: '📱',  color: 'from-purple-500/20 to-purple-600/10 border-purple-500/30 text-purple-300' },
-  'Educação':       { emoji: '📚',  color: 'from-cyan-500/20 to-cyan-600/10 border-cyan-500/30 text-cyan-300' },
-  'Saúde':          { emoji: '❤️',  color: 'from-rose-500/20 to-rose-600/10 border-rose-500/30 text-rose-300' },
-  'Moradia':        { emoji: '🏠',  color: 'from-yellow-500/20 to-yellow-600/10 border-yellow-500/30 text-yellow-300' },
-  'Impostos/Taxas': { emoji: '📋',  color: 'from-red-500/20 to-red-600/10 border-red-500/30 text-red-300' },
-  'Lazer':          { emoji: '🎮',  color: 'from-pink-500/20 to-pink-600/10 border-pink-500/30 text-pink-300' },
-  'Vestuário':      { emoji: '👗',  color: 'from-violet-500/20 to-violet-600/10 border-violet-500/30 text-violet-300' },
+type AnyRecord = Record<string, unknown>;
+
+interface FormData {
+  description: string;
+  value: string;
+  type: string;
+  category: string;
+  date: string;
+}
+
+interface TransactionFormProps {
+  onSave: (data: AnyRecord) => Promise<void>;
+  editingTransaction: AnyRecord | null;
+  onCancelEdit?: () => void;
+}
+
+interface CatMeta { emoji: string; color: string; }
+
+const CAT_META: Record<string, CatMeta> = {
+  'Alimentação':    { emoji: '🍽️',  color: 'from-orange-500/20 to-orange-600/10 border-orange-500/30 text-orange-300'   },
+  'Transporte':     { emoji: '🚗',  color: 'from-blue-500/20 to-blue-600/10 border-blue-500/30 text-blue-300'             },
+  'Assinaturas':    { emoji: '📱',  color: 'from-purple-500/20 to-purple-600/10 border-purple-500/30 text-purple-300'     },
+  'Educação':       { emoji: '📚',  color: 'from-cyan-500/20 to-cyan-600/10 border-cyan-500/30 text-cyan-300'             },
+  'Saúde':          { emoji: '❤️',  color: 'from-rose-500/20 to-rose-600/10 border-rose-500/30 text-rose-300'             },
+  'Moradia':        { emoji: '🏠',  color: 'from-yellow-500/20 to-yellow-600/10 border-yellow-500/30 text-yellow-300'     },
+  'Impostos/Taxas': { emoji: '📋',  color: 'from-red-500/20 to-red-600/10 border-red-500/30 text-red-300'                 },
+  'Lazer':          { emoji: '🎮',  color: 'from-pink-500/20 to-pink-600/10 border-pink-500/30 text-pink-300'             },
+  'Vestuário':      { emoji: '👗',  color: 'from-violet-500/20 to-violet-600/10 border-violet-500/30 text-violet-300'     },
   'Salário':        { emoji: '💰',  color: 'from-emerald-500/20 to-emerald-600/10 border-emerald-500/30 text-emerald-300' },
-  'Freelance':      { emoji: '💼',  color: 'from-teal-500/20 to-teal-600/10 border-teal-500/30 text-teal-300' },
-  'Investimento':   { emoji: '📈',  color: 'from-lime-500/20 to-lime-600/10 border-lime-500/30 text-lime-300' },
-  'Diversos':       { emoji: '📦',  color: 'from-slate-500/20 to-slate-600/10 border-slate-500/30 text-slate-300' },
-  'Outros':         { emoji: '•',   color: 'from-slate-500/20 to-slate-600/10 border-slate-500/30 text-slate-300' },
+  'Freelance':      { emoji: '💼',  color: 'from-teal-500/20 to-teal-600/10 border-teal-500/30 text-teal-300'             },
+  'Investimento':   { emoji: '📈',  color: 'from-lime-500/20 to-lime-600/10 border-lime-500/30 text-lime-300'             },
+  'Diversos':       { emoji: '📦',  color: 'from-slate-500/20 to-slate-600/10 border-slate-500/30 text-slate-300'         },
+  'Outros':         { emoji: '•',   color: 'from-slate-500/20 to-slate-600/10 border-slate-500/30 text-slate-300'         },
 };
 
-// ─── Formatar valor para exibição ──────────────────────────────────────────────
-function formatCurrencyDisplay(raw) {
+function formatCurrencyDisplay(raw: string): string | null {
   const num = parseFloat(raw);
   if (isNaN(num) || raw === '' || raw === '0') return null;
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
 }
 
-// ─── Animações ────────────────────────────────────────────────────────────────
-const backdropVariants = {
-  hidden: { opacity: 0 },
+const backdropVariants: Variants = {
+  hidden:  { opacity: 0 },
   visible: { opacity: 1 },
 };
-const panelVariants = {
-  hidden: { opacity: 0, y: 40, scale: 0.97 },
+const panelVariants: Variants = {
+  hidden:  { opacity: 0, y: 40, scale: 0.97 },
   visible: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 340, damping: 28 } },
   exit:    { opacity: 0, y: 24, scale: 0.96, transition: { duration: 0.18 } },
 };
 
-// ─── Sub-componente: TypeToggle ───────────────────────────────────────────────
-function TypeToggle({ value, onChange }) {
+interface TypeToggleProps { value: string; onChange: (v: string) => void; }
+function TypeToggle({ value, onChange }: TypeToggleProps) {
   return (
     <div className="flex rounded-xl overflow-hidden border border-white/10 bg-slate-900/50 p-0.5 gap-0.5">
       {[
@@ -54,11 +69,9 @@ function TypeToggle({ value, onChange }) {
           key={val}
           type="button"
           onClick={() => onChange(val)}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-bold transition-all duration-200 border
-            ${value === val
-              ? `${active} shadow-sm`
-              : 'border-transparent text-slate-500 hover:text-slate-300'
-            }`}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-bold transition-all duration-200 border ${
+            value === val ? `${active} shadow-sm` : 'border-transparent text-slate-500 hover:text-slate-300'
+          }`}
         >
           <Icon className="w-4 h-4" />
           {label}
@@ -68,11 +81,10 @@ function TypeToggle({ value, onChange }) {
   );
 }
 
-// ─── Sub-componente: CategoryPicker ──────────────────────────────────────────
-function CategoryPicker({ value, onChange }) {
+interface CategoryPickerProps { value: string; onChange: (v: string) => void; }
+function CategoryPicker({ value, onChange }: CategoryPickerProps) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-52 overflow-y-auto pr-1
-      scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-52 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
       {ALLOWED_CATEGORIES.map(cat => {
         const meta = CAT_META[cat] || CAT_META['Outros'];
         const isActive = value === cat;
@@ -81,12 +93,9 @@ function CategoryPicker({ value, onChange }) {
             key={cat}
             type="button"
             onClick={() => onChange(cat)}
-            className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-all duration-150
-              bg-gradient-to-br ${meta.color}
-              ${isActive
-                ? 'ring-2 ring-offset-1 ring-offset-slate-900 ring-white/20 scale-[1.03] shadow-md'
-                : 'opacity-60 hover:opacity-90'
-              }`}
+            className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-all duration-150 bg-gradient-to-br ${meta.color} ${
+              isActive ? 'ring-2 ring-offset-1 ring-offset-slate-900 ring-white/20 scale-[1.03] shadow-md' : 'opacity-60 hover:opacity-90'
+            }`}
           >
             <span className="text-sm leading-none">{meta.emoji}</span>
             <span className="truncate">{cat}</span>
@@ -98,59 +107,55 @@ function CategoryPicker({ value, onChange }) {
   );
 }
 
-// ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
-export default function TransactionForm({ onSave, editingTransaction, onCancelEdit }) {
+export default function TransactionForm({ onSave, editingTransaction, onCancelEdit }: TransactionFormProps) {
   const isEditing = Boolean(editingTransaction);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     description: '',
-    value: '',
-    type: 'saida',
-    category: ALLOWED_CATEGORIES[0],
-    date: new Date().toISOString().substring(0, 10),
+    value:       '',
+    type:        'saida',
+    category:    ALLOWED_CATEGORIES[0],
+    date:        new Date().toISOString().substring(0, 10),
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError]               = useState('');
-  const [saved, setSaved]               = useState(false);
-  const descRef = useRef(null);
+  const [error,        setError]        = useState('');
+  const [saved,        setSaved]        = useState(false);
+  const descRef = useRef<HTMLInputElement>(null);
 
-  // Preenche o form ao editar
   useEffect(() => {
     if (editingTransaction) {
       setFormData({
-        description: editingTransaction.description || '',
-        value:       editingTransaction.value       || '',
-        type:        editingTransaction.type        || 'saida',
-        category:    editingTransaction.category    || ALLOWED_CATEGORIES[0],
+        description: (editingTransaction.description as string) || '',
+        value:       String(editingTransaction.value ?? ''),
+        type:        (editingTransaction.type as string)     || 'saida',
+        category:    (editingTransaction.category as string) || ALLOWED_CATEGORIES[0],
         date:        editingTransaction.date
-          ? editingTransaction.date.substring(0, 10)
+          ? (editingTransaction.date as string).substring(0, 10)
           : new Date().toISOString().substring(0, 10),
       });
     }
   }, [editingTransaction]);
 
-  // Foco automático na descrição
   useEffect(() => {
     const t = setTimeout(() => descRef.current?.focus(), 120);
     return () => clearTimeout(t);
   }, []);
 
-  // Escape para fechar
   useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onCancelEdit?.(); };
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancelEdit?.(); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onCancelEdit]);
 
-  const setField = useCallback((name, val) => {
+  const setField = useCallback((name: keyof FormData, val: string) => {
     setFormData(prev => ({ ...prev, [name]: val }));
     setError('');
   }, []);
 
-  const handleChange = (e) => setField(e.target.name, e.target.value);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => setField(e.target.name as keyof FormData, e.target.value);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isSubmitting) return;
 
@@ -172,18 +177,17 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
       setSaved(true);
       setTimeout(() => { setSaved(false); }, 1200);
     } catch (err) {
-      setError(err.message || 'Erro ao guardar transação.');
+      setError((err as Error).message || 'Erro ao guardar transação.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const isReceita       = formData.type === 'entrada';
-  const displayAmount   = formatCurrencyDisplay(formData.value);
-  const descLen         = formData.description.length;
+  const isReceita     = formData.type === 'entrada';
+  const displayAmount = formatCurrencyDisplay(formData.value);
+  const descLen       = formData.description.length;
 
   return (
-    // Overlay com blur
     <motion.div
       variants={backdropVariants}
       initial="hidden"
@@ -193,7 +197,6 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
       style={{ background: 'rgba(2,6,23,0.82)', backdropFilter: 'blur(6px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onCancelEdit?.(); }}
     >
-      {/* Painel */}
       <motion.div
         variants={panelVariants}
         initial="hidden"
@@ -203,25 +206,21 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
         style={{ boxShadow: '0 0 60px rgba(0,230,138,0.08), 0 25px 50px rgba(0,0,0,0.6)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Linha decorativa superior */}
         <div
           className="absolute top-0 left-0 right-0 h-[2px]"
           style={{ background: isReceita
             ? 'linear-gradient(90deg, transparent, #00E68A, transparent)'
-            : 'linear-gradient(90deg, transparent, #ef4444, transparent)'
+            : 'linear-gradient(90deg, transparent, #ef4444, transparent)',
           }}
         />
 
-        {/* Handle mobile */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden">
           <div className="w-10 h-1 rounded-full bg-white/20" />
         </div>
 
-        {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4">
           <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center
-              ${isReceita ? 'bg-emerald-500/15' : 'bg-red-500/15'}`}>
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isReceita ? 'bg-emerald-500/15' : 'bg-red-500/15'}`}>
               {isReceita
                 ? <TrendingUp  className="w-5 h-5 text-emerald-400" />
                 : <TrendingDown className="w-5 h-5 text-red-400" />}
@@ -237,17 +236,11 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
               )}
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={onCancelEdit}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all"
-          >
+          <button type="button" onClick={onCancelEdit} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Erro */}
         <AnimatePresence>
           {error && (
             <motion.div
@@ -262,18 +255,12 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
           )}
         </AnimatePresence>
 
-        {/* Formulário */}
         <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-5">
-
-          {/* Tipo: toggle pills */}
           <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
-              Tipo
-            </label>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Tipo</label>
             <TypeToggle value={formData.type} onChange={(v) => setField('type', v)} />
           </div>
 
-          {/* Descrição */}
           <div>
             <label className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
               <span className="flex items-center gap-1.5"><FileText className="w-3 h-3" /> Descrição</span>
@@ -291,7 +278,6 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
             />
           </div>
 
-          {/* Valor + Data — grade 2 colunas */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
@@ -311,7 +297,6 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
                 />
               </div>
             </div>
-
             <div>
               <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
                 <Calendar className="w-3 h-3" /> Data
@@ -326,7 +311,6 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
             </div>
           </div>
 
-          {/* Categoria — picker visual */}
           <div>
             <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
               <Tag className="w-3 h-3" /> Categoria
@@ -337,38 +321,27 @@ export default function TransactionForm({ onSave, editingTransaction, onCancelEd
             <CategoryPicker value={formData.category} onChange={(v) => setField('category', v)} />
           </div>
 
-          {/* Rodapé com botões */}
           <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onCancelEdit}
-              className="btn-quantum-secondary flex-1 py-3 text-sm"
-            >
+            <button type="button" onClick={onCancelEdit} className="btn-quantum-secondary flex-1 py-3 text-sm">
               Cancelar
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className={`flex-[2] flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed
-                ${saved
-                  ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-300'
-                  : 'btn-quantum-primary'
-                }`}
+              className={`flex-[2] flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                saved ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-300' : 'btn-quantum-primary'
+              }`}
             >
               {saved ? (
                 <><CheckCircle className="w-4 h-4" /> Guardado!</>
               ) : isSubmitting ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-slate-900/50 border-t-slate-900 rounded-full animate-spin" />
-                  A guardar...
-                </>
+                <><span className="w-4 h-4 border-2 border-slate-900/50 border-t-slate-900 rounded-full animate-spin" /> A guardar...</>
               ) : (
                 <><Save className="w-4 h-4" /> {isEditing ? 'Atualizar' : 'Guardar'}</>
               )}
             </button>
           </div>
 
-          {/* Hint teclado */}
           <p className="text-center text-[10px] text-slate-700 -mt-2">
             Pressione <kbd className="px-1 py-0.5 bg-slate-800 rounded text-slate-500">Esc</kbd> para fechar
           </p>

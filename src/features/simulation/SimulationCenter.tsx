@@ -41,10 +41,10 @@ const DEFAULT_STATS = {
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const fmtBRL = (cents) =>
+const fmtBRL = (cents: number) =>
   (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
-const fmtBRLShort = (val) => {
+const fmtBRLShort = (val: number) => {
   const abs = Math.abs(val);
   if (abs >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}M`;
   if (abs >= 1_000)     return `${(val / 1_000).toFixed(0)}K`;
@@ -52,7 +52,10 @@ const fmtBRLShort = (val) => {
 };
 
 // ─── Slider interno ──────────────────────────────────────────────────────────
-function MacroSlider({ label, value, min, max, step = 1, unit, hint, onChange }) {
+interface MacroSliderProps {
+  label: string; value: number; min: number; max: number; step?: number; unit: string; hint?: string; onChange: (v: number) => void;
+}
+function MacroSlider({ label, value, min, max, step = 1, unit, hint, onChange }: MacroSliderProps) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
@@ -82,12 +85,12 @@ function MacroSlider({ label, value, min, max, step = 1, unit, hint, onChange })
 }
 
 // ─── Tooltip customizado do gráfico ──────────────────────────────────────────
-function ChartTooltip({ active, payload, label, isPrivacyMode }) {
+function ChartTooltip({ active, payload, label, isPrivacyMode }: { active?: boolean; payload?: any[]; label?: any; isPrivacyMode?: boolean }) {
   if (!active || !payload?.length) return null;
   const mask = '•••••';
-  const p10 = payload.find(p => p.dataKey === 'p10')?.value;
-  const p50 = payload.find(p => p.dataKey === 'p50')?.value;
-  const p90 = payload.find(p => p.dataKey === 'p90')?.value;
+  const p10 = payload.find((p: any) => p.dataKey === 'p10')?.value;
+  const p50 = payload.find((p: any) => p.dataKey === 'p50')?.value;
+  const p90 = payload.find((p: any) => p.dataKey === 'p90')?.value;
 
   return (
     <div className="bg-slate-900/95 border border-white/15 backdrop-blur-xl rounded-xl px-4 py-3 shadow-2xl text-xs">
@@ -120,7 +123,8 @@ function ChartTooltip({ active, payload, label, isPrivacyMode }) {
 }
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
-export default function SimulationCenter({ transactions, balances }) {
+interface SimulationCenterProps { transactions: any[]; balances: any; }
+export default function SimulationCenter({ transactions, balances }: SimulationCenterProps) {
   const { isPrivacyMode }             = usePrivacy();
   const { currentMonth, currentYear } = useNavigation();
 
@@ -131,17 +135,17 @@ export default function SimulationCenter({ transactions, balances }) {
   const [meses,          setMeses]          = useState(DEFAULTS.meses);
 
   // ── Estado de simulação ──
-  const [result,        setResult]        = useState(null);
+  const [result,        setResult]        = useState<any>(null);
   const [isCalculating, setIsCalculating] = useState(false);
-  const workerRef  = useRef(null);
-  const debounceRef = useRef(null);
+  const workerRef  = useRef<any>(null);
+  const debounceRef = useRef<any>(null);
 
   // ── Derivar estatísticas base das transações ───────────────────────────────
   const stats = useMemo(() => {
     if (!transactions || transactions.length === 0) return DEFAULT_STATS;
 
-    const byMonth = {};
-    transactions.forEach(tx => {
+    const byMonth: Record<string, { r: number; d: number }> = {};
+    transactions.forEach((tx: any) => {
       const d   = new Date(tx.date || tx.createdAt);
       const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}`;
       if (!byMonth[key]) byMonth[key] = { r: 0, d: 0 };
@@ -174,7 +178,7 @@ export default function SimulationCenter({ transactions, balances }) {
   useEffect(() => {
     const worker = new MonteCarloWorker();
 
-    worker.onmessage = (e) => {
+    worker.onmessage = (e: any) => {
       setIsCalculating(false);
       if (e.data.success) {
         setResult(e.data);
@@ -183,7 +187,7 @@ export default function SimulationCenter({ transactions, balances }) {
       }
     };
 
-    worker.onerror = (e) => {
+    worker.onerror = (e: any) => {
       setIsCalculating(false);
       console.error('[MonteCarloWorker] crash:', e.message);
     };
@@ -219,7 +223,7 @@ export default function SimulationCenter({ transactions, balances }) {
   // ── Preparar dados do gráfico (centavos → reais para display) ─────────────
   const chartData = useMemo(() => {
     if (!result?.chartData) return [];
-    return result.chartData.map((d) => {
+    return result.chartData.map((d: any) => {
       const offsetMonth = (currentMonth - 1 + d.month) % 12;
       const extraYears  = Math.floor((currentMonth - 1 + d.month) / 12);
       const label = d.month === 0
