@@ -30,7 +30,7 @@ const client = {
 vi.mock('../../shared/api/supabase/client', () => ({ getSupabase: () => client }));
 vi.mock('../../shared/lib/firebaseErrorHandling', () => ({ logSanitizedFirebaseError: vi.fn() }));
 
-import { useBudgetStoreSupabase, mapBudgetRow, toBudgetColumns } from './useBudgetsSupabase';
+import { BudgetUserError, useBudgetStoreSupabase, mapBudgetRow, toBudgetColumns } from './useBudgetsSupabase';
 
 beforeEach(() => {
   calls.length = 0;
@@ -68,6 +68,8 @@ describe('useBudgetStoreSupabase', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     await expect(result.current.addBudget({ category: 'Mercado', targetAmount: 10, month: '2026-11', period: 'monthly' }))
       .rejects.toThrow('Já existe um orçamento para essa categoria neste mês.');
+    await expect(result.current.addBudget({ category: 'Mercado', targetAmount: 10, month: '2026-11', period: 'monthly' }))
+      .rejects.toBeInstanceOf(BudgetUserError);
   });
 
   it('updateBudget grava só campos informados em centavos', async () => {

@@ -8,7 +8,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useBudgets, currentMonthStr } from '../hooks/useBudgets';
+import { useBudgets, currentMonthStr, BudgetUserError } from '../hooks/useBudgets';
 import { ALLOWED_CATEGORIES } from '../shared/schemas/financialSchemas';
 import { formatCurrency } from '../utils/formatters';
 import type { Transaction } from '../shared/types/transaction';
@@ -203,8 +203,9 @@ function AddForm({ onAdd, onClose }: AddFormProps) {
       await onAdd({ category, targetAmount, month, period: 'monthly' });
       toast.success(`Orçamento de ${category} criado!`);
       onClose();
-    } catch {
-      toast.error('Erro ao criar orçamento. Tente novamente.');
+    } catch (err) {
+      // Só mostra a mensagem quando ela já foi escrita para o usuário (ex.: orçamento duplicado).
+      toast.error(err instanceof BudgetUserError ? err.message : 'Erro ao criar orçamento. Tente novamente.');
     } finally {
       setBusy(false);
     }

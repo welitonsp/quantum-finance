@@ -11,6 +11,7 @@ import { absCentavos, addCentavos, fromCentavos, toCentavos, type Centavos } fro
 import { isExpense as checkExpense, isInvoicePayment } from '../utils/transactionUtils';
 import { DATA_BACKEND } from '../shared/config/backend';
 import { useBudgetStoreSupabase } from './supabase/useBudgetsSupabase';
+export { BudgetUserError } from './supabase/useBudgetsSupabase';
 
 // ─── Public Types ─────────────────────────────────────────────────────────────
 

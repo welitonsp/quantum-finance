@@ -38,8 +38,16 @@ export function toBudgetColumns(data: Partial<BudgetWriteData>): Record<string, 
 }
 
 /** Violação do único (usuário, mês, categoria) vira mensagem clara. */
-function friendlyBudgetError(error: { code?: string } | null, fallback: string): Error {
-  return new Error(error?.code === '23505'
+/** Erro com mensagem já pronta para o usuário (português, sem detalhe técnico). */
+export class BudgetUserError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'BudgetUserError';
+  }
+}
+
+function friendlyBudgetError(error: { code?: string } | null, fallback: string): BudgetUserError {
+  return new BudgetUserError(error?.code === '23505'
     ? 'Já existe um orçamento para essa categoria neste mês.'
     : fallback);
 }
