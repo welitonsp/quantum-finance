@@ -2,15 +2,49 @@ import { useState } from 'react';
 import {
   ShieldCheck, ScrollText, Clock, BrainCircuit, Tag, ChevronRight,
   CheckCircle2, AlertTriangle, Lock, Bell, BellOff,
+  Award, TrendingUp, ShieldCheck as ShieldFull, History,
 } from 'lucide-react';
 import { useAuditLogs } from '../../hooks/useAuditLogs';
+import { useDecisions } from '../../hooks/useDecisions';
+import type { AIDecision } from '../../hooks/useDecisions';
 import AuditTimeline from '../../components/AuditTimeline';
+import AIJournalDrawer from './AIJournalDrawer';
+import { getOutcomeCfg, getKindLabel } from './decisionHelpers';
 import DataPrivacyPanel from '../settings/DataPrivacyPanel';
 import { LoadingPage, Spinner } from '../../shared/components/ui';
 import { usePushNotifications } from '../../shared/hooks/usePushNotifications';
 
 interface Props {
   uid: string;
+}
+
+function DecisionRow({ decision }: { decision: AIDecision }) {
+  const label = getKindLabel(decision.proposedAction.kind, decision.intent);
+  const cfg = getOutcomeCfg(decision.outcomeStatus);
+  const Icon = cfg.icon;
+  const dateStr = decision.createdAt
+    ? decision.createdAt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+    : '—';
+
+  return (
+    <div className="flex items-center gap-3 py-2 border-t border-quantum-border/30">
+      <Icon className={`w-4 h-4 shrink-0 ${cfg.cls}`} />
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-bold text-quantum-fg truncate">{label}</p>
+        <p className="text-[10px] text-quantum-fgMuted truncate">{decision.question || decision.intent}</p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+          decision.outcomeStatus === 'applied'
+            ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-400'
+            : decision.outcomeStatus === 'reverted'
+              ? 'border-amber-500/25 bg-amber-500/10 text-amber-400'
+              : 'border-quantum-border bg-quantum-bg/60 text-quantum-fgMuted'
+        }`}>{cfg.label}</span>
+        <span className="text-[10px] text-quantum-fgMuted font-mono">{dateStr}</span>
+      </div>
+    </div>
+  );
 }
 
 const AI_PERMISSIONS = [
@@ -25,7 +59,9 @@ const AI_PERMISSIONS = [
 
 export default function GovernancePage({ uid }: Props) {
   const { logs, loading: loadingLogs } = useAuditLogs(uid);
+  const { decisions, loading: loadingDecisions, stats } = useDecisions(uid);
   const [showAuditTimeline, setShowAuditTimeline] = useState(false);
+  const [showJournal, setShowJournal] = useState(false);
   const {
     permission: pushPermission,
     loading:    pushLoading,
@@ -51,6 +87,71 @@ export default function GovernancePage({ uid }: Props) {
           <p className="text-xs text-quantum-fgMuted">LGPD, auditoria, histórico append-only e permissões de IA</p>
         </div>
       </div>
+
+      {/* Selo de Integridade */}
+      <section aria-labelledby="integrity-heading">
+        <div className="flex items-center gap-2 mb-4">
+          <Award className="w-4 h-4 text-quantum-fgMuted" />
+          <h2 id="integrity-heading" className="text-sm font-bold text-quantum-fgMuted uppercase tracking-wider">Selo de Integridade</h2>
+        </div>
+        <div className="bg-gradient-to-br from-quantum-card/60 to-quantum-bgSecondary/40 border border-quantum-border rounded-2xl p-5">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center">
+              <ShieldFull className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-sm font-black text-quantum-fg">Sistema Verificável &amp; Auditável</p>
+              <p className="text-xs text-quantum-fgMuted mt-0.5">4 pilares de integridade ativos em produção</p>
+            </div>
+            <span className="ml-auto text-[10px] font-bold px-3 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
+              Nível Premium
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {/* Pilar 1: Rastreabilidade */}
+            <div className="bg-quantum-bg/60 border border-quantum-border rounded-xl p-3.5">
+              <div className="flex items-center gap-2 mb-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="text-xs font-bold text-quantum-fg">Rastreabilidade</span>
+              </div>
+              <p className="text-[10px] text-quantum-fgMuted leading-relaxed">100% das transações com histórico append-only imutável (Modelo A)</p>
+            </div>
+            {/* Pilar 2: IA Verificável */}
+            <div className="bg-quantum-bg/60 border border-quantum-border rounded-xl p-3.5">
+              <div className="flex items-center gap-2 mb-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="text-xs font-bold text-quantum-fg">IA Verificável</span>
+              </div>
+              {loadingDecisions ? (
+                <p className="text-[10px] text-quantum-fgMuted">Carregando…</p>
+              ) : (
+                <p className="text-[10px] text-quantum-fgMuted leading-relaxed">
+                  {stats.total === 0
+                    ? 'Nenhuma decisão registrada ainda'
+                    : `${stats.confirmed} confirmada${stats.confirmed !== 1 ? 's' : ''} · ${stats.reverted > 0 ? `${stats.reverted} revertida${stats.reverted !== 1 ? 's' : ''}` : '0 revertidas'}`
+                  }
+                </p>
+              )}
+            </div>
+            {/* Pilar 3: LGPD */}
+            <div className="bg-quantum-bg/60 border border-quantum-border rounded-xl p-3.5">
+              <div className="flex items-center gap-2 mb-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="text-xs font-bold text-quantum-fg">LGPD Ativo</span>
+              </div>
+              <p className="text-[10px] text-quantum-fgMuted leading-relaxed">Hard-delete LGPD disponível — exclusão completa via Admin SDK</p>
+            </div>
+            {/* Pilar 4: Idempotência */}
+            <div className="bg-quantum-bg/60 border border-quantum-border rounded-xl p-3.5">
+              <div className="flex items-center gap-2 mb-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="text-xs font-bold text-quantum-fg">Idempotência</span>
+              </div>
+              <p className="text-[10px] text-quantum-fgMuted leading-relaxed">Zero operações duplicadas — chave de idempotência por callable</p>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Auditoria */}
       <section aria-labelledby="audit-heading">
@@ -131,6 +232,65 @@ export default function GovernancePage({ uid }: Props) {
           <p className="text-[10px] text-quantum-fgMuted mt-4 leading-relaxed border-t border-quantum-border/30 pt-3">
             Conforme <span className="font-bold">Política Copilot IA — 2026-06-12</span>: toda feature com IA declara dados usados, auditoria, idempotência e requer confirmação humana para ações.
           </p>
+        </div>
+      </section>
+
+      {/* Diário de Decisões IA */}
+      <section aria-labelledby="decisions-heading">
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingUp className="w-4 h-4 text-quantum-fgMuted" />
+          <h2 id="decisions-heading" className="text-sm font-bold text-quantum-fgMuted uppercase tracking-wider">Diário de Decisões IA</h2>
+        </div>
+        <div className="bg-quantum-card/40 border border-quantum-border rounded-2xl p-5 space-y-4">
+          {/* Stats header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-black text-quantum-fg">Histórico do Copiloto</p>
+              {loadingDecisions ? (
+                <p className="text-xs text-quantum-fgMuted mt-0.5">Carregando…</p>
+              ) : (
+                <p className="text-xs text-quantum-fgMuted mt-0.5">
+                  {stats.total === 0
+                    ? 'Nenhuma ação do Copiloto ainda'
+                    : `${stats.total} decisão${stats.total !== 1 ? 'ões' : ''} · ${stats.total > 0 ? Math.round((stats.confirmed / stats.total) * 100) : 0}% confirmadas`
+                  }
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {stats.total > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400">
+                    {stats.confirmed} aplicadas
+                  </span>
+                  {stats.reverted > 0 && (
+                    <span className="text-[9px] font-bold px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-400">
+                      {stats.reverted} revertidas
+                    </span>
+                  )}
+                </div>
+              )}
+              <button
+                onClick={() => setShowJournal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-quantum-bgSecondary border border-quantum-border rounded-xl text-xs font-bold text-quantum-fg hover:border-quantum-accent/40 transition-all"
+              >
+                <History className="w-3.5 h-3.5" />
+                Ver Diário Completo
+                <ChevronRight className="w-3.5 h-3.5 text-quantum-fgMuted" />
+              </button>
+            </div>
+          </div>
+
+          {/* Recent decisions list */}
+          {!loadingDecisions && decisions.slice(0, 5).map(dec => (
+            <DecisionRow key={dec.id} decision={dec} />
+          ))}
+
+          {!loadingDecisions && decisions.length === 0 && (
+            <p className="text-xs text-quantum-fgMuted border-t border-quantum-border/30 pt-3">
+              Quando o Copiloto registrar uma ação confirmada, ela aparecerá aqui.
+            </p>
+          )}
         </div>
       </section>
 
@@ -220,6 +380,16 @@ export default function GovernancePage({ uid }: Props) {
 
       {/* AuditTimeline drawer */}
       <AuditTimeline uid={uid} open={showAuditTimeline} onClose={() => setShowAuditTimeline(false)} />
+
+      {/* Diário de Decisões IA — drawer completo */}
+      <AIJournalDrawer
+        uid={uid}
+        decisions={decisions}
+        stats={stats}
+        loading={loadingDecisions}
+        open={showJournal}
+        onClose={() => setShowJournal(false)}
+      />
     </div>
   );
 }

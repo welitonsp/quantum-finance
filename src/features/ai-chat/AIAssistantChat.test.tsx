@@ -60,7 +60,7 @@ function renderChat() {
 }
 
 function sendMessage(container: HTMLElement, text: string) {
-  const input = screen.getByPlaceholderText(/Analise os meus gastos/i) as HTMLInputElement;
+  const input = screen.getByPlaceholderText(/Pergunte sobre seu saldo, gastos, metas/i) as HTMLInputElement;
   fireEvent.change(input, { target: { value: text } });
   const submit = container.querySelector('button[type="submit"]') as HTMLButtonElement;
   fireEvent.click(submit);

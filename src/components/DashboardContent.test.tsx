@@ -11,7 +11,7 @@ vi.mock('react-countup', () => ({
 }));
 
 vi.mock('../contexts/NavigationContext', () => ({
-  useNavigation: () => ({ currentMonth: 5, currentYear: 2026 }),
+  useNavigation: () => ({ currentMonth: 5, currentYear: 2026, setCurrentPage: vi.fn() }),
 }));
 
 vi.mock('../hooks/useFinancialData', () => ({
@@ -137,8 +137,8 @@ describe('DashboardContent budget alerts', () => {
   it('renderiza estado vazio de alertas sem quebrar', () => {
     renderDashboard();
 
-    expect(screen.getByText('Alertas de orçamento')).toBeInTheDocument();
-    expect(screen.getByText('Nenhum orçamento cadastrado.')).toBeInTheDocument();
+    expect(screen.getByText('Alertas — Tudo sob controle')).toBeInTheDocument();
+    expect(screen.getByText('Sem alertas críticos, faturas próximas ou despesas vencendo.')).toBeInTheDocument();
     expect(document.body.textContent ?? '').not.toMatch(/NaN|Infinity/);
   });
 
@@ -156,8 +156,8 @@ describe('DashboardContent budget alerts', () => {
       transaction({ category: 'Alimentação', value_cents: cents(8500), date: '2026-05-10' }),
     ]);
 
-    expect(screen.getByText('Alimentação')).toBeInTheDocument();
-    expect(screen.getByText('Atenção')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Orçamento em atenção: Alimentação' })).toBeInTheDocument();
+    expect(screen.getByText('Alertas')).toBeInTheDocument();
     expect(screen.getByText(/85%/)).toBeInTheDocument();
   });
 });

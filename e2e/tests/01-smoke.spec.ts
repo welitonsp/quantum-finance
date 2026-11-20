@@ -11,7 +11,7 @@ test.describe('Smoke — carregamento da app', () => {
     await page.goto('/');
 
     // Aguarda a app sair do estado de loading (auth + data)
-    await expect(page.getByRole('heading', { name: 'Centro de Comando' }).first())
+    await expect(page.getByText('Saldo em Caixa').first())
       .toBeVisible({ timeout: 20_000 });
 
     // Nenhum erro 500 ou tela branca

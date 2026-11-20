@@ -11,7 +11,7 @@ import { getTransactionAbsCentavos, isIncome, isExpense, isInvoicePayment } from
 import { fromCentavos } from '../shared/types/money';
 
 const PAGE_TITLES: Record<string, string> = {
-  dashboard:          'Centro de Comando',
+  dashboard:          'Hoje',
   history:            'Movimentações',
   reports:            'BI & Relatórios',
   accounts:           'Contas',
@@ -91,7 +91,7 @@ function BurnRateHUD({ transactions, currentMonth, currentYear }: BurnRateProps)
             style={{ width: `${Math.min(percentDoMes, 100)}%`, boxShadow: `0 0 6px ${color.glow}` }}
           />
         </div>
-        <span className={`text-xs font-bold font-mono ${color.text}`} style={{ textShadow: `0 0 10px ${color.glow}` }}>
+        <span className={`text-xs font-bold font-mono ${color.text}`}>
           {formatted}
         </span>
       </div>
@@ -156,18 +156,18 @@ function SurvivalKPIs({ transactions, currentMonth, currentYear }: SurvivalKPIsP
   const d2zDisplay  = isPrivacyMode ? '••' : d2zIsStable ? 'Estável' : `${d2z} dias`;
 
   const d2zColor = d2z === null
-    ? { text: 'text-quantum-fgMuted', glow: 'transparent' }
+    ? { text: 'text-quantum-fgMuted' }
     : d2zIsStable
-    ? { text: 'text-quantum-accent',  glow: 'rgba(0,230,138,0.45)' }
+    ? { text: 'text-quantum-accent' }
     : (d2z as number) > 30
-    ? { text: 'text-quantum-accent',  glow: 'rgba(0,230,138,0.45)' }
+    ? { text: 'text-quantum-accent' }
     : (d2z as number) > 15
-    ? { text: 'text-quantum-gold',    glow: 'rgba(255,184,0,0.45)'  }
-    : { text: 'text-quantum-red',     glow: 'rgba(255,71,87,0.45)'  };
+    ? { text: 'text-quantum-gold' }
+    : { text: 'text-quantum-red' };
 
   const libColor = (liberdadeDiaria ?? 0) >= 0
-    ? { text: 'text-quantum-accent', glow: 'rgba(0,230,138,0.45)' }
-    : { text: 'text-quantum-red',    glow: 'rgba(255,71,87,0.45)'  };
+    ? { text: 'text-quantum-accent' }
+    : { text: 'text-quantum-red' };
 
   const fmtCurrency = (v: number) => isPrivacyMode
     ? '••••'
@@ -186,7 +186,7 @@ function SurvivalKPIs({ transactions, currentMonth, currentYear }: SurvivalKPIsP
           </div>
           <div className="flex flex-col">
             <span className="text-[10px] text-quantum-fgMuted uppercase tracking-wider font-medium leading-none mb-1">Dias p/ Zero</span>
-            <span className={`text-xs font-bold font-mono leading-none ${d2zColor.text}`} style={{ textShadow: `0 0 10px ${d2zColor.glow}` }}>
+            <span className={`text-xs font-bold font-mono leading-none ${d2zColor.text}`}>
               {d2zDisplay}
             </span>
           </div>
@@ -204,7 +204,7 @@ function SurvivalKPIs({ transactions, currentMonth, currentYear }: SurvivalKPIsP
           </div>
           <div className="flex flex-col">
             <span className="text-[10px] text-quantum-fgMuted uppercase tracking-wider font-medium leading-none mb-1">Liberdade Diária</span>
-            <span className={`text-xs font-bold font-mono leading-none ${libColor.text}`} style={{ textShadow: `0 0 10px ${libColor.glow}` }}>
+            <span className={`text-xs font-bold font-mono leading-none ${libColor.text}`}>
               {fmtCurrency(liberdadeDiaria)}
             </span>
           </div>

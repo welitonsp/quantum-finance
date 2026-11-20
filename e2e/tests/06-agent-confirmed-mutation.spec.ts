@@ -34,17 +34,22 @@ const SHEET_TITLE = 'Registrar compra';
 /** Aguarda o app carregar (auth anônimo concluído) e concede o consentimento de IA. */
 async function bootApp(page: Page): Promise<void> {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Centro de Comando' }).first())
+  await expect(page.getByText('Saldo em Caixa').first())
     .toBeVisible({ timeout: 20_000 });
   await dismissOnboardingIfPresent(page);
   // UI mirror do F-01: sem consents/current.ai=true o AiConsentGate substitui o chat.
   await seedAiConsent();
+  // Garante que o hook realtime de consentimento leia o documento antes de abrir o chat.
+  await page.reload();
+  await expect(page.getByText('Saldo em Caixa').first())
+    .toBeVisible({ timeout: 20_000 });
+  await dismissOnboardingIfPresent(page);
 }
 
 /** Abre o chat e envia um comando. */
 async function openChatAndSend(page: Page, command: string): Promise<void> {
   await page.getByTestId('ai-chat-fab').click();
-  const input = page.getByPlaceholder('Analise os meus gastos');
+  const input = page.getByPlaceholder(/Pergunte sobre seu saldo, gastos, metas/i);
   await expect(input).toBeVisible({ timeout: 10_000 });
   await input.fill(command);
   await input.press('Enter');
