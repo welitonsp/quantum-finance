@@ -1,7 +1,7 @@
 // Leitura genérica de uma tabela do Supabase com recarga em tempo real.
 // RLS garante que só as linhas do usuário logado voltam; o filtro do canal
 // apenas evita eventos de outras linhas.
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSupabase } from '../../shared/api/supabase/client';
 import { logSanitizedFirebaseError, type FirebaseErrorOperation } from '../../shared/lib/firebaseErrorHandling';
 
@@ -27,11 +27,16 @@ export function useSupabaseTable<TRow, T>(
   const [items, setItems]     = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Só a resposta da consulta mais recente vale (troca de usuário/ordem de chegada).
+  const latestRequest = useRef(0);
+
   const refresh = useCallback(async (): Promise<void> => {
+    const request = ++latestRequest.current;
     const { data, error } = await getSupabase()
       .from(table)
       .select(columns)
       .order(orderBy, { ascending });
+    if (request !== latestRequest.current) return;
     if (error) {
       logSanitizedFirebaseError(loadOp, error);
       return;
@@ -40,8 +45,9 @@ export function useSupabaseTable<TRow, T>(
   }, [table, columns, orderBy, ascending, map, loadOp]);
 
   useEffect(() => {
-    if (!uid) { setItems([]); setLoading(false); return; }
+    if (!uid) { latestRequest.current += 1; setItems([]); setLoading(false); return; }
     let active = true;
+    setItems([]);
     setLoading(true);
     void refresh().finally(() => { if (active) setLoading(false); });
 
