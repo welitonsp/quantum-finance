@@ -49,6 +49,7 @@ as $$
 declare
   v_uid   uuid := auth.uid();
   v_tx_id uuid;
+  v_existing_type text;
   v_n     int;
 begin
   if v_uid is null then
@@ -69,9 +70,14 @@ begin
   perform pg_advisory_xact_lock(hashtextextended(v_uid::text || ':' || p_idempotency_key, 0));
 
   -- replay idempotente: devolve a mesma transferência
-  select id into v_tx_id from public.transactions
+  -- só vale como replay se a chave pertencer a uma TRANSFERÊNCIA; chave já
+  -- usada por outra transação é rejeitada (senão o saldo nunca seria movido)
+  select id, type into v_tx_id, v_existing_type from public.transactions
    where user_id = v_uid and idempotency_key = p_idempotency_key;
   if v_tx_id is not null then
+    if v_existing_type <> 'transferencia' then
+      raise exception 'chave de idempotência já usada por outra transação' using errcode = '23505';
+    end if;
     return v_tx_id;
   end if;
 

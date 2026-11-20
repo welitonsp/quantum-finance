@@ -20,6 +20,24 @@ insert into public.debts (name, total_cents, remaining_cents, interest_rate, ins
 values ('Carro', 3000000, 2500000, 0.0185, 48, 10, '2026-01-10', 'financiamento');
 insert into public.recurring_tasks (description, value_cents, category, due_day) values ('Aluguel', 150000, 'Moradia', 5);
 
+-- create_transfer (versão endurecida): chave já usada por transação comum é rejeitada
+insert into public.accounts (id, name, type, balance_cents) values
+  ('20000000-0000-0000-0000-0000000000a1', 'Corrente', 'corrente', 50000),
+  ('20000000-0000-0000-0000-0000000000a2', 'Poupança', 'poupanca', 0);
+insert into public.transactions (description, value_cents, type, category, date, idempotency_key)
+values ('Mercado', 1000, 'saida', 'Alimentação', '2026-11-12', 'idem-chave-comum-01');
+do $$ begin
+  begin
+    perform public.create_transfer('20000000-0000-0000-0000-0000000000a1', '20000000-0000-0000-0000-0000000000a2',
+                                   500, '2026-11-12', 'Reserva', 'idem-chave-comum-01');
+    raise exception 'FALHA: transferência aceitou chave de outra transação';
+  exception when unique_violation then null;
+  end;
+  if (select balance_cents from public.accounts where id = '20000000-0000-0000-0000-0000000000a1') <> 50000 then
+    raise exception 'FALHA: saldo mudou com chave rejeitada';
+  end if;
+end $$;
+
 do $$ begin
   -- duplicidade de orçamento no mesmo mês/categoria
   begin
