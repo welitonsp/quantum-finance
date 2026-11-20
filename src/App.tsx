@@ -601,6 +601,8 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 // Provedor de login: Firebase (padrão) ou Supabase (migração), por variável de build.
+// Migração em etapas: com 'supabase', o login já é Supabase, mas os hooks de dados e
+// callables ainda são Firebase. Não ligar em produção antes da camada de dados migrar.
 const AUTH_PROVIDER = import.meta.env.VITE_AUTH_PROVIDER === 'supabase' ? 'supabase' : 'firebase';
 const SupabaseAuthGate = lazy(() => import('./shared/auth/SupabaseAuthGate'));
 
