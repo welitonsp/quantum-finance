@@ -29,8 +29,7 @@ create index if not exists transactions_card_fk_idx         on public.transactio
 create index if not exists transactions_from_account_fk_idx on public.transactions (from_account_id, user_id) where from_account_id is not null;
 create index if not exists transactions_to_account_fk_idx   on public.transactions (to_account_id, user_id)   where to_account_id is not null;
 create index if not exists recurring_tasks_user_idx         on public.recurring_tasks (user_id);
--- o card_id parcial antigo fica coberto pelo novo
-drop index if exists public.transactions_user_card_idx;
+-- o drop do índice parcial antigo de card_id foi para a 20261120000005
 
 -- create_transfer com trava por chave de idempotência (mantém os grants atuais)
 create or replace function public.create_transfer(
