@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, lazy, Suspense, useCallback } from 'react';
+import { useEffect, useRef, useState, lazy, Suspense, useCallback, useMemo } from 'react';
 import { auth } from './shared/api/firebase/index';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
 import type { MultiFactorError, User } from 'firebase/auth';
 import { isMfaRequiredError, resolveTotpSignIn } from './shared/lib/mfa';
+import { appUserFromFirebase, type AppUser } from './shared/auth/appUser';
 import { BrainCircuit, AlertTriangle, Loader2, X } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -144,7 +145,7 @@ function pageGroupLabel(page: string): string {
 
 // ─── AuthenticatedApp ─────────────────────────────────────────────────────────
 interface AuthenticatedAppProps {
-  user:         User;
+  user:         AppUser;
   handleLogout: () => Promise<void>;
 }
 const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
@@ -605,6 +606,8 @@ export default function App() {
   // Sign-in interrompido por MFA (auth/multi-factor-auth-required): guarda o
   // erro original — o resolver TOTP precisa dele para concluir o login.
   const [mfaError,  setMfaError]  = useState<MultiFactorError | null>(null);
+  // Visão do usuário independente do provedor (prepara a troca para o Supabase).
+  const appUser = useMemo(() => (user ? appUserFromFirebase(user) : null), [user]);
 
   useEffect(() => {
     const originalWarn = console.warn;
@@ -668,7 +671,7 @@ export default function App() {
       </div>
     );
   }
-  if (!user) {
+  if (!appUser) {
     return (
       <LoginScreen
         onLogin={handleLogin}
@@ -682,7 +685,7 @@ export default function App() {
   return (
     <NavigationProvider>
       <ErrorBoundary label="Quantum Finance">
-        <AuthenticatedApp user={user} handleLogout={handleLogout} />
+        <AuthenticatedApp user={appUser} handleLogout={handleLogout} />
       </ErrorBoundary>
     </NavigationProvider>
   );

@@ -2,14 +2,14 @@ import { useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { toCentavos } from '../shared/types/money';
 import type { Transaction } from '../shared/types/transaction';
-import type { User } from 'firebase/auth';
+import type { AppUser } from '../shared/auth/appUser';
 import {
   getUserFriendlyErrorMessage,
   logSanitizedFirebaseError,
 } from '../shared/lib/firebaseErrorHandling';
 
 interface UseTransactionActionsParams {
-  user: User | null;
+  user: AppUser | null;
   update: (id: string, data: Partial<Transaction>) => Promise<void>;
   add: (data: Partial<Transaction>) => Promise<string>;
   remove: (id: string) => Promise<void>;
