@@ -17,7 +17,7 @@ grant execute on function pg_temp.login(text) to anon, authenticated;
 
 -- Usuário A cria conta, cartão e transação ----------------------------------
 set local role authenticated;
-select pg_temp.login('00000000-0000-0000-0000-00000000000a');
+select pg_temp.login('00000000-0000-0000-0000-00000000000a') \g /dev/null
 
 insert into public.accounts (id, name, type, balance_cents)
 values ('10000000-0000-0000-0000-00000000000a', 'Conta A', 'corrente', 150000);
@@ -54,9 +54,9 @@ begin
 end $$;
 
 -- Origem 'ai' via set_config (como uma RPC server-side faria)
-select set_config('app.tx_origin', 'ai', true);
+select set_config('app.tx_origin', 'ai', true) \g /dev/null
 update public.transactions set category = 'Lazer' where id = '30000000-0000-0000-0000-00000000000a';
-select set_config('app.tx_origin', '', true);
+select set_config('app.tx_origin', '', true) \g /dev/null
 do $$ begin
   if not exists (select 1 from public.transaction_history where origin = 'ai' and changed_fields = array['category']) then
     raise exception 'FALHA: origem ai não registrada';
@@ -136,7 +136,7 @@ begin
 end $$;
 
 -- Usuário B não vê nem altera nada de A --------------------------------------
-select pg_temp.login('00000000-0000-0000-0000-00000000000b');
+select pg_temp.login('00000000-0000-0000-0000-00000000000b') \g /dev/null
 do $$
 declare n int;
 begin
