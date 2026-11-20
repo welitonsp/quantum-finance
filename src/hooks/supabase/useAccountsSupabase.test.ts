@@ -109,4 +109,27 @@ describe('useAccountsSupabase', () => {
     await waitFor(() => expect(result.current.loadingAccounts).toBe(false));
     await expect(result.current.removeAccount('a1')).rejects.toThrow('Não foi possível excluir a conta.');
   });
+
+  it('descarta resposta atrasada do usuário anterior após troca de uid', async () => {
+    let releaseOld: (v: unknown) => void = () => {};
+    const oldRows = { data: [{ id: 'old', name: 'Antiga', type: 'corrente', balance_cents: 1, created_at: null, updated_at: null }], error: null };
+    const newRows = { data: [{ id: 'new', name: 'Nova', type: 'corrente', balance_cents: 2, created_at: null, updated_at: null }], error: null };
+    let first = true;
+    client.from.mockImplementation(() => {
+      const b = builder();
+      if (first) {
+        first = false;
+        b['order'] = () => new Promise(res => { releaseOld = () => res(oldRows); });
+      } else {
+        b['order'] = () => Promise.resolve(newRows);
+      }
+      return b;
+    });
+    const { result, rerender } = renderHook(({ uid }) => useAccountsSupabase(uid), { initialProps: { uid: 'u1' } });
+    rerender({ uid: 'u2' });
+    await waitFor(() => expect(result.current.accounts.map(a => a.id)).toEqual(['new']));
+    await act(async () => { releaseOld(undefined); await Promise.resolve(); });
+    expect(result.current.accounts.map(a => a.id)).toEqual(['new']);
+    client.from.mockImplementation(() => builder());
+  });
 });
