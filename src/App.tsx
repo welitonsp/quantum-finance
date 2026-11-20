@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, lazy, Suspense, useCallback } from 'react';
+import { useEffect, useRef, useState, lazy, Suspense, useCallback, useMemo } from 'react';
 import { auth } from './shared/api/firebase/index';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
 import type { MultiFactorError, User } from 'firebase/auth';
 import { isMfaRequiredError, resolveTotpSignIn } from './shared/lib/mfa';
+import { appUserFromFirebase, type AppUser } from './shared/auth/appUser';
 import { BrainCircuit, AlertTriangle, Loader2, X } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -144,7 +145,7 @@ function pageGroupLabel(page: string): string {
 
 // ─── AuthenticatedApp ─────────────────────────────────────────────────────────
 interface AuthenticatedAppProps {
-  user:         User;
+  user:         AppUser;
   handleLogout: () => Promise<void>;
 }
 const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
@@ -599,12 +600,47 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
 };
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
+// Provedor de login: Firebase (padrão) ou Supabase (migração), por variável de build.
+// Migração em etapas: com 'supabase', o login já é Supabase, mas os hooks de dados e
+// callables ainda são Firebase. Não ligar em produção antes da camada de dados migrar.
+const AUTH_PROVIDER = import.meta.env.VITE_AUTH_PROVIDER === 'supabase' ? 'supabase' : 'firebase';
+const SupabaseAuthGate = lazy(() => import('./shared/auth/SupabaseAuthGate'));
+
+function SupabaseApp() {
+  return (
+    <Suspense fallback={<QuantumLoader />}>
+      <SupabaseAuthGate>
+        {(appUser, logout) => (
+          <NavigationProvider>
+            <ErrorBoundary label="Quantum Finance">
+              <AuthenticatedApp
+                user={appUser}
+                handleLogout={async () => {
+                  // Privacidade (F-10): descarta memória de conversa do chat ao sair.
+                  ConversationMemory.purgeAll();
+                  try { await logout(); } catch { toast.error('Erro ao sair.'); }
+                }}
+              />
+            </ErrorBoundary>
+          </NavigationProvider>
+        )}
+      </SupabaseAuthGate>
+    </Suspense>
+  );
+}
+
 export default function App() {
+  return AUTH_PROVIDER === 'supabase' ? <SupabaseApp /> : <FirebaseApp />;
+}
+
+function FirebaseApp() {
   const [user,      setUser]      = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   // Sign-in interrompido por MFA (auth/multi-factor-auth-required): guarda o
   // erro original — o resolver TOTP precisa dele para concluir o login.
   const [mfaError,  setMfaError]  = useState<MultiFactorError | null>(null);
+  // Visão do usuário independente do provedor (prepara a troca para o Supabase).
+  const appUser = useMemo(() => (user ? appUserFromFirebase(user) : null), [user]);
 
   useEffect(() => {
     const originalWarn = console.warn;
@@ -668,7 +704,7 @@ export default function App() {
       </div>
     );
   }
-  if (!user) {
+  if (!appUser) {
     return (
       <LoginScreen
         onLogin={handleLogin}
@@ -682,7 +718,7 @@ export default function App() {
   return (
     <NavigationProvider>
       <ErrorBoundary label="Quantum Finance">
-        <AuthenticatedApp user={user} handleLogout={handleLogout} />
+        <AuthenticatedApp user={appUser} handleLogout={handleLogout} />
       </ErrorBoundary>
     </NavigationProvider>
   );
