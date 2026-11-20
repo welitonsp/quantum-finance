@@ -2066,12 +2066,6 @@ export const maintainMonthlyRollups = onDocumentWritten(
     timeoutSeconds: 60,
   },
   async (event) => {
-    const eventTimeMs = Date.parse(event.time);
-    if (Number.isFinite(eventTimeMs) && Date.now() - eventTimeMs > ROLLUP_EVENT_MAX_AGE_MS) {
-      console.warn('[maintainMonthlyRollups] stale event dropped; month needs rebuild');
-      return;
-    }
-
     const uid = event.params.uid;
     const before = event.data?.before?.exists ? event.data.before.data() ?? null : null;
     const after = event.data?.after?.exists ? event.data.after.data() ?? null : null;
@@ -2079,6 +2073,23 @@ export const maintainMonthlyRollups = onDocumentWritten(
     const deltas = computeRollupDelta(before, after);
     const months = Object.keys(deltas).sort();
     if (months.length === 0) return;
+
+    const eventTimeMs = Date.parse(event.time);
+    if (Number.isFinite(eventTimeMs) && Date.now() - eventTimeMs > ROLLUP_EVENT_MAX_AGE_MS) {
+      // Não aplica o delta (pode já ter sido aplicado antes do marcador expirar),
+      // mas deixa rastro durável: o cliente vê needsRebuild e dispara a reconstrução.
+      try {
+        const batch = adminDb.batch();
+        for (const month of months) {
+          batch.set(adminDb.doc(`users/${uid}/rollups/${month}`), { needsRebuild: true }, { merge: true });
+        }
+        await batch.commit();
+      } catch (e) {
+        console.error('[FunctionError]', sanitizeFunctionError('monthly_rollups', e));
+      }
+      console.warn('[maintainMonthlyRollups] stale event dropped; month flagged needsRebuild');
+      return;
+    }
 
     const markerRef = adminDb.doc(`users/${uid}/rollupEvents/${event.id}`);
     const monthRefs = months.map(month => adminDb.doc(`users/${uid}/rollups/${month}`));

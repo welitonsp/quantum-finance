@@ -156,8 +156,17 @@ function addToAccount(totals: AccountTotals, c: RollupContribution, sign: 1 | -1
   totals.txCount += sign;
 }
 
+/**
+ * Leitura segura de mapa indexado por texto do usuário: só propriedades
+ * próprias. Sem isso, uma categoria/conta "constructor" ou "toString" lê
+ * Object.prototype e corrompe o total (NaN/string).
+ */
+function ownValue<T>(map: Record<string, T>, key: string): T | undefined {
+  return Object.prototype.hasOwnProperty.call(map, key) ? map[key] : undefined;
+}
+
 function addToMap(map: Record<string, number>, key: string, amount: number): void {
-  map[key] = (map[key] ?? 0) + amount;
+  map[key] = (ownValue(map, key) ?? 0) + amount;
 }
 
 /** Aplica (sign=+1) ou remove (sign=-1) uma contribuição num MonthTotals (muta). */
@@ -165,7 +174,7 @@ export function applyContribution(month: MonthTotals, c: RollupContribution, sig
   addToAccount(month, c, sign);
   if (c.kind === 'expense') addToMap(month.expenseByCategory, c.category, sign * c.cents);
   if (c.kind === 'income') addToMap(month.incomeByCategory, c.category, sign * c.cents);
-  const account = month.byAccount[c.account] ?? emptyAccountTotals();
+  const account = ownValue(month.byAccount, c.account) ?? emptyAccountTotals();
   addToAccount(account, c, sign);
   month.byAccount[c.account] = account;
 }
@@ -189,12 +198,12 @@ export function computeRollupDelta(
 
   const deltas: Record<string, MonthTotals> = {};
   if (prev) {
-    const m = deltas[prev.month] ?? emptyMonthTotals();
+    const m = ownValue(deltas, prev.month) ?? emptyMonthTotals();
     applyContribution(m, prev, -1);
     deltas[prev.month] = m;
   }
   if (next) {
-    const m = deltas[next.month] ?? emptyMonthTotals();
+    const m = ownValue(deltas, next.month) ?? emptyMonthTotals();
     applyContribution(m, next, 1);
     deltas[next.month] = m;
   }
@@ -259,8 +268,8 @@ export function mergeMonthTotals(base: MonthTotals, delta: MonthTotals): MonthTo
   const byAccount: Record<string, AccountTotals> = {};
   const accountKeys = new Set([...Object.keys(base.byAccount), ...Object.keys(delta.byAccount)]);
   for (const key of accountKeys) {
-    const a = base.byAccount[key] ?? emptyAccountTotals();
-    const b = delta.byAccount[key] ?? emptyAccountTotals();
+    const a = ownValue(base.byAccount, key) ?? emptyAccountTotals();
+    const b = ownValue(delta.byAccount, key) ?? emptyAccountTotals();
     const merged: AccountTotals = {
       incomeCents: a.incomeCents + b.incomeCents,
       expenseCents: a.expenseCents + b.expenseCents,
@@ -313,7 +322,7 @@ export function buildRollupsFromTransactions(txs: Iterable<Record<string, unknow
   for (const tx of txs) {
     const c = transactionContribution(tx);
     if (!c) continue;
-    const m = months[c.month] ?? emptyMonthTotals();
+    const m = ownValue(months, c.month) ?? emptyMonthTotals();
     applyContribution(m, c, 1);
     months[c.month] = m;
   }

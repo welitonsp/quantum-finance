@@ -204,3 +204,28 @@ describe('invariantes e leitura tolerante', () => {
     assert.deepEqual(parseMonthTotals(null), emptyMonthTotals());
   });
 });
+
+describe('chaves vindas do usuário', () => {
+  it('categoria/conta com nome de propriedade de Object.prototype não corrompe totais', () => {
+    const txs = ['constructor', 'toString', 'hasOwnProperty', 'valueOf'].flatMap((key) => [
+      { type: 'saida', value_cents: 1000, date: '2026-03-10', category: key, account: key },
+      { type: 'entrada', value_cents: 500, date: '2026-03-11', category: key, account: key },
+    ]);
+    const m = buildRollupsFromTransactions(txs)['2026-03'];
+    assert.equal(m.expenseCents, 4000);
+    assert.equal(m.incomeCents, 2000);
+    assert.equal(m.expenseByCategory.constructor, 1000);
+    assert.equal(m.incomeByCategory.toString, 500);
+    assert.deepEqual(m.byAccount.valueOf, {
+      incomeCents: 500, expenseCents: 1000, invoicePaymentCents: 0, transferCents: 0, txCount: 2,
+    });
+    assert.equal(isConsistentMonthTotals(m), true);
+
+    const delta = computeRollupDelta(txs[0], null)['2026-03'];
+    const plan = planMonthWrite(m, delta);
+    assert.equal(plan.action, 'set');
+    assert.equal(plan.needsRebuild, false);
+    assert.equal(Object.hasOwn(plan.totals.expenseByCategory, 'constructor'), false);
+    assert.equal(plan.totals.byAccount.constructor.txCount, 1);
+  });
+});
