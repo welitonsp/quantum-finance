@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FinancialMetrics } from '../hooks/useFinancialMetrics';
-import { computeHealthScore, computePillars, nextLevelHint } from './healthScore';
+import { computeHealthScore, computePillars, heroStatusFromScore, nextLevelHint } from './healthScore';
 
 function metrics(overrides: Partial<FinancialMetrics> = {}): FinancialMetrics {
   return {
@@ -98,5 +98,23 @@ describe('healthScore — nextLevelHint', () => {
     const m = metrics({ taxaPoupanca: 0, endividamento: 100, reservaMeses: 0, comprometimento: 100 });
 
     expect(nextLevelHint(m)).toBe('Aumente a poupança para 20% da renda');
+  });
+});
+
+describe('heroStatusFromScore', () => {
+  it('usa as mesmas faixas do painel (85/60/35)', () => {
+    expect(heroStatusFromScore(100)).toMatchObject({ status: 'EXCELENTE', color: 'emerald' });
+    expect(heroStatusFromScore(85)).toMatchObject({ status: 'EXCELENTE', color: 'emerald' });
+    expect(heroStatusFromScore(84)).toMatchObject({ status: 'SAUDÁVEL', color: 'emerald' });
+    expect(heroStatusFromScore(60)).toMatchObject({ status: 'SAUDÁVEL', color: 'emerald' });
+    expect(heroStatusFromScore(59)).toMatchObject({ status: 'ATENÇÃO', color: 'amber' });
+    expect(heroStatusFromScore(35)).toMatchObject({ status: 'ATENÇÃO', color: 'amber' });
+    expect(heroStatusFromScore(34)).toMatchObject({ status: 'CRÍTICO', color: 'red' });
+    expect(heroStatusFromScore(0)).toMatchObject({ status: 'CRÍTICO', color: 'red' });
+  });
+
+  it('score canônico baixo nunca gera gauge verde', () => {
+    const m = metrics({ taxaPoupanca: 0, endividamento: 100, reservaMeses: 0, comprometimento: 100 });
+    expect(heroStatusFromScore(computeHealthScore(m)).color).toBe('red');
   });
 });

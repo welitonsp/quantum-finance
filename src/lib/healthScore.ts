@@ -73,3 +73,27 @@ export function nextLevelHint(m: FinancialMetrics): string {
   const lowest = pillars.reduce((a, b) => (b.score < a.score ? b : a));
   return lowest.hint;
 }
+
+export interface HeroStatus {
+  status: 'EXCELENTE' | 'SAUDÁVEL' | 'ATENÇÃO' | 'CRÍTICO';
+  color: 'emerald' | 'amber' | 'red';
+  rec: string;
+}
+
+/**
+ * Status/cor/recomendação do hero derivados do score canônico, com as mesmas
+ * faixas do painel FinancialHealthScore (85/60/35) — evita score baixo com
+ * gauge verde quando o status vinha de outra fórmula.
+ */
+export function heroStatusFromScore(score: number): HeroStatus {
+  if (score >= 85) {
+    return { status: 'EXCELENTE', color: 'emerald', rec: 'Desempenho excepcional. Acelere posições em ativos de maior retorno.' };
+  }
+  if (score >= 60) {
+    return { status: 'SAUDÁVEL', color: 'emerald', rec: 'Indicadores estáveis. Considere aumentar aportes em renda variável.' };
+  }
+  if (score >= 35) {
+    return { status: 'ATENÇÃO', color: 'amber', rec: 'Reduza despesas variáveis e assinaturas. Reforce a reserva de emergência.' };
+  }
+  return { status: 'CRÍTICO', color: 'red', rec: 'Interrompa gastos não essenciais. Reestruture dívidas imediatamente.' };
+}
