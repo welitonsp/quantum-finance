@@ -3,8 +3,8 @@ import {
   FileText, Download, TrendingUp, TrendingDown, Minus,
   AlertCircle, ChevronDown, ChevronUp, Info,
 } from 'lucide-react';
-import { useTransactions } from '../../hooks/useTransactions';
-import { gerarInformeIR, anosDisponiveis, exportarInformeCSV } from '../../lib/irEngine';
+import { useTransactionsByYear } from '../../hooks/useTransactionsByYear';
+import { gerarInformeIR, exportarInformeCSV } from '../../lib/irEngine';
 import { formatBRL } from '../../shared/types/money';
 import type { IRGanhoCapital, IRRendimento } from '../../lib/irEngine';
 
@@ -13,11 +13,10 @@ interface Props {
 }
 
 export default function IRPage({ uid }: Props) {
-  const { transactions } = useTransactions(uid);
   const [anoSelecionado, setAnoSelecionado] = useState<number>(() => new Date().getFullYear() - 1);
+  // P-01: lê o ano-calendário inteiro (paginado), não só as 500 transações mais recentes.
+  const { transactions, years: anos, loading, error, truncated } = useTransactionsByYear(uid, anoSelecionado);
   const [showGanhos, setShowGanhos] = useState(false);
-
-  const anos = useMemo(() => anosDisponiveis(transactions), [transactions]);
   const informe = useMemo(
     () => gerarInformeIR(transactions, anoSelecionado),
     [transactions, anoSelecionado],
@@ -52,7 +51,7 @@ export default function IRPage({ uid }: Props) {
             className="text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
             aria-label="Selecionar ano-calendário"
           >
-            {anos.length === 0 && (
+            {!anos.includes(anoSelecionado) && (
               <option value={anoSelecionado}>{anoSelecionado}</option>
             )}
             {anos.map((a) => (
@@ -85,7 +84,21 @@ export default function IRPage({ uid }: Props) {
         </div>
       </div>
 
-      {!temDados ? (
+      {truncated && (
+        <div role="status" className="flex gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
+          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <p>Este ano tem mais lançamentos do que o limite de leitura. O informe abaixo pode estar incompleto.</p>
+        </div>
+      )}
+
+      {loading ? (
+        <p role="status" aria-live="polite" className="text-sm text-gray-500">Carregando lançamentos de {anoSelecionado}…</p>
+      ) : error ? (
+        <div role="alert" className="flex gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
+          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <p>Não foi possível carregar os lançamentos de {anoSelecionado}. Tente novamente em instantes.</p>
+        </div>
+      ) : !temDados ? (
         <EmptyState ano={anoSelecionado} />
       ) : (
         <>
