@@ -87,6 +87,7 @@ create table public.transactions (
   paid_invoice_month      text check (paid_invoice_month ~ '^\d{4}-(0[1-9]|1[0-2])$'),
   reconciliation_status   text check (reconciliation_status = 'reconciled'),
   reconciled_at           timestamptz,
+  idempotency_key         text check (char_length(idempotency_key) between 8 and 128),
   deleted_at              timestamptz,
   created_at              timestamptz not null default now(),
   updated_at              timestamptz not null default now(),
@@ -97,10 +98,13 @@ create table public.transactions (
     or (installment_group_id is not null and installment_index is not null
         and installment_count is not null and installment_index <= installment_count)
   ),
-  -- transferência exige origem e destino distintos
+  -- transferência: origem e destino distintos. A presença de ambos é exigida na
+  -- criação pela RPC create_transfer; aqui aceitamos NULL para que apagar uma
+  -- conta (FK ON DELETE SET NULL) não seja bloqueado por transferências antigas.
   constraint transactions_transfer_shape check (
     type <> 'transferencia'
-    or (from_account_id is not null and to_account_id is not null and from_account_id <> to_account_id)
+    or from_account_id is null or to_account_id is null
+    or from_account_id <> to_account_id
   ),
 
   -- FKs compostas: a conta/cartão referenciado tem que ser do MESMO usuário.
@@ -116,6 +120,8 @@ create index transactions_user_card_idx on public.transactions (user_id, card_id
 create index transactions_installment_idx on public.transactions (user_id, installment_group_id) where installment_group_id is not null;
 -- deduplicação de importação (sucessor do importHash no Firestore)
 create unique index transactions_user_import_hash_uidx on public.transactions (user_id, import_hash) where import_hash is not null;
+-- idempotência server-side (sucessor de users/{uid}/idempotency)
+create unique index transactions_user_idempotency_uidx on public.transactions (user_id, idempotency_key) where idempotency_key is not null;
 
 -- ---------------------------------------------------------------------------
 -- Histórico append-only (sucessor de transactions/{id}/history)
@@ -141,7 +147,7 @@ language sql
 immutable
 set search_path = ''
 as $$
-  select row_data - 'id' - 'user_id' - 'created_at' - 'updated_at' - 'import_hash';
+  select row_data - 'id' - 'user_id' - 'created_at' - 'updated_at' - 'import_hash' - 'idempotency_key';
 $$;
 
 -- Origem da escrita: RPCs server-side fazem
@@ -180,6 +186,11 @@ begin
     v_after  := public.tx_history_snapshot(to_jsonb(new));
     insert into public.transaction_history (transaction_id, user_id, action, origin, changed_fields, before, after)
     values (new.id, new.user_id, 'CREATE', v_origin, '{}', null, v_after);
+    return new;
+  end if;
+
+  -- exclusão do usuário (LGPD) em cascata: não há o que auditar
+  if not exists (select 1 from auth.users where id = new.user_id) then
     return new;
   end if;
 
@@ -222,7 +233,8 @@ begin
   if new.id is distinct from old.id
      or new.user_id is distinct from old.user_id
      or new.created_at is distinct from old.created_at
-     or new.import_hash is distinct from old.import_hash then
+     or new.import_hash is distinct from old.import_hash
+     or new.idempotency_key is distinct from old.idempotency_key then
     raise exception 'campo imutável da transação' using errcode = '42501';
   end if;
   return new;
@@ -304,13 +316,159 @@ create policy credit_cards_owner_delete on public.credit_cards for delete to aut
 
 create policy transactions_owner_select on public.transactions for select to authenticated
   using (user_id = (select auth.uid()));
+-- Transferência mexe no saldo de duas contas: só pela RPC create_transfer
+-- (sucessor do callable createTransfer). O cliente não grava nem altera
+-- linhas 'transferencia' diretamente.
 create policy transactions_owner_insert on public.transactions for insert to authenticated
-  with check (user_id = (select auth.uid()));
+  with check (user_id = (select auth.uid()) and type <> 'transferencia');
 create policy transactions_owner_update on public.transactions for update to authenticated
-  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+  using (user_id = (select auth.uid()) and type <> 'transferencia')
+  with check (user_id = (select auth.uid()) and type <> 'transferencia');
 
 create policy transaction_history_owner_select on public.transaction_history for select to authenticated
   using (user_id = (select auth.uid()));
+
+-- ---------------------------------------------------------------------------
+-- Histórico append-only de contas (sucessor de accounts/{id}/history).
+-- Sem FK para accounts: o registro da exclusão sobrevive à conta apagada.
+-- ---------------------------------------------------------------------------
+create table public.account_history (
+  id             bigint generated always as identity primary key,
+  account_id     uuid not null,
+  user_id        uuid not null references auth.users (id) on delete cascade,
+  action         text not null check (action in ('CREATE', 'UPDATE', 'DELETE', 'TRANSFER')),
+  origin         text not null check (origin in ('manual', 'ai', 'reconcile', 'bulk', 'import', 'system')),
+  changed_fields text[] not null default '{}',
+  before         jsonb,
+  after          jsonb,
+  created_at     timestamptz not null default now()
+);
+create index account_history_account_idx on public.account_history (account_id, created_at desc);
+create index account_history_user_idx on public.account_history (user_id, created_at desc);
+
+create or replace function public.account_write_history()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_before  jsonb := case when tg_op <> 'INSERT' then to_jsonb(old) - 'id' - 'user_id' - 'created_at' - 'updated_at' end;
+  v_after   jsonb := case when tg_op <> 'DELETE' then to_jsonb(new) - 'id' - 'user_id' - 'created_at' - 'updated_at' end;
+  v_origin  text := public.tx_current_origin();
+  v_changed text[] := '{}';
+  v_row     public.accounts := case when tg_op = 'DELETE' then old else new end;
+begin
+  -- exclusão do usuário (LGPD) apaga em cascata: não há o que auditar
+  if not exists (select 1 from auth.users where id = v_row.user_id) then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+  if tg_op = 'UPDATE' then
+    select coalesce(array_agg(n.key order by n.key), '{}') into v_changed
+      from jsonb_each(v_after) n join jsonb_each(v_before) o using (key)
+     where n.value is distinct from o.value;
+    if cardinality(v_changed) = 0 then
+      return new;
+    end if;
+    select jsonb_object_agg(key, value) into v_before from jsonb_each(v_before) where key = any (v_changed);
+    select jsonb_object_agg(key, value) into v_after  from jsonb_each(v_after)  where key = any (v_changed);
+  end if;
+
+  insert into public.account_history (account_id, user_id, action, origin, changed_fields, before, after)
+  values (
+    v_row.id, v_row.user_id,
+    case tg_op when 'INSERT' then 'CREATE' when 'DELETE' then 'DELETE'
+               else case when v_origin = 'system' and current_setting('app.account_action', true) = 'TRANSFER' then 'TRANSFER' else 'UPDATE' end end,
+    v_origin, v_changed, v_before, v_after
+  );
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$$;
+
+create trigger accounts_write_history
+  after insert or update or delete on public.accounts
+  for each row execute function public.account_write_history();
+
+alter table public.account_history enable row level security;
+revoke all on public.account_history from anon;
+revoke insert, update, delete, truncate on public.account_history from authenticated;
+create policy account_history_owner_select on public.account_history for select to authenticated
+  using (user_id = (select auth.uid()));
+
+-- ---------------------------------------------------------------------------
+-- RPC create_transfer (sucessor do callable createTransfer):
+-- grava a transferência e move o saldo das DUAS contas na mesma transação SQL,
+-- idempotente por p_idempotency_key. Roda com os direitos do dono da função,
+-- mas valida que as duas contas são do usuário logado.
+-- ---------------------------------------------------------------------------
+create or replace function public.create_transfer(
+  p_from_account_id uuid,
+  p_to_account_id   uuid,
+  p_value_cents     bigint,
+  p_date            date,
+  p_description     text,
+  p_idempotency_key text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid   uuid := auth.uid();
+  v_tx_id uuid;
+  v_n     int;
+begin
+  if v_uid is null then
+    raise exception 'login obrigatório' using errcode = '42501';
+  end if;
+  if p_idempotency_key is null or char_length(p_idempotency_key) not between 8 and 128 then
+    raise exception 'chave de idempotência inválida' using errcode = '22023';
+  end if;
+  if p_from_account_id is null or p_to_account_id is null or p_from_account_id = p_to_account_id then
+    raise exception 'contas de origem e destino inválidas' using errcode = '22023';
+  end if;
+  if p_value_cents is null or p_value_cents <= 0 then
+    raise exception 'valor deve ser positivo' using errcode = '22023';
+  end if;
+
+  -- replay idempotente: devolve a mesma transferência
+  select id into v_tx_id from public.transactions
+   where user_id = v_uid and idempotency_key = p_idempotency_key;
+  if v_tx_id is not null then
+    return v_tx_id;
+  end if;
+
+  -- trava as duas contas em ordem estável (evita deadlock) e confere o dono
+  perform 1 from public.accounts
+   where id in (p_from_account_id, p_to_account_id) and user_id = v_uid
+   order by id
+   for update;
+  get diagnostics v_n = row_count;
+  if v_n <> 2 then
+    raise exception 'conta não encontrada' using errcode = '42501';
+  end if;
+
+  perform set_config('app.tx_origin', 'system', true);
+  perform set_config('app.account_action', 'TRANSFER', true);
+
+  update public.accounts set balance_cents = balance_cents - p_value_cents where id = p_from_account_id;
+  update public.accounts set balance_cents = balance_cents + p_value_cents where id = p_to_account_id;
+
+  insert into public.transactions (user_id, description, value_cents, type, category, date,
+                                   from_account_id, to_account_id, idempotency_key)
+  values (v_uid, coalesce(nullif(btrim(p_description), ''), 'Transferência'), p_value_cents,
+          'transferencia', 'Transferência', p_date, p_from_account_id, p_to_account_id, p_idempotency_key)
+  returning id into v_tx_id;
+
+  perform set_config('app.tx_origin', '', true);
+  perform set_config('app.account_action', '', true);
+  return v_tx_id;
+end;
+$$;
+
+revoke all on function public.create_transfer(uuid, uuid, bigint, date, text, text) from public, anon;
+grant execute on function public.create_transfer(uuid, uuid, bigint, date, text, text) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Agregados mensais (substituem os rollups e o teto de 500 transações)
