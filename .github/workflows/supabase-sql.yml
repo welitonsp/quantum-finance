@@ -1,0 +1,40 @@
+name: Supabase SQL (RLS)
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/supabase-sql.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/**'
+
+permissions:
+  contents: read
+
+jobs:
+  rls:
+    name: Migrations + testes de RLS
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Stub mínimo do Supabase (roles + auth)
+        run: psql -v ON_ERROR_STOP=1 -q -f supabase/tests/local_auth_stub.sql
+      - name: Aplicar migrations em ordem
+        run: for f in supabase/migrations/*.sql; do echo "→ $f"; psql -v ON_ERROR_STOP=1 -q -f "$f"; done
+      - name: Testes de RLS
+        run: for f in supabase/tests/rls_*.sql; do echo "→ $f"; psql -v ON_ERROR_STOP=1 -q -f "$f"; done
