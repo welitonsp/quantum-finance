@@ -106,6 +106,22 @@ do $$ begin
   end;
 end $$;
 reset role;
+-- só create_transfer fica na superfície RPC
+do $$
+declare f text;
+begin
+  foreach f in array array['public.tx_write_history()', 'public.account_write_history()', 'public.planning_write_history()',
+                           'public.set_updated_at()', 'public.guard_owner_immutable()', 'public.tx_guard_immutable()',
+                           'public.recurring_guard_last_executed()', 'public.tx_current_origin()', 'public.tx_history_snapshot(jsonb)'] loop
+    if has_function_privilege('anon', f, 'execute') or has_function_privilege('authenticated', f, 'execute') then
+      raise exception 'FALHA: % exposta via RPC', f;
+    end if;
+  end loop;
+  if has_function_privilege('anon', 'public.create_transfer(uuid, uuid, bigint, date, text, text)', 'execute')
+     or not has_function_privilege('authenticated', 'public.create_transfer(uuid, uuid, bigint, date, text, text)', 'execute') then
+    raise exception 'FALHA: permissão de create_transfer errada';
+  end if;
+end $$;
 delete from auth.users where id = '00000000-0000-0000-0000-00000000000a';
 do $$ begin
   if exists (select 1 from public.goals) or exists (select 1 from public.planning_history) then
