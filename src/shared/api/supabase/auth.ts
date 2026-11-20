@@ -77,9 +77,11 @@ export async function resolveAuthStage(
   client: SupabaseClient = getSupabase(),
 ): Promise<AuthStage> {
   if (!session) return { kind: 'signed_out' };
-  const { data, error } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+  // O AAL é lido do token DESTA sessão, não da sessão "atual" do cliente,
+  // que pode já ter mudado (logout/troca de conta) enquanto isto roda.
+  const { data, error } = await client.auth.mfa.getAuthenticatorAssuranceLevel(session.access_token);
   // Fail-closed: sem conseguir ler o AAL, não libera os dados.
-  if (error || !data) return { kind: 'needs_mfa', user: session.user };
+  if (error || !data || !data.currentLevel) return { kind: 'needs_mfa', user: session.user };
   if (data.nextLevel === 'aal2' && data.currentLevel !== 'aal2') {
     return { kind: 'needs_mfa', user: session.user };
   }
@@ -91,14 +93,24 @@ export function onAuthStageChange(
   listener: (stage: AuthStage) => void,
   client: SupabaseClient = getSupabase(),
 ): () => void {
+  // Cada evento ganha um número; só o resultado do evento MAIS RECENTE é
+  // entregue. Assim uma resolução lenta de antes do logout não "relogar" a tela.
+  let generation = 0;
+  let active = true;
   const { data } = client.auth.onAuthStateChange((_event, session) => {
+    const mine = ++generation;
     // Não chamar a API de auth dentro do callback (deadlock documentado no
     // supabase-js): adia para o próximo tick.
     setTimeout(() => {
-      void resolveAuthStage(session, client).then(listener);
+      void resolveAuthStage(session, client).then((stage) => {
+        if (active && mine === generation) listener(stage);
+      });
     }, 0);
   });
-  return () => data.subscription.unsubscribe();
+  return () => {
+    active = false;
+    data.subscription.unsubscribe();
+  };
 }
 
 /** Fatores TOTP já verificados do usuário. */

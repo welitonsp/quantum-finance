@@ -30,7 +30,7 @@ function fakeClient(over: Record<string, AnyFn> = {}) {
   return { client: { auth } as unknown as SupabaseClient, auth };
 }
 
-const session = { user: { id: 'u1' } } as unknown as Session;
+const session = { user: { id: 'u1' }, access_token: 'tok-u1' } as unknown as Session;
 
 describe('supabase auth', () => {
   it('normaliza código TOTP', () => {
@@ -67,6 +67,39 @@ describe('supabase auth', () => {
       getAuthenticatorAssuranceLevel: async () => ({ data: null, error: { message: 'x' } }),
     });
     expect((await resolveAuthStage(session, client)).kind).toBe('needs_mfa');
+  });
+
+  it('lê o AAL do token da própria sessão; AAL nulo não libera', async () => {
+    const aal = vi.fn(async () => ({ data: { currentLevel: null, nextLevel: null }, error: null }));
+    const { client } = fakeClient({ getAuthenticatorAssuranceLevel: aal as AnyFn });
+    expect((await resolveAuthStage(session, client)).kind).toBe('needs_mfa');
+    expect(aal).toHaveBeenCalledWith('tok-u1');
+  });
+
+  it('descarta resolução antiga quando chega um evento mais novo (logout)', async () => {
+    vi.useFakeTimers();
+    let cb: ((e: string, s: Session | null) => void) | undefined;
+    let releaseSlow: (() => void) | undefined;
+    const { client, auth } = fakeClient({
+      getAuthenticatorAssuranceLevel: (() => new Promise((resolve) => {
+        releaseSlow = () => resolve({ data: { currentLevel: 'aal1', nextLevel: 'aal1' }, error: null });
+      })) as AnyFn,
+    });
+    auth.onAuthStateChange.mockImplementation(((fn: typeof cb) => {
+      cb = fn;
+      return { data: { subscription: { unsubscribe: vi.fn() } } };
+    }) as never);
+    const listener = vi.fn();
+    onAuthStageChange(listener, client);
+    cb?.('SIGNED_IN', session);   // lento: fica pendurado no AAL
+    await vi.advanceTimersByTimeAsync(0);
+    cb?.('SIGNED_OUT', null);     // rápido: sem sessão
+    await vi.advanceTimersByTimeAsync(0);
+    releaseSlow?.();
+    await vi.runAllTimersAsync();
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith({ kind: 'signed_out' });
+    vi.useRealTimers();
   });
 
   it('lista só fatores verificados', async () => {
