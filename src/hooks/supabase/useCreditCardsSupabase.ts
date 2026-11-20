@@ -1,6 +1,6 @@
 // Cartões de crédito no Supabase (tabela public.credit_cards, RLS por auth.uid()).
 // Só a camada de armazenamento: métricas de fatura e pagamento ficam em useCreditCards.
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSupabase } from '../../shared/api/supabase/client';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 import { toCentavos } from '../../shared/schemas/financialSchemas';
@@ -58,11 +58,16 @@ export function useCreditCardStoreSupabase(uid: string): CreditCardStore {
   const [cards, setCards]     = useState<CreditCard[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Só a resposta da consulta mais recente vale (troca de usuário/ordem de chegada).
+  const latestRequest = useRef(0);
+
   const refresh = useCallback(async (): Promise<void> => {
+    const request = ++latestRequest.current;
     const { data, error } = await getSupabase()
       .from('credit_cards')
       .select(CARD_COLUMNS)
       .order('name', { ascending: true });
+    if (request !== latestRequest.current) return;
     if (error) {
       logSanitizedFirebaseError('credit_cards_load', error);
       return;
@@ -71,8 +76,9 @@ export function useCreditCardStoreSupabase(uid: string): CreditCardStore {
   }, []);
 
   useEffect(() => {
-    if (!uid) { setCards([]); setLoading(false); return; }
+    if (!uid) { latestRequest.current += 1; setCards([]); setLoading(false); return; }
     let active = true;
+    setCards([]);
     setLoading(true);
     void refresh().finally(() => { if (active) setLoading(false); });
 
