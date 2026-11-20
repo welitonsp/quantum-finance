@@ -5,6 +5,13 @@ import { isIncome as checkIncome, isExpense as checkExpense, isInvoicePayment } 
 import { getTransactionCentavos } from '../utils/transactionUtils';
 import { fromCentavos, type Centavos } from '../shared/types/money';
 import { normalizeCategoryName, type UserCategory } from '../shared/schemas/categorySchemas';
+import {
+  EMPTY_ROLLUP_STATE,
+  selectCumulativeNetCents,
+  selectExpenseByCategory,
+  selectMonthTotals,
+  type RollupState,
+} from '../lib/monthlyRollups';
 
 interface FirestoreTimestamp { toDate: () => Date; }
 
@@ -56,6 +63,12 @@ export function useFinancialData(
   categories: UserCategory[] = [],
   /** Soma das faturas abertas de cartões em centavos inteiros (fonte: useCreditCards.totalFaturaCents). */
   cardOpenInvoicesCents?: Centavos,
+  /**
+   * P-01 — rollups mensais server-side (useMonthlyRollups). Quando confiáveis,
+   * receitas/despesas/saldo/categorias vêm deles e cobrem TODO o histórico; senão
+   * cai no cálculo legado sobre `transactions` (janela de até 500 carregadas).
+   */
+  rollups: RollupState = EMPTY_ROLLUP_STATE,
 ): FinancialDataReturn {
 
   const displayedTransactions = useMemo(() => {
@@ -85,20 +98,32 @@ export function useFinancialData(
 
       const val = new Decimal(Math.abs(txValueCents(tx)));
       const isIncome  = checkIncome(tx.type);
-      const isInvPay  = isInvoicePayment(tx);
+      // P-01: só despesa de consumo. Transferência entre contas próprias não é
+      // gasto (antes era subtraída do saldo e somada às despesas) e pagamento de
+      // fatura liquida um passivo cuja compra já foi contada.
+      const isConsumption = checkExpense(tx.type) && !isInvoicePayment(tx);
 
       if (isIncome)           saldoAcumulado = saldoAcumulado.plus(val);
-      else if (!isInvPay)     saldoAcumulado = saldoAcumulado.minus(val);
+      else if (isConsumption) saldoAcumulado = saldoAcumulado.minus(val);
 
       const rawDate = tx.date || tx.createdAt;
       if (rawDate) {
         const txDate = resolveDate(rawDate);
         if (txDate && txDate.getMonth() + 1 === currentMonth && txDate.getFullYear() === currentYear) {
-          if (isIncome)         receitasMes = receitasMes.plus(val);
-          else if (!isInvPay)   despesasMes = despesasMes.plus(val);
+          if (isIncome)           receitasMes = receitasMes.plus(val);
+          else if (isConsumption) despesasMes = despesasMes.plus(val);
         }
       }
     });
+
+    // Rollups server-side substituem os valores legados quando confiáveis.
+    const monthFromRollups = selectMonthTotals(rollups, activeModule, currentYear, currentMonth);
+    if (monthFromRollups) {
+      receitasMes = new Decimal(monthFromRollups.incomeCents);
+      despesasMes = new Decimal(monthFromRollups.expenseCents);
+    }
+    const netFromRollups = selectCumulativeNetCents(rollups, activeModule);
+    if (netFromRollups !== null) saldoAcumulado = new Decimal(netFromRollups);
 
     // FIX C: saldo inclui saldo de abertura das contas; patrimônio usa contas reais
     // balance vem em CENTAVOS do useAccounts — converter para reais antes de somar
@@ -128,11 +153,12 @@ export function useFinancialData(
         dividas:    fromCentavos(totalPassivos),
       }
     };
-  }, [transactions, activeModule, currentMonth, currentYear, accounts, cardOpenInvoicesCents]);
+  }, [transactions, activeModule, currentMonth, currentYear, accounts, cardOpenInvoicesCents, rollups]);
 
   const categoryData = useMemo((): CategoryDataPoint[] => {
-    const map: Record<string, number> = {};
-    displayedTransactions.forEach(tx => {
+    const fromRollups = selectExpenseByCategory(rollups, activeModule, currentYear, currentMonth);
+    const map: Record<string, number> = fromRollups ? { ...fromRollups } : {};
+    if (!fromRollups) displayedTransactions.forEach(tx => {
       if (checkExpense(tx.type) && !isInvoicePayment(tx)) {
         const cat = tx.category || 'Diversos';
         const current = map[cat] ? new Decimal(map[cat]) : new Decimal(0);
@@ -146,7 +172,7 @@ export function useFinancialData(
       value: fromCentavos(map[name] ?? 0),
       color: categoryColor(name, categories, idx),
     })).sort((a, b) => b.value - a.value);
-  }, [categories, displayedTransactions]);
+  }, [categories, displayedTransactions, rollups, activeModule, currentYear, currentMonth]);
 
   const topExpensesData = useMemo(() => categoryData.slice(0, 4), [categoryData]);
 
