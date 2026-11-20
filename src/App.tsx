@@ -600,7 +600,40 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
 };
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
+// Provedor de login: Firebase (padrão) ou Supabase (migração), por variável de build.
+// Migração em etapas: com 'supabase', o login já é Supabase, mas os hooks de dados e
+// callables ainda são Firebase. Não ligar em produção antes da camada de dados migrar.
+const AUTH_PROVIDER = import.meta.env.VITE_AUTH_PROVIDER === 'supabase' ? 'supabase' : 'firebase';
+const SupabaseAuthGate = lazy(() => import('./shared/auth/SupabaseAuthGate'));
+
+function SupabaseApp() {
+  return (
+    <Suspense fallback={<QuantumLoader />}>
+      <SupabaseAuthGate>
+        {(appUser, logout) => (
+          <NavigationProvider>
+            <ErrorBoundary label="Quantum Finance">
+              <AuthenticatedApp
+                user={appUser}
+                handleLogout={async () => {
+                  // Privacidade (F-10): descarta memória de conversa do chat ao sair.
+                  ConversationMemory.purgeAll();
+                  try { await logout(); } catch { toast.error('Erro ao sair.'); }
+                }}
+              />
+            </ErrorBoundary>
+          </NavigationProvider>
+        )}
+      </SupabaseAuthGate>
+    </Suspense>
+  );
+}
+
 export default function App() {
+  return AUTH_PROVIDER === 'supabase' ? <SupabaseApp /> : <FirebaseApp />;
+}
+
+function FirebaseApp() {
   const [user,      setUser]      = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   // Sign-in interrompido por MFA (auth/multi-factor-auth-required): guarda o
