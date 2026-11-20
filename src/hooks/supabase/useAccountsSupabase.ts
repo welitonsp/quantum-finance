@@ -1,7 +1,7 @@
 // Contas no Supabase (tabela public.accounts, RLS por auth.uid()).
 // O histórico append-only (account_history) é gravado por trigger no banco,
 // na mesma transação do INSERT/UPDATE/DELETE — o cliente não escreve histórico.
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSupabase } from '../../shared/api/supabase/client';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 import { toCentavos } from '../../shared/schemas/financialSchemas';
@@ -57,11 +57,17 @@ export function useAccountsSupabase(uid: string): UseAccountsReturn {
   const [accounts, setAccounts]               = useState<Account[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
 
+  // Só a resposta da consulta mais recente vale: evita que uma resposta atrasada
+  // (ex.: de outro usuário, após troca de sessão) sobrescreva a lista atual.
+  const latestRequest = useRef(0);
+
   const refresh = useCallback(async (): Promise<void> => {
+    const request = ++latestRequest.current;
     const { data, error } = await getSupabase()
       .from('accounts')
       .select(ACCOUNT_COLUMNS)
       .order('name', { ascending: true });
+    if (request !== latestRequest.current) return;
     if (error) {
       logSanitizedFirebaseError('accounts_load', error);
       return;
@@ -70,8 +76,9 @@ export function useAccountsSupabase(uid: string): UseAccountsReturn {
   }, []);
 
   useEffect(() => {
-    if (!uid) { setAccounts([]); setLoadingAccounts(false); return; }
+    if (!uid) { latestRequest.current += 1; setAccounts([]); setLoadingAccounts(false); return; }
     let active = true;
+    setAccounts([]);
     setLoadingAccounts(true);
     void refresh().finally(() => { if (active) setLoadingAccounts(false); });
 
