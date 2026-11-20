@@ -329,9 +329,17 @@ export function buildRollupsFromTransactions(txs: Iterable<Record<string, unknow
   return months;
 }
 
+/**
+ * Campo persistido que pede reconstrução de forma "pegajosa": só a
+ * reconstrução (que regrava o documento do zero) o limpa. Usado quando um
+ * delta foi descartado (evento atrasado) e o mês pode parecer consistente
+ * sem estar correto.
+ */
+export const ROLLUP_REBUILD_REQUIRED_FIELD = 'rebuildRequired';
+
 export type MonthWritePlan =
   | { action: 'delete' }
-  | { action: 'set'; totals: MonthTotals; needsRebuild: boolean };
+  | { action: 'set'; totals: MonthTotals; needsRebuild: boolean; rebuildRequired: boolean };
 
 /**
  * Decide como persistir um mês após aplicar um delta. Usado pelo trigger e
@@ -341,10 +349,12 @@ export type MonthWritePlan =
  *     (eventos fora de ordem convergem quando o evento faltante chega e o
  *     flag volta a false) ou drift real (a reconstrução corrige). Nunca apaga
  *     um mês inconsistente, para não perder o delta pendente.
+ *   • rebuildRequired=true (delta descartado antes) → mantém o pedido e
+ *     needsRebuild=true mesmo que o agregado pareça consistente, e não apaga.
  */
-export function planMonthWrite(existing: MonthTotals, delta: MonthTotals): MonthWritePlan {
+export function planMonthWrite(existing: MonthTotals, delta: MonthTotals, rebuildRequired = false): MonthWritePlan {
   const totals = mergeMonthTotals(existing, delta);
   const consistent = isConsistentMonthTotals(totals);
-  if (consistent && totals.txCount === 0) return { action: 'delete' };
-  return { action: 'set', totals, needsRebuild: !consistent };
+  if (!rebuildRequired && consistent && totals.txCount === 0) return { action: 'delete' };
+  return { action: 'set', totals, needsRebuild: rebuildRequired || !consistent, rebuildRequired };
 }

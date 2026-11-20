@@ -57,6 +57,7 @@ import {
   computeRollupDelta,
   parseMonthTotals,
   planMonthWrite,
+  ROLLUP_REBUILD_REQUIRED_FIELD,
 } from './monthlyRollups';
 
 // F-09 — teto global de instâncias: bounds custo/DoS econômico (Firebase/Gemini).
@@ -2081,11 +2082,16 @@ export const maintainMonthlyRollups = onDocumentWritten(
       try {
         const batch = adminDb.batch();
         for (const month of months) {
-          batch.set(adminDb.doc(`users/${uid}/rollups/${month}`), { needsRebuild: true }, { merge: true });
+          batch.set(
+            adminDb.doc(`users/${uid}/rollups/${month}`),
+            { needsRebuild: true, [ROLLUP_REBUILD_REQUIRED_FIELD]: true },
+            { merge: true },
+          );
         }
         await batch.commit();
       } catch (e) {
         console.error('[FunctionError]', sanitizeFunctionError('monthly_rollups', e));
+        throw e; // sem o flag gravado não há sinal durável: retry até gravar.
       }
       console.warn('[maintainMonthlyRollups] stale event dropped; month flagged needsRebuild');
       return;
@@ -2104,9 +2110,11 @@ export const maintainMonthlyRollups = onDocumentWritten(
         const snaps = await tx.getAll(...monthRefs);
         snaps.forEach((snap, index) => {
           const month = months[index]!;
+          const data = snap.exists ? snap.data() ?? null : null;
           const plan = planMonthWrite(
-            parseMonthTotals(snap.exists ? snap.data() ?? null : null),
+            parseMonthTotals(data),
             deltas[month]!,
+            data?.[ROLLUP_REBUILD_REQUIRED_FIELD] === true,
           );
           if (plan.action === 'delete') {
             tx.delete(monthRefs[index]!);
@@ -2118,6 +2126,7 @@ export const maintainMonthlyRollups = onDocumentWritten(
             month,
             schemaVersion: ROLLUP_SCHEMA_VERSION,
             needsRebuild: plan.needsRebuild,
+            [ROLLUP_REBUILD_REQUIRED_FIELD]: plan.rebuildRequired,
             updatedAt: FieldValue.serverTimestamp(),
           });
         });

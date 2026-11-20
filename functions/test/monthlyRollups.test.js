@@ -229,3 +229,30 @@ describe('chaves vindas do usuário', () => {
     assert.equal(plan.totals.byAccount.constructor.txCount, 1);
   });
 });
+
+describe('pedido de reconstrução pegajoso (evento atrasado descartado)', () => {
+  it('rebuildRequired mantém needsRebuild mesmo com agregado consistente e impede o delete', () => {
+    const t = { type: 'saida', value_cents: 1000, date: '2026-03-10', category: 'A', account: 'c' };
+    const base = buildRollupsFromTransactions([t])['2026-03'];
+
+    const normal = planMonthWrite(base, computeRollupDelta(null, { ...t, value_cents: 500 })['2026-03']);
+    assert.equal(normal.needsRebuild, false);
+    assert.equal(normal.rebuildRequired, false);
+
+    const sticky = planMonthWrite(base, computeRollupDelta(null, { ...t, value_cents: 500 })['2026-03'], true);
+    assert.equal(sticky.action, 'set');
+    assert.equal(sticky.needsRebuild, true);
+    assert.equal(sticky.rebuildRequired, true);
+
+    const emptied = planMonthWrite(base, computeRollupDelta(t, null)['2026-03'], true);
+    assert.equal(emptied.action, 'set', 'não apaga o mês enquanto a reconstrução não rodar');
+    assert.equal(emptied.needsRebuild, true);
+  });
+
+  it('trigger repassa o flag persistido e relança erro ao gravar o pedido', () => {
+    const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/index.ts'), 'utf8');
+    const body = src.slice(src.indexOf('export const maintainMonthlyRollups'), src.indexOf('export const maintainMonthlyRollups') + 4000);
+    assert.match(body, /data\?\.\[ROLLUP_REBUILD_REQUIRED_FIELD\] === true/);
+    assert.match(body, /\[ROLLUP_REBUILD_REQUIRED_FIELD\]: true[\s\S]*?throw e;/);
+  });
+});
