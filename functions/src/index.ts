@@ -2233,6 +2233,9 @@ export const rebuildMonthlyRollups = onCall(
         months: plan.upserts.length,
         transactions: scanned,
       }));
+      // Invalida o marcador anterior antes de mexer nos meses: se a reconstrução
+      // falhar no meio, o cliente não confia num histórico parcialmente regravado.
+      await rollupsCol.doc(ROLLUP_META_DOC_ID).delete();
       for (let i = 0; i < ops.length; i += ROLLUP_REBUILD_BATCH_SIZE) {
         const batch = adminDb.batch();
         ops.slice(i, i + ROLLUP_REBUILD_BATCH_SIZE).forEach(op => op(batch));

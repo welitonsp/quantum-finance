@@ -304,6 +304,8 @@ describe('reconstrução (rebuildMonthlyRollups)', () => {
     assert.match(body, /if \(!request\.auth\)/);
     assert.match(body, /assertOpRateLimit\(uid, 'rebuildMonthlyRollups'\)/);
     assert.match(body, /users\/\$\{uid\}\/transactions/, 'lê apenas as transações do próprio uid');
+    const metaDelete = body.indexOf('doc(ROLLUP_META_DOC_ID).delete()');
+    assert.ok(metaDelete > 0 && metaDelete < body.indexOf('batch.commit()'), '_meta antigo é invalidado antes dos lotes');
     assert.ok(body.indexOf('ROLLUP_META_DOC_ID') > body.indexOf('plan.deletes'), '_meta gravado depois dos meses');
   });
 });
