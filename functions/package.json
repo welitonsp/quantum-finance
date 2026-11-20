@@ -34,6 +34,16 @@
     "@istanbuljs/load-nyc-config": {
       "js-yaml": ">=3.15.0"
     },
-    "websocket-driver": "0.7.5"
+    "websocket-driver": "0.7.5",
+    "qs": "^6.16.2",
+    "@jest/reporters": {
+      "glob": "^14.0.6"
+    },
+    "jest-config": {
+      "glob": "^14.0.6"
+    },
+    "jest-runtime": {
+      "glob": "^14.0.6"
+    }
   }
 }
