@@ -45,6 +45,28 @@ do $$ begin
     raise exception 'FALHA: parcelas pagas > total aceito';
   exception when check_violation then null;
   end;
+  -- categoria não é apagada pelo cliente (desativa-se)
+  begin
+    delete from public.categories;
+    raise exception 'FALHA: cliente apagou categoria';
+  exception when insufficient_privilege then null;
+  end;
+  -- toda escrita em recorrente deixa histórico, inclusive a exclusão
+  update public.recurring_tasks set value_cents = 160000;
+  delete from public.recurring_tasks;
+  if (select array_agg(action order by id) from public.planning_history where table_name = 'recurring_tasks')
+     <> array['CREATE', 'UPDATE', 'DELETE'] then
+    raise exception 'FALHA: histórico de recorrente incompleto';
+  end if;
+  if (select changed_fields from public.planning_history where table_name = 'recurring_tasks' and action = 'UPDATE')
+     <> array['value_cents'] then
+    raise exception 'FALHA: delta do histórico de recorrente errado';
+  end if;
+  begin
+    delete from public.planning_history;
+    raise exception 'FALHA: cliente apagou histórico de planejamento';
+  exception when insufficient_privilege then null;
+  end;
   -- dono imutável
   begin
     update public.goals set user_id = '00000000-0000-0000-0000-00000000000b';
@@ -59,7 +81,8 @@ declare n int;
 begin
   if (select count(*) from public.categories) + (select count(*) from public.category_rules)
      + (select count(*) from public.budgets) + (select count(*) from public.goals)
-     + (select count(*) from public.debts) + (select count(*) from public.recurring_tasks) <> 0 then
+     + (select count(*) from public.debts) + (select count(*) from public.recurring_tasks)
+     + (select count(*) from public.planning_history) <> 0 then
     raise exception 'FALHA: B enxerga planejamento de A';
   end if;
   update public.goals set current_cents = 1; get diagnostics n = row_count;
@@ -83,5 +106,11 @@ do $$ begin
   end;
 end $$;
 reset role;
+delete from auth.users where id = '00000000-0000-0000-0000-00000000000a';
+do $$ begin
+  if exists (select 1 from public.goals) or exists (select 1 from public.planning_history) then
+    raise exception 'FALHA: sobrou planejamento após excluir o usuário';
+  end if;
+end $$;
 \echo 'OK: todos os testes de RLS de planejamento passaram'
 rollback;

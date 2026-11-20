@@ -109,9 +109,83 @@ begin
     execute format('create policy %I on public.%I for select to authenticated using (user_id = (select auth.uid()))', t || '_owner_select', t);
     execute format('create policy %I on public.%I for insert to authenticated with check (user_id = (select auth.uid()))', t || '_owner_insert', t);
     execute format('create policy %I on public.%I for update to authenticated using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()))', t || '_owner_update', t);
-    execute format('create policy %I on public.%I for delete to authenticated using (user_id = (select auth.uid()))', t || '_owner_delete', t);
+    -- categorias não são apagadas pelo cliente: desativa-se com is_active = false
+    if t <> 'categories' then
+      execute format('create policy %I on public.%I for delete to authenticated using (user_id = (select auth.uid()))', t || '_owner_delete', t);
+    end if;
   end loop;
 end $$;
+revoke delete, truncate on public.categories from authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Histórico append-only do planejamento (sucessor de recurringTasks/{id}/history
+-- e afins). Gravado por trigger na mesma transação: nenhuma escrita do cliente
+-- passa sem registro. Sem FK para a linha de origem: a exclusão fica registrada.
+-- ---------------------------------------------------------------------------
+create table public.planning_history (
+  id             bigint generated always as identity primary key,
+  table_name     text not null check (table_name in ('categories', 'category_rules', 'budgets', 'goals', 'debts', 'recurring_tasks')),
+  row_id         uuid not null,
+  user_id        uuid not null references auth.users (id) on delete cascade,
+  action         text not null check (action in ('CREATE', 'UPDATE', 'DELETE')),
+  origin         text not null check (origin in ('manual', 'ai', 'reconcile', 'bulk', 'import', 'system')),
+  changed_fields text[] not null default '{}',
+  before         jsonb,
+  after          jsonb,
+  created_at     timestamptz not null default now()
+);
+create index planning_history_row_idx on public.planning_history (table_name, row_id, created_at desc);
+create index planning_history_user_idx on public.planning_history (user_id, created_at desc);
+
+create or replace function public.planning_write_history()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_old     jsonb := case when tg_op <> 'INSERT' then to_jsonb(old) - 'id' - 'user_id' - 'created_at' - 'updated_at' end;
+  v_new     jsonb := case when tg_op <> 'DELETE' then to_jsonb(new) - 'id' - 'user_id' - 'created_at' - 'updated_at' end;
+  v_row_id  uuid := case when tg_op = 'DELETE' then old.id else new.id end;
+  v_user_id uuid := case when tg_op = 'DELETE' then old.user_id else new.user_id end;
+  v_changed text[] := '{}';
+begin
+  -- exclusão do usuário (LGPD) em cascata: não há o que auditar
+  if not exists (select 1 from auth.users where id = v_user_id) then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+  if tg_op = 'UPDATE' then
+    select coalesce(array_agg(n.key order by n.key), '{}') into v_changed
+      from jsonb_each(v_new) n join jsonb_each(v_old) o using (key)
+     where n.value is distinct from o.value;
+    if cardinality(v_changed) = 0 then
+      return new;
+    end if;
+    select jsonb_object_agg(key, value) into v_old from jsonb_each(v_old) where key = any (v_changed);
+    select jsonb_object_agg(key, value) into v_new from jsonb_each(v_new) where key = any (v_changed);
+  end if;
+  insert into public.planning_history (table_name, row_id, user_id, action, origin, changed_fields, before, after)
+  values (tg_table_name, v_row_id, v_user_id,
+          case tg_op when 'INSERT' then 'CREATE' when 'DELETE' then 'DELETE' else 'UPDATE' end,
+          public.tx_current_origin(), v_changed, v_old, v_new);
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$$;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['categories', 'category_rules', 'budgets', 'goals', 'debts', 'recurring_tasks'] loop
+    execute format('create trigger %I after insert or update or delete on public.%I for each row execute function public.planning_write_history()', t || '_write_history', t);
+  end loop;
+end $$;
+
+alter table public.planning_history enable row level security;
+revoke all on public.planning_history from anon;
+revoke insert, update, delete, truncate on public.planning_history from authenticated;
+create policy planning_history_owner_select on public.planning_history for select to authenticated
+  using (user_id = (select auth.uid()));
 
 -- last_executed_month é do agendador (pg_cron, etapa 6); o cliente não o forja.
 create or replace function public.recurring_guard_last_executed()
