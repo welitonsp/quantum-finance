@@ -37,6 +37,8 @@ export const OP_RATE_LIMITS = {
   acceptGroupInvite:      { limit: 30,  windowMs: HOUR_MS },
   createGroupExpense:     { limit: 120, windowMs: HOUR_MS },
   settleGroupExpenseShare:{ limit: 240, windowMs: HOUR_MS },
+  // Reconstrução lê TODAS as transações do usuário: teto baixo contra abuso de custo.
+  rebuildMonthlyRollups:  { limit: 10,  windowMs: DAY_MS },
 } as const satisfies Record<string, OpRateLimitConfig>;
 
 export type OpRateLimitKey = keyof typeof OP_RATE_LIMITS;

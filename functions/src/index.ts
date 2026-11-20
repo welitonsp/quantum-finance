@@ -20,7 +20,7 @@ import * as admin from 'firebase-admin';
 // `admin.firestore.FieldValue`, que pode ser `undefined` no runtime do emulator/CI
 // (firebase-admin v13 + Node 24) e quebrava createTransaction com
 // "Cannot read properties of undefined (reading 'serverTimestamp')".
-import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { FieldPath, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import {
   CreateTransactionValidationError,
   validateCreateTransactionPayload,
@@ -54,10 +54,14 @@ import {
 import { safeSystemLogDetail, sanitizeFunctionError } from './lib/logger';
 import {
   ROLLUP_SCHEMA_VERSION,
+  ROLLUP_SOURCE_FIELDS,
+  accumulateRollups,
   computeRollupDelta,
   parseMonthTotals,
   planMonthWrite,
   ROLLUP_REBUILD_REQUIRED_FIELD,
+  planRebuild,
+  type MonthTotals,
 } from './monthlyRollups';
 
 // F-09 — teto global de instâncias: bounds custo/DoS econômico (Firebase/Gemini).
@@ -2143,6 +2147,93 @@ export const maintainMonthlyRollups = onDocumentWritten(
 
     if (drift) {
       console.warn('[maintainMonthlyRollups] rollup invariant violated; month flagged needsRebuild');
+    }
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNÇÃO 16 — rebuildMonthlyRollups (P-01, Fase 1 — PR 2)
+// Recalcula do zero users/{uid}/rollups a partir de TODAS as transações do
+// próprio usuário. Usos: backfill do histórico anterior ao trigger e correção
+// de meses com needsRebuild. Sem payload; só o próprio uid.
+//
+// Leitura paginada por documentId com select() dos campos do cálculo (sem
+// descrição/PII). Escrita em lotes de 400 (limite do batch = 500).
+//
+// Corrida conhecida e aceita: uma escrita em transação durante a varredura
+// pode ser sobrescrita pelo resultado da reconstrução. A janela é de segundos,
+// o mês fica no máximo um lançamento desatualizado e a próxima reconstrução
+// (ou o próximo evento daquele lançamento) corrige. Nenhum valor é perdido na
+// fonte canônica — só o agregado derivado.
+// ═══════════════════════════════════════════════════════════════════════════════
+const ROLLUP_REBUILD_PAGE_SIZE = 1000;
+const ROLLUP_REBUILD_BATCH_SIZE = 400;
+
+export const rebuildMonthlyRollups = onCall(
+  {
+    region: REGION,
+    timeoutSeconds: 300,
+    memory: '512MiB',
+    enforceAppCheck: ENFORCE_APP_CHECK,
+    consumeAppCheckToken: ENFORCE_APP_CHECK,
+    cors: CORS_ORIGINS,
+  },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
+    if (request.app?.alreadyConsumed) throw new HttpsError('permission-denied', 'Requisição duplicada rejeitada.');
+
+    const data = request.data;
+    if (data !== undefined && data !== null
+      && (typeof data !== 'object' || Array.isArray(data) || Object.keys(data as object).length > 0)) {
+      throw new HttpsError('invalid-argument', 'Esta operação não aceita parâmetros.');
+    }
+
+    const uid = request.auth.uid;
+    await assertOpRateLimit(uid, 'rebuildMonthlyRollups');
+
+    try {
+      const months: Record<string, MonthTotals> = {};
+      let scanned = 0;
+      let cursor: string | null = null;
+      for (;;) {
+        let q = adminDb.collection(`users/${uid}/transactions`)
+          .select(...ROLLUP_SOURCE_FIELDS)
+          .orderBy(FieldPath.documentId())
+          .limit(ROLLUP_REBUILD_PAGE_SIZE);
+        if (cursor) q = q.startAfter(cursor);
+        const page = await q.get();
+        if (page.empty) break;
+        accumulateRollups(months, page.docs.map(d => d.data() as Record<string, unknown>));
+        scanned += page.size;
+        cursor = page.docs[page.docs.length - 1]!.id;
+        if (page.size < ROLLUP_REBUILD_PAGE_SIZE) break;
+      }
+
+      const rollupsCol = adminDb.collection(`users/${uid}/rollups`);
+      const existing = await rollupsCol.select().get();
+      const plan = planRebuild(months, existing.docs.map(d => d.id));
+
+      const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [
+        ...plan.upserts.map(month => (b: FirebaseFirestore.WriteBatch) => b.set(rollupsCol.doc(month), {
+          ...months[month]!,
+          month,
+          schemaVersion: ROLLUP_SCHEMA_VERSION,
+          needsRebuild: false,
+          rebuiltAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        })),
+        ...plan.deletes.map(month => (b: FirebaseFirestore.WriteBatch) => b.delete(rollupsCol.doc(month))),
+      ];
+      for (let i = 0; i < ops.length; i += ROLLUP_REBUILD_BATCH_SIZE) {
+        const batch = adminDb.batch();
+        ops.slice(i, i + ROLLUP_REBUILD_BATCH_SIZE).forEach(op => op(batch));
+        await batch.commit();
+      }
+
+      return { rebuilt: true, months: plan.upserts.length, removedMonths: plan.deletes.length, transactions: scanned };
+    } catch (e) {
+      console.error('[FunctionError]', sanitizeFunctionError('rebuild_monthly_rollups', e));
+      throw new HttpsError('internal', 'Falha ao recalcular os totais mensais.');
     }
   },
 );

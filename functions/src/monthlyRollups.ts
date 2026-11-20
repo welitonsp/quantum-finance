@@ -316,9 +316,11 @@ export function isConsistentMonthTotals(m: MonthTotals): boolean {
   return true;
 }
 
-/** Recalcula os rollups do zero a partir de uma lista de transações (backfill/reconciliação). */
-export function buildRollupsFromTransactions(txs: Iterable<Record<string, unknown>>): Record<string, MonthTotals> {
-  const months: Record<string, MonthTotals> = {};
+/** Acumula transações em `months` (muta). Permite recalcular página a página. */
+export function accumulateRollups(
+  months: Record<string, MonthTotals>,
+  txs: Iterable<Record<string, unknown>>,
+): Record<string, MonthTotals> {
   for (const tx of txs) {
     const c = transactionContribution(tx);
     if (!c) continue;
@@ -336,6 +338,31 @@ export function buildRollupsFromTransactions(txs: Iterable<Record<string, unknow
  * sem estar correto.
  */
 export const ROLLUP_REBUILD_REQUIRED_FIELD = 'rebuildRequired';
+
+/** Recalcula os rollups do zero a partir de uma lista de transações (backfill/reconciliação). */
+export function buildRollupsFromTransactions(txs: Iterable<Record<string, unknown>>): Record<string, MonthTotals> {
+  return accumulateRollups({}, txs);
+}
+
+/** Campos lidos pela reconstrução (select): nada além do necessário ao cálculo. */
+export const ROLLUP_SOURCE_FIELDS = [
+  'type', 'value_cents', 'category', 'account', 'date', 'createdAt',
+  'paidInvoiceMonth', 'isDeleted', 'deletedAt',
+] as const;
+
+/**
+ * Plano de reconstrução: meses a gravar (recalculados) e meses a apagar
+ * (existiam persistidos mas não têm mais nenhuma transação).
+ */
+export function planRebuild(
+  rebuilt: Record<string, MonthTotals>,
+  existingMonths: Iterable<string>,
+): { upserts: string[]; deletes: string[] } {
+  const upserts = Object.keys(rebuilt).sort();
+  const keep = new Set(upserts);
+  const deletes = [...new Set(existingMonths)].filter(m => !keep.has(m)).sort();
+  return { upserts, deletes };
+}
 
 export type MonthWritePlan =
   | { action: 'delete' }

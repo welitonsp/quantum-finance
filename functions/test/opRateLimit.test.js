@@ -57,7 +57,7 @@ beforeEach(() => {
 });
 
 describe('OP_RATE_LIMITS — configuração', () => {
-  it('cobre exatamente as 9 callables de escrita não-IA', () => {
+  it('cobre exatamente as 10 callables de escrita não-IA', () => {
     assert.deepEqual(
       Object.keys(OP_RATE_LIMITS).sort(),
       [
@@ -68,6 +68,7 @@ describe('OP_RATE_LIMITS — configuração', () => {
         'deleteUserData',
         'executeAgentAction',
         'logAuditEvent',
+        'rebuildMonthlyRollups',
         'recordPriceObservation',
         'settleGroupExpenseShare',
       ],

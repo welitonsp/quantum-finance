@@ -6,7 +6,12 @@
 const assert = require('node:assert/strict');
 const { describe, it } = require('node:test');
 
+const fs = require('node:fs');
+const path = require('node:path');
+
 const {
+  ROLLUP_SOURCE_FIELDS,
+  accumulateRollups,
   applyContribution,
   buildRollupsFromTransactions,
   computeRollupDelta,
@@ -14,6 +19,7 @@ const {
   isConsistentMonthTotals,
   parseMonthTotals,
   planMonthWrite,
+  planRebuild,
   resolveMonthKey,
   transactionContribution,
 } = require('../lib/monthlyRollups');
@@ -254,5 +260,49 @@ describe('pedido de reconstrução pegajoso (evento atrasado descartado)', () =>
     const body = src.slice(src.indexOf('export const maintainMonthlyRollups'), src.indexOf('export const maintainMonthlyRollups') + 4000);
     assert.match(body, /data\?\.\[ROLLUP_REBUILD_REQUIRED_FIELD\] === true/);
     assert.match(body, /\[ROLLUP_REBUILD_REQUIRED_FIELD\]: true[\s\S]*?throw e;/);
+  });
+});
+
+describe('reconstrução (rebuildMonthlyRollups)', () => {
+  it('accumulateRollups página a página == recálculo de uma vez', () => {
+    const txs = [];
+    for (let i = 0; i < 2500; i += 1) {
+      txs.push(tx({
+        type: i % 3 === 0 ? 'entrada' : 'saida',
+        value_cents: 100 + i,
+        date: `2024-${String((i % 12) + 1).padStart(2, '0')}-05`,
+        account: i % 2 ? 'nubank' : 'inter',
+      }));
+    }
+    const paged = {};
+    for (let i = 0; i < txs.length; i += 1000) accumulateRollups(paged, txs.slice(i, i + 1000));
+    assert.deepEqual(paged, buildRollupsFromTransactions(txs));
+    for (const m of Object.values(paged)) assert.ok(isConsistentMonthTotals(m));
+  });
+
+  it('planRebuild grava meses recalculados e apaga meses que esvaziaram', () => {
+    const rebuilt = buildRollupsFromTransactions([tx({ date: '2026-01-10' }), tx({ date: '2026-03-10' })]);
+    const plan = planRebuild(rebuilt, ['2025-12', '2026-01', '2026-02', '2026-01']);
+    assert.deepEqual(plan.upserts, ['2026-01', '2026-03']);
+    assert.deepEqual(plan.deletes, ['2025-12', '2026-02']);
+  });
+
+  it('select da reconstrução não lê descrição nem outros campos com PII', () => {
+    assert.ok(!ROLLUP_SOURCE_FIELDS.includes('description'));
+    assert.ok(!ROLLUP_SOURCE_FIELDS.includes('descriptionLower'));
+    for (const field of ['type', 'value_cents', 'date', 'paidInvoiceMonth', 'isDeleted', 'deletedAt']) {
+      assert.ok(ROLLUP_SOURCE_FIELDS.includes(field), field);
+    }
+  });
+
+  it('callable exige auth, App Check com replay protection e rate limit', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.ts'), 'utf8');
+    const body = source.slice(source.indexOf('export const rebuildMonthlyRollups'));
+    assert.match(body, /enforceAppCheck:\s*ENFORCE_APP_CHECK/);
+    assert.match(body, /consumeAppCheckToken:\s*ENFORCE_APP_CHECK/);
+    assert.match(body, /request\.app\?\.alreadyConsumed/);
+    assert.match(body, /if \(!request\.auth\)/);
+    assert.match(body, /assertOpRateLimit\(uid, 'rebuildMonthlyRollups'\)/);
+    assert.match(body, /users\/\$\{uid\}\/transactions/, 'lê apenas as transações do próprio uid');
   });
 });
