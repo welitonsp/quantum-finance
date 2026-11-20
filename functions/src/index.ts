@@ -54,6 +54,7 @@ import {
 import { safeSystemLogDetail, sanitizeFunctionError } from './lib/logger';
 import {
   ROLLUP_SCHEMA_VERSION,
+  ROLLUP_META_DOC_ID,
   ROLLUP_SOURCE_FIELDS,
   accumulateRollups,
   computeRollupDelta,
@@ -2224,6 +2225,14 @@ export const rebuildMonthlyRollups = onCall(
         })),
         ...plan.deletes.map(month => (b: FirebaseFirestore.WriteBatch) => b.delete(rollupsCol.doc(month))),
       ];
+      // _meta por último: só marca o histórico como completo depois que todos
+      // os meses foram gravados (o cliente usa a presença dele como gate).
+      ops.push((b: FirebaseFirestore.WriteBatch) => b.set(rollupsCol.doc(ROLLUP_META_DOC_ID), {
+        schemaVersion: ROLLUP_SCHEMA_VERSION,
+        lastRebuiltAt: FieldValue.serverTimestamp(),
+        months: plan.upserts.length,
+        transactions: scanned,
+      }));
       for (let i = 0; i < ops.length; i += ROLLUP_REBUILD_BATCH_SIZE) {
         const batch = adminDb.batch();
         ops.slice(i, i + ROLLUP_REBUILD_BATCH_SIZE).forEach(op => op(batch));

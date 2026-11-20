@@ -282,9 +282,9 @@ describe('reconstrução (rebuildMonthlyRollups)', () => {
 
   it('planRebuild grava meses recalculados e apaga meses que esvaziaram', () => {
     const rebuilt = buildRollupsFromTransactions([tx({ date: '2026-01-10' }), tx({ date: '2026-03-10' })]);
-    const plan = planRebuild(rebuilt, ['2025-12', '2026-01', '2026-02', '2026-01']);
+    const plan = planRebuild(rebuilt, ['2025-12', '2026-01', '2026-02', '2026-01', '_meta']);
     assert.deepEqual(plan.upserts, ['2026-01', '2026-03']);
-    assert.deepEqual(plan.deletes, ['2025-12', '2026-02']);
+    assert.deepEqual(plan.deletes, ['2025-12', '2026-02'], '_meta nunca é apagado');
   });
 
   it('select da reconstrução não lê descrição nem outros campos com PII', () => {
@@ -304,5 +304,6 @@ describe('reconstrução (rebuildMonthlyRollups)', () => {
     assert.match(body, /if \(!request\.auth\)/);
     assert.match(body, /assertOpRateLimit\(uid, 'rebuildMonthlyRollups'\)/);
     assert.match(body, /users\/\$\{uid\}\/transactions/, 'lê apenas as transações do próprio uid');
+    assert.ok(body.indexOf('ROLLUP_META_DOC_ID') > body.indexOf('plan.deletes'), '_meta gravado depois dos meses');
   });
 });

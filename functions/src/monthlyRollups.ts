@@ -344,6 +344,14 @@ export function buildRollupsFromTransactions(txs: Iterable<Record<string, unknow
   return accumulateRollups({}, txs);
 }
 
+/**
+ * Documento de metadados em users/{uid}/rollups/_meta, gravado ao fim de cada
+ * reconstrução completa. Sem ele o cliente não pode confiar nos rollups: o
+ * trigger só conta escritas posteriores ao deploy, então o histórico anterior
+ * fica de fora até a primeira reconstrução.
+ */
+export const ROLLUP_META_DOC_ID = '_meta';
+
 /** Campos lidos pela reconstrução (select): nada além do necessário ao cálculo. */
 export const ROLLUP_SOURCE_FIELDS = [
   'type', 'value_cents', 'category', 'account', 'date', 'createdAt',
@@ -358,9 +366,10 @@ export function planRebuild(
   rebuilt: Record<string, MonthTotals>,
   existingMonths: Iterable<string>,
 ): { upserts: string[]; deletes: string[] } {
-  const upserts = Object.keys(rebuilt).sort();
+  const upserts = Object.keys(rebuilt).filter(isValidMonthKey).sort();
   const keep = new Set(upserts);
-  const deletes = [...new Set(existingMonths)].filter(m => !keep.has(m)).sort();
+  // Só ids de mês são candidatos a remoção: o doc ROLLUP_META_DOC_ID nunca é apagado aqui.
+  const deletes = [...new Set(existingMonths)].filter(m => isValidMonthKey(m) && !keep.has(m)).sort();
   return { upserts, deletes };
 }
 
