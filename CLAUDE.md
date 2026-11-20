@@ -151,7 +151,7 @@ lastExecutedMonth?: string;        // formato YYYY-MM
 - Atualizar main local após merge.
 - Confirmar git status limpo.
 - Atualizar `CLAUDE.md` após marco relevante.
-- **Firebase Hosting preview channels:** TTL máximo `3d` (`expires: 3d` em `.github/workflows/firebase-hosting-pull-request.yml`). TTL default de 7d satura a cota de canais.
+- **Deploy:** Vercel (preview por PR e produção a cada merge na `main`). Os workflows de deploy do Firebase (hosting, rules, functions) foram removidos em 2026-11-20 na migração para Supabase + Vercel.
 
 ## Comandos de Validação Padrão
 
