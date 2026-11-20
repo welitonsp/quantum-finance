@@ -55,6 +55,12 @@
       "fieldPath": "expireAt",
       "indexes": [],
       "ttlConfig": {}
+    },
+    {
+      "collectionGroup": "rollupEvents",
+      "fieldPath": "expireAt",
+      "indexes": [],
+      "ttlConfig": {}
     }
   ]
 }
