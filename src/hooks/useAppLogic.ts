@@ -2,7 +2,7 @@ import { useModalState } from './useModalState';
 import { useTransactionActions } from './useTransactionActions';
 import { useImportActions } from './useImportActions';
 import type { Transaction, ImportResult } from '../shared/types/transaction';
-import type { User } from 'firebase/auth';
+import type { AppUser } from '../shared/auth/appUser';
 
 interface UseAppLogicReturn {
   isAIChatOpen: boolean;
@@ -22,7 +22,7 @@ interface UseAppLogicReturn {
 }
 
 export function useAppLogic(
-  user: User | null,
+  user: AppUser | null,
   update:     (id: string, data: Partial<Transaction>) => Promise<void>,
   add:        (data: Partial<Transaction>) => Promise<string>,
   remove:     (id: string) => Promise<void>,

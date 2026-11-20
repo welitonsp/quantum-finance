@@ -4,7 +4,7 @@ import { showAIFeedbackBatch } from '../shared/lib/aiFeedbackToast';
 import { toCentavos } from '../shared/types/money';
 import type { Transaction, ImportResult } from '../shared/types/transaction';
 import { FirestoreService } from '../shared/services/FirestoreService';
-import type { User } from 'firebase/auth';
+import type { AppUser } from '../shared/auth/appUser';
 import {
   getUserFriendlyErrorMessage,
   logSanitizedFirebaseError,
@@ -15,7 +15,7 @@ interface UseImportActionsReturn {
 }
 
 export function useImportActions(
-  user: User | null,
+  user: AppUser | null,
 ): UseImportActionsReturn {
   const uid = user?.uid;
 
