@@ -321,6 +321,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     loading={loading}
                     moduleBalances={moduleBalances}
                     categoryData={categoryData}
+                    rollups={monthlyRollups}
                     topExpensesData={topExpensesData}
                     monthlyGoal={monthlyGoal}
                     setMonthlyGoal={setMonthlyGoal}

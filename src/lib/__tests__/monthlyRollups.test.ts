@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import {
   parseMonthRollup,
+  selectAllTimeTotals,
   selectCumulativeNetCents,
   selectExpenseByCategory,
   selectMonthTotals,
   type RollupState,
 } from '../monthlyRollups';
-import { useFinancialData } from '../../hooks/useFinancialData';
+import { useDashboardData, useFinancialData } from '../../hooks/useFinancialData';
 import type { Transaction } from '../../shared/types/transaction';
 import type { Centavos } from '../../shared/types/money';
 
@@ -129,5 +130,45 @@ describe('useFinancialData com rollups (P-01)', () => {
     const geral = result.current.moduleBalances['geral']!;
     expect(geral.despesas).toBe(10);
     expect(geral.saldo).toBe(90);
+  });
+});
+
+describe('painel (useDashboardData) com rollups (P-01)', () => {
+  const s = state({
+    '2025-12': rollupDoc({ expenseByCategory: { Alimentação: 30_000, Lazer: 90_000 } }),
+    '2026-03': rollupDoc(),
+  });
+
+  it('selectAllTimeTotals soma todos os meses e não confia sem _meta ou com rebuild pendente', () => {
+    expect(selectAllTimeTotals(s)).toEqual({
+      incomeCents: 1_000_000,
+      expenseCents: 240_000,
+      expenseByCategory: { Alimentação: 110_000, Lazer: 90_000, Transporte: 40_000 },
+    });
+    expect(selectAllTimeTotals(state({ '2026-03': rollupDoc() }, false))).toBeNull();
+    expect(selectAllTimeTotals(state({ '2026-03': rollupDoc({ needsRebuild: true }) }))).toBeNull();
+  });
+
+  it('saldo e período "Tudo" (KPIs e gráfico de categorias) vêm dos rollups', () => {
+    const loaded = [tx({ type: 'entrada', value_cents: C(999) })];
+    const { result } = renderHook(() => useDashboardData(loaded, false, [], s));
+    expect(result.current.kpis.totalBalance).toBe(7600);
+    act(() => result.current.setTimeRange('all'));
+    expect(result.current.kpis.totalIncome).toBe(10_000);
+    expect(result.current.kpis.totalExpense).toBe(2400);
+    expect(result.current.categoryData.map(c => [c.name, c.value])).toEqual([
+      ['Alimentação', 1100], ['Lazer', 900], ['Transporte', 400],
+    ]);
+  });
+
+  it('legado: transferência não é despesa nem reduz o saldo do painel', () => {
+    const loaded = [
+      tx({ type: 'entrada', value_cents: C(10_000), date: new Date().toISOString().slice(0, 10) }),
+      tx({ type: 'transferencia', value_cents: C(3_000), date: new Date().toISOString().slice(0, 10) }),
+      tx({ value_cents: C(1_000), date: new Date().toISOString().slice(0, 10) }),
+    ];
+    const { result } = renderHook(() => useDashboardData(loaded, false));
+    expect(result.current.kpis.totalBalance).toBe(90);
+    expect(result.current.kpis.totalExpense).toBe(10);
   });
 });

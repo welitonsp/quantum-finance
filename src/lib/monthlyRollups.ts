@@ -150,3 +150,28 @@ export function selectExpenseByCategory(
   if (rollup.needsRebuild) return null;
   return rollup.expenseByCategory;
 }
+
+/**
+ * Totais de todo o histórico (visão geral): receitas, despesas de consumo e
+ * despesas por categoria. Alimenta o painel no período "Tudo", que antes só
+ * via as 500 transações mais recentes. null se os rollups não são confiáveis.
+ */
+export function selectAllTimeTotals(
+  state: RollupState,
+): { incomeCents: Centavos; expenseCents: Centavos; expenseByCategory: Record<string, Centavos> } | null {
+  if (!state.ready || anyNeedsRebuild(state)) return null;
+  let income = 0;
+  let expense = 0;
+  const byCategory = new Map<string, number>();
+  for (const rollup of Object.values(state.months)) {
+    income += rollup.incomeCents;
+    expense += rollup.expenseCents;
+    for (const [category, cents] of Object.entries(rollup.expenseByCategory)) {
+      byCategory.set(category, (byCategory.get(category) ?? 0) + cents);
+    }
+  }
+  if (!Number.isSafeInteger(income) || !Number.isSafeInteger(expense)) return null;
+  const expenseByCategory: Record<string, Centavos> = {};
+  for (const [category, cents] of byCategory) expenseByCategory[category] = cents as Centavos;
+  return { incomeCents: income as Centavos, expenseCents: expense as Centavos, expenseByCategory };
+}

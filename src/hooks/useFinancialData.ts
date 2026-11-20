@@ -9,6 +9,7 @@ import {
   EMPTY_ROLLUP_STATE,
   selectCumulativeNetCents,
   selectExpenseByCategory,
+  selectAllTimeTotals,
   selectMonthTotals,
   type RollupState,
 } from '../lib/monthlyRollups';
@@ -239,8 +240,18 @@ export function useDashboardData(
   transactions: Transaction[],
   loading: boolean,
   categories: UserCategory[] = [],
+  rollups: RollupState = EMPTY_ROLLUP_STATE,
 ): DashboardDataReturn {
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
+
+  // Saldo e período "Tudo" vêm dos rollups server-side quando confiáveis (P-01):
+  // a lista em memória tem só as 500 transações mais recentes. As janelas de
+  // 7/30/90 dias seguem calculadas das transações (rollup é mensal).
+  const cumulativeNetCents = useMemo(() => selectCumulativeNetCents(rollups, 'geral'), [rollups]);
+  const allTime = useMemo(
+    () => (timeRange === 'all' ? selectAllTimeTotals(rollups) : null),
+    [rollups, timeRange],
+  );
 
   const filtered = useMemo(() => {
     if (!transactions.length) return [];
@@ -257,24 +268,25 @@ export function useDashboardData(
     let totalIncome  = new Decimal(0);
     let totalExpense = new Decimal(0);
 
-    transactions.forEach(tx => {
+    // Transferência só move dinheiro entre contas próprias: não é receita nem despesa.
+    if (cumulativeNetCents === null) transactions.forEach(tx => {
       const val = new Decimal(Math.abs(txValueCents(tx)));
-      if (checkIncome(tx.type))         totalBalance = totalBalance.plus(val);
-      else if (!isInvoicePayment(tx))   totalBalance = totalBalance.minus(val);
+      if (checkIncome(tx.type))                                 totalBalance = totalBalance.plus(val);
+      else if (checkExpense(tx.type) && !isInvoicePayment(tx))  totalBalance = totalBalance.minus(val);
     });
 
-    filtered.forEach(tx => {
+    if (!allTime) filtered.forEach(tx => {
       const val = new Decimal(Math.abs(txValueCents(tx)));
-      if (checkIncome(tx.type))         totalIncome  = totalIncome.plus(val);
-      else if (!isInvoicePayment(tx))   totalExpense = totalExpense.plus(val);
+      if (checkIncome(tx.type))                                 totalIncome  = totalIncome.plus(val);
+      else if (checkExpense(tx.type) && !isInvoicePayment(tx))  totalExpense = totalExpense.plus(val);
     });
 
     return {
-      totalBalance: fromCentavos(totalBalance.toNumber()),
-      totalIncome:  fromCentavos(totalIncome.toNumber()),
-      totalExpense: fromCentavos(totalExpense.toNumber()),
+      totalBalance: fromCentavos(cumulativeNetCents ?? totalBalance.toNumber()),
+      totalIncome:  fromCentavos(allTime ? allTime.incomeCents : totalIncome.toNumber()),
+      totalExpense: fromCentavos(allTime ? allTime.expenseCents : totalExpense.toNumber()),
     };
-  }, [transactions, filtered]);
+  }, [transactions, filtered, cumulativeNetCents, allTime]);
 
   const timelineData = useMemo((): TimelineDataPoint[] => {
     const map = new Map<string, { income: Decimal; expense: Decimal }>();
@@ -285,8 +297,8 @@ export function useDashboardData(
       const key   = d.toISOString().slice(0, 10);
       const entry = map.get(key) ?? { income: new Decimal(0), expense: new Decimal(0) };
       const val   = new Decimal(Math.abs(txValueCents(tx)));
-      if (checkIncome(tx.type))         entry.income  = entry.income.plus(val);
-      else if (!isInvoicePayment(tx))   entry.expense = entry.expense.plus(val);
+      if (checkIncome(tx.type))                                 entry.income  = entry.income.plus(val);
+      else if (checkExpense(tx.type) && !isInvoicePayment(tx))  entry.expense = entry.expense.plus(val);
       map.set(key, entry);
     });
 
@@ -302,7 +314,9 @@ export function useDashboardData(
   const categoryData = useMemo((): CategoryChartPoint[] => {
     const map = new Map<string, Decimal>();
 
-    filtered.forEach(tx => {
+    if (allTime) {
+      for (const [cat, cents] of Object.entries(allTime.expenseByCategory)) map.set(cat, new Decimal(cents));
+    } else filtered.forEach(tx => {
       if (!checkExpense(tx.type) || isInvoicePayment(tx)) return;
       const cat = tx.category || 'Diversos';
       map.set(cat, (map.get(cat) ?? new Decimal(0)).plus(
@@ -317,7 +331,7 @@ export function useDashboardData(
         color: categoryColor(name, categories, index),
       }))
       .sort((a, b) => b.value - a.value);
-  }, [categories, filtered]);
+  }, [categories, filtered, allTime]);
 
   return { kpis, timelineData, categoryData, timeRange, setTimeRange, loading };
 }

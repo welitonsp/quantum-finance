@@ -7,6 +7,7 @@ import {
 
 import { useNavigation } from '../contexts/NavigationContext';
 import { useDashboardData } from '../hooks/useFinancialData';
+import type { RollupState } from '../lib/monthlyRollups';
 import ProactiveBriefing from './ProactiveBriefing';
 import OneTouchActionsCard from './OneTouchActionsCard';
 // Widgets analíticos pesados (gráficos) — code-split via lazy; só carregam ao expandir
@@ -66,6 +67,8 @@ interface Props {
   loading: boolean;
   moduleBalances: ModuleBalances | null;
   categoryData?: CategoryDataPoint[];
+  /** Rollups mensais server-side (P-01); ausente = cálculo legado sobre a lista em memória. */
+  rollups?: RollupState;
   topExpensesData?: CategoryDataPoint[];
   monthlyGoal: { percent?: number } | number | null;
   setMonthlyGoal: (goal: number) => void;
@@ -109,6 +112,7 @@ export default function DashboardContent({
   allTransactions,
   loading,
   moduleBalances,
+  rollups,
   monthlyGoal,
   onEditTransaction,
   setIsFormOpen,
@@ -211,7 +215,7 @@ export default function DashboardContent({
     setTimeRange,
     loading: dashLoading,
   // FIX: single source of truth for transactions
-  } = useDashboardData(allTransactions, loading, categories);
+  } = useDashboardData(allTransactions, loading, categories, rollups);
 
   const { history: scoreHistory } = useScoreHistory(user?.uid ?? '', metrics);
 
