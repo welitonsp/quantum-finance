@@ -7,6 +7,7 @@ import {
 import { db } from '../shared/api/firebase/index';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import type { FinancialMetrics } from './useFinancialMetrics';
+import { computeHealthScore } from '../lib/healthScore';
 
 export interface ScoreHistoryEntry {
   month:       string; // YYYY-MM
@@ -22,14 +23,6 @@ function currentMonthKey(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function computeScore(m: FinancialMetrics): number {
-  const s1 = m.taxaPoupanca >= 30 ? 25 : m.taxaPoupanca >= 20 ? 20 : m.taxaPoupanca >= 10 ? 12 : m.taxaPoupanca >= 5 ? 6 : 0;
-  const s2 = m.endividamento <= 10 ? 25 : m.endividamento <= 30 ? 20 : m.endividamento <= 50 ? 12 : m.endividamento <= 70 ? 6 : 0;
-  const s3 = m.reservaMeses >= 6 ? 25 : m.reservaMeses >= 3 ? 18 : m.reservaMeses >= 1 ? 8 : 0;
-  const s4 = m.comprometimento <= 20 ? 25 : m.comprometimento <= 35 ? 18 : m.comprometimento <= 50 ? 8 : 0;
-  return s1 + s2 + s3 + s4;
-}
-
 export function useScoreHistory(uid: string, metrics: FinancialMetrics | null) {
   const [history, setHistory] = useState<ScoreHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,7 +31,7 @@ export function useScoreHistory(uid: string, metrics: FinancialMetrics | null) {
   const persistScore = useCallback(async () => {
     if (!uid || !metrics) return;
     const month = currentMonthKey();
-    const score = computeScore(metrics);
+    const score = computeHealthScore(metrics);
     const entry: Omit<ScoreHistoryEntry, 'month'> & { updatedAt: unknown; schemaVersion: number } = {
       score,
       taxaPoupanca:    metrics.taxaPoupanca,

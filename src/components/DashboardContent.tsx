@@ -33,6 +33,7 @@ import QuantumInsights from './QuantumInsights';
 import QuantumCopilotCards from './QuantumCopilotCards';
 import { useQuantumCopilot } from '../hooks/useQuantumCopilot';
 import { useScoreHistory } from '../hooks/useScoreHistory';
+import { computeHealthScore, heroStatusFromScore } from '../lib/healthScore';
 const FinancialHealthScore = lazy(() => import('./FinancialHealthScore'));
 import WeeklyCashflowWidget from './WeeklyCashflowWidget';
 import { useWeeklyCashflow } from '../hooks/useWeeklyCashflow';
@@ -147,7 +148,7 @@ export default function DashboardContent({
     [saldo, receitas, despesas, patrimonio, dividas, metaEcon],
   );
 
-  const { status, color, rec, score, savingsRate, debtRatio, goalProgress } = st;
+  const { score, savingsRate, debtRatio, goalProgress } = st;
 
   const currentYYYYMM = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
   const todayYYYYMM = useMemo(() => {
@@ -177,6 +178,9 @@ export default function DashboardContent({
     totalFaturaCents,
   );
 
+  const canonicalScore = metrics ? computeHealthScore(metrics) : score;
+  // Status/cor/rec seguem a mesma fonte do score exibido (canônico quando há métricas).
+  const { status, color, rec } = metrics ? heroStatusFromScore(canonicalScore) : st;
   const StatusIcon  = status === 'CRÍTICO' ? AlertTriangle : status === 'ATENÇÃO' ? Activity : CheckCircle2;
   const incomeDelta = receitas > 0 ? ((receitas - despesas) / receitas * 100) : 0;
 
@@ -280,7 +284,7 @@ export default function DashboardContent({
         receitas={receitas}
         despesas={despesas}
         incomeDelta={incomeDelta}
-        score={score}
+        score={canonicalScore}
         color={color}
         status={status}
         rec={rec}

@@ -1,13 +1,45 @@
 /// <reference types="vitest" />
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 function normalizePath(id: string): string {
   return id.replace(/\\/g, '/');
 }
 
+/**
+ * Barreira de build: variáveis VITE_* são embutidas no bundle do navegador,
+ * então uma chave privilegiada do Supabase (service_role JWT ou sb_secret_)
+ * em VITE_SUPABASE_ANON_KEY vazaria mesmo com o guard de runtime do cliente.
+ * Falha o build antes de gerar qualquer asset, sem ecoar o valor da chave.
+ */
+function isPrivilegedSupabaseKey(key: string): boolean {
+  if (key.startsWith('sb_secret_')) return true;
+  const parts = key.split('.');
+  if (parts.length !== 3) return false;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1] ?? '', 'base64url').toString('utf8')) as { role?: unknown };
+    return payload.role === 'service_role';
+  } catch {
+    return false;
+  }
+}
+
+function supabaseKeyGuard(): Plugin {
+  return {
+    name: 'supabase-key-guard',
+    config(_config, { mode }) {
+      const env = loadEnv(mode, process.cwd(), 'VITE_');
+      const key = (env.VITE_SUPABASE_ANON_KEY ?? '').trim();
+      if (key && isPrivilegedSupabaseKey(key)) {
+        throw new Error('VITE_SUPABASE_ANON_KEY contém chave privilegiada do Supabase; use a chave anon/publishable.');
+      }
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
+    supabaseKeyGuard(),
     react(),
     VitePWA({
       // injectManifest: SW customizado em src/sw.ts — necessário para FCM
