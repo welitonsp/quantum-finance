@@ -8,6 +8,8 @@ import Decimal from 'decimal.js';
 import { db } from '../shared/api/firebase/index';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import type { Centavos } from '../shared/types/money';
+import { DATA_BACKEND } from '../shared/config/backend';
+import { useDebtsSupabase } from './supabase/useDebtsSupabase';
 
 // ─── Public Types ─────────────────────────────────────────────────────────────
 
@@ -79,7 +81,7 @@ function mapDocToDebt(id: string, r: Record<string, unknown>): Debt {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useDebts(uid: string): UseDebtsReturn {
+function useDebtsFirebase(uid: string): UseDebtsReturn {
   const [debts,   setDebts]   = useState<Debt[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -133,6 +135,10 @@ export function useDebts(uid: string): UseDebtsReturn {
 
   return { debts, loading, addDebt, updateDebt, deleteDebt };
 }
+
+/** Escolhido no build: o mesmo hook em todas as renderizações. */
+export const useDebts: (uid: string) => UseDebtsReturn =
+  DATA_BACKEND === 'supabase' ? useDebtsSupabase : useDebtsFirebase;
 
 // ─── Finance helpers (Decimal.js — no float math) ────────────────────────────
 
