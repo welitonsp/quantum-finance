@@ -10,6 +10,8 @@ import { projectCardInvoices } from '../lib/cardProjection';
 import type { CreditCard, CreditCardWithMetrics, CardMetrics, Transaction } from '../shared/types/transaction';
 import type { MoneyInput, Centavos } from '../shared/types/money';
 import { getTransactionAbsCentavos, isExpense } from '../utils/transactionUtils';
+import { DATA_BACKEND } from '../shared/config/backend';
+import { useCreditCardStoreSupabase } from './supabase/useCreditCardsSupabase';
 
 function calcCardMetrics(card: CreditCard, transactions: Transaction[]): CardMetrics {
   const hoje     = new Date();
@@ -114,15 +116,24 @@ interface UseCreditCardsReturn {
   payInvoice: (cardId: string, amountCents: Centavos, fromAccountId: string) => Promise<void>;
 }
 
-type CreditCardWriteInput = Omit<CreditCard, 'id' | 'limit'> & {
+export type CreditCardWriteInput = Omit<CreditCard, 'id' | 'limit'> & {
   limit: MoneyInput;
 };
 
-type CreditCardUpdateInput = Partial<Omit<CreditCard, 'limit'>> & {
+export type CreditCardUpdateInput = Partial<Omit<CreditCard, 'limit'>> & {
   limit?: MoneyInput;
 };
 
-export function useCreditCards(uid: string, transactions: Transaction[] = []): UseCreditCardsReturn {
+/** Camada de armazenamento dos cartões (Firebase ou Supabase, escolhida no build). */
+export interface CreditCardStore {
+  cards: CreditCard[];
+  loading: boolean;
+  addCard: (data: CreditCardWriteInput) => Promise<string>;
+  updateCard: (id: string, data: CreditCardUpdateInput) => Promise<void>;
+  removeCard: (id: string) => Promise<void>;
+}
+
+function useCreditCardStoreFirebase(uid: string): CreditCardStore {
   const [cards, setCards]     = useState<CreditCard[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -150,10 +161,6 @@ export function useCreditCards(uid: string, transactions: Transaction[] = []): U
     return () => unsub();
   }, [uid]);
 
-  const cardsWithMetrics = useMemo((): CreditCardWithMetrics[] => {
-    return cards.map(card => ({ ...card, metrics: calcCardMetrics(card, transactions) }));
-  }, [cards, transactions]);
-
   const addCard = useCallback(async (data: CreditCardWriteInput): Promise<string> => {
     if (!uid) throw new Error('Utilizador não autenticado.');
     const ref = collection(db, 'users', uid, 'creditCards');
@@ -180,6 +187,19 @@ export function useCreditCards(uid: string, transactions: Transaction[] = []): U
     if (!uid || !id) return;
     await deleteDoc(doc(db, 'users', uid, 'creditCards', id));
   }, [uid]);
+
+  return { cards, loading, addCard, updateCard, removeCard };
+}
+
+const useCreditCardStore: (uid: string) => CreditCardStore =
+  DATA_BACKEND === 'supabase' ? useCreditCardStoreSupabase : useCreditCardStoreFirebase;
+
+export function useCreditCards(uid: string, transactions: Transaction[] = []): UseCreditCardsReturn {
+  const { cards, loading, addCard, updateCard, removeCard } = useCreditCardStore(uid);
+
+  const cardsWithMetrics = useMemo((): CreditCardWithMetrics[] => {
+    return cards.map(card => ({ ...card, metrics: calcCardMetrics(card, transactions) }));
+  }, [cards, transactions]);
 
   const payInvoice = useCallback(async (
     cardId: string,
