@@ -27,3 +27,5 @@ psql -v ON_ERROR_STOP=1 -f supabase/tests/rls_core_financeiro.sql
 | `importHash` fora de before/after | removido por `tx_history_snapshot` |
 | `firestore.rules` | RLS `user_id = auth.uid()` + FKs compostas por usuário |
 | Rollups mensais | views `monthly_totals` e `monthly_category_totals` |
+| callable `createTransfer` | RPC `create_transfer` (atômica, idempotente); cliente não grava transferência direto |
+| `accounts/{id}/history` | `account_history` append-only, inclusive para conta apagada |

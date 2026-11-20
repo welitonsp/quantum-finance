@@ -17,7 +17,7 @@ grant execute on function pg_temp.login(text) to anon, authenticated;
 
 -- Usuário A cria conta, cartão e transação ----------------------------------
 set local role authenticated;
-select pg_temp.login('00000000-0000-0000-0000-00000000000a');
+select pg_temp.login('00000000-0000-0000-0000-00000000000a') \g /dev/null
 
 insert into public.accounts (id, name, type, balance_cents)
 values ('10000000-0000-0000-0000-00000000000a', 'Conta A', 'corrente', 150000);
@@ -54,9 +54,9 @@ begin
 end $$;
 
 -- Origem 'ai' via set_config (como uma RPC server-side faria)
-select set_config('app.tx_origin', 'ai', true);
+select set_config('app.tx_origin', 'ai', true) \g /dev/null
 update public.transactions set category = 'Lazer' where id = '30000000-0000-0000-0000-00000000000a';
-select set_config('app.tx_origin', '', true);
+select set_config('app.tx_origin', '', true) \g /dev/null
 do $$ begin
   if not exists (select 1 from public.transaction_history where origin = 'ai' and changed_fields = array['category']) then
     raise exception 'FALHA: origem ai não registrada';
@@ -114,11 +114,35 @@ do $$ begin
   end;
 end $$;
 
--- Agregados: transferência e pagamento de fatura não são despesa
+-- Transferência: cliente não grava direto; só pela RPC atômica e idempotente
 insert into public.accounts (id, name, type) values ('10000000-0000-0000-0000-0000000000a2', 'Poupança A', 'poupanca');
-insert into public.transactions (description, value_cents, type, category, date, from_account_id, to_account_id)
-values ('Transferência', 99999, 'transferencia', 'Outros', '2026-11-11',
-        '10000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-0000000000a2');
+do $$
+declare t1 uuid; t2 uuid;
+begin
+  begin
+    insert into public.transactions (description, value_cents, type, category, date, from_account_id, to_account_id)
+    values ('Transferência', 99999, 'transferencia', 'Outros', '2026-11-11',
+            '10000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-0000000000a2');
+    raise exception 'FALHA: cliente gravou transferência direto';
+  exception when insufficient_privilege then null;
+  end;
+  t1 := public.create_transfer('10000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-0000000000a2',
+                               99999, '2026-11-11', 'Reserva', 'idem-transfer-0001');
+  t2 := public.create_transfer('10000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-0000000000a2',
+                               99999, '2026-11-11', 'Reserva', 'idem-transfer-0001');
+  if t1 <> t2 then raise exception 'FALHA: replay criou outra transferência'; end if;
+  if (select balance_cents from public.accounts where id = '10000000-0000-0000-0000-00000000000a') <> 150000 - 99999
+     or (select balance_cents from public.accounts where id = '10000000-0000-0000-0000-0000000000a2') <> 99999 then
+    raise exception 'FALHA: saldos não moveram exatamente uma vez';
+  end if;
+  if (select count(*) from public.account_history where action = 'TRANSFER') <> 2 then
+    raise exception 'FALHA: histórico das contas não registrou a transferência';
+  end if;
+  begin
+    update public.transactions set value_cents = 1 where id = t1;
+    if found then raise exception 'FALHA: cliente alterou transferência'; end if;
+  end;
+end $$;
 insert into public.transactions (description, value_cents, type, category, date, paid_invoice_month)
 values ('Pagamento fatura', 88888, 'saida', 'Outros', '2026-11-12', '2026-10');
 insert into public.transactions (description, value_cents, type, category, date)
@@ -136,7 +160,7 @@ begin
 end $$;
 
 -- Usuário B não vê nem altera nada de A --------------------------------------
-select pg_temp.login('00000000-0000-0000-0000-00000000000b');
+select pg_temp.login('00000000-0000-0000-0000-00000000000b') \g /dev/null
 do $$
 declare n int;
 begin
@@ -155,6 +179,13 @@ begin
   begin
     insert into public.accounts (user_id, name, type) values ('00000000-0000-0000-0000-00000000000a', 'X', 'corrente');
     raise exception 'FALHA: B criou conta em nome de A';
+  exception when insufficient_privilege then null;
+  end;
+  -- B não transfere usando conta de A
+  begin
+    perform public.create_transfer('10000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-0000000000a2',
+                                   1, '2026-11-11', 'x', 'idem-transfer-b-01');
+    raise exception 'FALHA: B transferiu com contas de A';
   exception when insufficient_privilege then null;
   end;
   -- B não aponta transação para a conta de A (FK composta)
@@ -181,6 +212,23 @@ do $$ begin
   end;
 end $$;
 
+-- A apaga a poupança usada numa transferência: permitido e auditado ----------
+select pg_temp.login('00000000-0000-0000-0000-00000000000a') \g /dev/null
+delete from public.accounts where id = '10000000-0000-0000-0000-0000000000a2';
+do $$ begin
+  if not exists (select 1 from public.account_history where account_id = '10000000-0000-0000-0000-0000000000a2' and action = 'DELETE') then
+    raise exception 'FALHA: exclusão de conta sem histórico';
+  end if;
+  if exists (select 1 from public.transactions where to_account_id is not null and type = 'transferencia') then
+    raise exception 'FALHA: referência da conta apagada não foi zerada';
+  end if;
+  begin
+    delete from public.account_history;
+    raise exception 'FALHA: cliente apagou histórico de conta';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
 -- Visitante sem login não lê nada --------------------------------------------
 reset role;
 set local role anon;
@@ -193,5 +241,13 @@ do $$ begin
 end $$;
 
 reset role;
+-- Exclusão LGPD do usuário apaga tudo em cascata (sem erro de FK do histórico)
+delete from auth.users where id = '00000000-0000-0000-0000-00000000000a';
+do $$ begin
+  if exists (select 1 from public.accounts) or exists (select 1 from public.transactions)
+     or exists (select 1 from public.transaction_history) or exists (select 1 from public.account_history) then
+    raise exception 'FALHA: sobrou dado após excluir o usuário';
+  end if;
+end $$;
 \echo 'OK: todos os testes de RLS do núcleo financeiro passaram'
 rollback;
