@@ -3653,5 +3653,59 @@ describe.skipIf(!EMULATOR_HOST)('Firestore Security Rules', () => {
       ));
     });
   });
-});
 
+  // ── V. users/{uid}/rollups + rollupEvents — server-only (P-01, Fase 1) ──
+  describe('V — rollups mensais: leitura do owner, escrita só do servidor', () => {
+    const ROLLUP = {
+      month: '2026-03',
+      schemaVersion: 1,
+      incomeCents: 500000,
+      expenseCents: 12345,
+      invoicePaymentCents: 0,
+      transferCents: 0,
+      txCount: 2,
+      expenseByCategory: { 'Alimentação': 12345 },
+      incomeByCategory: { 'Salário': 500000 },
+      byAccount: {},
+      needsRebuild: false,
+      updatedAt: FIXED_TS,
+    };
+
+    async function seedRollup() {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'users', UID_A, 'rollups', '2026-03'), ROLLUP);
+        await setDoc(doc(db, 'users', UID_A, 'rollupEvents', 'evt-1'), { createdAt: FIXED_TS });
+      });
+    }
+
+    it('V1 — owner lê o próprio rollup', async () => {
+      await seedRollup();
+      const alice = testEnv.authenticatedContext(UID_A);
+      await assertSucceeds(getDoc(doc(alice.firestore(), 'users', UID_A, 'rollups', '2026-03')));
+    });
+
+    it('V2 — outro usuário não lê o rollup', async () => {
+      await seedRollup();
+      const bob = testEnv.authenticatedContext(UID_B);
+      await assertFails(getDoc(doc(bob.firestore(), 'users', UID_A, 'rollups', '2026-03')));
+    });
+
+    it('V3 — owner não cria, altera nem apaga rollup (totais não podem ser forjados)', async () => {
+      await seedRollup();
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      await assertFails(setDoc(doc(db, 'users', UID_A, 'rollups', '2026-04'), { ...ROLLUP, month: '2026-04' }));
+      await assertFails(updateDoc(doc(db, 'users', UID_A, 'rollups', '2026-03'), { incomeCents: 1 }));
+      await assertFails(deleteDoc(doc(db, 'users', UID_A, 'rollups', '2026-03')));
+    });
+
+    it('V4 — rollupEvents é negado para leitura e escrita do owner', async () => {
+      await seedRollup();
+      const alice = testEnv.authenticatedContext(UID_A);
+      const db = alice.firestore();
+      await assertFails(getDoc(doc(db, 'users', UID_A, 'rollupEvents', 'evt-1')));
+      await assertFails(setDoc(doc(db, 'users', UID_A, 'rollupEvents', 'evt-2'), { createdAt: serverTimestamp() }));
+    });
+  });
+});

@@ -12,6 +12,7 @@
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { defineSecret } from 'firebase-functions/params';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as admin from 'firebase-admin';
@@ -51,6 +52,12 @@ import {
   txCents,
 } from './lib/financialUtils';
 import { safeSystemLogDetail, sanitizeFunctionError } from './lib/logger';
+import {
+  ROLLUP_SCHEMA_VERSION,
+  computeRollupDelta,
+  parseMonthTotals,
+  planMonthWrite,
+} from './monthlyRollups';
 
 // F-09 — teto global de instâncias: bounds custo/DoS econômico (Firebase/Gemini).
 // Cada function fica limitada a este número de instâncias concorrentes; folgado para
@@ -2025,5 +2032,97 @@ export const sendPushReminders = onSchedule(
     console.info('[sendPushReminders]', {
       users: tokensByUid.size, sent, skippedUsers, removedTokens, errors,
     });
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNÇÃO 15 — maintainMonthlyRollups (P-01, Fase 1 da Auditoria Premium)
+// Mantém users/{uid}/rollups/{YYYY-MM} a cada escrita em transactions/{txId},
+// para que dashboard/IR/relatórios deixem de somar só as 500 transações mais
+// recentes carregadas no cliente. Motor puro em ./monthlyRollups.
+//
+// Garantias:
+//   • exactly-once por evento: o trigger é at-least-once, então o id do evento
+//     é gravado em users/{uid}/rollupEvents/{eventId} NA MESMA transação que
+//     aplica o delta — reentrega vira no-op. `expireAt` permite política TTL.
+//   • ordem irrelevante: cada evento aplica (depois − antes); a soma de deltas
+//     comuta, então entregas fora de ordem convergem para o mesmo total.
+//   • drift nunca é silencioso: se o merge violar a invariante (total negativo
+//     ou soma por conta ≠ total do mês), o mês é gravado com needsRebuild=true.
+//     Pode ser transitório (evento fora de ordem; o flag volta a false quando o
+//     evento faltante chega) ou drift real (corrigido pela reconstrução).
+//   • rollups e rollupEvents são somente leitura/negados para o cliente nas Rules.
+// ═══════════════════════════════════════════════════════════════════════════════
+const ROLLUP_EVENT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// Eventos reentregues após este prazo são descartados (evita loop de retry
+// infinito) — o mês fica coberto pela reconstrução periódica.
+const ROLLUP_EVENT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+export const maintainMonthlyRollups = onDocumentWritten(
+  {
+    document: 'users/{uid}/transactions/{txId}',
+    region: REGION,
+    retry: true,
+    timeoutSeconds: 60,
+  },
+  async (event) => {
+    const eventTimeMs = Date.parse(event.time);
+    if (Number.isFinite(eventTimeMs) && Date.now() - eventTimeMs > ROLLUP_EVENT_MAX_AGE_MS) {
+      console.warn('[maintainMonthlyRollups] stale event dropped; month needs rebuild');
+      return;
+    }
+
+    const uid = event.params.uid;
+    const before = event.data?.before?.exists ? event.data.before.data() ?? null : null;
+    const after = event.data?.after?.exists ? event.data.after.data() ?? null : null;
+
+    const deltas = computeRollupDelta(before, after);
+    const months = Object.keys(deltas).sort();
+    if (months.length === 0) return;
+
+    const markerRef = adminDb.doc(`users/${uid}/rollupEvents/${event.id}`);
+    const monthRefs = months.map(month => adminDb.doc(`users/${uid}/rollups/${month}`));
+
+    let drift = false;
+    try {
+      await adminDb.runTransaction(async (tx) => {
+        drift = false;
+        const marker = await tx.get(markerRef);
+        if (marker.exists) return;
+
+        const snaps = await tx.getAll(...monthRefs);
+        snaps.forEach((snap, index) => {
+          const month = months[index]!;
+          const plan = planMonthWrite(
+            parseMonthTotals(snap.exists ? snap.data() ?? null : null),
+            deltas[month]!,
+          );
+          if (plan.action === 'delete') {
+            tx.delete(monthRefs[index]!);
+            return;
+          }
+          if (plan.needsRebuild) drift = true;
+          tx.set(monthRefs[index]!, {
+            ...plan.totals,
+            month,
+            schemaVersion: ROLLUP_SCHEMA_VERSION,
+            needsRebuild: plan.needsRebuild,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        });
+
+        tx.set(markerRef, {
+          createdAt: FieldValue.serverTimestamp(),
+          expireAt: Timestamp.fromMillis(Date.now() + ROLLUP_EVENT_TTL_MS),
+        });
+      });
+    } catch (e) {
+      console.error('[FunctionError]', sanitizeFunctionError('monthly_rollups', e));
+      throw e; // retry: true → reentrega; o marcador garante exactly-once.
+    }
+
+    if (drift) {
+      console.warn('[maintainMonthlyRollups] rollup invariant violated; month flagged needsRebuild');
+    }
   },
 );

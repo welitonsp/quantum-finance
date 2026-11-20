@@ -1219,6 +1219,20 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // P-01 — rollups mensais (YYYY-MM) mantidos pelo trigger maintainMonthlyRollups.
+      // Dado derivado e server-trusted: o owner só lê; qualquer escrita client-side
+      // permitiria forjar totais do dashboard/IR.
+      match /rollups/{monthId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+
+      // Marcadores de idempotência dos eventos do trigger de rollups (exactly-once).
+      // Exclusivos do Admin SDK — o cliente não lê nem escreve.
+      match /rollupEvents/{eventId} {
+        allow read, write: if false;
+      }
+
       match /goals/{goalId} {
         allow read:   if isOwner(userId);
         allow create: if isOwner(userId) && isValidGoalCreate();
