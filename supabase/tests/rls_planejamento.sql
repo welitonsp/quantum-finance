@@ -20,6 +20,17 @@ insert into public.debts (name, total_cents, remaining_cents, interest_rate, ins
 values ('Carro', 3000000, 2500000, 0.0185, 48, 10, '2026-01-10', 'financiamento');
 insert into public.recurring_tasks (description, value_cents, category, due_day) values ('Aluguel', 150000, 'Moradia', 5);
 
+-- created_at enviado pelo cliente é ignorado no INSERT (data sempre do servidor)
+insert into public.goals (name, target_cents, created_at) values ('Retroativa', 100, '2000-01-01');
+insert into public.transactions (description, value_cents, type, category, date, created_at)
+values ('Retroativa', 100, 'saida', 'Outros', '2026-11-12', '2000-01-01');
+do $$ begin
+  if exists (select 1 from public.goals where name = 'Retroativa' and created_at < now() - interval '1 minute')
+     or exists (select 1 from public.transactions where description = 'Retroativa' and created_at < now() - interval '1 minute') then
+    raise exception 'FALHA: created_at retroativo aceito no INSERT';
+  end if;
+end $$;
+
 -- create_transfer (versão endurecida): chave já usada por transação comum é rejeitada
 insert into public.accounts (id, name, type, balance_cents) values
   ('20000000-0000-0000-0000-0000000000a1', 'Corrente', 'corrente', 50000),
@@ -141,7 +152,8 @@ declare f text;
 begin
   foreach f in array array['public.tx_write_history()', 'public.account_write_history()', 'public.planning_write_history()',
                            'public.set_updated_at()', 'public.guard_owner_immutable()', 'public.tx_guard_immutable()',
-                           'public.recurring_guard_last_executed()', 'public.tx_current_origin()', 'public.tx_history_snapshot(jsonb)'] loop
+                           'public.recurring_guard_last_executed()', 'public.tx_current_origin()', 'public.tx_history_snapshot(jsonb)',
+                           'public.force_server_timestamps()'] loop
     if has_function_privilege('anon', f, 'execute') or has_function_privilege('authenticated', f, 'execute') then
       raise exception 'FALHA: % exposta via RPC', f;
     end if;
