@@ -67,6 +67,17 @@ do $$ begin
     raise exception 'FALHA: cliente apagou histórico de planejamento';
   exception when insufficient_privilege then null;
   end;
+  -- created_at não pode ser retroagido (o histórico não o registra)
+  begin
+    update public.goals set created_at = now() - interval '1 year';
+    raise exception 'FALHA: created_at da meta alterado';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.accounts set created_at = now() - interval '1 year';
+    if found then raise exception 'FALHA: created_at da conta alterado'; end if;
+  exception when insufficient_privilege then null;
+  end;
   -- dono imutável
   begin
     update public.goals set user_id = '00000000-0000-0000-0000-00000000000b';
