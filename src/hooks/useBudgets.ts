@@ -9,6 +9,9 @@ import { db } from '../shared/api/firebase/index';
 import type { Transaction } from '../shared/types/transaction';
 import { absCentavos, addCentavos, fromCentavos, toCentavos, type Centavos } from '../shared/types/money';
 import { isExpense as checkExpense, isInvoicePayment } from '../utils/transactionUtils';
+import { DATA_BACKEND } from '../shared/config/backend';
+import { useBudgetStoreSupabase } from './supabase/useBudgetsSupabase';
+export { BudgetUserError } from './supabase/useBudgetsSupabase';
 
 // ─── Public Types ─────────────────────────────────────────────────────────────
 
@@ -90,7 +93,16 @@ const STATUS_RANK: Record<BudgetInsight['status'], number> = { danger: 0, warnin
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useBudgets(uid: string, transactions: Transaction[]): UseBudgetsReturn {
+/** Camada de armazenamento dos orçamentos (Firebase ou Supabase, escolhida no build). */
+export interface BudgetStore {
+  budgets:      Budget[];
+  loading:      boolean;
+  addBudget:    (data: BudgetWriteData) => Promise<void>;
+  removeBudget: (id: string) => Promise<void>;
+  updateBudget: (id: string, data: Partial<BudgetWriteData>) => Promise<void>;
+}
+
+function useBudgetStoreFirebase(uid: string): BudgetStore {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -131,6 +143,39 @@ export function useBudgets(uid: string, transactions: Transaction[]): UseBudgets
   }, [uid]);
 
   // ── Compute insights (pure derivation — no extra Firestore calls) ─────────
+  // ── CRUD ──────────────────────────────────────────────────────────────────
+  const addBudget = useCallback(async (data: BudgetWriteData) => {
+    if (!uid) return;
+    await addDoc(collection(db, 'users', uid, 'budgets'), {
+      ...data,
+      targetAmount: toCentavos(data.targetAmount),
+      schemaVersion: 2,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }, [uid]);
+
+  const removeBudget = useCallback(async (id: string) => {
+    if (!uid) return;
+    await deleteDoc(doc(db, 'users', uid, 'budgets', id));
+  }, [uid]);
+
+  const updateBudget = useCallback(async (id: string, data: Partial<BudgetWriteData>) => {
+    if (!uid) return;
+    const payload: Record<string, unknown> = { ...data, updatedAt: serverTimestamp() };
+    if (data.targetAmount !== undefined) payload['targetAmount'] = toCentavos(data.targetAmount);
+    await updateDoc(doc(db, 'users', uid, 'budgets', id), payload);
+  }, [uid]);
+
+  return { budgets, loading, addBudget, removeBudget, updateBudget };
+}
+
+const useBudgetStore: (uid: string) => BudgetStore =
+  DATA_BACKEND === 'supabase' ? useBudgetStoreSupabase : useBudgetStoreFirebase;
+
+export function useBudgets(uid: string, transactions: Transaction[]): UseBudgetsReturn {
+  const { budgets, loading, addBudget, removeBudget, updateBudget } = useBudgetStore(uid);
+
   const insights = useMemo<BudgetInsight[]>(() => {
     return budgets
       .map(budget => {
@@ -188,30 +233,6 @@ export function useBudgets(uid: string, transactions: Transaction[]): UseBudgets
         return tier !== 0 ? tier : b.progress - a.progress;
       });
   }, [budgets, transactions]);
-
-  // ── CRUD ──────────────────────────────────────────────────────────────────
-  const addBudget = useCallback(async (data: BudgetWriteData) => {
-    if (!uid) return;
-    await addDoc(collection(db, 'users', uid, 'budgets'), {
-      ...data,
-      targetAmount: toCentavos(data.targetAmount),
-      schemaVersion: 2,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-  }, [uid]);
-
-  const removeBudget = useCallback(async (id: string) => {
-    if (!uid) return;
-    await deleteDoc(doc(db, 'users', uid, 'budgets', id));
-  }, [uid]);
-
-  const updateBudget = useCallback(async (id: string, data: Partial<BudgetWriteData>) => {
-    if (!uid) return;
-    const payload: Record<string, unknown> = { ...data, updatedAt: serverTimestamp() };
-    if (data.targetAmount !== undefined) payload['targetAmount'] = toCentavos(data.targetAmount);
-    await updateDoc(doc(db, 'users', uid, 'budgets', id), payload);
-  }, [uid]);
 
   return { budgets, insights, loading, addBudget, removeBudget, updateBudget };
 }
