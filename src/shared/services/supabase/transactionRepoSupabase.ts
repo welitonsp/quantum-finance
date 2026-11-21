@@ -22,6 +22,11 @@ import {
 } from '../firestoreCore';
 import { PAGE_SIZE } from '../../../utils/transactionPagination';
 import type { TransactionGateway, WindowPage } from '../../../hooks/transactionGateway';
+import {
+  generateTransactionImportHash,
+  normalizeImportTransaction,
+  transactionToLedgerInput,
+} from '../LedgerService';
 
 export interface TransactionRow {
   id: string;
@@ -310,16 +315,16 @@ export const transactionRepoSupabase = {
    */
   async saveAllTransactions(uid: string, transactions: Array<Partial<Transaction>>): Promise<ImportResult> {
     if (!uid || !transactions.length) return { added: 0, duplicates: 0, invalid: 0 };
+    // Mesma normalização e mesmo hash estável do importador Firebase (LedgerService):
+    // reimportar o mesmo arquivo gera os mesmos import_hash e é deduplicado.
     const rows: Record<string, unknown>[] = [];
     let invalid = 0;
     for (const tx of transactions) {
-      try {
-        const cols = toTransactionColumns({ ...buildManualCreatePayload(tx), source: tx.source ?? 'manual' });
-        if (tx.importHash) cols['import_hash'] = tx.importHash;
-        rows.push(cols);
-      } catch {
-        invalid += 1;
-      }
+      const payload = normalizeImportTransaction(transactionToLedgerInput(tx));
+      if (!payload) { invalid += 1; continue; }
+      const cols = toTransactionColumns(payload as unknown as Record<string, unknown>);
+      cols['import_hash'] = tx.importHash ?? await generateTransactionImportHash(uid, payload);
+      rows.push(cols);
     }
 
     let added = 0;

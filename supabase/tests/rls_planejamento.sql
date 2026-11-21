@@ -13,7 +13,7 @@ set local role authenticated;
 select pg_temp.login('00000000-0000-0000-0000-00000000000a') \g /dev/null
 
 insert into public.categories (name, normalized_name, type, color) values ('Pets', 'pets', 'saida', '#f00');
--- recriar categoria desativada (upsert do app) reativa a mesma linha
+-- nome único por usuário: conflito no insert permite reativar a mesma linha
 update public.categories set is_active = false where normalized_name = 'pets';
 insert into public.categories (name, normalized_name, type, color, is_active)
 values ('Pets', 'pets', 'saida', '#64748b', true)
