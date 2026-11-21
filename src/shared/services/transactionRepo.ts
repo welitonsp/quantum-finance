@@ -35,8 +35,10 @@ import {
   type ManualTransactionCreateDTO,
   type TransactionUpdateDTO,
 } from './firestoreCore';
+import { DATA_BACKEND } from '../config/backend';
+import { transactionRepoSupabase } from './supabase/transactionRepoSupabase';
 
-export const transactionRepo = {
+const transactionRepoFirebase = {
   async getTransactions(uid: string): Promise<Transaction[]> {
     if (!uid) return [];
     try {
@@ -400,3 +402,11 @@ export const transactionRepo = {
     return LedgerService.importTransactions(uid, transactions.map(transactionToLedgerInput));
   },
 };
+
+/**
+ * Repositório ativo, escolhido no build (VITE_AUTH_PROVIDER). No Supabase o
+ * histórico é gravado por trigger no banco; os parâmetros de histórico do
+ * Firebase são aceitos e só a origem (ai/reconcile/bulk) é aproveitada.
+ */
+export const transactionRepo: typeof transactionRepoFirebase =
+  DATA_BACKEND === 'supabase' ? transactionRepoSupabase : transactionRepoFirebase;
