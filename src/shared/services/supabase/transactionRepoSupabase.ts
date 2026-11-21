@@ -169,9 +169,25 @@ export function toTransactionColumns(payload: Record<string, unknown>): Record<s
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const UNIQUE_VIOLATION = '23505';
 
+/**
+ * Traduz o código do Postgres/PostgREST para as categorias que a fila de
+ * sincronização já entende: falhas permanentes não são repetidas.
+ * Sem código (rede, 5xx, timeout, limite) → undefined → a fila tenta de novo.
+ */
+export function mapSupabaseErrorCode(error: unknown): string | undefined {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (typeof code !== 'string') return undefined;
+  if (code === '42501') return 'permission-denied';
+  if (code === 'PGRST301' || code === 'PGRST302' || code === 'PGRST303') return 'unauthenticated';
+  // 22xxx dado inválido, 23xxx constraint (check, not null, fk, unique), coluna/schema inexistente
+  if (/^2[23]/.test(code) || code === '42703' || code === 'PGRST204') return 'invalid-argument';
+  return undefined;
+}
+
 function fail(op: Parameters<typeof logSanitizedFirebaseError>[0], error: unknown, message: string): never {
   logSanitizedFirebaseError(op, error);
-  throw new Error(message);
+  const code = mapSupabaseErrorCode(error);
+  throw code ? Object.assign(new Error(message), { code }) : new Error(message);
 }
 
 type BulkSnapshotItem = {

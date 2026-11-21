@@ -31,6 +31,7 @@ vi.mock('../../lib/firebaseErrorHandling', () => ({ logSanitizedFirebaseError: v
 
 import {
   escapeLike,
+  mapSupabaseErrorCode,
   transactionGatewaySupabase as gateway,
   mapTransactionRow,
   toTransactionColumns,
@@ -301,5 +302,25 @@ describe('transactionGatewaySupabase', () => {
 
   it('escapeLike', () => {
     expect(escapeLike('a%b_c\\d')).toBe('a\\%b\\_c\\\\d');
+  });
+});
+
+describe('mapSupabaseErrorCode', () => {
+  it('falhas permanentes viram categorias que a fila não repete; o resto fica sem código', () => {
+    expect(mapSupabaseErrorCode({ code: '42501' })).toBe('permission-denied');
+    expect(mapSupabaseErrorCode({ code: 'PGRST301' })).toBe('unauthenticated');
+    expect(mapSupabaseErrorCode({ code: '23514' })).toBe('invalid-argument');
+    expect(mapSupabaseErrorCode({ code: '22P02' })).toBe('invalid-argument');
+    expect(mapSupabaseErrorCode({ code: 'PGRST204' })).toBe('invalid-argument');
+    expect(mapSupabaseErrorCode({ code: '57014' })).toBeUndefined();
+    expect(mapSupabaseErrorCode({ code: '53400' })).toBeUndefined();
+    expect(mapSupabaseErrorCode(null)).toBeUndefined();
+  });
+
+  it('create com erro permanente mantém o código no erro lançado', async () => {
+    results = [{ data: null, error: { code: '23514', message: 'check' } }];
+    await expect(gateway.create('u1', {
+      description: 'Mercado', value_cents: 100, type: 'saida', category: 'Lazer', date: '2026-11-10',
+    } as never, 'idem-key-1234')).rejects.toMatchObject({ code: 'invalid-argument' });
   });
 });
