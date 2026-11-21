@@ -6,14 +6,16 @@ import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
+import { DATA_BACKEND } from '../shared/config/backend';
+import { useAiConsentSupabase } from './supabase/useAiConsentSupabase';
 
-interface UseAiConsentReturn {
+export interface UseAiConsentReturn {
   /** true somente quando o documento existe e `ai === true`. Fail-closed em qualquer outro caso. */
   aiGranted: boolean;
   loading:   boolean;
 }
 
-export function useAiConsent(uid: string): UseAiConsentReturn {
+function useAiConsentFirebase(uid: string): UseAiConsentReturn {
   const [aiGranted, setAiGranted] = useState(false);
   const [loading,   setLoading]   = useState(true);
 
@@ -41,3 +43,7 @@ export function useAiConsent(uid: string): UseAiConsentReturn {
 
   return { aiGranted, loading };
 }
+
+/** Firebase ou Supabase, escolhido no build (VITE_AUTH_PROVIDER). */
+export const useAiConsent: (uid: string) => UseAiConsentReturn =
+  DATA_BACKEND === 'supabase' ? useAiConsentSupabase : useAiConsentFirebase;
