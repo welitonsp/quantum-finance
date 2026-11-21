@@ -197,7 +197,7 @@ describe('transactionGatewaySupabase', () => {
     const pages: unknown[] = [];
     const stop = gateway.subscribeWindow('u1', {}, p => pages.push(p), () => {});
     await flush();
-    expect(pages).toEqual([{ docs: [mapTransactionRow(baseRow)], rawCount: 1, cursor: { q: {}, offset: 1 } }]);
+    expect(pages).toEqual([{ docs: [mapTransactionRow(baseRow)], rawCount: 1, cursor: { q: {}, offset: 1, extent: { rows: 500 } } }]);
     expect(calls).toContainEqual({ op: 'is', args: ['deleted_at', null] });
     expect(calls).toContainEqual({ op: 'order', args: ['created_at', { ascending: false }] });
     expect(calls).toContainEqual({ op: 'order', args: ['id', { ascending: false }] });
@@ -258,6 +258,29 @@ describe('transactionGatewaySupabase', () => {
     calls.length = 0;
     expect(await gateway.loadOlder('u1', null)).toEqual({ docs: [], rawCount: 0, cursor: null });
     expect(calls).toHaveLength(0);
+  });
+
+  it('após carregar página antiga, a recarga em tempo real cobre janela + páginas (sem buraco na fronteira)', async () => {
+    const fullPage = Array.from({ length: 500 }, (_, i) => ({ ...baseRow, id: `w${i}` }));
+    results = [{ data: fullPage, error: null }];
+    const pages: Array<{ rawCount: number; cursor: unknown }> = [];
+    const stop = gateway.subscribeWindow('u1', {}, p => pages.push(p), () => {});
+    await flush();
+    const cursor = pages[0]?.cursor;
+    results = [{ data: [{ ...baseRow, id: 'old1' }, { ...baseRow, id: 'old2' }], error: null }];
+    await gateway.loadOlder('u1', cursor);
+
+    calls.length = 0;
+    results = [
+      { data: fullPage, error: null },
+      { data: [{ ...baseRow, id: 'w499' }, { ...baseRow, id: 'old1' }, { ...baseRow, id: 'old2' }], error: null },
+    ];
+    const onChange = channel.on.mock.calls[channel.on.mock.calls.length - 1]?.[2] as () => void;
+    onChange();
+    await flush();
+    expect(calls.filter(c => c.op === 'range').map(c => c.args)).toEqual([[0, 499], [500, 999]]);
+    expect(pages[pages.length - 1]?.rawCount).toBe(503);
+    stop();
   });
 
   it('fetchOne, create idempotente e newId uuid', async () => {
