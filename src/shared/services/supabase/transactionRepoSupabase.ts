@@ -428,15 +428,16 @@ export const transactionGatewaySupabase: TransactionGateway = {
       const request = ++latest;
       const rows: TransactionRow[] = [];
       const target = extent.rows;
+      let exhausted = false;
       for (let from = 0; from < target; from += PAGE_SIZE) {
         const { data, error } = await windowQueryBuilder(q).range(from, from + PAGE_SIZE - 1);
         if (!active || request !== latest) return;
         if (error) { onError(error); return; }
         const chunk = (data ?? []) as unknown as TransactionRow[];
         rows.push(...chunk);
-        if (chunk.length < PAGE_SIZE) break;
+        if (chunk.length < PAGE_SIZE) { exhausted = true; break; }
       }
-      onNext(windowPage(rows, q, 0, extent));
+      onNext({ ...windowPage(rows, q, 0, extent), coversLoaded: true, exhausted });
     };
 
     void run();

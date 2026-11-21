@@ -197,7 +197,7 @@ describe('transactionGatewaySupabase', () => {
     const pages: unknown[] = [];
     const stop = gateway.subscribeWindow('u1', {}, p => pages.push(p), () => {});
     await flush();
-    expect(pages).toEqual([{ docs: [mapTransactionRow(baseRow)], rawCount: 1, cursor: { q: {}, offset: 1, extent: { rows: 500 } } }]);
+    expect(pages).toEqual([{ docs: [mapTransactionRow(baseRow)], rawCount: 1, cursor: { q: {}, offset: 1, extent: { rows: 500 } }, coversLoaded: true, exhausted: true }]);
     expect(calls).toContainEqual({ op: 'is', args: ['deleted_at', null] });
     expect(calls).toContainEqual({ op: 'order', args: ['created_at', { ascending: false }] });
     expect(calls).toContainEqual({ op: 'order', args: ['id', { ascending: false }] });
@@ -279,7 +279,7 @@ describe('transactionGatewaySupabase', () => {
     onChange();
     await flush();
     expect(calls.filter(c => c.op === 'range').map(c => c.args)).toEqual([[0, 499], [500, 999]]);
-    expect(pages[pages.length - 1]?.rawCount).toBe(503);
+    expect(pages[pages.length - 1]).toMatchObject({ rawCount: 503, coversLoaded: true, exhausted: true });
     stop();
   });
 
