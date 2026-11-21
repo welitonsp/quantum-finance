@@ -87,7 +87,8 @@ export function useAccountsSupabase(uid: string): UseAccountsReturn {
       .channel(`accounts:${uid}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'accounts', filter: `user_id=eq.${uid}` },
         () => { void refresh(); })
-      .subscribe();
+      // Recarrega quando o canal entra: cobre mudanças entre a consulta inicial e a assinatura.
+      .subscribe((status: string) => { if (status === 'SUBSCRIBED') void refresh(); });
 
     return () => {
       active = false;
