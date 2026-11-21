@@ -31,7 +31,7 @@ vi.mock('../../shared/api/supabase/client', () => ({ getSupabase: () => client }
 vi.mock('../../shared/lib/firebaseErrorHandling', () => ({ logSanitizedFirebaseError: vi.fn() }));
 
 import { useGoalStoreSupabase, mapGoalRow, toGoalColumns } from './useGoalsSupabase';
-import { millisOrNull } from './useSupabaseTable';
+import { millisOrNull, useSupabaseTable } from './useSupabaseTable';
 import type { Centavos } from '../../shared/types/money';
 
 beforeEach(() => {
@@ -93,5 +93,36 @@ describe('useGoalStoreSupabase', () => {
     const { result } = renderHook(() => useGoalStoreSupabase(''));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(client.from).not.toHaveBeenCalled();
+  });
+});
+
+describe('useSupabaseTable', () => {
+  const opts = {
+    table: 'goals', columns: 'id', orderBy: 'id',
+    map: (r: { id: string }) => r.id, loadOp: 'goals_load' as const,
+  };
+
+  it('na troca de usuário não expõe, nem por um render, os itens do anterior', async () => {
+    selectResult = { data: [{ id: 'g-do-a' }], error: null };
+    const { result, rerender } = renderHook(({ uid }) => useSupabaseTable(uid, opts), { initialProps: { uid: 'a' } });
+    await waitFor(() => expect(result.current.items).toEqual(['g-do-a']));
+
+    selectResult = { data: [{ id: 'g-do-b' }], error: null };
+    const seen: string[][] = [];
+    rerender({ uid: 'b' });
+    seen.push(result.current.items);
+    expect(result.current.loading).toBe(true);
+    await waitFor(() => expect(result.current.items).toEqual(['g-do-b']));
+    expect(seen.flat()).not.toContain('g-do-a');
+  });
+
+  it('falha na leitura aparece em error (e some quando volta a funcionar)', async () => {
+    selectResult = { data: null, error: { code: '500' } };
+    const { result } = renderHook(() => useSupabaseTable('a', opts));
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    selectResult = { data: [{ id: 'g1' }], error: null };
+    await act(async () => { await result.current.refresh(); });
+    expect(result.current.error).toBeNull();
+    expect(result.current.items).toEqual(['g1']);
   });
 });

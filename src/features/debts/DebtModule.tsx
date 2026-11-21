@@ -92,9 +92,10 @@ function AddDebtModal({ onClose, onSave }: AddDebtModalProps) {
       errs['totalCents'] = 'Valor inválido';
     }
     const rate = Number(form.interestRate.replace(',', '.'));
-    if (isNaN(rate) || rate < 0)    errs['interestRate']  = 'Taxa inválida';
+    // Taxa mensal em %: o banco guarda a fração (< 1), então o teto é 99,99% a.m.
+    if (isNaN(rate) || rate < 0 || rate >= 100) errs['interestRate'] = 'Taxa entre 0 e 99,99% ao mês';
     const inst = parseInt(form.installments);
-    if (!inst || inst <= 0)         errs['installments']  = 'Número de parcelas inválido';
+    if (!inst || inst <= 0 || inst > 600) errs['installments'] = 'Número de parcelas entre 1 e 600';
     const day = parseInt(form.dueDayOfMonth);
     if (!day || day < 1 || day > 31) errs['dueDayOfMonth'] = 'Dia inválido (1-31)';
     if (!form.startDate)            errs['startDate']     = 'Data de início obrigatória';
