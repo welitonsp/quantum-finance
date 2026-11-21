@@ -10,6 +10,8 @@ export interface SupabaseTableOptions<TRow, T> {
   columns: string;
   orderBy: string;
   ascending?: boolean;
+  /** Teto de linhas (as mais recentes pela ordem); sem teto quando ausente. */
+  limit?: number;
   map: (row: TRow) => T;
   loadOp: FirebaseErrorOperation;
 }
@@ -26,7 +28,7 @@ type Loaded<T> = { uid: string; items: T[] };
 
 export function useSupabaseTable<TRow, T>(
   uid: string,
-  { table, columns, orderBy, ascending = true, map, loadOp }: SupabaseTableOptions<TRow, T>,
+  { table, columns, orderBy, ascending = true, limit, map, loadOp }: SupabaseTableOptions<TRow, T>,
 ): SupabaseTableState<T> {
   // Os itens guardam de qual usuário vieram: na troca de usuário, nada do
   // anterior é exposto, nem no primeiro render antes do efeito limpar.
@@ -42,10 +44,11 @@ export function useSupabaseTable<TRow, T>(
   const refresh = useCallback(async (): Promise<void> => {
     const request = ++latestRequest.current;
     const requestUid = uidRef.current;
-    const { data, error } = await getSupabase()
+    const ordered = getSupabase()
       .from(table)
       .select(columns)
       .order(orderBy, { ascending });
+    const { data, error } = await (limit === undefined ? ordered : ordered.limit(limit));
     if (request !== latestRequest.current) return;
     if (error) {
       logSanitizedFirebaseError(loadOp, error);
@@ -54,7 +57,7 @@ export function useSupabaseTable<TRow, T>(
     }
     setError(null);
     setLoaded({ uid: requestUid, items: ((data ?? []) as TRow[]).map(map) });
-  }, [table, columns, orderBy, ascending, map, loadOp]);
+  }, [table, columns, orderBy, ascending, limit, map, loadOp]);
 
   useEffect(() => {
     if (!uid) { latestRequest.current += 1; setLoaded({ uid: '', items: [] }); setError(null); setLoading(false); return; }

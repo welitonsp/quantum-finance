@@ -7,26 +7,23 @@ import { db, functions } from '../../../shared/api/firebase/index';
 import { logSanitizedFirebaseError } from '../../../shared/lib/firebaseErrorHandling';
 import type { PriceObservation } from '../../../shared/types/shopping';
 import { priceObservationCreateSchema, type PriceObservationCreateInput } from '../../../shared/schemas/shoppingSchemas';
+import { DATA_BACKEND } from '../../../shared/config/backend';
+import {
+  normalizeProductName, observationsForProduct, PRICE_OBSERVATIONS_LIMIT,
+  type UsePriceObservationsReturn,
+} from './priceObservationRules';
+import { usePriceObservationsSupabase } from './usePriceObservationsSupabase';
 
-interface UsePriceObservationsReturn {
-  observations: PriceObservation[];
-  loading: boolean;
-  addObservation: (payload: PriceObservationCreateInput) => Promise<string>;
-  forProduct: (productName: string) => PriceObservation[];
-}
+export type { UsePriceObservationsReturn } from './priceObservationRules';
 
-function normalizeProductName(name: string): string {
-  return name.trim().toLowerCase().replace(/\s+/g, ' ');
-}
-
-export function usePriceObservations(uid: string): UsePriceObservationsReturn {
+function usePriceObservationsFirebase(uid: string): UsePriceObservationsReturn {
   const [observations, setObservations] = useState<PriceObservation[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!uid) return;
     const ref = collection(db, 'users', uid, 'priceObservations');
-    const q = query(ref, orderBy('observedAt', 'desc'), limit(500));
+    const q = query(ref, orderBy('observedAt', 'desc'), limit(PRICE_OBSERVATIONS_LIMIT));
     const unsub = onSnapshot(
       q,
       (snap) => {
@@ -55,14 +52,13 @@ export function usePriceObservations(uid: string): UsePriceObservationsReturn {
   }, [uid]);
 
   const forProduct = useCallback(
-    (productName: string): PriceObservation[] => {
-      const normalized = normalizeProductName(productName);
-      return observations
-        .filter((o) => normalizeProductName(o.productName) === normalized)
-        .slice(0, 20);
-    },
+    (productName: string) => observationsForProduct(observations, productName),
     [observations],
   );
 
   return { observations, loading, addObservation, forProduct };
 }
+
+/** Firebase ou Supabase, escolhido no build (VITE_AUTH_PROVIDER). */
+export const usePriceObservations: (uid: string) => UsePriceObservationsReturn =
+  DATA_BACKEND === 'supabase' ? usePriceObservationsSupabase : usePriceObservationsFirebase;
