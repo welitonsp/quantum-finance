@@ -7,6 +7,7 @@ import { toCentavos } from '../../shared/schemas/financialSchemas';
 import type { CreditCard } from '../../shared/types/transaction';
 import type { CreditCardStore, CreditCardUpdateInput, CreditCardWriteInput } from '../useCreditCards';
 import { centsFromBigint } from './useAccountsSupabase';
+import { reloadWhenVisible } from './useSupabaseTable';
 
 const CARD_COLUMNS = 'id, name, limit_cents, closing_day, due_day, color, active, created_at, updated_at';
 
@@ -89,8 +90,12 @@ export function useCreditCardStoreSupabase(uid: string): CreditCardStore {
       // Recarrega quando o canal entra: cobre mudanças entre a consulta inicial e a assinatura.
       .subscribe((status: string) => { if (status === 'SUBSCRIBED') void refresh(); });
 
+    // Exclusões em outra aba/aparelho: o Realtime não filtra DELETE (ver reloadWhenVisible).
+    const stopVisible = reloadWhenVisible(() => { void refresh(); });
+
     return () => {
       active = false;
+      stopVisible();
       void getSupabase().removeChannel(channel);
     };
   }, [uid, refresh]);

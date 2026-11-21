@@ -8,6 +8,7 @@ import { toCentavos } from '../../shared/schemas/financialSchemas';
 import type { Account } from '../../shared/types/transaction';
 import type { Centavos } from '../../shared/types/money';
 import type { AddAccountInput, UpdateAccountInput, UseAccountsReturn } from '../useAccounts';
+import { reloadWhenVisible } from './useSupabaseTable';
 
 const ACCOUNT_TYPES: ReadonlySet<Account['type']> = new Set([
   'corrente', 'poupanca', 'investimento', 'cartao', 'divida',
@@ -90,8 +91,12 @@ export function useAccountsSupabase(uid: string): UseAccountsReturn {
       // Recarrega quando o canal entra: cobre mudanças entre a consulta inicial e a assinatura.
       .subscribe((status: string) => { if (status === 'SUBSCRIBED') void refresh(); });
 
+    // Exclusões em outra aba/aparelho: o Realtime não filtra DELETE (ver reloadWhenVisible).
+    const stopVisible = reloadWhenVisible(() => { void refresh(); });
+
     return () => {
       active = false;
+      stopVisible();
       void getSupabase().removeChannel(channel);
     };
   }, [uid, refresh]);
