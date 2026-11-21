@@ -23,13 +23,17 @@ select pg_temp.login('00000000-0000-0000-0000-0000000000d1') \g /dev/null
 insert into public.user_consents (ai, analytics) values (true, false);
 insert into public.shopping_lists (id, name, items, created_at)
 values ('50000000-0000-0000-0000-000000000001', 'Mercado', '[{"id":"i1","productName":"arroz"}]', '2000-01-01');
-select public.record_price_observation('arroz', 'Atacadão', 2390, '1', 'kg', '2026-11-10') \g /dev/null
+select public.record_price_observation('arroz', 'Atacadão', 2390, '1,5', 'kg', '2026-11-10') \g /dev/null
 insert into public.challenges (category, target_pct, baseline_cents, deadline_days, start_date, end_date)
 values ('Lazer', 20, 50000, 30, '2026-11-01', '2026-12-01');
 insert into public.score_history (month, score, taxa_poupanca) values ('2026-11', 72, 0.15);
 insert into public.push_tokens (token) values ('token-de-teste-com-mais-de-20-caracteres');
 
 do $$ begin
+  -- quantidade com vírgula decimal é gravada com ponto
+  if (select quantity from public.price_observations where product_name = 'arroz') <> '1.5' then
+    raise exception 'FALHA: quantidade com vírgula não normalizada';
+  end if;
   -- dono, datas do servidor e upsert do consentimento
   if (select user_id from public.shopping_lists where id = '50000000-0000-0000-0000-000000000001')
      <> '00000000-0000-0000-0000-0000000000d1' then
