@@ -1,8 +1,8 @@
-import { getAuth, signInAnonymously, onAuthStateChanged, type User } from 'firebase/auth';
-import { app } from './index';
+import { getAuth, signInAnonymously, onAuthStateChanged, type Auth, type User } from 'firebase/auth';
+import { app, FIREBASE_ENABLED } from './index';
 import { logSanitizedFirebaseError } from '../../lib/firebaseErrorHandling';
 
-export const auth = getAuth(app);
+export const auth: Auth = FIREBASE_ENABLED ? getAuth(app) : (undefined as unknown as Auth);
 
 export function initAuth(onUserChange: (user: User) => void) {
   return onAuthStateChanged(auth, async (user) => {
