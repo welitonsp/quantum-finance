@@ -37,6 +37,16 @@ do $$ begin
   end if;
 end $$;
 
+-- authenticated só tem SELECT na view
+do $$ begin
+  if has_table_privilege('authenticated', 'public.audit_timeline', 'INSERT, UPDATE, DELETE, TRUNCATE') then
+    raise exception 'FALHA: authenticated tem escrita na linha do tempo';
+  end if;
+  if not has_table_privilege('authenticated', 'public.audit_timeline', 'SELECT') then
+    raise exception 'FALHA: authenticated sem leitura na linha do tempo';
+  end if;
+end $$;
+
 -- anônimo não lê a view
 reset role;
 set local role anon;
