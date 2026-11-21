@@ -103,6 +103,7 @@ export const FIREBASE_ERROR_OPERATIONS = [
   'shared_expense_mark_paid',
   'shared_expense_delete',
   'invoice_payment',
+  'agent_action_execute',
 ] as const;
 
 export type FirebaseErrorOperation = typeof FIREBASE_ERROR_OPERATIONS[number];

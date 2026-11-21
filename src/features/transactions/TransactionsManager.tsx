@@ -87,7 +87,8 @@ export default function TransactionsManager({
   onAddNew,
   recurringTasks = [],
 }: Props) {
-  const effectiveUid = uid ?? auth.currentUser?.uid ?? '';
+  // `auth` só existe no build Firebase (no Supabase o uid sempre vem por prop)
+  const effectiveUid = uid ?? auth?.currentUser?.uid ?? '';
   const { categories: loadedCategories } = useCategories(providedCategories ? '' : effectiveUid);
   const categories = providedCategories ?? loadedCategories;
   const { accounts } = useAccounts(effectiveUid);

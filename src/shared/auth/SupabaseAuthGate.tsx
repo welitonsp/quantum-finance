@@ -10,12 +10,12 @@ interface Props {
 }
 
 /**
- * Porta de entrada do login pelo Supabase (Google + TOTP).
+ * Porta de entrada do login pelo Supabase (Google ou e-mail e senha + TOTP).
  * Carregada sob demanda (React.lazy) só quando VITE_AUTH_PROVIDER=supabase,
  * para o supabase-js não pesar no bundle enquanto o app roda no Firebase.
  */
 export default function SupabaseAuthGate({ children }: Props) {
-  const { ready, stage, appUser, login, submitMfaCode, cancelMfa, logout } = useSupabaseAuth();
+  const { ready, stage, appUser, login, loginWithEmail, signUpWithEmail, submitMfaCode, cancelMfa, logout } = useSupabaseAuth();
 
   if (!ready) {
     return (
@@ -29,6 +29,7 @@ export default function SupabaseAuthGate({ children }: Props) {
     return (
       <LoginScreen
         onLogin={login}
+        emailAuth={{ onSignIn: loginWithEmail, onSignUp: signUpWithEmail }}
         mfaPending={stage === 'needs_mfa'}
         onSubmitMfaCode={async (code) => {
           try {
