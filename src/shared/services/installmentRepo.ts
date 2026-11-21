@@ -16,14 +16,15 @@ import type { Centavos } from '../types/money';
 import type { Transaction } from '../types/transaction';
 import {
   txCol,
-  addMonthsToDate,
-  resolveCompetencia,
+  buildInstallmentPlan,
   type InstallmentGroupCreateDTO,
 } from './firestoreCore';
+import { DATA_BACKEND } from '../config/backend';
+import { installmentRepoSupabase } from './supabase/installmentRepoSupabase';
 
 // Forward reference — installmentRepo uses cancelRemainingInstallments which
 // needs getInstallmentGroup, so we define both in the same object.
-export const installmentRepo = {
+const installmentRepoFirebase = {
   async createInstallmentGroupWithHistory(
     uid: string,
     data: InstallmentGroupCreateDTO,
@@ -36,12 +37,9 @@ export const installmentRepo = {
       throw new Error('[Firestore][createInstallmentGroupWithHistory] Descrição obrigatória.');
     }
 
+    const plan = buildInstallmentPlan(data);
     const n = data.installmentCount;
     const total = Math.abs(data.totalValueCents) as Centavos;
-    // Safe integer division: compute remainder first so (total - remainder) divides n exactly.
-    const remainder = (total % n) as Centavos;
-    const perInstallment = ((total - remainder) / n) as Centavos;
-    const lastInstallment = (perInstallment + remainder) as Centavos;
 
     const groupAnchorRef = doc(txCol(uid));
     const groupId = groupAnchorRef.id;
@@ -50,10 +48,7 @@ export const installmentRepo = {
     const batch = writeBatch(db);
 
     for (let i = 0; i < n; i++) {
-      const index = i + 1; // 1-based
-      const valueCents = index === n ? lastInstallment : perInstallment;
-      const date = addMonthsToDate(data.date, i);
-      const competencia = resolveCompetencia(data.date, data.closingDay, i);
+      const { index, valueCents, date, competencia, description } = plan[i]!;
 
       const txRef = i === 0 ? groupAnchorRef : doc(txCol(uid));
       const historyRef = doc(
@@ -62,7 +57,7 @@ export const installmentRepo = {
       );
 
       const txPayload = {
-        description:          `${data.description.trim()} (${index}/${n})`,
+        description,
         value_cents:          valueCents,
         schemaVersion:        2 as const,
         type:                 'saida' as const,
@@ -132,7 +127,7 @@ export const installmentRepo = {
     fromIndex: number,
   ): Promise<number> {
     if (!uid || !groupId) return 0;
-    const allTxs = await installmentRepo.getInstallmentGroup(uid, groupId);
+    const allTxs = await installmentRepoFirebase.getInstallmentGroup(uid, groupId);
     const toCancel = allTxs.filter(
       tx => (tx.installmentIndex ?? 0) > fromIndex,
     );
@@ -172,3 +167,7 @@ export const installmentRepo = {
     return toCancel.length;
   },
 };
+
+/** Repositório ativo, escolhido no build (VITE_AUTH_PROVIDER). */
+export const installmentRepo: typeof installmentRepoFirebase =
+  DATA_BACKEND === 'supabase' ? installmentRepoSupabase : installmentRepoFirebase;
