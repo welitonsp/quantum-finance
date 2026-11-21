@@ -78,6 +78,24 @@ describe('useGoalStoreSupabase', () => {
     expect(client.removeChannel).toHaveBeenCalled();
   });
 
+  it('não escuta DELETE sem filtro e recarrega quando a aba volta a ficar visível', async () => {
+    selectResult = { data: [{ id: 'g1', name: 'A', target_cents: 100, current_cents: 0, deadline: null, emoji: null, created_at: null, updated_at: null }], error: null };
+    const { result, unmount } = renderHook(() => useGoalStoreSupabase('u1'));
+    await waitFor(() => expect(result.current.rawGoals).toHaveLength(1));
+    for (const c of channel.on.mock.calls as unknown[][]) {
+      expect((c[1] as { filter?: string }).filter).toBe('user_id=eq.u1');
+    }
+    const loads = () => calls.filter(c => c.op === 'order').length;
+    const before = loads();
+    selectResult = { data: [], error: null };
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+    await waitFor(() => expect(result.current.rawGoals).toHaveLength(0));
+    expect(loads()).toBe(before + 1);
+    unmount();
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+    expect(loads()).toBe(before + 1);
+  });
+
   it('addGoal e setProgress gravam centavos inteiros', async () => {
     const { result } = renderHook(() => useGoalStoreSupabase('u1'));
     await waitFor(() => expect(result.current.loading).toBe(false));
