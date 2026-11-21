@@ -9,8 +9,15 @@ function escapeCSV(val: unknown): string {
   return s;
 }
 
-/** Converte transações em string CSV (compatível com Excel pt-BR). */
-export function transactionsToCSV(transactions: Transaction[]): string {
+/**
+ * Converte transações em string CSV (compatível com Excel pt-BR).
+ * A coluna Conta usa o nome da conta vinculada (accountId); sem vínculo
+ * conhecido, cai no rótulo legado `account` do Firestore.
+ */
+export function transactionsToCSV(
+  transactions: Transaction[],
+  accountNames: ReadonlyMap<string, string> = new Map(),
+): string {
   const header = ['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria', 'Conta'];
   const rows = transactions.map(tx => [
     tx.date ?? '',
@@ -19,7 +26,7 @@ export function transactionsToCSV(transactions: Transaction[]): string {
     tx.type === 'entrada' || tx.type === 'receita' ? 'Receita'
       : isInvoicePayment(tx) ? 'Pagamento Fatura' : 'Despesa',
     tx.category ?? 'Outros',
-    tx.account ?? '',
+    (tx.accountId ? accountNames.get(tx.accountId) : undefined) ?? tx.account ?? '',
   ]);
   // BOM UTF-8 para Excel reconhecer acentos
   const bom = '﻿';
