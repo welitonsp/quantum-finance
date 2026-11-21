@@ -92,6 +92,12 @@ do $$ begin
     raise exception 'FALHA: cliente forjou registro LGPD';
   exception when insufficient_privilege then null;
   end;
+  -- quantidade zero é recusada (com ou sem vírgula)
+  begin
+    perform public.record_price_observation('feijão', 'X', 100, '0,0', 'kg', '2026-11-10');
+    raise exception 'FALHA: quantidade zero aceita';
+  exception when check_violation then null;
+  end;
   -- limite de 240 observações por hora (1 já gravada acima)
   for i in 1..239 loop
     perform public.record_price_observation('item ' || i, 'Loja', 100, '1', 'un', '2026-11-10');
