@@ -8,12 +8,38 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../../../shared/api/firebase';
 import { logSanitizedFirebaseError } from '../../../shared/lib/firebaseErrorHandling';
 import type { Group, GroupInvite, SharedExpense, SharedExpenseCreatePayload } from '../../../shared/types/shared';
+import { DATA_BACKEND } from '../../../shared/config/backend';
+import { useGroupsSupabase, useGroupInvitesSupabase, useGroupExpensesSupabase } from './useGroupsSupabase';
+
+export interface UseGroupsReturn {
+  groups: Group[];
+  loading: boolean;
+  createGroup: (name: string, description?: string) => Promise<string>;
+  deleteGroup: (groupId: string) => Promise<void>;
+  createInvite: (groupId: string, groupName: string, inviteeEmail: string, inviterDisplayName: string) => Promise<void>;
+  checkGroupInvite: (groupId: string, email: string) => Promise<GroupInvite | null>;
+  acceptInvite: (groupId: string, inviteId: string, displayName: string, email: string) => Promise<void>;
+  rejectInvite: (groupId: string, inviteId: string) => Promise<void>;
+}
+
+export interface UseGroupInvitesReturn {
+  invites: GroupInvite[];
+  loading: boolean;
+}
+
+export interface UseGroupExpensesReturn {
+  expenses: SharedExpense[];
+  loading: boolean;
+  addExpense: (groupId: string, payload: SharedExpenseCreatePayload) => Promise<void>;
+  markSharePaid: (groupId: string, expenseId: string, memberUid: string) => Promise<void>;
+  deleteExpense: (groupId: string, expenseId: string) => Promise<void>;
+}
 
 // ──────────────────────────────────────────────
 // Hook de grupos
 // ──────────────────────────────────────────────
 
-export function useGroups(uid: string) {
+function useGroupsFirebase(uid: string): UseGroupsReturn {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -184,7 +210,7 @@ export function useGroups(uid: string) {
 // Hook de convites enviados (para o dono do grupo ver)
 // ──────────────────────────────────────────────
 
-export function useGroupInvites(groupId: string | null) {
+function useGroupInvitesFirebase(groupId: string | null): UseGroupInvitesReturn {
   const [invites, setInvites] = useState<GroupInvite[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -218,7 +244,7 @@ export function useGroupInvites(groupId: string | null) {
 // Hook de despesas do grupo
 // ──────────────────────────────────────────────
 
-export function useGroupExpenses(groupId: string | null) {
+function useGroupExpensesFirebase(groupId: string | null): UseGroupExpensesReturn {
   const [expenses, setExpenses] = useState<SharedExpense[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -306,3 +332,11 @@ export function useGroupExpenses(groupId: string | null) {
 
   return { expenses, loading, addExpense, markSharePaid, deleteExpense };
 }
+
+// Backend escolhido no build (VITE_AUTH_PROVIDER): Supabase ou Firebase.
+const USE_SUPABASE = DATA_BACKEND === 'supabase';
+export const useGroups: (uid: string) => UseGroupsReturn = USE_SUPABASE ? useGroupsSupabase : useGroupsFirebase;
+export const useGroupInvites: (groupId: string | null) => UseGroupInvitesReturn =
+  USE_SUPABASE ? useGroupInvitesSupabase : useGroupInvitesFirebase;
+export const useGroupExpenses: (groupId: string | null) => UseGroupExpensesReturn =
+  USE_SUPABASE ? useGroupExpensesSupabase : useGroupExpensesFirebase;
