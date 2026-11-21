@@ -12,6 +12,7 @@ import { buildActionQuestion } from '../features/ai-agent/intentRouter';
 import type { ActionProposal } from '../shared/schemas/agentSchemas';
 import { isIncome } from '../utils/transactionUtils';
 import { transactionRepo } from '../shared/services/transactionRepo';
+import { DATA_BACKEND } from '../shared/config/backend';
 
 interface Props {
   uid: string;
@@ -95,7 +96,7 @@ function nextOneTouchOccurrence(task: RecurringTask, today = todayAtStartOfDay()
   return dueDate;
 }
 
-export default function OneTouchActionsCard({ uid, recurringTasks }: Props) {
+function OneTouchActionsCardFirebase({ uid, recurringTasks }: Props) {
   const [activeTask, setActiveTask] = useState<RecurringTask | null>(null);
   const [activeProposal, setActiveProposal] = useState<ActionProposal | null>(null);
   const [activeQuestion, setActiveQuestion] = useState('');
@@ -295,4 +296,14 @@ export default function OneTouchActionsCard({ uid, recurringTasks }: Props) {
       )}
     </section>
   );
+}
+
+/**
+ * A execução em 1 toque passa pela callable do Agente (Firebase). No build
+ * Supabase o card fica oculto até o Agente migrar para as funções do servidor
+ * do Supabase (etapa própria), para não oferecer uma ação que falharia.
+ */
+export default function OneTouchActionsCard(props: Props) {
+  if (DATA_BACKEND === 'supabase') return null;
+  return <OneTouchActionsCardFirebase {...props} />;
 }
