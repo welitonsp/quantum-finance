@@ -322,7 +322,13 @@ export function useTransactions(
         const snapLastDoc  = page.cursor;
         const snapIsFull   = page.rawCount >= PAGE_SIZE;
 
-        if (!snapIsFull) {
+        if (page.coversLoaded && snapIsFull) {
+          // A janela trouxe tudo o que já foi carregado: as páginas antigas
+          // guardadas podem ter linhas excluídas ou fora do filtro — descarta.
+          olderPagesRef.current  = [];
+          lastPageDocRef.current = snapLastDoc;
+          setHasMoreTransactions(page.exhausted !== true);
+        } else if (!snapIsFull) {
           // Snapshot não cheio → ALL transações cabem na janela realtime.
           // Quaisquer páginas antigas carregadas estão cobertas (ou foram eliminadas).
           olderPagesRef.current  = [];
