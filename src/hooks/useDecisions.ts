@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { collection, query, orderBy, limit, onSnapshot, type DocumentData } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
+import { DATA_BACKEND } from '../shared/config/backend';
+import { DECISIONS_LIMIT, useDecisionsSupabase } from './supabase/useDecisionsSupabase';
 
 export interface AIDecision {
   id: string;
@@ -23,13 +25,13 @@ export interface DecisionStats {
   reverted: number;
 }
 
-interface UseDecisionsReturn {
+export interface UseDecisionsReturn {
   decisions: AIDecision[];
   loading: boolean;
   stats: DecisionStats;
 }
 
-function toStringField(value: unknown): string {
+export function toStringField(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
@@ -44,7 +46,7 @@ function toDate(value: unknown): Date | null {
   return null;
 }
 
-function toProposedAction(value: unknown): { kind: string; payload: Record<string, unknown> } {
+export function toProposedAction(value: unknown): { kind: string; payload: Record<string, unknown> } {
   if (value && typeof value === 'object') {
     const record = value as Record<string, unknown>;
     const payload = record['payload'];
@@ -56,13 +58,13 @@ function toProposedAction(value: unknown): { kind: string; payload: Record<strin
   return { kind: '', payload: {} };
 }
 
-function toUserDecision(value: unknown): AIDecision['userDecision'] {
+export function toUserDecision(value: unknown): AIDecision['userDecision'] {
   return value === 'confirmed' || value === 'rejected' || value === 'expired' || value === 'none'
     ? value
     : 'none';
 }
 
-function toOutcomeStatus(value: unknown): AIDecision['outcomeStatus'] {
+export function toOutcomeStatus(value: unknown): AIDecision['outcomeStatus'] {
   return value === 'pending' || value === 'applied' || value === 'reverted' || value === 'n/a'
     ? value
     : 'pending';
@@ -80,7 +82,18 @@ function mapDecision(id: string, data: DocumentData): AIDecision {
   };
 }
 
-export function useDecisions(uid: string): UseDecisionsReturn {
+/** Contagens do diário (mesma regra nas duas versões). */
+export function decisionStats(decisions: AIDecision[]): DecisionStats {
+  return {
+    total: decisions.length,
+    confirmed: decisions.filter(d => d.userDecision === 'confirmed').length,
+    rejected: decisions.filter(d => d.userDecision === 'rejected').length,
+    applied: decisions.filter(d => d.outcomeStatus === 'applied').length,
+    reverted: decisions.filter(d => d.outcomeStatus === 'reverted').length,
+  };
+}
+
+function useDecisionsFirebase(uid: string): UseDecisionsReturn {
   const [decisions, setDecisions] = useState<AIDecision[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -95,7 +108,7 @@ export function useDecisions(uid: string): UseDecisionsReturn {
     const q = query(
       collection(db, 'users', uid, 'decisions'),
       orderBy('createdAt', 'desc'),
-      limit(50),
+      limit(DECISIONS_LIMIT),
     );
 
     const unsub = onSnapshot(
@@ -113,13 +126,11 @@ export function useDecisions(uid: string): UseDecisionsReturn {
     return unsub;
   }, [uid]);
 
-  const stats: DecisionStats = {
-    total: decisions.length,
-    confirmed: decisions.filter(d => d.userDecision === 'confirmed').length,
-    rejected: decisions.filter(d => d.userDecision === 'rejected').length,
-    applied: decisions.filter(d => d.outcomeStatus === 'applied').length,
-    reverted: decisions.filter(d => d.outcomeStatus === 'reverted').length,
-  };
+  const stats = decisionStats(decisions);
 
   return { decisions, loading, stats };
 }
+
+/** Firebase ou Supabase, escolhido no build (VITE_AUTH_PROVIDER). */
+export const useDecisions: (uid: string) => UseDecisionsReturn =
+  DATA_BACKEND === 'supabase' ? useDecisionsSupabase : useDecisionsFirebase;
