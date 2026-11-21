@@ -163,4 +163,18 @@ describe('transactionRepoSupabase', () => {
     expect(inserted.map(r => r['import_hash'])).toEqual(['h2']);
     expect(inserted[0]).toMatchObject({ source: 'csv' });
   });
+
+  it('sem importHash calcula o mesmo hash estável do importador Firebase (reimportar não duplica)', async () => {
+    results = [
+      { data: [], error: null },              // nenhum hash gravado ainda
+      { data: [{ id: 'n1' }], error: null },  // insere uma
+    ];
+    const tx = { description: 'Padaria', value_cents: 1250 as never, type: 'saida' as const, category: 'Alimentação', date: '2026-11-03', source: 'csv' as const };
+    const res = await repo.saveAllTransactions('u1', [tx, { ...tx }]);
+    expect(res).toEqual({ added: 1, duplicates: 1, invalid: 0 });
+    const inserted = calls.find(c => c.op === 'insert')!.args[0] as Array<Record<string, unknown>>;
+    expect(inserted).toHaveLength(1);
+    expect(String(inserted[0]!['import_hash'])).toMatch(/^[0-9a-f]{64}$/);
+    expect(inserted[0]).not.toHaveProperty('descriptionLower');
+  });
 });
