@@ -78,7 +78,9 @@ const firebaseConfig = {
 
 // Sob emulador/CI a config é fake — messaging não inicializa (mesmo guard do
 // stub antigo), e o SW segue funcionando só como cache.
-if (firebaseConfig.projectId && firebaseConfig.projectId !== 'fake-project'
+// Build Supabase: sem Firebase (o push via FCM fica desligado).
+if (import.meta.env.VITE_AUTH_PROVIDER !== 'supabase'
+  && firebaseConfig.projectId && firebaseConfig.projectId !== 'fake-project'
   && firebaseConfig.projectId !== 'demo-quantum-finance') {
   try {
     const messaging = getMessaging(initializeApp(firebaseConfig));
