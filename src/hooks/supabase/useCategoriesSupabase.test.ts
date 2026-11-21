@@ -81,7 +81,7 @@ describe('useCategoryStoreSupabase', () => {
   it('insertCategory insere sem user_id e devolve o id', async () => {
     const { result } = renderHook(() => useCategoryStoreSupabase('u1'));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    let id = '';
+    let id: unknown = '';
     await act(async () => { id = await result.current.insertCategory(pets); });
     expect(id).toBe('new-id');
     expect(calls).toContainEqual({ op: 'insert', args: [petsCols] });
@@ -91,7 +91,7 @@ describe('useCategoryStoreSupabase', () => {
     const { result } = renderHook(() => useCategoryStoreSupabase('u1'));
     await waitFor(() => expect(result.current.loading).toBe(false));
     writeQueue = [{ data: null, error: { code: '23505' } }, { data: [{ id: 'old' }], error: null }];
-    let id = '';
+    let id: unknown = '';
     await act(async () => { id = await result.current.insertCategory(pets); });
     expect(id).toBe('old');
     expect(calls).toContainEqual({ op: 'update', args: [petsCols] });
@@ -104,11 +104,12 @@ describe('useCategoryStoreSupabase', () => {
     writeQueue = [
       { data: null, error: { code: '23505' } },
       { data: [], error: null },
-      { data: { id: 'ativa' }, error: null },
+      { data: { id: 'ativa', name: 'Pets', normalized_name: 'pets', type: 'saida', color: '#123456', icon: null, is_default: false, is_active: true }, error: null },
     ];
-    let id = '';
-    await act(async () => { id = await result.current.insertCategory(pets); });
-    expect(id).toBe('ativa');
+    let stored: unknown;
+    await act(async () => { stored = await result.current.insertCategory({ ...pets, name: 'pets' }); });
+    // devolve a categoria gravada (nome canônico "Pets"), não o nome digitado agora
+    expect(stored).toMatchObject({ id: 'ativa', name: 'Pets', type: 'saida' });
     expect(calls.filter(c => c.op === 'update')).toHaveLength(1); // só a tentativa restrita a is_active=false
   });
 
