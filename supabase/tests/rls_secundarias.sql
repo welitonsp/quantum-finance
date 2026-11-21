@@ -21,11 +21,9 @@ set local role authenticated;
 select pg_temp.login('00000000-0000-0000-0000-0000000000d1') \g /dev/null
 
 insert into public.user_consents (ai, analytics) values (true, false);
-insert into public.data_processing_log (event_type, details) values ('consent_granted', 'ai');
 insert into public.shopping_lists (id, name, items, created_at)
 values ('50000000-0000-0000-0000-000000000001', 'Mercado', '[{"id":"i1","productName":"arroz"}]', '2000-01-01');
-insert into public.price_observations (product_name, store, unit_price_cents, quantity, unit, observed_at)
-values ('arroz', 'Atacadão', 2390, '1', 'kg', '2026-11-10');
+select public.record_price_observation('arroz', 'Atacadão', 2390, '1', 'kg', '2026-11-10') \g /dev/null
 insert into public.challenges (category, target_pct, baseline_cents, deadline_days, start_date, end_date)
 values ('Lazer', 20, 50000, 30, '2026-11-01', '2026-12-01');
 insert into public.score_history (month, score, taxa_poupanca) values ('2026-11', 72, 0.15);
@@ -43,6 +41,13 @@ do $$ begin
   insert into public.user_consents (ai, analytics) values (false, true)
     on conflict (user_id) do update set ai = excluded.ai, analytics = excluded.analytics;
   if (select ai from public.user_consents) then raise exception 'FALHA: upsert do consentimento'; end if;
+  -- consentimento concedido vira registro LGPD gravado pelo banco (ai, depois analytics)
+  if (select string_agg(details, ',' order by id) from public.data_processing_log) is distinct from 'ai,analytics' then
+    raise exception 'FALHA: consentimento não gerou registro LGPD';
+  end if;
+  if (select user_id from public.price_observations) <> '00000000-0000-0000-0000-0000000000d1' then
+    raise exception 'FALHA: observação de preço sem o dono do login';
+  end if;
   if (select count(*) from public.ai_decisions) <> 1 then raise exception 'FALHA: dono não lê a própria decisão'; end if;
   -- dono apaga o próprio token (ex.: ao desativar o push) e grava de novo
   delete from public.push_tokens where token = 'token-de-teste-com-mais-de-20-caracteres';
@@ -68,15 +73,29 @@ do $$ begin
   exception when insufficient_privilege then null;
   end;
   begin
-    insert into public.price_observations (product_name, store, unit_price_cents, quantity, unit, observed_at)
-    values ('feijão', 'X', 0, '1', 'kg', '2026-11-10');
+    perform public.record_price_observation('feijão', 'X', 0, '1', 'kg', '2026-11-10');
     raise exception 'FALHA: preço zero aceito';
   exception when check_violation then null;
   end;
   begin
-    insert into public.data_processing_log (event_type) values ('qualquer');
-    raise exception 'FALHA: evento LGPD desconhecido aceito';
-  exception when check_violation then null;
+    insert into public.price_observations (product_name, store, unit_price_cents, quantity, unit, observed_at)
+    values ('feijão', 'X', 100, '1', 'kg', '2026-11-10');
+    raise exception 'FALHA: cliente gravou observação de preço sem a função';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.data_processing_log (event_type) values ('export_requested');
+    raise exception 'FALHA: cliente forjou registro LGPD';
+  exception when insufficient_privilege then null;
+  end;
+  -- limite de 240 observações por hora (1 já gravada acima)
+  for i in 1..239 loop
+    perform public.record_price_observation('item ' || i, 'Loja', 100, '1', 'un', '2026-11-10');
+  end loop;
+  begin
+    perform public.record_price_observation('item 240', 'Loja', 100, '1', 'un', '2026-11-10');
+    raise exception 'FALHA: limite por hora não aplicado';
+  exception when sqlstate '53400' then null;
   end;
   begin
     update public.score_history set user_id = '00000000-0000-0000-0000-0000000000d2';
