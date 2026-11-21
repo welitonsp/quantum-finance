@@ -66,7 +66,7 @@ export function useCategoryStoreSupabase(uid: string): CategoryStore {
     map: (row: CategoryRow) => mapCategoryRow(row, uid),
     loadOp: 'categories_load' as const,
   }), [uid]);
-  const { items, loading, refresh } = useSupabaseTable<CategoryRow, UserCategory | null>(uid, options);
+  const { items, loading, error, refresh } = useSupabaseTable<CategoryRow, UserCategory | null>(uid, options);
   const userCategories = useMemo(
     () => items.filter((c): c is UserCategory => c !== null),
     [items],
@@ -74,19 +74,44 @@ export function useCategoryStoreSupabase(uid: string): CategoryStore {
 
   const insertCategory = useCallback(async (payload: CategoryWritePayload): Promise<string> => {
     if (!uid) throw new Error('Usuário não autenticado.');
-    // Nome único por usuário no banco: recriar uma categoria desativada a reativa
-    // (mesmo id), em vez de falhar como duplicata.
-    const { data, error } = await getSupabase()
-      .from('categories')
-      .upsert(toCategoryColumns(payload), { onConflict: 'user_id,normalized_name' })
-      .select('id')
-      .single();
-    if (error || !data) {
+    const db = getSupabase();
+    const { data, error } = await db.from('categories').insert(toCategoryColumns(payload)).select('id').single();
+    if (!error && data) {
+      await refresh();
+      return (data as { id: string }).id;
+    }
+    if ((error as { code?: string } | null)?.code !== DUPLICATE) {
       logSanitizedFirebaseError('category_create', error);
       throw new Error('Não foi possível criar a categoria.');
     }
+
+    // Nome já existe para o usuário (nome único no banco).
+    // Desativada: reativa a mesma linha com os dados novos.
+    const { data: revived, error: reviveError } = await db
+      .from('categories')
+      .update(toCategoryColumns(payload))
+      .eq('normalized_name', payload.normalizedName)
+      .eq('is_active', false)
+      .select('id');
+    if (reviveError) {
+      logSanitizedFirebaseError('category_create', reviveError);
+      throw new Error('Não foi possível criar a categoria.');
+    }
+    const revivedId = (revived as Array<{ id: string }> | null)?.[0]?.id;
+    if (revivedId) {
+      await refresh();
+      return revivedId;
+    }
+
+    // Ativa (criada em outra aba): reaproveita sem alterar o que já foi salvo.
+    const { data: existing } = await db
+      .from('categories')
+      .select('id')
+      .eq('normalized_name', payload.normalizedName)
+      .maybeSingle();
     await refresh();
-    return (data as { id: string }).id;
+    if (existing) return (existing as { id: string }).id;
+    throw new Error('Não foi possível criar a categoria.');
   }, [uid, refresh]);
 
   const patchCategory = useCallback(async (categoryId: string, patch: CategoryPatch): Promise<void> => {
@@ -104,5 +129,5 @@ export function useCategoryStoreSupabase(uid: string): CategoryStore {
     await refresh();
   }, [uid, refresh]);
 
-  return { userCategories, loading, error: null, insertCategory, patchCategory };
+  return { userCategories, loading, error, insertCategory, patchCategory };
 }

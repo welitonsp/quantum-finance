@@ -9,7 +9,7 @@ const next = (): Promise<Result> => Promise.resolve(results.shift() ?? { data: [
 function builder() {
   const b: Record<string, unknown> = {};
   const record = (op: string) => (...args: unknown[]) => { calls.push({ op, args }); return b; };
-  for (const op of ['select', 'insert', 'update', 'eq', 'in', 'is', 'order', 'ilike', 'gte', 'lte', 'lt', 'limit']) b[op] = record(op);
+  for (const op of ['select', 'insert', 'update', 'eq', 'in', 'is', 'order', 'ilike', 'gte', 'lte', 'lt', 'limit', 'range']) b[op] = record(op);
   b['single'] = () => next();
   b['maybeSingle'] = () => next();
   b['then'] = (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => next().then(res, rej);
@@ -195,20 +195,35 @@ describe('transactionRepoSupabase', () => {
     expect(inserted.map(r => r['import_hash'])).toEqual(['h2']);
     expect(inserted[0]).toMatchObject({ source: 'csv' });
   });
+
+  it('sem importHash calcula o mesmo hash estável do importador Firebase (reimportar não duplica)', async () => {
+    results = [
+      { data: [], error: null },              // nenhum hash gravado ainda
+      { data: [{ id: 'n1' }], error: null },  // insere uma
+    ];
+    const tx = { description: 'Padaria', value_cents: 1250 as never, type: 'saida' as const, category: 'Alimentação', date: '2026-11-03', source: 'csv' as const };
+    const res = await repo.saveAllTransactions('u1', [tx, { ...tx }]);
+    expect(res).toEqual({ added: 1, duplicates: 1, invalid: 0 });
+    const inserted = calls.find(c => c.op === 'insert')!.args[0] as Array<Record<string, unknown>>;
+    expect(inserted).toHaveLength(1);
+    expect(String(inserted[0]!['import_hash'])).toMatch(/^[0-9a-f]{64}$/);
+    expect(inserted[0]).not.toHaveProperty('descriptionLower');
+  });
 });
 
 describe('transactionGatewaySupabase', () => {
   const flush = () => new Promise(r => setTimeout(r, 0));
 
-  it('janela padrão: mais recentes, só ativas, limitada, com cursor em created_at', async () => {
+  it('janela padrão: mais recentes (id desempata), só ativas, primeira página', async () => {
     results = [{ data: [baseRow], error: null }];
     const pages: unknown[] = [];
     const stop = gateway.subscribeWindow('u1', {}, p => pages.push(p), () => {});
     await flush();
-    expect(pages).toEqual([{ docs: [mapTransactionRow(baseRow)], rawCount: 1, cursor: baseRow.created_at }]);
+    expect(pages).toEqual([{ docs: [mapTransactionRow(baseRow)], rawCount: 1, cursor: { q: {}, offset: 1 } }]);
     expect(calls).toContainEqual({ op: 'is', args: ['deleted_at', null] });
     expect(calls).toContainEqual({ op: 'order', args: ['created_at', { ascending: false }] });
-    expect(calls.some(c => c.op === 'limit')).toBe(true);
+    expect(calls).toContainEqual({ op: 'order', args: ['id', { ascending: false }] });
+    expect(calls.find(c => c.op === 'range')?.args[0]).toBe(0);
     stop();
     expect(client.removeChannel).toHaveBeenCalled();
   });
@@ -255,11 +270,13 @@ describe('transactionGatewaySupabase', () => {
     expect(onError).toHaveBeenCalledWith({ code: '42501' });
   });
 
-  it('loadOlder pagina por created_at; sem cursor não consulta', async () => {
+  it('loadOlder repete o filtro da janela a partir da posição; sem cursor não consulta', async () => {
     results = [{ data: [baseRow], error: null }];
-    const page = await gateway.loadOlder('u1', '2026-11-10T12:00:00Z');
+    const page = await gateway.loadOlder('u1', { q: { category: 'Lazer' }, offset: 500 });
     expect(page.rawCount).toBe(1);
-    expect(calls).toContainEqual({ op: 'lt', args: ['created_at', '2026-11-10T12:00:00Z'] });
+    expect(page.cursor).toEqual({ q: { category: 'Lazer' }, offset: 501 });
+    expect(calls).toContainEqual({ op: 'eq', args: ['category', 'Lazer'] });
+    expect(calls.find(c => c.op === 'range')?.args[0]).toBe(500);
     calls.length = 0;
     expect(await gateway.loadOlder('u1', null)).toEqual({ docs: [], rawCount: 0, cursor: null });
     expect(calls).toHaveLength(0);
