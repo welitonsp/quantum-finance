@@ -11,6 +11,10 @@ vi.mock('../../../hooks/useCategories', () => ({
   useCategories: vi.fn(() => ({ categories: [] })),
 }));
 
+vi.mock('../../../hooks/useAccounts', () => ({
+  useAccounts: vi.fn(() => ({ accounts: [] })),
+}));
+
 vi.mock('../../../components/AuditTimeline', () => ({
   default: () => null,
 }));
