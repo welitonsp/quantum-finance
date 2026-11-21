@@ -3,6 +3,14 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../api/firebase/index';
 import { logSanitizedFirebaseError } from '../lib/firebaseErrorHandling';
 import { isSafeOperationId } from '../lib/operationTrace';
+import { DATA_BACKEND } from '../config/backend';
+
+/**
+ * No Supabase a auditoria é gravada pelo próprio banco (gatilhos de
+ * transaction_history / planning_history / account_history, server-trusted) e
+ * lida pela view audit_timeline. Os registros abaixo só existem no Firebase.
+ */
+const AUDIT_WRITTEN_BY_DATABASE = DATA_BACKEND === 'supabase';
 
 // ─── Audit Model (replayable) ─────────────────────────────────────────────────
 
@@ -99,6 +107,7 @@ export const AuditService = {
    * - FAIL SILENT — nunca lança erro nem bloqueia o fluxo principal
    */
   async logAction(log: RecurringAuditLogInput): Promise<void> {
+    if (AUDIT_WRITTEN_BY_DATABASE) return;
     if (!log.userId) {
       if (import.meta.env.DEV) {
         console.warn('[AuditService] logAction ignorado: identificador ausente.');
@@ -133,6 +142,7 @@ export const AuditService = {
    * - FAIL SILENT — nunca lança erro nem bloqueia o fluxo principal
    */
   async logTransactionAudit(log: TransactionAuditLogInput): Promise<void> {
+    if (AUDIT_WRITTEN_BY_DATABASE) return;
     try {
       const call = httpsCallable<TransactionAuditLogInput, { logged: boolean }>(
         functions, 'logAuditEvent'
