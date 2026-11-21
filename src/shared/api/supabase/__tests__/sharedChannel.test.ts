@@ -67,4 +67,12 @@ describe('subscribeSharedChannel', () => {
     subscribeSharedChannel('accounts:u1', watch, fn)();
     expect(client.channel).toHaveBeenCalledTimes(2);
   });
+
+  it('modo só INSERT/UPDATE assina os dois eventos e omite filtro vazio', () => {
+    subscribeSharedChannel('groups:shared_groups_load:u1', [{ table: 'groups', insertUpdateOnly: true }], vi.fn())();
+    expect(channel.on.mock.calls.map((c) => c[1])).toEqual([
+      { event: 'INSERT', schema: 'public', table: 'groups' },
+      { event: 'UPDATE', schema: 'public', table: 'groups' },
+    ]);
+  });
 });

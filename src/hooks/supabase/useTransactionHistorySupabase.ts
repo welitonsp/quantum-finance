@@ -3,6 +3,7 @@
 // aqui viram os nomes de campo do app e passam pelo mesmo mapeador do Firebase.
 import { useEffect, useState } from 'react';
 import { getSupabase } from '../../shared/api/supabase/client';
+import { subscribeSharedChannel } from '../../shared/api/supabase/sharedChannel';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 import { TRANSACTION_FIELD_TO_COLUMN } from '../../shared/services/supabase/transactionRepoSupabase';
 import {
@@ -101,18 +102,15 @@ export function useTransactionHistorySupabase(
     // O histórico é gravado por trigger a cada mudança da transação: quando a linha
     // muda (tempo real), recarregamos. Também recarregamos quando o canal termina de
     // entrar, para não perder uma mudança feita entre a 1ª leitura e a assinatura.
-    const supabase = getSupabase();
-    const channel = supabase
-      .channel(`transaction_history:${transactionId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'transactions', filter: `id=eq.${transactionId}` },
-        () => { void load(); },
-      )
-      .subscribe((status: string) => { if (status === 'SUBSCRIBED') void load(); });
+    const leaveChannel = subscribeSharedChannel(
+      `transaction_history:${transactionId}`,
+      [{ table: 'transactions', filter: `id=eq.${transactionId}` }],
+      () => { void load(); },
+      () => { void load(); },
+    );
     return () => {
       active = false;
-      void supabase.removeChannel(channel);
+      leaveChannel();
     };
   }, [uid, transactionId]);
 
