@@ -10,6 +10,8 @@ import {
 
 import { db } from '../shared/api/firebase';
 import type { TransactionHistoryAction } from '../shared/services/AuditService';
+import { DATA_BACKEND } from '../shared/config/backend';
+import { useTransactionHistorySupabase } from './supabase/useTransactionHistorySupabase';
 
 const DEFAULT_ACTION: TransactionHistoryAction = 'UPDATE';
 const HISTORY_LIMIT = 50;
@@ -33,7 +35,7 @@ export type TransactionHistoryView = {
   schemaVersion?: number;
 };
 
-type UseTransactionHistoryReturn = {
+export type UseTransactionHistoryReturn = {
   events: TransactionHistoryView[];
   loading: boolean;
   error: string | null;
@@ -158,7 +160,7 @@ export function mapTransactionHistoryDoc(doc: HistoryDoc): TransactionHistoryVie
   return event;
 }
 
-export function useTransactionHistory(
+function useTransactionHistoryFirebase(
   uid: string | undefined,
   transactionId: string | undefined,
 ): UseTransactionHistoryReturn {
@@ -216,3 +218,6 @@ export function useTransactionHistory(
   return { events, loading, error };
 }
 
+/** Firebase ou Supabase, escolhido no build (VITE_AUTH_PROVIDER). */
+export const useTransactionHistory: (uid: string | undefined, transactionId: string | undefined) => UseTransactionHistoryReturn =
+  DATA_BACKEND === 'supabase' ? useTransactionHistorySupabase : useTransactionHistoryFirebase;

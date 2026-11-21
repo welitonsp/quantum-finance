@@ -10,6 +10,13 @@ import {
 import { db } from '../../shared/api/firebase/index';
 import type { Transaction } from '../../shared/types/transaction';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
+import { DATA_BACKEND } from '../../shared/config/backend';
+import { getSupabase } from '../../shared/api/supabase/client';
+import {
+  mapTransactionRow,
+  TRANSACTION_COLUMNS,
+  type TransactionRow,
+} from '../../shared/services/supabase/transactionRepoSupabase';
 
 const DEFAULT_MAX_CANDIDATES = 300;
 const MAX_CANDIDATES_CEILING = 500;
@@ -47,6 +54,19 @@ export async function findImportCandidateTransactions({
   }
 
   try {
+    if (DATA_BACKEND === 'supabase') {
+      const { data, error } = await getSupabase()
+        .from('transactions')
+        .select(TRANSACTION_COLUMNS)
+        .is('deleted_at', null)
+        .gte('date', periodStart)
+        .lte('date', periodEnd)
+        .order('date', { ascending: true })
+        .limit(resolveMaxCandidates(maxCandidates));
+      if (error) throw error;
+      return ((data ?? []) as unknown as TransactionRow[]).map(mapTransactionRow);
+    }
+
     const candidatesQuery = query(
       collection(db, 'users', safeUid, 'transactions'),
       where('date', '>=', periodStart),
