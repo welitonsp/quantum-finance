@@ -14,8 +14,9 @@ $$;
 grant execute on function pg_temp.login(text) to authenticated;
 
 -- decisão do Agente gravada pelo servidor (fora da RLS)
-insert into public.ai_decisions (user_id, intent, question) values
-  ('00000000-0000-0000-0000-0000000000d1', 'register_purchase', 'Registrar compra?');
+insert into public.ai_decisions (user_id, intent, question, tools_used, snapshot_ref, simulation_result) values
+  ('00000000-0000-0000-0000-0000000000d1', 'register_purchase', repeat('?', 2000),
+   array['saldo', 'simulador'], 'snap-1', '{"veredito": "ok"}');
 
 set local role authenticated;
 select pg_temp.login('00000000-0000-0000-0000-0000000000d1') \g /dev/null
@@ -92,14 +93,19 @@ do $$ begin
     raise exception 'FALHA: cliente forjou registro LGPD';
   exception when insufficient_privilege then null;
   end;
+  -- precisão extra é arredondada para 3 casas
+  perform public.record_price_observation('leite', 'X', 100, '1,2345', 'L', '2026-11-10');
+  if (select quantity from public.price_observations where product_name = 'leite') <> '1.235' then
+    raise exception 'FALHA: quantidade não arredondada para 3 casas';
+  end if;
   -- quantidade zero é recusada (com ou sem vírgula)
   begin
     perform public.record_price_observation('feijão', 'X', 100, '0,0', 'kg', '2026-11-10');
     raise exception 'FALHA: quantidade zero aceita';
   exception when check_violation then null;
   end;
-  -- limite de 240 observações por hora (1 já gravada acima)
-  for i in 1..239 loop
+  -- limite de 240 observações por hora (2 já gravadas acima)
+  for i in 1..238 loop
     perform public.record_price_observation('item ' || i, 'Loja', 100, '1', 'un', '2026-11-10');
   end loop;
   begin
