@@ -108,6 +108,10 @@ export default defineConfig({
             return 'vendor-firebase';
           }
 
+          if (normalizedId.includes('/node_modules/@supabase/')) {
+            return 'vendor-supabase';
+          }
+
           if (
             normalizedId.includes('/node_modules/react/') ||
             normalizedId.includes('/node_modules/react-dom/') ||
