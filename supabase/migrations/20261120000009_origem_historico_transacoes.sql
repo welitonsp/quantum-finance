@@ -85,7 +85,7 @@ declare
   v_count  integer;
   v_bad    text;
 begin
-  if p_origin not in ('manual', 'ai', 'reconcile', 'bulk', 'bulk_undo') then
+  if p_origin is null or p_origin not in ('manual', 'ai', 'reconcile', 'bulk', 'bulk_undo') then
     raise exception 'origem inválida' using errcode = '22023';
   end if;
   if p_ids is null or cardinality(p_ids) = 0 then

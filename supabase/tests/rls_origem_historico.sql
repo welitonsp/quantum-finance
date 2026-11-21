@@ -61,6 +61,11 @@ do $$ begin
   exception when invalid_parameter_value then null;
   end;
   begin
+    perform public.update_transactions_with_origin(array['40000000-0000-0000-0000-000000000001']::uuid[], '{"category": "X"}'::jsonb, null);
+    raise exception 'FALHA: origem nula aceita';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
     perform public.update_transactions_with_origin(array['40000000-0000-0000-0000-000000000001']::uuid[], '{"import_hash": "x"}'::jsonb, 'bulk');
     raise exception 'FALHA: campo import_hash aceito no patch';
   exception when invalid_parameter_value then null;
