@@ -1,12 +1,13 @@
 // src/features/transactions/TransactionsManager.tsx
 // Motor de Gestão de Movimentações — Quantum Finance v2
 // Thin orchestrator: holds state, delegates rendering to sub-components.
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { Check, AlertTriangle } from 'lucide-react';
 import type { Transaction } from '../../shared/types/transaction';
 import type { BulkUpdate } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
+import { useAccounts } from '../../hooks/useAccounts';
 import { auth } from '../../shared/api/firebase/auth';
 import AuditTimeline from '../../components/AuditTimeline';
 import TransactionHistoryDrawer from '../../components/TransactionHistoryDrawer';
@@ -89,6 +90,8 @@ export default function TransactionsManager({
   const effectiveUid = uid ?? auth.currentUser?.uid ?? '';
   const { categories: loadedCategories } = useCategories(providedCategories ? '' : effectiveUid);
   const categories = providedCategories ?? loadedCategories;
+  const { accounts } = useAccounts(effectiveUid);
+  const accountNames = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts]);
 
   // ── Alertas de assinaturas ────────────────────────────────────────────────
   const subscriptionAlerts = useSubscriptionAlerts(recurringTasks, transactions);
@@ -354,6 +357,7 @@ export default function TransactionsManager({
         onOpenAudit={() => setAuditOpen(true)}
         filtered={filtered}
         transactions={transactions}
+        accountNames={accountNames}
         reportPickerOpen={reportPickerOpen}
         setReportPickerOpen={setReportPickerOpen}
         reportYear={reportYear}
