@@ -66,14 +66,22 @@ export const transferRepoSupabase: typeof transferRepoFirebase = {
       throw new Error(parsed.error.issues[0]?.message ?? 'Transferência inválida.');
     }
     const { fromAccountId, toAccountId, value_cents, date, description } = parsed.data;
-    const { data: id, error } = await getSupabase().rpc('create_transfer', {
+    // Uma chave por transferência pedida: se a resposta se perder na rede, a
+    // nova tentativa reusa a mesma chave e o banco devolve a transferência já feita.
+    const args = {
       p_from_account_id: fromAccountId,
       p_to_account_id: toAccountId,
       p_value_cents: Math.abs(value_cents),
       p_date: date,
       p_description: description?.trim() || null,
       p_idempotency_key: crypto.randomUUID(),
-    });
+    };
+    let result = await getSupabase().rpc('create_transfer', args).then(r => r, (err: unknown) => ({ data: null, error: err }));
+    const isNetworkFailure = (e: unknown) => !!e && typeof (e as { code?: unknown }).code !== 'string';
+    if (result.error && isNetworkFailure(result.error)) {
+      result = await getSupabase().rpc('create_transfer', args).then(r => r, (err: unknown) => ({ data: null, error: err }));
+    }
+    const { data: id, error } = result;
     if (error || typeof id !== 'string' || id.length === 0) {
       logSanitizedFirebaseError('transaction_add', error);
       throw new Error('Não foi possível concluir a transferência.');

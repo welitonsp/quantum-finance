@@ -253,6 +253,9 @@ export function buildInstallmentPlan(data: InstallmentGroupCreateDTO): Installme
   }
   const n = data.installmentCount;
   const total = Math.abs(data.totalValueCents) as Centavos;
+  if (total < n) {
+    throw new Error('Valor total pequeno demais: cada parcela precisa ter ao menos R$ 0,01.');
+  }
   // Safe integer division: compute remainder first so (total - remainder) divides n exactly.
   const remainder = (total % n) as Centavos;
   const perInstallment = ((total - remainder) / n) as Centavos;
