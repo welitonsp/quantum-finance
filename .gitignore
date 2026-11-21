@@ -11,6 +11,7 @@ node_modules/
 .env
 .env.*
 !.env.example
+!.env.production
 # Firebase Functions emulator secrets (defineSecret) — NUNCA commitar chaves reais.
 .secret.local
 **/.secret.local
