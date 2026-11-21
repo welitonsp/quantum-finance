@@ -114,7 +114,7 @@ export function mapTransactionRow(row: TransactionRow): Transaction {
   return tx;
 }
 
-const FIELD_TO_COLUMN: Record<string, string> = {
+export const TRANSACTION_FIELD_TO_COLUMN: Record<string, string> = {
   description: 'description',
   value_cents: 'value_cents',
   type: 'type',
@@ -154,7 +154,7 @@ function toIsoOrNow(value: unknown): string {
 export function toTransactionColumns(payload: Record<string, unknown>): Record<string, unknown> {
   const cols: Record<string, unknown> = {};
   for (const [field, value] of Object.entries(payload)) {
-    const column = FIELD_TO_COLUMN[field];
+    const column = TRANSACTION_FIELD_TO_COLUMN[field];
     if (!column || value === undefined) continue;
     cols[column] = NULLABLE_REFS.has(column) && !value ? null : value;
   }
