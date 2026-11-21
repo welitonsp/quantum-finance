@@ -78,6 +78,7 @@ export const FIREBASE_ERROR_OPERATIONS = [
   'score_history_persist',
   'score_history_load',
   'challenges_load',
+  'challenge_write',
   'debt_load',
   'debt_add',
   'debt_update',

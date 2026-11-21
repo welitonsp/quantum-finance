@@ -5,6 +5,8 @@ import {
 } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
+import { DATA_BACKEND } from '../shared/config/backend';
+import { useChallengeStoreSupabase } from './supabase/useChallengesSupabase';
 
 export interface Challenge {
   id:           string;
@@ -37,7 +39,21 @@ function addDaysToISO(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function useChallenges(uid: string) {
+/** Janela do desafio: começa hoje e termina após `deadlineDays` dias. */
+export function challengeDates(deadlineDays: number): { startDate: string; endDate: string } {
+  const startDate = todayISO();
+  return { startDate, endDate: addDaysToISO(startDate, deadlineDays) };
+}
+
+export interface ChallengeStore {
+  challenges: Challenge[];
+  loading: boolean;
+  createChallenge: (input: CreateChallengeInput) => Promise<void>;
+  updateXP: (challengeId: string, newXP: number, status: Challenge['status']) => Promise<void>;
+  deleteChallenge: (challengeId: string) => Promise<void>;
+}
+
+function useChallengesFirebase(uid: string): ChallengeStore {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [loading, setLoading]       = useState(true);
 
@@ -63,8 +79,7 @@ export function useChallenges(uid: string) {
 
   const createChallenge = useCallback(async (input: CreateChallengeInput) => {
     if (!uid) return;
-    const today   = todayISO();
-    const endDate = addDaysToISO(today, input.deadlineDays);
+    const { startDate: today, endDate } = challengeDates(input.deadlineDays);
     await addDoc(collection(db, 'users', uid, 'challenges'), {
       category:      input.category,
       targetPct:     input.targetPct,
@@ -91,6 +106,10 @@ export function useChallenges(uid: string) {
 
   return { challenges, loading, createChallenge, updateXP, deleteChallenge };
 }
+
+/** Firebase ou Supabase, escolhido no build (VITE_AUTH_PROVIDER). */
+export const useChallenges: (uid: string) => ChallengeStore =
+  DATA_BACKEND === 'supabase' ? useChallengeStoreSupabase : useChallengesFirebase;
 
 // ─── XP milestone computation ────────────────────────────────────────────────
 
