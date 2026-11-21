@@ -3,6 +3,7 @@
 // apenas evita eventos de outras linhas.
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSupabase } from '../../shared/api/supabase/client';
+import { subscribeSharedChannel } from '../../shared/api/supabase/sharedChannel';
 import { logSanitizedFirebaseError, type FirebaseErrorOperation } from '../../shared/lib/firebaseErrorHandling';
 
 export interface SupabaseTableOptions<TRow, T> {
@@ -67,19 +68,21 @@ export function useSupabaseTable<TRow, T>(
     setLoading(true);
     void refresh().finally(() => { if (active) setLoading(false); });
 
-    const channel = getSupabase()
-      .channel(`${table}:${uid}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table, filter: `user_id=eq.${uid}` },
-        () => { void refresh(); })
-      // Recarrega quando o canal entra: cobre mudanças entre a consulta inicial e a assinatura.
-      .subscribe((status: string) => { if (status === 'SUBSCRIBED') void refresh(); });
+    // Canal compartilhado: várias telas com este hook ao mesmo tempo não quebram o app.
+    // Recarrega quando o canal entra: cobre mudanças entre a consulta inicial e a assinatura.
+    const leaveChannel = subscribeSharedChannel(
+      `${table}:${uid}`,
+      [{ table: table, filter: `user_id=eq.${uid}` }],
+      () => { void refresh(); },
+      () => { void refresh(); },
+    );
 
     const stopVisible = reloadWhenVisible(() => { void refresh(); });
 
     return () => {
       active = false;
       stopVisible();
-      void getSupabase().removeChannel(channel);
+      leaveChannel();
     };
   }, [uid, table, refresh]);
 
