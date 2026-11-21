@@ -31,6 +31,33 @@ insert into public.user_consents (ai, analytics) values (true, true);
 select pg_temp.login('00000000-0000-0000-0000-0000000000f2', 0) \g /dev/null
 insert into public.goals (name, target_cents) values ('Meta F2', 2000);
 
+-- registro LGPD pela função: tipos permitidos, consent_granted recusado, sem INSERT direto
+select public.log_data_processing_event('export_requested', '  pedido pela tela  ') \g /dev/null
+do $$ begin
+  if (select details from public.data_processing_log
+       where user_id = '00000000-0000-0000-0000-0000000000f2' and event_type = 'export_requested') <> 'pedido pela tela' then
+    raise exception 'FALHA: registro LGPD não gravado pela função';
+  end if;
+  begin
+    perform public.log_data_processing_event('consent_granted');
+    raise exception 'FALHA: cliente gravou consent_granted';
+  exception when sqlstate '22023' then null;
+  end;
+  begin
+    insert into public.data_processing_log (event_type) values ('portability');
+    raise exception 'FALHA: INSERT direto no registro LGPD';
+  exception when insufficient_privilege then null;
+  end;
+  for i in 1..29 loop
+    perform public.log_data_processing_event('portability');
+  end loop;
+  begin
+    perform public.log_data_processing_event('portability');
+    raise exception 'FALHA: limite por hora não aplicado';
+  exception when sqlstate 'QF429' then null;
+  end;
+end $$;
+
 -- login antigo (10 min) é recusado com QF401
 select pg_temp.login('00000000-0000-0000-0000-0000000000f1', 600) \g /dev/null
 do $$ begin
