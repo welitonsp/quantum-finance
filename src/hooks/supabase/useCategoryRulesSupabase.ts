@@ -25,14 +25,21 @@ export function normalizeRules(raw: CategoryRule[]): CategoryRule[] {
 const RULE_OPTIONS = {
   table: 'category_rules',
   columns: 'id, keyword, category',
-  orderBy: 'keyword',
+  // Ordem de prioridade (não de exibição): a categorização para na 1ª regra que casa.
+  orderBy: 'created_at',
+  ascending: true,
   map: mapCategoryRuleRow,
   loadOp: 'category_rules_load',
 } as const;
 
 export function useCategoryRuleStoreSupabase(uid: string): CategoryRuleStore {
   const { items, loading, refresh } = useSupabaseTable<CategoryRuleRow, CategoryRule>(uid, RULE_OPTIONS);
-  const rules = useMemo(() => normalizeRules(items), [items]);
+  // Palavra-chave mais longa primeiro ("uber eats" antes de "uber"): a regra mais
+  // específica vence; empate mantém a ordem de criação (sort é estável).
+  const rules = useMemo(
+    () => normalizeRules(items).sort((a, b) => b.keyword.length - a.keyword.length),
+    [items],
+  );
 
   const addRule = useCallback(async (keyword: string, category: string): Promise<void> => {
     if (!uid) throw new Error('Utilizador não autenticado.');
