@@ -21,7 +21,7 @@ import {
   type TransactionUpdateDTO,
 } from '../firestoreCore';
 import { PAGE_SIZE } from '../../../utils/transactionPagination';
-import type { TransactionGateway, WindowPage } from '../../../hooks/transactionGateway';
+import type { TransactionGateway, WindowPage, WindowQuery } from '../../../hooks/transactionGateway';
 import {
   generateTransactionImportHash,
   normalizeImportTransaction,
@@ -380,9 +380,30 @@ export function escapeLike(term: string): string {
   return term.replace(/[\\%_]/g, ch => `\\${ch}`);
 }
 
-function windowPage(rows: TransactionRow[]): WindowPage {
-  const last = rows[rows.length - 1];
-  return { docs: rows.map(mapTransactionRow), rawCount: rows.length, cursor: last ? last.created_at : null };
+/** Cursor da próxima página: a mesma consulta da janela, a partir de `offset`. */
+interface SupabaseCursor { q: WindowQuery; offset: number }
+
+/** Monta a consulta da janela com filtro e ordenação estáveis (id desempata). */
+function windowQueryBuilder(q: WindowQuery) {
+  let builder = getSupabase().from('transactions').select(TRANSACTION_COLUMNS).is('deleted_at', null);
+  const term = q.term ?? '';
+  if (term.length >= 2) {
+    return builder.ilike('description', `%${escapeLike(term)}%`)
+      .order('description', { ascending: true }).order('id', { ascending: true });
+  }
+  if (q.category) {
+    builder = builder.eq('category', q.category);
+  } else if (q.dateFrom && q.dateTo) {
+    builder = builder.gte('date', q.dateFrom).lte('date', q.dateTo);
+  } else {
+    return builder.order('created_at', { ascending: false }).order('id', { ascending: false });
+  }
+  return builder.order('date', { ascending: false }).order('id', { ascending: false });
+}
+
+function windowPage(rows: TransactionRow[], q: WindowQuery, offset: number): WindowPage {
+  const cursor: SupabaseCursor | null = rows.length > 0 ? { q, offset: offset + rows.length } : null;
+  return { docs: rows.map(mapTransactionRow), rawCount: rows.length, cursor };
 }
 
 let channelSeq = 0;
@@ -394,24 +415,10 @@ export const transactionGatewaySupabase: TransactionGateway = {
 
     const run = async (): Promise<void> => {
       const request = ++latest;
-      let builder = getSupabase().from('transactions').select(TRANSACTION_COLUMNS).is('deleted_at', null);
-      const term = q.term ?? '';
-      if (term.length >= 2) {
-        builder = builder.ilike('description', `%${escapeLike(term)}%`);
-      } else if (q.category) {
-        builder = builder.eq('category', q.category);
-      } else if (q.dateFrom && q.dateTo) {
-        builder = builder.gte('date', q.dateFrom).lte('date', q.dateTo);
-      }
-      const ordered = term.length >= 2
-        ? builder.order('description', { ascending: true })
-        : q.category || (q.dateFrom && q.dateTo)
-          ? builder.order('date', { ascending: false })
-          : builder.order('created_at', { ascending: false });
-      const { data, error } = await ordered.limit(PAGE_SIZE);
+      const { data, error } = await windowQueryBuilder(q).range(0, PAGE_SIZE - 1);
       if (!active || request !== latest) return;
       if (error) { onError(error); return; }
-      onNext(windowPage((data ?? []) as unknown as TransactionRow[]));
+      onNext(windowPage((data ?? []) as unknown as TransactionRow[], q, 0));
     };
 
     void run();
@@ -428,17 +435,17 @@ export const transactionGatewaySupabase: TransactionGateway = {
     };
   },
 
+  /**
+   * Próxima página com o MESMO filtro e ordem da janela (busca, categoria ou
+   * período). Paginação por posição: linhas repetidas por mudança concorrente
+   * são descartadas pelo id no hook.
+   */
   async loadOlder(_uid, cursor) {
-    if (typeof cursor !== 'string') return { docs: [], rawCount: 0, cursor: null };
-    const { data, error } = await getSupabase()
-      .from('transactions')
-      .select(TRANSACTION_COLUMNS)
-      .is('deleted_at', null)
-      .lt('created_at', cursor)
-      .order('created_at', { ascending: false })
-      .limit(PAGE_SIZE);
+    const c = cursor as SupabaseCursor | null;
+    if (!c || typeof c.offset !== 'number') return { docs: [], rawCount: 0, cursor: null };
+    const { data, error } = await windowQueryBuilder(c.q).range(c.offset, c.offset + PAGE_SIZE - 1);
     if (error) throw error;
-    return windowPage((data ?? []) as unknown as TransactionRow[]);
+    return windowPage((data ?? []) as unknown as TransactionRow[], c.q, c.offset);
   },
 
   async fetchOne(_uid, id) {
