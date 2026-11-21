@@ -194,6 +194,19 @@ describe('transactionsToCSV', () => {
     expect(csv).toContain('Nubank');
   });
 
+  it('coluna Conta usa o nome da conta vinculada e cai no rótulo legado', () => {
+    const names = new Map([['acc-1', 'Conta Itaú']]);
+    const csv = transactionsToCSV([
+      tx({ id: 'a', accountId: 'acc-1', account: 'conta_corrente' }),
+      tx({ id: 'b', accountId: 'acc-sumida', account: 'Nubank' }),
+      tx({ id: 'c' }),
+    ], names);
+    const lines = csv.slice(1).split('\r\n');
+    expect(lines[1]?.endsWith(',Conta Itaú')).toBe(true);
+    expect(lines[2]?.endsWith(',Nubank')).toBe(true);
+    expect(lines[3]?.endsWith(',')).toBe(true);
+  });
+
   it('serializa transação de saida sem paidInvoiceMonth como Despesa', () => {
     const txs = [tx({ date: '2026-06-01', type: 'saida', value_cents: cents(5000) })];
     const csv = transactionsToCSV(txs);
