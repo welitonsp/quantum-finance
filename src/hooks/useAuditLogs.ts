@@ -7,6 +7,8 @@ import { db } from '../shared/api/firebase/index';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import type { AuditLog } from '../shared/services/AuditService';
 import { fromCentavos } from '../shared/types/money';
+import { DATA_BACKEND } from '../shared/config/backend';
+import { useAuditLogsSupabase } from './supabase/useAuditLogsSupabase';
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
 
@@ -120,7 +122,7 @@ export const mapLog = (log: AuditLog): AuditView => {
 
 // ─── Return Type ──────────────────────────────────────────────────────────────
 
-interface UseAuditLogsReturn {
+export interface UseAuditLogsReturn {
   logs:          AuditView[];
   loading:       boolean;
   error:         string | null;
@@ -148,7 +150,7 @@ function mapSnapshotDocs(docs: QueryDocumentSnapshot<DocumentData>[]): AuditView
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useAuditLogs(uid: string): UseAuditLogsReturn {
+function useAuditLogsFirebase(uid: string): UseAuditLogsReturn {
   const [realtimeLogs,  setRealtimeLogs]  = useState<AuditView[]>([]);
   const [olderLogs,     setOlderLogs]     = useState<AuditView[]>([]);
   const [loading,       setLoading]       = useState(true);
@@ -259,3 +261,7 @@ export function useAuditLogs(uid: string): UseAuditLogsReturn {
     loadMoreLogs,
   };
 }
+
+/** Firebase (audit_logs) ou Supabase (view audit_timeline), escolhido no build (VITE_AUTH_PROVIDER). */
+export const useAuditLogs: (uid: string) => UseAuditLogsReturn =
+  DATA_BACKEND === 'supabase' ? useAuditLogsSupabase : useAuditLogsFirebase;
