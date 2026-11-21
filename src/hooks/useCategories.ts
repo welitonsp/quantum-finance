@@ -37,8 +37,11 @@ export interface CategoryStore {
   userCategories: UserCategory[];
   loading: boolean;
   error: Error | null;
-  /** Grava e devolve o id. */
-  insertCategory: (payload: CategoryWritePayload) => Promise<string>;
+  /**
+   * Grava e devolve o id. Se a categoria já existia (criada em outra aba), devolve
+   * a categoria como está gravada, para o chamador usar o nome canônico.
+   */
+  insertCategory: (payload: CategoryWritePayload) => Promise<string | UserCategory>;
   patchCategory: (categoryId: string, patch: CategoryPatch) => Promise<void>;
 }
 
@@ -186,10 +189,11 @@ export function useCategories(uid: string): UseCategoriesReturn {
     const parsed = userCategorySchema.safeParse({ id: '', uid, ...payload });
     if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Categoria inválida.');
 
-    const id = await insertCategory(payload);
+    const created = await insertCategory(payload);
+    if (typeof created !== 'string') return created;
     return {
       ...parsed.data,
-      id,
+      id: created,
     };
   }, [categories, insertCategory, uid]);
 

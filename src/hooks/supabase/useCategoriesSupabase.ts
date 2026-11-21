@@ -72,7 +72,7 @@ export function useCategoryStoreSupabase(uid: string): CategoryStore {
     [items],
   );
 
-  const insertCategory = useCallback(async (payload: CategoryWritePayload): Promise<string> => {
+  const insertCategory = useCallback(async (payload: CategoryWritePayload): Promise<string | UserCategory> => {
     if (!uid) throw new Error('Usuário não autenticado.');
     const db = getSupabase();
     const { data, error } = await db.from('categories').insert(toCategoryColumns(payload)).select('id').single();
@@ -103,14 +103,16 @@ export function useCategoryStoreSupabase(uid: string): CategoryStore {
       return revivedId;
     }
 
-    // Ativa (criada em outra aba): reaproveita sem alterar o que já foi salvo.
+    // Ativa (criada em outra aba): reaproveita sem alterar o que já foi salvo e
+    // devolve a categoria como está no banco (o nome gravado pode diferir em caixa).
     const { data: existing } = await db
       .from('categories')
-      .select('id')
+      .select('id, name, normalized_name, type, color, icon, is_default, is_active')
       .eq('normalized_name', payload.normalizedName)
       .maybeSingle();
     await refresh();
-    if (existing) return (existing as { id: string }).id;
+    const stored = existing ? mapCategoryRow(existing as CategoryRow, uid) : null;
+    if (stored) return stored;
     throw new Error('Não foi possível criar a categoria.');
   }, [uid, refresh]);
 
