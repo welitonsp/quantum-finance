@@ -33,8 +33,7 @@ end;
 $$;
 revoke all on function public.log_consent_granted() from public, anon, authenticated;
 
-drop trigger if exists user_consents_log_granted on public.user_consents;
-create trigger user_consents_log_granted
+create or replace trigger user_consents_log_granted
   after insert or update on public.user_consents
   for each row execute function public.log_consent_granted();
 
