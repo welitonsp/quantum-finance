@@ -66,6 +66,18 @@ describe('useCategoryRuleStoreSupabase', () => {
     expect(client.channel).toHaveBeenCalledWith('category_rules:u1');
   });
 
+  it('ordena por prioridade: palavra mais específica primeiro, depois ordem de criação', async () => {
+    selectResult = { data: [
+      { id: 'r1', keyword: 'uber', category: 'Transporte' },
+      { id: 'r2', keyword: 'uber eats', category: 'Alimentação' },
+      { id: 'r3', keyword: 'ifood', category: 'Alimentação' },
+    ], error: null };
+    const { result } = renderHook(() => useCategoryRuleStoreSupabase('u1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.rules.map(r => r.id)).toEqual(['r2', 'r1', 'r3']);
+    expect(calls).toContainEqual({ op: 'order', args: ['created_at', { ascending: true }] });
+  });
+
   it('addRule insere sem user_id (o banco preenche pelo login)', async () => {
     const { result } = renderHook(() => useCategoryRuleStoreSupabase('u1'));
     await waitFor(() => expect(result.current.loading).toBe(false));
