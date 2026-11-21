@@ -32,6 +32,7 @@ vi.mock('../../lib/firebaseErrorHandling', () => ({ logSanitizedFirebaseError: v
 
 import {
   escapeLike,
+  mapSupabaseErrorCode,
   transactionGatewaySupabase as gateway,
   mapTransactionRow,
   toTransactionColumns,
@@ -219,7 +220,7 @@ describe('transactionGatewaySupabase', () => {
     const pages: unknown[] = [];
     const stop = gateway.subscribeWindow('u1', {}, p => pages.push(p), () => {});
     await flush();
-    expect(pages).toEqual([{ docs: [mapTransactionRow(baseRow)], rawCount: 1, cursor: { q: {}, offset: 1 } }]);
+    expect(pages).toEqual([{ docs: [mapTransactionRow(baseRow)], rawCount: 1, cursor: { q: {}, offset: 1, extent: { rows: 500 } }, coversLoaded: true, exhausted: true }]);
     expect(calls).toContainEqual({ op: 'is', args: ['deleted_at', null] });
     expect(calls).toContainEqual({ op: 'order', args: ['created_at', { ascending: false }] });
     expect(calls).toContainEqual({ op: 'order', args: ['id', { ascending: false }] });
@@ -282,6 +283,29 @@ describe('transactionGatewaySupabase', () => {
     expect(calls).toHaveLength(0);
   });
 
+  it('após carregar página antiga, a recarga em tempo real cobre janela + páginas (sem buraco na fronteira)', async () => {
+    const fullPage = Array.from({ length: 500 }, (_, i) => ({ ...baseRow, id: `w${i}` }));
+    results = [{ data: fullPage, error: null }];
+    const pages: Array<{ rawCount: number; cursor: unknown }> = [];
+    const stop = gateway.subscribeWindow('u1', {}, p => pages.push(p), () => {});
+    await flush();
+    const cursor = pages[0]?.cursor;
+    results = [{ data: [{ ...baseRow, id: 'old1' }, { ...baseRow, id: 'old2' }], error: null }];
+    await gateway.loadOlder('u1', cursor);
+
+    calls.length = 0;
+    results = [
+      { data: fullPage, error: null },
+      { data: [{ ...baseRow, id: 'w499' }, { ...baseRow, id: 'old1' }, { ...baseRow, id: 'old2' }], error: null },
+    ];
+    const onChange = channel.on.mock.calls[channel.on.mock.calls.length - 1]?.[2] as () => void;
+    onChange();
+    await flush();
+    expect(calls.filter(c => c.op === 'range').map(c => c.args)).toEqual([[0, 499], [500, 999]]);
+    expect(pages[pages.length - 1]).toMatchObject({ rawCount: 503, coversLoaded: true, exhausted: true });
+    stop();
+  });
+
   it('fetchOne, create idempotente e newId uuid', async () => {
     results = [{ data: baseRow, error: null }];
     expect((await gateway.fetchOne('u1', 't1'))?.id).toBe('t1');
@@ -300,5 +324,25 @@ describe('transactionGatewaySupabase', () => {
 
   it('escapeLike', () => {
     expect(escapeLike('a%b_c\\d')).toBe('a\\%b\\_c\\\\d');
+  });
+});
+
+describe('mapSupabaseErrorCode', () => {
+  it('falhas permanentes viram categorias que a fila não repete; o resto fica sem código', () => {
+    expect(mapSupabaseErrorCode({ code: '42501' })).toBe('permission-denied');
+    expect(mapSupabaseErrorCode({ code: 'PGRST301' })).toBe('unauthenticated');
+    expect(mapSupabaseErrorCode({ code: '23514' })).toBe('invalid-argument');
+    expect(mapSupabaseErrorCode({ code: '22P02' })).toBe('invalid-argument');
+    expect(mapSupabaseErrorCode({ code: 'PGRST204' })).toBe('invalid-argument');
+    expect(mapSupabaseErrorCode({ code: '57014' })).toBeUndefined();
+    expect(mapSupabaseErrorCode({ code: '53400' })).toBeUndefined();
+    expect(mapSupabaseErrorCode(null)).toBeUndefined();
+  });
+
+  it('create com erro permanente mantém o código no erro lançado', async () => {
+    results = [{ data: null, error: { code: '23514', message: 'check' } }];
+    await expect(gateway.create('u1', {
+      description: 'Mercado', value_cents: 100, type: 'saida', category: 'Lazer', date: '2026-11-10',
+    } as never, 'idem-key-1234')).rejects.toMatchObject({ code: 'invalid-argument' });
   });
 });

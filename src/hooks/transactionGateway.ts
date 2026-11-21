@@ -37,6 +37,13 @@ export interface WindowPage {
   rawCount: number;
   /** Cursor para loadOlder; null quando a página veio vazia. */
   cursor: unknown;
+  /**
+   * A janela já recarregou tudo o que foi carregado (janela + páginas antigas):
+   * o hook descarta as páginas antigas guardadas, que podem estar desatualizadas.
+   */
+  coversLoaded?: boolean;
+  /** Com `coversLoaded`: não há mais linhas além desta janela. */
+  exhausted?: boolean;
 }
 
 export interface TransactionGateway {
