@@ -23,6 +23,7 @@ const channel: { on: ReturnType<typeof vi.fn>; subscribe: ReturnType<typeof vi.f
 const client = {
   from: vi.fn((table: string) => { calls.push({ op: 'from', args: [table] }); return builder(); }),
   channel: vi.fn(() => channel),
+  rpc: vi.fn((fn: string, args: unknown) => { calls.push({ op: 'rpc', args: [fn, args] }); return next(); }),
   removeChannel: vi.fn(() => Promise.resolve()),
 };
 
@@ -153,13 +154,34 @@ describe('transactionRepoSupabase', () => {
       .rejects.toThrow('Não foi possível atualizar a transação.');
   });
 
-  it('desfazer lote agrupa por categoria anterior', async () => {
+  it('desfazer lote agrupa por categoria anterior e grava UNDO pela RPC', async () => {
     await repo.batchUndoBulkUpdateTransactionsWithHistory('u1', [
       { id: 'a', oldCategory: 'Lazer' }, { id: 'b', oldCategory: 'Lazer' }, { id: 'c', oldCategory: 'Saúde' },
     ]);
-    expect(calls).toContainEqual({ op: 'update', args: [{ category: 'Lazer' }] });
-    expect(calls).toContainEqual({ op: 'in', args: ['id', ['a', 'b']] });
-    expect(calls).toContainEqual({ op: 'in', args: ['id', ['c']] });
+    expect(calls).toContainEqual({ op: 'rpc', args: ['update_transactions_with_origin',
+      { p_ids: ['a', 'b'], p_patch: { category: 'Lazer' }, p_origin: 'bulk_undo' }] });
+    expect(calls).toContainEqual({ op: 'rpc', args: ['update_transactions_with_origin',
+      { p_ids: ['c'], p_patch: { category: 'Saúde' }, p_origin: 'bulk_undo' }] });
+  });
+
+  it('edição em lote usa origem bulk; edição da IA usa origem ai; manual é UPDATE direto', async () => {
+    await repo.batchUpdateTransactionsWithHistory('u1', [{ id: 'a', oldCategory: 'Outros' }], { category: 'Lazer' }, 'c1');
+    expect(calls).toContainEqual({ op: 'rpc', args: ['update_transactions_with_origin',
+      { p_ids: ['a'], p_patch: { category: 'Lazer' }, p_origin: 'bulk' }] });
+    calls.length = 0;
+    await repo.updateTransactionWithHistory('u1', 't1', { category: 'Saúde' }, { origin: 'ai' });
+    expect(calls).toContainEqual({ op: 'rpc', args: ['update_transactions_with_origin',
+      { p_ids: ['t1'], p_patch: { category: 'Saúde' }, p_origin: 'ai' }] });
+    calls.length = 0;
+    await repo.updateTransactionWithHistory('u1', 't1', { category: 'Saúde' });
+    expect(calls.find(c => c.op === 'rpc')).toBeUndefined();
+    expect(calls).toContainEqual({ op: 'update', args: [{ category: 'Saúde' }] });
+  });
+
+  it('patch fora da RPC (exclusão lógica) cai no UPDATE direto mesmo com origem', async () => {
+    await repo.updateTransactionWithHistory('u1', 't1', { isDeleted: false }, { origin: 'reconcile' });
+    expect(calls.find(c => c.op === 'rpc')).toBeUndefined();
+    expect(calls).toContainEqual({ op: 'update', args: [{ deleted_at: null }] });
   });
 
   it('importação ignora hashes já gravados e repetidos no arquivo', async () => {

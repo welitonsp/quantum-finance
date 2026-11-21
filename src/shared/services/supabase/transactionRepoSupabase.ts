@@ -199,6 +199,34 @@ type BulkSnapshotItem = {
 
 const CHUNK = 200;
 
+type WriteOrigin = 'manual' | 'ai' | 'reconcile' | 'bulk' | 'bulk_undo';
+
+/** Colunas que a RPC update_transactions_with_origin aceita no patch. */
+const RPC_PATCH_COLUMNS = new Set([
+  'description', 'value_cents', 'type', 'category', 'date', 'account_id', 'card_id', 'is_recurring',
+  'tags', 'source', 'fit_id', 'competencia', 'paid_invoice_month', 'reconciliation_status', 'reconciled_at',
+]);
+
+/**
+ * Atualiza linhas gravando a origem certa no histórico (RPC da migração 0009).
+ * Origem 'manual' ou patch com coluna fora da RPC: UPDATE direto (histórico 'manual').
+ */
+async function updateWithOrigin(
+  ids: string[],
+  cols: Record<string, unknown>,
+  origin: WriteOrigin,
+): Promise<{ error: unknown }> {
+  const viaRpc = origin !== 'manual' && Object.keys(cols).every(c => RPC_PATCH_COLUMNS.has(c));
+  if (viaRpc) {
+    const { error } = await getSupabase().rpc('update_transactions_with_origin', {
+      p_ids: ids, p_patch: cols, p_origin: origin,
+    });
+    return { error };
+  }
+  const { error } = await getSupabase().from('transactions').update(cols).in('id', ids);
+  return { error };
+}
+
 export const transactionRepoSupabase = {
   async getTransactions(uid: string): Promise<Transaction[]> {
     if (!uid) return [];
@@ -250,12 +278,12 @@ export const transactionRepoSupabase = {
     uid: string,
     id: string,
     data: TransactionUpdateDTO,
-    _historyEvent?: unknown,
+    historyEvent?: { origin?: 'manual' | 'ai' | 'reconcile' },
   ): Promise<void> {
     if (!uid || !id) throw new Error('Usuário ou transação ausente.');
     const cols = toTransactionColumns(normalizeUpdatePayload(data));
     if (Object.keys(cols).length === 0) return;
-    const { error } = await getSupabase().from('transactions').update(cols).eq('id', id);
+    const { error } = await updateWithOrigin([id], cols, historyEvent?.origin ?? 'manual');
     if (error) fail('transaction_update', error, 'Não foi possível atualizar a transação.');
   },
 
@@ -294,7 +322,7 @@ export const transactionRepoSupabase = {
     if (Object.keys(cols).length === 0) return;
     for (let i = 0; i < snapshot.length; i += CHUNK) {
       const ids = snapshot.slice(i, i + CHUNK).map(item => item.id);
-      const { error } = await getSupabase().from('transactions').update(cols).in('id', ids);
+      const { error } = await updateWithOrigin(ids, cols, 'bulk');
       if (error) fail('transaction_bulk_update', error, 'Não foi possível atualizar as transações.');
     }
   },
@@ -316,10 +344,7 @@ export const transactionRepoSupabase = {
     }
     for (const [category, ids] of byCategory) {
       for (let i = 0; i < ids.length; i += CHUNK) {
-        const { error } = await getSupabase()
-          .from('transactions')
-          .update({ category })
-          .in('id', ids.slice(i, i + CHUNK));
+        const { error } = await updateWithOrigin(ids.slice(i, i + CHUNK), { category }, 'bulk_undo');
         if (error) fail('transaction_bulk_undo', error, 'Não foi possível desfazer a edição em lote.');
       }
     }
