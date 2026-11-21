@@ -1,7 +1,10 @@
 // src/features/ai-chat/GeminiService.ts
-// Firebase Cloud Functions proxy — chave da API fica exclusivamente no servidor.
+// Proxy da IA — a chave do Gemini fica exclusivamente no servidor (Cloud Functions
+// no Firebase; função de borda `quantum-ai` no Supabase, escolhida no build).
 import { httpsCallable } from 'firebase/functions';
 import { functions }     from '../../shared/api/firebase/index';
+import { DATA_BACKEND }  from '../../shared/config/backend';
+import { callQuantumAiSupabase, type AiCallableName } from './quantumAiSupabase';
 import { maskPII, buildSafePromptRows } from '../../shared/lib/piiMasker';
 import {
   getUserFriendlyErrorMessage,
@@ -35,10 +38,15 @@ interface AnomalyResult {
   delta:   number;
 }
 
-// ─── Wrapper seguro de httpsCallable ─────────────────────────────────────────
-function getFunction(name: string, timeoutSeconds = 30) {
-  return httpsCallable(functions, name, { timeout: timeoutSeconds * 1000 });
-}
+// ─── Transporte da IA (escolhido no build) ───────────────────────────────────
+type AiCall = (name: AiCallableName, data: Record<string, unknown>, timeoutSeconds: number) => Promise<unknown>;
+
+const callAiFirebase: AiCall = async (name, data, timeoutSeconds) => {
+  const fn = httpsCallable(functions, name, { timeout: timeoutSeconds * 1000 });
+  return (await fn(data)).data;
+};
+
+const callAi: AiCall = DATA_BACKEND === 'supabase' ? callQuantumAiSupabase : callAiFirebase;
 
 export class GeminiService {
 
@@ -50,9 +58,8 @@ export class GeminiService {
 
     const safeRows = buildSafePromptRows(transactions);
     try {
-      const fn     = getFunction('categorizeTransactionsBatch');
-      const result = await fn({ transactions: safeRows });
-      return Array.isArray(result.data) ? (result.data as CategorizeResult[]) : [];
+      const result = await callAi('categorizeTransactionsBatch', { transactions: safeRows }, 30);
+      return Array.isArray(result) ? (result as CategorizeResult[]) : [];
     } catch (error) {
       logSanitizedFirebaseError('callable_ai_category', error);
       return [];
@@ -90,9 +97,8 @@ export class GeminiService {
     };
 
     try {
-      const fn     = getFunction('chatWithQuantumAI', 60);
-      const result = await fn({ prompt: message, financialContext: maskedContext });
-      const data   = result.data as { reply?: string } | null;
+      const result = await callAi('chatWithQuantumAI', { prompt: message, financialContext: maskedContext }, 60);
+      const data   = result as { reply?: string } | null;
       return data?.reply ?? '⚠️ Resposta vazia do servidor.';
     } catch (error) {
       logSanitizedFirebaseError('callable_ai_chat', error);
@@ -126,9 +132,8 @@ export class GeminiService {
     };
 
     try {
-      const fn     = getFunction('generateAuditReport', 60);
-      const result = await fn({ financialContext: maskedContext });
-      const data   = result.data as { reply?: string } | null;
+      const result = await callAi('generateAuditReport', { financialContext: maskedContext }, 60);
+      const data   = result as { reply?: string } | null;
       return data?.reply ?? '⚠️ Relatório vazio.';
     } catch (error) {
       logSanitizedFirebaseError('callable_ai_report', error);
@@ -200,16 +205,15 @@ export class GeminiService {
     ].join('\n');
 
     try {
-      const fn     = getFunction('chatWithQuantumAI', 30);
-      const result = await fn({
+      const result = await callAi('chatWithQuantumAI', {
         prompt,
         financialContext: {
           saldo:    kpis.totalBalance,
           entradas: kpis.totalIncome,
           saidas:   kpis.totalExpense,
         },
-      });
-      const data = result.data as { reply?: string } | null;
+      }, 30);
+      const data = result as { reply?: string } | null;
       const text = data?.reply?.trim() ?? '';
       if (!text) throw new Error('Resposta vazia');
       return text;

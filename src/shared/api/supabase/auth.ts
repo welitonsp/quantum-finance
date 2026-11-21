@@ -4,8 +4,9 @@ import { getSupabase } from './client';
 /**
  * Login no Supabase (migração Firebase → Supabase, etapa 3).
  *
- * Mesmo contrato do Firebase de hoje: Google + TOTP opcional.
+ * Google ou e-mail e senha + TOTP opcional.
  * - Google via OAuth com redirect (PKCE). Popup não existe no Supabase.
+ * - E-mail e senha: funciona sem configurar o Google (confirmação por e-mail).
  * - MFA: quem tem fator TOTP verificado entra em aal1 e precisa subir para
  *   aal2 com o código do autenticador antes de ver dados.
  * - Nenhum segredo TOTP, token ou e-mail é logado (política de logs).
@@ -64,6 +65,46 @@ export async function signInWithGoogle(
     options: { redirectTo },
   });
   if (error) fail('oauth_start_failed');
+}
+
+/** Códigos estáveis do login por e-mail (a UI traduz; nada do usuário no erro). */
+const EMAIL_AUTH_CODES = new Set([
+  'invalid_credentials', 'email_not_confirmed', 'user_already_exists',
+  'weak_password', 'over_email_send_rate_limit', 'email_address_invalid',
+]);
+
+function emailAuthCode(error: { code?: string | undefined } | null): string {
+  const code = error?.code ?? '';
+  return EMAIL_AUTH_CODES.has(code) ? code : 'email_auth_failed';
+}
+
+/** Login com e-mail e senha (sem depender do Google). */
+export async function signInWithEmail(
+  email: string,
+  password: string,
+  client: SupabaseClient = getSupabase(),
+): Promise<void> {
+  const { error } = await client.auth.signInWithPassword({ email: email.trim(), password });
+  if (error) fail(emailAuthCode(error));
+}
+
+/**
+ * Cria conta com e-mail e senha. Com confirmação de e-mail ligada (padrão do
+ * Supabase) não há sessão até o usuário clicar no link: devolve needsConfirmation.
+ */
+export async function signUpWithEmail(
+  email: string,
+  password: string,
+  redirectTo: string = window.location.origin,
+  client: SupabaseClient = getSupabase(),
+): Promise<{ needsConfirmation: boolean }> {
+  const { data, error } = await client.auth.signUp({
+    email: email.trim(),
+    password,
+    options: { emailRedirectTo: redirectTo },
+  });
+  if (error) fail(emailAuthCode(error));
+  return { needsConfirmation: !data.session };
 }
 
 export async function signOut(client: SupabaseClient = getSupabase()): Promise<void> {

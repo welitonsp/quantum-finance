@@ -13,6 +13,7 @@ import type { ActionProposal } from '../shared/schemas/agentSchemas';
 import { isIncome } from '../utils/transactionUtils';
 import { transactionRepo } from '../shared/services/transactionRepo';
 import { DATA_BACKEND } from '../shared/config/backend';
+import { markRecurringExecutedSupabase } from '../hooks/supabase/recurringOneTouchSupabase';
 
 interface Props {
   uid: string;
@@ -96,7 +97,73 @@ function nextOneTouchOccurrence(task: RecurringTask, today = todayAtStartOfDay()
   return dueDate;
 }
 
-function OneTouchActionsCardFirebase({ uid, recurringTasks }: Props) {
+/** Firebase: marca is_recurring na transação criada e o mês pago na recorrente (Modelo A). */
+async function markRecurringExecutedFirebase(
+  uid: string,
+  task: RecurringTask,
+  transactionId: string,
+  lastExecutedMonth: string,
+): Promise<void> {
+  if (!uid) return;
+  const createdTxRef = doc(db, 'users', uid, 'transactions', transactionId);
+  const createdTxSnap = await getDoc(createdTxRef);
+  if (createdTxSnap.exists()) {
+    const before = { id: transactionId, ...createdTxSnap.data() };
+    await transactionRepo.updateTransactionWithHistory(
+      uid,
+      transactionId,
+      { isRecurring: true },
+      {
+        before,
+        after: { ...before, isRecurring: true },
+        changedFields: ['isRecurring'],
+        origin: 'ai',
+      },
+    );
+  }
+
+  const opId = crypto.randomUUID();
+  const taskRef = doc(db, 'users', uid, 'recurringTasks', task.id);
+  const historyRef = doc(db, 'users', uid, 'recurringTasks', task.id, 'history', opId);
+  const before = recurringTaskSnapshot(task);
+  const after = {
+    ...before,
+    frequency: task.frequency ?? 'mensal',
+    lastExecutedMonth,
+  };
+  const updatePayload: Record<string, unknown> = {
+    lastExecutedMonth,
+    _lastOpId: opId,
+    updatedAt: serverTimestamp(),
+  };
+  const changedFields = ['lastExecutedMonth'];
+  if (!task.frequency) {
+    updatePayload['frequency'] = 'mensal';
+    changedFields.push('frequency');
+  }
+  const batch = writeBatch(db);
+  batch.update(taskRef, updatePayload);
+  batch.set(historyRef, {
+    action: 'UPDATE',
+    recurringTaskId: task.id,
+    before,
+    after,
+    changedFields,
+    origin: 'manual',
+    correlationId: opId,
+    createdAt: serverTimestamp(),
+    schemaVersion: 1,
+  });
+  await batch.commit();
+}
+
+/** Supabase: o servidor controla last_executed_month (RPC mark_recurring_executed). */
+const markRecurringExecuted = DATA_BACKEND === 'supabase'
+  ? (_uid: string, task: RecurringTask, transactionId: string, lastExecutedMonth: string) =>
+      markRecurringExecutedSupabase(task.id, transactionId, lastExecutedMonth)
+  : markRecurringExecutedFirebase;
+
+function OneTouchActionsCard({ uid, recurringTasks }: Props) {
   const [activeTask, setActiveTask] = useState<RecurringTask | null>(null);
   const [activeProposal, setActiveProposal] = useState<ActionProposal | null>(null);
   const [activeQuestion, setActiveQuestion] = useState('');
@@ -150,59 +217,8 @@ function OneTouchActionsCardFirebase({ uid, recurringTasks }: Props) {
         question: activeQuestion,
         toolsUsed: ['recurring_task_briefing'],
       });
-      if (uid) {
-        const createdTxRef = doc(db, 'users', uid, 'transactions', actionResult.id);
-        const createdTxSnap = await getDoc(createdTxRef);
-        if (createdTxSnap.exists()) {
-          const before = { id: actionResult.id, ...createdTxSnap.data() };
-          await transactionRepo.updateTransactionWithHistory(
-            uid,
-            actionResult.id,
-            { isRecurring: true },
-            {
-              before,
-              after: { ...before, isRecurring: true },
-              changedFields: ['isRecurring'],
-              origin: 'ai',
-            },
-          );
-        }
-
-        const lastExecutedMonth = monthKey(nextOneTouchOccurrence(activeTask));
-        const opId = crypto.randomUUID();
-        const taskRef = doc(db, 'users', uid, 'recurringTasks', activeTask.id);
-        const historyRef = doc(db, 'users', uid, 'recurringTasks', activeTask.id, 'history', opId);
-        const before = recurringTaskSnapshot(activeTask);
-        const after = {
-          ...before,
-          frequency: activeTask.frequency ?? 'mensal',
-          lastExecutedMonth,
-        };
-        const updatePayload: Record<string, unknown> = {
-          lastExecutedMonth,
-          _lastOpId: opId,
-          updatedAt: serverTimestamp(),
-        };
-        const changedFields = ['lastExecutedMonth'];
-        if (!activeTask.frequency) {
-          updatePayload['frequency'] = 'mensal';
-          changedFields.push('frequency');
-        }
-        const batch = writeBatch(db);
-        batch.update(taskRef, updatePayload);
-        batch.set(historyRef, {
-          action: 'UPDATE',
-          recurringTaskId: activeTask.id,
-          before,
-          after,
-          changedFields,
-          origin: 'manual',
-          correlationId: opId,
-          createdAt: serverTimestamp(),
-          schemaVersion: 1,
-        });
-        await batch.commit();
-      }
+      const lastExecutedMonth = monthKey(nextOneTouchOccurrence(activeTask));
+      await markRecurringExecuted(uid, activeTask, actionResult.id, lastExecutedMonth);
       setDismissed((prev) => {
         const next = new Set(prev);
         next.add(activeTask.id);
@@ -298,12 +314,4 @@ function OneTouchActionsCardFirebase({ uid, recurringTasks }: Props) {
   );
 }
 
-/**
- * A execução em 1 toque passa pela callable do Agente (Firebase). No build
- * Supabase o card fica oculto até o Agente migrar para as funções do servidor
- * do Supabase (etapa própria), para não oferecer uma ação que falharia.
- */
-export default function OneTouchActionsCard(props: Props) {
-  if (DATA_BACKEND === 'supabase') return null;
-  return <OneTouchActionsCardFirebase {...props} />;
-}
+export default OneTouchActionsCard;

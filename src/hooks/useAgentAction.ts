@@ -16,6 +16,8 @@ import { useCallback, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../shared/api/firebase/index';
 import { parseActionProposal, type ActionProposal } from '../shared/schemas/agentSchemas';
+import { DATA_BACKEND } from '../shared/config/backend';
+import { executeAgentActionSupabase } from './supabase/agentActionSupabase';
 
 export type AgentActionStatus = 'idle' | 'running' | 'success' | 'error';
 
@@ -52,6 +54,17 @@ interface ExecuteResponse {
   id: string;
   decisionId?: string | null;
 }
+
+async function executeAgentActionFirebase(envelope: Record<string, unknown>): Promise<ExecuteResponse> {
+  const call = httpsCallable<Record<string, unknown>, ExecuteResponse>(functions, 'executeAgentAction');
+  const res  = await call(envelope);
+  return res.data;
+}
+
+// Backend escolhido no build (VITE_AUTH_PROVIDER): função execute_agent_action
+// no Supabase ou callable executeAgentAction no Firebase. Mesmo formato de erro.
+const executeAgentAction: (envelope: Record<string, unknown>) => Promise<ExecuteResponse> =
+  DATA_BACKEND === 'supabase' ? executeAgentActionSupabase : executeAgentActionFirebase;
 
 /** Lê `code`/`message`/`details.reason` de um erro de callable sem depender de tipos internos. */
 function toAgentActionError(err: unknown): AgentActionError {
@@ -100,9 +113,8 @@ export function useAgentAction() {
         if (ctx.snapshotRef !== undefined)      envelope['snapshotRef']      = ctx.snapshotRef;
         if (ctx.simulationResult !== undefined) envelope['simulationResult'] = ctx.simulationResult;
 
-        const call = httpsCallable<Record<string, unknown>, ExecuteResponse>(functions, 'executeAgentAction');
-        const res  = await call(envelope);
-        const out: AgentActionResult = { id: res.data.id, decisionId: res.data.decisionId ?? null };
+        const res = await executeAgentAction(envelope);
+        const out: AgentActionResult = { id: res.id, decisionId: res.decisionId ?? null };
 
         setResult(out);
         setStatus('success');

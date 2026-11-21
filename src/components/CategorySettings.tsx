@@ -3,8 +3,12 @@ import { X, Plus, Trash2, Settings, Tag, Search, Loader2, ArrowRight } from 'luc
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import toast from 'react-hot-toast';
 import DataPrivacyPanel from '../features/settings/DataPrivacyPanel';
-import MfaPanel from '../features/settings/MfaPanel';
+import MfaPanelFirebase from '../features/settings/MfaPanel';
+import MfaPanelSupabase from '../features/settings/MfaPanelSupabase';
+import { DATA_BACKEND } from '../shared/config/backend';
 import { useCategoryRules } from '../hooks/useCategoryRules';
+
+const MfaPanel = DATA_BACKEND === 'supabase' ? MfaPanelSupabase : MfaPanelFirebase;
 
 interface Props {
   uid: string;

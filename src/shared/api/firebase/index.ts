@@ -1,11 +1,11 @@
-import { initializeApp }                                      from 'firebase/app';
+import { initializeApp, type FirebaseApp }                    from 'firebase/app';
 import { initializeAppCheck, ReCaptchaV3Provider }            from 'firebase/app-check';
-import { getAuth, connectAuthEmulator }                        from 'firebase/auth';
+import { getAuth, connectAuthEmulator, type Auth }             from 'firebase/auth';
 import {
   getFirestore, initializeFirestore, connectFirestoreEmulator,
-  persistentLocalCache, persistentMultipleTabManager,
+  persistentLocalCache, persistentMultipleTabManager, type Firestore,
 }                                                              from 'firebase/firestore';
-import { getFunctions, connectFunctionsEmulator }              from 'firebase/functions';
+import { getFunctions, connectFunctionsEmulator, type Functions } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY as string,
@@ -16,8 +16,14 @@ const firebaseConfig = {
   appId:             import.meta.env.VITE_FIREBASE_APP_ID as string,
 };
 
-export const app       = initializeApp(firebaseConfig);
-export const auth      = getAuth(app);
+// Build Supabase (VITE_AUTH_PROVIDER=supabase): o Firebase NÃO é inicializado.
+// Todos os caminhos Firebase ficam desligados no nível do módulo nesse build, então
+// estes exports nunca são usados; se algum resto de código Firebase rodar, falha
+// alto em vez de falar com o projeto Firebase desativado. Sem variáveis VITE_FIREBASE_*.
+export const FIREBASE_ENABLED = import.meta.env.VITE_AUTH_PROVIDER !== 'supabase';
+
+export const app: FirebaseApp = FIREBASE_ENABLED ? initializeApp(firebaseConfig) : (undefined as unknown as FirebaseApp);
+export const auth: Auth       = FIREBASE_ENABLED ? getAuth(app) : (undefined as unknown as Auth);
 
 // F-11 — cache PERSISTENTE (IndexedDB): leituras funcionam offline (dashboard/lista
 // sobrevivem a reload sem rede) e escritas DIRETAS ao Firestore ficam numa fila durável
@@ -25,21 +31,26 @@ export const auth      = getAuth(app);
 // para determinismo. (A criação canônica via callable é tratada por outbox à parte.)
 const _useEmulatorDb = import.meta.env.DEV && import.meta.env.VITE_USE_EMULATOR === 'true';
 const _isTestEnv     = import.meta.env.MODE === 'test' || import.meta.env.VITEST === 'true';
-export const db = (_useEmulatorDb || _isTestEnv || typeof indexedDB === 'undefined')
-  ? getFirestore(app)
-  : initializeFirestore(app, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-    });
+export const db: Firestore = !FIREBASE_ENABLED
+  ? (undefined as unknown as Firestore)
+  : (_useEmulatorDb || _isTestEnv || typeof indexedDB === 'undefined')
+    ? getFirestore(app)
+    : initializeFirestore(app, {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      });
 
-export const functions = getFunctions(app, 'southamerica-east1');
+export const functions: Functions = FIREBASE_ENABLED
+  ? getFunctions(app, 'southamerica-east1')
+  : (undefined as unknown as Functions);
 
-if (import.meta.env.DEV && import.meta.env.VITE_USE_EMULATOR === 'true') {
+if (FIREBASE_ENABLED && import.meta.env.DEV && import.meta.env.VITE_USE_EMULATOR === 'true') {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
   connectFirestoreEmulator(db, '127.0.0.1', 8080);
   connectFunctionsEmulator(functions, '127.0.0.1', 5001);
 }
 
-const _siteKey    = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined;
+// Sem Firebase (build Supabase) não há App Check: a site key é ignorada.
+const _siteKey    = FIREBASE_ENABLED ? (import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined) : undefined;
 const _isEmulator = import.meta.env.VITE_USE_EMULATOR === 'true';
 const _isTest     = import.meta.env.MODE === 'test' || import.meta.env.VITEST === 'true';
 const _mode       = import.meta.env.MODE;

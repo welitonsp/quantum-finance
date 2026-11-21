@@ -5,16 +5,42 @@ import toast from 'react-hot-toast';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import { normalizeTotpCode } from '../shared/lib/mfa';
 
+export interface EmailAuthHandlers {
+  onSignIn: (email: string, password: string) => Promise<void>;
+  /** Devolve true quando a conta precisa ser confirmada pelo link do e-mail. */
+  onSignUp: (email: string, password: string) => Promise<boolean>;
+}
+
+const EMAIL_ERROR_MESSAGES: Record<string, string> = {
+  invalid_credentials: 'E-mail ou senha incorretos.',
+  email_not_confirmed: 'Confirme seu e-mail pelo link que enviamos antes de entrar.',
+  user_already_exists: 'Já existe uma conta com este e-mail. Use "Entrar".',
+  weak_password: 'Senha fraca. Use pelo menos 8 caracteres, misturando letras e números.',
+  over_email_send_rate_limit: 'Muitos e-mails enviados. Aguarde alguns minutos e tente de novo.',
+  email_address_invalid: 'E-mail inválido.',
+};
+
+function emailErrorMessage(error: unknown): string {
+  const code = typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
+  return (typeof code === 'string' && EMAIL_ERROR_MESSAGES[code]) || 'Não foi possível entrar. Tente novamente.';
+}
+
 interface Props {
   onLogin: () => Promise<void>;
+  /** Login por e-mail e senha (só no Supabase). */
+  emailAuth?: EmailAuthHandlers;
   /** Login interrompido por MFA — exibe o prompt de código TOTP. */
   mfaPending?: boolean;
   onSubmitMfaCode?: (code: string) => Promise<void>;
   onCancelMfa?: () => void;
 }
 
-export default function LoginScreen({ onLogin, mfaPending = false, onSubmitMfaCode, onCancelMfa }: Props) {
+export default function LoginScreen({ onLogin, emailAuth, mfaPending = false, onSubmitMfaCode, onCancelMfa }: Props) {
   const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [signUpMode, setSignUpMode] = useState(false);
+  const [confirmationSent, setConfirmationSent] = useState(false);
   const [mfaCode, setMfaCode] = useState('');
   const mfaInputRef = useRef<HTMLInputElement>(null);
 
@@ -30,6 +56,31 @@ export default function LoginScreen({ onLogin, mfaPending = false, onSubmitMfaCo
     } catch (error) {
       logSanitizedFirebaseError('auth_login_screen', error);
       toast.error('Falha ao iniciar sessão. Verifique se tem os pop-ups bloqueados.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmailSubmit = async () => {
+    if (isLoading || !emailAuth) return;
+    if (!email.trim() || !password) {
+      toast.error('Preencha e-mail e senha.');
+      return;
+    }
+    if (signUpMode && password.length < 8) {
+      toast.error('A senha precisa ter pelo menos 8 caracteres.');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      if (signUpMode) {
+        const needsConfirmation = await emailAuth.onSignUp(email, password);
+        if (needsConfirmation) setConfirmationSent(true);
+      } else {
+        await emailAuth.onSignIn(email, password);
+      }
+    } catch (error) {
+      toast.error(emailErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
@@ -126,6 +177,54 @@ export default function LoginScreen({ onLogin, mfaPending = false, onSubmitMfaCo
               )}
               {isLoading ? 'A autenticar...' : 'Entrar com Google'}
             </button>
+
+            {emailAuth && (
+              confirmationSent ? (
+                <p role="status" className="mt-6 text-sm text-emerald-300">
+                  Conta criada. Abra o e-mail que enviamos, clique no link de confirmação e depois entre aqui com e-mail e senha.
+                </p>
+              ) : (
+                <form
+                  className="mt-6 space-y-3 text-left"
+                  onSubmit={(e) => { e.preventDefault(); void handleEmailSubmit(); }}
+                >
+                  <p className="text-center text-xs uppercase tracking-wider text-quantum-fgMuted">ou com e-mail</p>
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="seu@email.com"
+                    aria-label="E-mail"
+                    className="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+                  />
+                  <input
+                    type="password"
+                    autoComplete={signUpMode ? 'new-password' : 'current-password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={signUpMode ? 'Crie uma senha (mín. 8 caracteres)' : 'Senha'}
+                    aria-label="Senha"
+                    className="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 text-white font-bold px-6 py-3 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-70 disabled:cursor-not-allowed"
+                  >
+                    {signUpMode ? 'Criar conta' : 'Entrar com e-mail'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSignUpMode((v) => !v)}
+                    disabled={isLoading}
+                    className="w-full text-sm text-quantum-fgMuted hover:text-quantum-fg transition-colors"
+                  >
+                    {signUpMode ? 'Já tenho conta: entrar' : 'Não tem conta? Criar com e-mail'}
+                  </button>
+                </form>
+              )
+            )}
           </>
         )}
       </div>
