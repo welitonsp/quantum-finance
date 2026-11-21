@@ -8,7 +8,7 @@ import { toCentavos } from '../../shared/schemas/financialSchemas';
 import type { Account } from '../../shared/types/transaction';
 import type { Centavos } from '../../shared/types/money';
 import type { AddAccountInput, UpdateAccountInput, UseAccountsReturn } from '../useAccounts';
-import { reloadOnOwnDelete } from './useSupabaseTable';
+import { reloadWhenVisible } from './useSupabaseTable';
 
 const ACCOUNT_TYPES: ReadonlySet<Account['type']> = new Set([
   'corrente', 'poupanca', 'investimento', 'cartao', 'divida',
@@ -61,8 +61,6 @@ export function useAccountsSupabase(uid: string): UseAccountsReturn {
   // Só a resposta da consulta mais recente vale: evita que uma resposta atrasada
   // (ex.: de outro usuário, após troca de sessão) sobrescreva a lista atual.
   const latestRequest = useRef(0);
-  const idsRef = useRef<string[]>([]);
-  idsRef.current = accounts.map(item => item.id);
 
   const refresh = useCallback(async (): Promise<void> => {
     const request = ++latestRequest.current;
@@ -90,14 +88,15 @@ export function useAccountsSupabase(uid: string): UseAccountsReturn {
       .channel(`accounts:${uid}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'accounts', filter: `user_id=eq.${uid}` },
         () => { void refresh(); })
-      // DELETE não respeita filtro no Realtime: escuta sem filtro e reage só às nossas linhas.
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'accounts' },
-        reloadOnOwnDelete(() => idsRef.current, () => { void refresh(); }))
       // Recarrega quando o canal entra: cobre mudanças entre a consulta inicial e a assinatura.
       .subscribe((status: string) => { if (status === 'SUBSCRIBED') void refresh(); });
 
+    // Exclusões em outra aba/aparelho: o Realtime não filtra DELETE (ver reloadWhenVisible).
+    const stopVisible = reloadWhenVisible(() => { void refresh(); });
+
     return () => {
       active = false;
+      stopVisible();
       void getSupabase().removeChannel(channel);
     };
   }, [uid, refresh]);
