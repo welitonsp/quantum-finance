@@ -7,13 +7,16 @@ import {
 } from 'firebase/firestore';
 import { db } from '../api/firebase/index';
 import { logSanitizedFirebaseError } from '../lib/firebaseErrorHandling';
+import { DATA_BACKEND } from '../config/backend';
+import { getUserConsentsSupabase, saveUserConsentsSupabase } from './supabase/userConsentsSupabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface UserConsents {
   analytics: boolean; // Consentimento para uso em melhorias do produto
   ai:        boolean; // Consentimento para processamento por IA
-  updatedAt: Timestamp | null;
+  /** Firestore Timestamp ou equivalente do Supabase: só `toDate()` é usado. */
+  updatedAt: Pick<Timestamp, 'toDate'> | null;
 }
 
 const DEFAULT_CONSENTS: Omit<UserConsents, 'updatedAt'> = {
@@ -27,7 +30,7 @@ const DEFAULT_CONSENTS: Omit<UserConsents, 'updatedAt'> = {
  * Lê os consentimentos atuais do usuário de users/{uid}/consents/current.
  * Retorna defaults (false, false) se o documento não existir.
  */
-export async function getUserConsents(uid: string): Promise<UserConsents> {
+async function getUserConsentsFirebase(uid: string): Promise<UserConsents> {
   try {
     const ref  = doc(db, 'users', uid, 'consents', 'current');
     const snap = await getDoc(ref);
@@ -49,7 +52,7 @@ export async function getUserConsents(uid: string): Promise<UserConsents> {
 /**
  * Salva os consentimentos do usuário em users/{uid}/consents/current.
  */
-export async function saveUserConsents(
+async function saveUserConsentsFirebase(
   uid: string,
   consents: Omit<UserConsents, 'updatedAt'>,
 ): Promise<void> {
@@ -65,3 +68,10 @@ export async function saveUserConsents(
     throw err;
   }
 }
+
+/** Firebase ou Supabase, escolhido no build (VITE_AUTH_PROVIDER). */
+export const getUserConsents: (uid: string) => Promise<UserConsents> =
+  DATA_BACKEND === 'supabase' ? getUserConsentsSupabase : getUserConsentsFirebase;
+
+export const saveUserConsents: (uid: string, consents: Omit<UserConsents, 'updatedAt'>) => Promise<void> =
+  DATA_BACKEND === 'supabase' ? saveUserConsentsSupabase : saveUserConsentsFirebase;
