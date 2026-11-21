@@ -70,7 +70,7 @@ describe('useCategoryRuleStoreSupabase', () => {
     selectResult = { data: [
       { id: 'r1', keyword: 'uber', category: 'Transporte' },
       { id: 'r2', keyword: 'uber eats', category: 'Alimentação' },
-      { id: 'r3', keyword: 'ifood', category: 'Alimentação' },
+      { id: 'r3', keyword: 'pix', category: 'Transferência' },
     ], error: null };
     const { result } = renderHook(() => useCategoryRuleStoreSupabase('u1'));
     await waitFor(() => expect(result.current.loading).toBe(false));
