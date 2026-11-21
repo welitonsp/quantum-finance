@@ -55,7 +55,8 @@ export function useSupabaseTable<TRow, T>(
       .channel(`${table}:${uid}`)
       .on('postgres_changes', { event: '*', schema: 'public', table, filter: `user_id=eq.${uid}` },
         () => { void refresh(); })
-      .subscribe();
+      // Recarrega quando o canal entra: cobre mudanças entre a consulta inicial e a assinatura.
+      .subscribe((status: string) => { if (status === 'SUBSCRIBED') void refresh(); });
 
     return () => {
       active = false;
