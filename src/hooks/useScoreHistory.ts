@@ -8,6 +8,8 @@ import { db } from '../shared/api/firebase/index';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import type { FinancialMetrics } from './useFinancialMetrics';
 import { computeHealthScore } from '../lib/healthScore';
+import { DATA_BACKEND } from '../shared/config/backend';
+import { useScoreHistorySupabase } from './supabase/useScoreHistorySupabase';
 
 export interface ScoreHistoryEntry {
   month:       string; // YYYY-MM
@@ -18,12 +20,17 @@ export interface ScoreHistoryEntry {
   comprometimento: number;
 }
 
-function currentMonthKey(): string {
+export interface ScoreHistoryState {
+  history: ScoreHistoryEntry[];
+  loading: boolean;
+}
+
+export function currentMonthKey(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
-export function useScoreHistory(uid: string, metrics: FinancialMetrics | null) {
+function useScoreHistoryFirebase(uid: string, metrics: FinancialMetrics | null): ScoreHistoryState {
   const [history, setHistory] = useState<ScoreHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -85,3 +92,7 @@ export function useScoreHistory(uid: string, metrics: FinancialMetrics | null) {
 
   return { history, loading };
 }
+
+/** Firebase ou Supabase, escolhido no build (VITE_AUTH_PROVIDER). */
+export const useScoreHistory: (uid: string, metrics: FinancialMetrics | null) => ScoreHistoryState =
+  DATA_BACKEND === 'supabase' ? useScoreHistorySupabase : useScoreHistoryFirebase;
