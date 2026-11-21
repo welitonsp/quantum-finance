@@ -58,6 +58,7 @@ export const FIREBASE_ERROR_OPERATIONS = [
   'goal_create',
   'goal_update',
   'budgets_load',
+  'category_rules_load',
   'budget_create',
   'budget_update',
   'budget_delete',

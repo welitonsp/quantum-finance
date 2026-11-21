@@ -1,17 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { X, Plus, Trash2, Settings, Tag, Search, Loader2, ArrowRight } from 'lucide-react';
-import { collection, query, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../shared/api/firebase';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import toast from 'react-hot-toast';
 import DataPrivacyPanel from '../features/settings/DataPrivacyPanel';
 import MfaPanel from '../features/settings/MfaPanel';
-
-interface CategoryRule {
-  id: string;
-  keyword: string;
-  category: string;
-}
+import { useCategoryRules } from '../hooks/useCategoryRules';
 
 interface Props {
   uid: string;
@@ -25,26 +18,14 @@ const CATEGORIES = [
 ];
 
 export default function CategorySettings({ uid, onClose }: Props) {
-  const [rules,    setRules]    = useState<CategoryRule[]>([]);
-  const [loading,  setLoading]  = useState(true);
+  const { rules: rawRules, loading, addRule, removeRule } = useCategoryRules(uid);
+  const rules = useMemo(
+    () => [...rawRules].sort((a, b) => a.keyword.localeCompare(b.keyword)),
+    [rawRules],
+  );
   const [keyword,  setKeyword]  = useState('');
   const [category, setCategory] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-
-  useEffect(() => {
-    if (!uid) return;
-    const q = query(collection(db, 'users', uid, 'categoryRules'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(d => ({
-        id: d.id,
-        ...(d.data() as Omit<CategoryRule, 'id'>),
-      }));
-      data.sort((a, b) => a.keyword.localeCompare(b.keyword));
-      setRules(data);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, [uid]);
 
   if (!uid) return null;
 
@@ -56,10 +37,7 @@ export default function CategorySettings({ uid, onClose }: Props) {
     }
     setIsSaving(true);
     try {
-      await addDoc(collection(db, 'users', uid, 'categoryRules'), {
-        keyword:  keyword.trim().toLowerCase(),
-        category,
-      });
+      await addRule(keyword.trim().toLowerCase(), category);
       toast.success('Regra Quântica ativada!');
       setKeyword(''); setCategory('');
     } catch (error) {
@@ -72,7 +50,7 @@ export default function CategorySettings({ uid, onClose }: Props) {
 
   const handleDeleteRule = async (ruleId: string) => {
     try {
-      await deleteDoc(doc(db, 'users', uid, 'categoryRules', ruleId));
+      await removeRule(ruleId);
       toast.success('Regra desativada.');
     } catch (error) {
       logSanitizedFirebaseError('category_settings_delete', error);
