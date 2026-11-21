@@ -4,6 +4,7 @@
 // create_group_expense e settle_group_expense_share.
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSupabase } from '../../../shared/api/supabase/client';
+import { subscribeSharedChannel } from '../../../shared/api/supabase/sharedChannel';
 import { logSanitizedFirebaseError, type FirebaseErrorOperation } from '../../../shared/lib/firebaseErrorHandling';
 import { centsFromBigint } from '../../../hooks/supabase/useAccountsSupabase';
 import { reloadWhenVisible } from '../../../hooks/supabase/useSupabaseTable';
@@ -167,23 +168,25 @@ function useLiveQuery<TRow, T>({ key, load, map, watch, loadOp }: LiveQuery<TRow
 
     // Só INSERT/UPDATE: o Realtime aplica RLS a eles; DELETE chega sem filtro
     // (exporia ids alheios), então exclusões recarregam ao gravar ou ao voltar à aba.
-    let channel = getSupabase().channel(`groups:${key}`);
-    for (const spec of watchKey.split(',')) {
-      const [table, filter] = spec.split('|');
-      const where = { schema: 'public', table: table ?? '', ...(filter ? { filter } : {}) };
-      channel = channel
-        .on('postgres_changes', { event: 'INSERT', ...where }, () => { void refresh(); })
-        .on('postgres_changes', { event: 'UPDATE', ...where }, () => { void refresh(); });
-    }
-    channel.subscribe((status: string) => { if (status === 'SUBSCRIBED') void refresh(); });
+    // Nome inclui a consulta: convites e despesas do mesmo grupo usam canais distintos;
+    // o mesmo hook em duas telas divide um canal (subscribeSharedChannel).
+    const leaveChannel = subscribeSharedChannel(
+      `groups:${loadOp}:${key}`,
+      watchKey.split(',').map((spec) => {
+        const [table, filter] = spec.split('|');
+        return { table: table ?? '', filter: filter || undefined, insertUpdateOnly: true };
+      }),
+      () => { void refresh(); },
+      () => { void refresh(); },
+    );
     const stopVisible = reloadWhenVisible(() => { void refresh(); });
 
     return () => {
       active = false;
       stopVisible();
-      void getSupabase().removeChannel(channel);
+      leaveChannel();
     };
-  }, [key, watchKey, refresh]);
+  }, [key, watchKey, loadOp, refresh]);
 
   const current = !!key && loaded.key === key;
   return {
