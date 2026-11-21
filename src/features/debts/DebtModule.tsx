@@ -65,6 +65,10 @@ interface AddDebtModalProps {
   onSave:  (data: DebtCreateDTO) => Promise<void>;
 }
 
+/** Limites do banco: nome/credor até 80 caracteres; taxa (fração) < 1 com 6 casas. */
+const MAX_TEXT = 80;
+const MAX_RATE_PERCENT = 99.9999;
+
 const EMPTY_FORM = {
   name:             '',
   creditor:         '',
@@ -84,7 +88,9 @@ function AddDebtModal({ onClose, onSave }: AddDebtModalProps) {
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
     if (!form.name.trim())          errs['name']          = 'Nome obrigatório';
+    else if (form.name.trim().length > MAX_TEXT) errs['name'] = `Nome com até ${MAX_TEXT} caracteres`;
     if (!form.creditor.trim())      errs['creditor']      = 'Credor obrigatório';
+    else if (form.creditor.trim().length > MAX_TEXT) errs['creditor'] = `Credor com até ${MAX_TEXT} caracteres`;
     try {
       const cents = toCentavos(form.totalCents);
       if (cents <= 0) errs['totalCents'] = 'Valor deve ser positivo';
@@ -92,9 +98,11 @@ function AddDebtModal({ onClose, onSave }: AddDebtModalProps) {
       errs['totalCents'] = 'Valor inválido';
     }
     const rate = Number(form.interestRate.replace(',', '.'));
-    if (isNaN(rate) || rate < 0)    errs['interestRate']  = 'Taxa inválida';
+    // Taxa mensal em %: o banco guarda a fração (< 1) com 6 casas. Acima de 99,9999%
+    // o arredondamento chega a 1,000000 e o banco recusa, então esse é o teto.
+    if (isNaN(rate) || rate < 0 || rate > MAX_RATE_PERCENT) errs['interestRate'] = 'Taxa entre 0 e 99,99% ao mês';
     const inst = parseInt(form.installments);
-    if (!inst || inst <= 0)         errs['installments']  = 'Número de parcelas inválido';
+    if (!inst || inst <= 0 || inst > 600) errs['installments'] = 'Número de parcelas entre 1 e 600';
     const day = parseInt(form.dueDayOfMonth);
     if (!day || day < 1 || day > 31) errs['dueDayOfMonth'] = 'Dia inválido (1-31)';
     if (!form.startDate)            errs['startDate']     = 'Data de início obrigatória';
@@ -140,6 +148,7 @@ function AddDebtModal({ onClose, onSave }: AddDebtModalProps) {
         type={type}
         placeholder={placeholder}
         value={form[id as keyof typeof form] as string}
+        maxLength={id === 'name' || id === 'creditor' ? MAX_TEXT : undefined}
         onChange={e => setForm(f => ({ ...f, [id]: e.target.value }))}
         className="w-full bg-quantum-bg border border-quantum-border rounded-xl px-3 py-2 text-sm text-quantum-fg placeholder-quantum-fgMuted focus:outline-none focus:border-cyan-500/50"
       />
