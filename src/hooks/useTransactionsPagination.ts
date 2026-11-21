@@ -1,9 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import {
-  collection, query, orderBy, limit, getDocs, startAfter,
-  type QueryDocumentSnapshot, type DocumentData,
-} from 'firebase/firestore';
-import { db } from '../shared/api/firebase/index';
+import { transactionGateway } from './transactionGateway';
 import type { Transaction } from '../shared/types/transaction';
 import { PAGE_SIZE, hasMorePages } from '../utils/transactionPagination';
 import {
@@ -18,7 +14,8 @@ export type PaginationResult = {
   isLoadingMore:          boolean;
   loadMoreTransactions:   () => Promise<void>;
   /** Cursor ref — shared with the onSnapshot effect in useTransactions. */
-  lastPageDocRef:         React.MutableRefObject<QueryDocumentSnapshot<DocumentData> | null>;
+  /** Cursor opaco do backend (documento no Firebase, created_at no Supabase). */
+  lastPageDocRef:         React.MutableRefObject<unknown>;
   /** Accumulated older-page docs — shared with the onSnapshot merge logic. */
   olderPagesRef:          React.MutableRefObject<Transaction[]>;
   /** Guard ref against concurrent loadMore calls. */
@@ -29,7 +26,7 @@ export type PaginationResult = {
 };
 
 /**
- * Encapsulates Firestore cursor-based pagination for transactions.
+ * Encapsulates cursor-based pagination for transactions (via transactionGateway).
  * Owns page refs and loadMore logic; composes into useTransactions.
  */
 export function useTransactionsPagination(
@@ -37,7 +34,7 @@ export function useTransactionsPagination(
   transactionsRef: React.MutableRefObject<Transaction[]>,
   setTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>,
 ): PaginationResult {
-  const lastPageDocRef   = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const lastPageDocRef   = useRef<unknown>(null);
   const olderPagesRef    = useRef<Transaction[]>([]);
   const isLoadingMoreRef = useRef(false);
 
@@ -59,28 +56,21 @@ export function useTransactionsPagination(
     setIsLoadingMore(true);
 
     try {
-      const q = query(
-        collection(db, 'users', uid, 'transactions'),
-        orderBy('createdAt', 'desc'),
-        startAfter(lastPageDocRef.current),
-        limit(PAGE_SIZE),
-      );
+      const page = await transactionGateway.loadOlder(uid, lastPageDocRef.current);
 
-      const snap = await getDocs(q);
-
-      const newDocs = snap.docs
-        .map(d => normalizeTransaction({ id: d.id, ...(d.data() as Omit<Transaction, 'id'>) } as Transaction))
+      const newDocs = page.docs
+        .map(tx => normalizeTransaction(tx))
         .filter(tx => tx.isDeleted !== true && !tx.deletedAt);
 
-      if (snap.docs.length > 0) {
-        lastPageDocRef.current = snap.docs[snap.docs.length - 1] ?? null;
+      if (page.rawCount > 0) {
+        lastPageDocRef.current = page.cursor;
       }
 
       const existingIds = new Set(transactionsRef.current.map(tx => tx.id));
       const uniqueNew   = newDocs.filter(tx => !existingIds.has(tx.id));
       olderPagesRef.current = [...olderPagesRef.current, ...uniqueNew];
 
-      setHasMoreTransactions(hasMorePages(PAGE_SIZE, snap.docs.length));
+      setHasMoreTransactions(hasMorePages(PAGE_SIZE, page.rawCount));
 
       if (uniqueNew.length > 0) {
         setTransactions(prev => {

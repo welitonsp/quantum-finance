@@ -20,6 +20,8 @@ import {
   type ManualTransactionCreateDTO,
   type TransactionUpdateDTO,
 } from '../firestoreCore';
+import { PAGE_SIZE } from '../../../utils/transactionPagination';
+import type { TransactionGateway, WindowPage, WindowQuery } from '../../../hooks/transactionGateway';
 import {
   generateTransactionImportHash,
   normalizeImportTransaction,
@@ -167,9 +169,25 @@ export function toTransactionColumns(payload: Record<string, unknown>): Record<s
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const UNIQUE_VIOLATION = '23505';
 
+/**
+ * Traduz o código do Postgres/PostgREST para as categorias que a fila de
+ * sincronização já entende: falhas permanentes não são repetidas.
+ * Sem código (rede, 5xx, timeout, limite) → undefined → a fila tenta de novo.
+ */
+export function mapSupabaseErrorCode(error: unknown): string | undefined {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (typeof code !== 'string') return undefined;
+  if (code === '42501') return 'permission-denied';
+  if (code === 'PGRST301' || code === 'PGRST302' || code === 'PGRST303') return 'unauthenticated';
+  // 22xxx dado inválido, 23xxx constraint (check, not null, fk, unique), coluna/schema inexistente
+  if (/^2[23]/.test(code) || code === '42703' || code === 'PGRST204') return 'invalid-argument';
+  return undefined;
+}
+
 function fail(op: Parameters<typeof logSanitizedFirebaseError>[0], error: unknown, message: string): never {
   logSanitizedFirebaseError(op, error);
-  throw new Error(message);
+  const code = mapSupabaseErrorCode(error);
+  throw code ? Object.assign(new Error(message), { code }) : new Error(message);
 }
 
 type BulkSnapshotItem = {
@@ -370,3 +388,119 @@ export const transactionRepoSupabase = {
   },
 };
 
+
+// ─── Leitura em tempo real e criação (usadas pelo useTransactions) ─────────────
+
+/** Escapa curingas do LIKE para a busca por descrição. */
+export function escapeLike(term: string): string {
+  return term.replace(/[\\%_]/g, ch => `\\${ch}`);
+}
+
+/**
+ * Até onde a lista já foi carregada (janela + páginas antigas), compartilhado
+ * entre a janela em tempo real e o `loadOlder` da mesma assinatura.
+ */
+interface LoadedExtent { rows: number }
+
+/** Cursor da próxima página: a mesma consulta da janela, a partir de `offset`. */
+interface SupabaseCursor { q: WindowQuery; offset: number; extent?: LoadedExtent | undefined }
+
+/** Monta a consulta da janela com filtro e ordenação estáveis (id desempata). */
+function windowQueryBuilder(q: WindowQuery) {
+  let builder = getSupabase().from('transactions').select(TRANSACTION_COLUMNS).is('deleted_at', null);
+  const term = q.term ?? '';
+  if (term.length >= 2) {
+    return builder.ilike('description', `%${escapeLike(term)}%`)
+      .order('description', { ascending: true }).order('id', { ascending: true });
+  }
+  if (q.category) {
+    builder = builder.eq('category', q.category);
+  } else if (q.dateFrom && q.dateTo) {
+    builder = builder.gte('date', q.dateFrom).lte('date', q.dateTo);
+  } else {
+    return builder.order('created_at', { ascending: false }).order('id', { ascending: false });
+  }
+  return builder.order('date', { ascending: false }).order('id', { ascending: false });
+}
+
+function windowPage(rows: TransactionRow[], q: WindowQuery, offset: number, extent?: LoadedExtent): WindowPage {
+  const cursor: SupabaseCursor | null = rows.length > 0 ? { q, offset: offset + rows.length, extent } : null;
+  return { docs: rows.map(mapTransactionRow), rawCount: rows.length, cursor };
+}
+
+let channelSeq = 0;
+
+export const transactionGatewaySupabase: TransactionGateway = {
+  subscribeWindow(uid, q, onNext, onError) {
+    let active = true;
+    let latest = 0;
+    const extent: LoadedExtent = { rows: PAGE_SIZE };
+
+    // Recarrega TUDO o que já foi carregado (não só a 1ª página): com paginação
+    // por posição, uma inserção empurraria a linha da fronteira para fora da
+    // janela e ela sumiria entre a janela e as páginas antigas guardadas no hook.
+    // Busca em blocos de PAGE_SIZE (o PostgREST limita linhas por resposta).
+    const run = async (): Promise<void> => {
+      const request = ++latest;
+      const rows: TransactionRow[] = [];
+      const target = extent.rows;
+      let exhausted = false;
+      for (let from = 0; from < target; from += PAGE_SIZE) {
+        const { data, error } = await windowQueryBuilder(q).range(from, from + PAGE_SIZE - 1);
+        if (!active || request !== latest) return;
+        if (error) { onError(error); return; }
+        const chunk = (data ?? []) as unknown as TransactionRow[];
+        rows.push(...chunk);
+        if (chunk.length < PAGE_SIZE) { exhausted = true; break; }
+      }
+      onNext({ ...windowPage(rows, q, 0, extent), coversLoaded: true, exhausted });
+    };
+
+    void run();
+    const channel = getSupabase()
+      .channel(`transactions:${uid}:${++channelSeq}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${uid}` },
+        () => { void run(); })
+      // Recarrega quando o canal entra: cobre mudanças entre a consulta inicial e a assinatura.
+      .subscribe((status: string) => { if (status === 'SUBSCRIBED') void run(); });
+
+    return () => {
+      active = false;
+      void getSupabase().removeChannel(channel);
+    };
+  },
+
+  /**
+   * Próxima página com o MESMO filtro e ordem da janela (busca, categoria ou
+   * período). Paginação por posição: linhas repetidas por mudança concorrente
+   * são descartadas pelo id no hook. Amplia o alcance da janela em tempo real
+   * para que as próximas recargas cubram também esta página.
+   */
+  async loadOlder(_uid, cursor) {
+    const c = cursor as SupabaseCursor | null;
+    if (!c || typeof c.offset !== 'number') return { docs: [], rawCount: 0, cursor: null };
+    const { data, error } = await windowQueryBuilder(c.q).range(c.offset, c.offset + PAGE_SIZE - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as unknown as TransactionRow[];
+    if (c.extent) c.extent.rows = Math.max(c.extent.rows, c.offset + rows.length);
+    return windowPage(rows, c.q, c.offset, c.extent);
+  },
+
+  async fetchOne(_uid, id) {
+    const { data, error } = await getSupabase()
+      .from('transactions')
+      .select(TRANSACTION_COLUMNS)
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? mapTransactionRow(data as unknown as TransactionRow) : null;
+  },
+
+  create(uid, data, idempotencyKey) {
+    return transactionRepoSupabase.createManualTransactionWithHistory(uid, data, idempotencyKey);
+  },
+
+  newId() {
+    return crypto.randomUUID();
+  },
+};

@@ -1,11 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  collection, query, orderBy, onSnapshot, limit, where,
-  doc, getDoc,
-} from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
 import { useTransactionsPagination } from './useTransactionsPagination';
-import { db, functions } from '../shared/api/firebase/index';
+import { transactionGateway } from './transactionGateway';
 import { FirestoreService } from '../shared/services/FirestoreService';
 import { AuditService } from '../shared/services/AuditService';
 import type { Transaction } from '../shared/types/transaction';
@@ -167,7 +162,7 @@ function makeIdempotencyKey(): string {
 }
 
 function makeManualTransactionId(uid: string): string {
-  return doc(collection(db, 'users', uid, 'transactions')).id;
+  return transactionGateway.newId(uid);
 }
 
 function isTemp(id: string): boolean {
@@ -182,14 +177,8 @@ function getTxCentavos(tx: Partial<Transaction>): Centavos | undefined {
 
 
 async function fetchTransactionForHistory(uid: string, id: string): Promise<Transaction | undefined> {
-  const txRef = doc(db, 'users', uid, 'transactions', id);
-  const snap = await getDoc(txRef);
-  if (!snap.exists()) return undefined;
-
-  return normalizeTransaction({
-    id,
-    ...(snap.data() as Omit<Transaction, 'id'>),
-  } as Transaction);
+  const tx = await transactionGateway.fetchOne(uid, id);
+  return tx ? normalizeTransaction(tx) : undefined;
 }
 
 function getErrorMessage(err: unknown): string {
@@ -317,44 +306,29 @@ export function useTransactions(
     const isTermSearch = searchTerm.length >= 2;
     const categoryFilter = serverSearch?.category?.trim() ?? '';
     const isCategorySearch = !isTermSearch && categoryFilter.length > 0;
-
-    const q = isTermSearch
-      ? query(
-          collection(db, 'users', uid, 'transactions'),
-          where('descriptionLower', '>=', searchTerm),
-          where('descriptionLower', '<=', searchTerm + ''),
-          orderBy('descriptionLower', 'asc'),
-          limit(PAGE_SIZE),
-        )
+    const windowQuery = isTermSearch
+      ? { term: searchTerm }
       : isCategorySearch
-        ? query(
-            collection(db, 'users', uid, 'transactions'),
-            where('category', '==', categoryFilter),
-            orderBy('date', 'desc'),
-            limit(PAGE_SIZE),
-          )
+        ? { category: categoryFilter }
         : snapshotWindow
-          ? query(
-              collection(db, 'users', uid, 'transactions'),
-              where('date', '>=', snapshotWindow.dateFrom),
-              where('date', '<=', snapshotWindow.dateTo),
-              orderBy('date', 'desc'),
-              limit(PAGE_SIZE),
-            )
-          : query(
-              collection(db, 'users', uid, 'transactions'),
-              orderBy('createdAt', 'desc'),
-              limit(PAGE_SIZE),
-            );
+          ? { dateFrom: snapshotWindow.dateFrom, dateTo: snapshotWindow.dateTo }
+          : {};
 
-    const unsub = onSnapshot(
-      q,
-      snap => {
+    const unsub = transactionGateway.subscribeWindow(
+      uid,
+      windowQuery,
+      page => {
         // ── Atualiza cursor e estado de "há mais" ────────────────────────────
-        const snapLastDoc  = snap.docs.length > 0 ? (snap.docs[snap.docs.length - 1] ?? null) : null;
-        const snapIsFull   = snap.docs.length >= PAGE_SIZE;
+        const snapLastDoc  = page.cursor;
+        const snapIsFull   = page.rawCount >= PAGE_SIZE;
 
-        if (!snapIsFull) {
+        if (page.coversLoaded && snapIsFull) {
+          // A janela trouxe tudo o que já foi carregado: as páginas antigas
+          // guardadas podem ter linhas excluídas ou fora do filtro — descarta.
+          olderPagesRef.current  = [];
+          lastPageDocRef.current = snapLastDoc;
+          setHasMoreTransactions(page.exhausted !== true);
+        } else if (!snapIsFull) {
           // Snapshot não cheio → ALL transações cabem na janela realtime.
           // Quaisquer páginas antigas carregadas estão cobertas (ou foram eliminadas).
           olderPagesRef.current  = [];
@@ -368,10 +342,9 @@ export function useTransactions(
         // Se snapIsFull && olderPagesRef não vazio: o cursor e hasMore foram
         // definidos pelo último loadMoreTransactions — não regredir.
 
-        const remote: Transaction[] = snap.docs.map(d => normalizeTransaction({
-          id: d.id,
-          ...(d.data() as Omit<Transaction, 'id'>),
-        })).filter(tx => tx.isDeleted !== true && !tx.deletedAt);
+        const remote: Transaction[] = page.docs
+          .map(tx => normalizeTransaction(tx))
+          .filter(tx => tx.isDeleted !== true && !tx.deletedAt);
 
         setTransactions(prev => {
           // Índice do estado local para O(1) lookup
@@ -447,26 +420,7 @@ export function useTransactions(
           case 'add': {
             // Modo Blaze: callable server-trusted com App Check + audit atômico via Admin SDK.
             debugSync('iniciando criação via callable server-trusted', 'transaction_add');
-            const callCreateTransaction = httpsCallable<Record<string, unknown>, { id: string }>(
-              functions, 'createTransaction'
-            );
-            const callPayload: Record<string, unknown> = {
-              description:     op.data.description ?? '',
-              value_cents:     op.data.value_cents,
-              type:            op.data.type ?? 'saida',
-              category:        op.data.category ?? 'Outros',
-              date:            op.data.date ?? new Date().toISOString().slice(0, 10),
-              source:          'manual',
-              isRecurring:     op.data.isRecurring ?? false,
-              idempotencyKey:  op.idempotencyKey,
-            };
-            if (op.data.account   !== undefined) callPayload['account']   = op.data.account;
-            if (op.data.accountId !== undefined) callPayload['accountId'] = op.data.accountId;
-            if (op.data.cardId    !== undefined) callPayload['cardId']    = op.data.cardId;
-            if (op.data.fitId     !== undefined) callPayload['fitId']     = op.data.fitId;
-            if (Array.isArray(op.data.tags) && op.data.tags.length > 0) callPayload['tags'] = op.data.tags;
-            const result = await callCreateTransaction(callPayload);
-            const realId = result.data.id;
+            const realId = await transactionGateway.create(uid, op.data, op.idempotencyKey);
             debugSync('callable confirmado', 'transaction_add');
             // O batch já escreveu transação + history de forma atômica — sem log CREATE separado
             const aiCb = postAddCallbacks.current.get(op.tempId);
@@ -520,10 +474,8 @@ export function useTransactions(
               });
             } else {
               // Modelo A: fetch current state to build history when not in memory
-              const txRef = doc(db, 'users', uid, 'transactions', op.itemId);
-              const snap = await getDoc(txRef);
-              if (snap.exists()) {
-                const fetched = snap.data() as Transaction;
+              const fetched = await transactionGateway.fetchOne(uid, op.itemId);
+              if (fetched) {
                 const before = sanitizeForHistory(fetched);
                 await FirestoreService.softDeleteTransactionWithHistory(uid, op.itemId, {
                   before,
@@ -541,11 +493,7 @@ export function useTransactions(
             let allTx: Transaction[] = [...op.previousBatch];
             if (orphanIds.length > 0) {
               const fetched = await Promise.all(
-                orphanIds.map(async id => {
-                  const txRef = doc(db, 'users', uid, 'transactions', id);
-                  const s = await getDoc(txRef);
-                  return s.exists() ? (s.data() as Transaction) : null;
-                })
+                orphanIds.map(id => transactionGateway.fetchOne(uid, id))
               );
               allTx = [...allTx, ...(fetched.filter(Boolean) as Transaction[])];
             }
@@ -961,10 +909,8 @@ export function useTransactions(
       if (orphanIds.length > 0) {
         const fetched = await Promise.all(
           orphanIds.map(async id => {
-            const txRef = doc(db, 'users', uid, 'transactions', id);
-            const s = await getDoc(txRef);
-            if (!s.exists()) return null;
-            const tx = s.data() as Transaction;
+            const tx = await transactionGateway.fetchOne(uid, id);
+            if (!tx) return null;
             const before = sanitizeForHistory(tx);
             before['category'] = tx.category ?? 'Outros';
             if (typeof tx.value_cents !== 'number') delete before['value_cents'];

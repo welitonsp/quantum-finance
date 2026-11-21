@@ -9,19 +9,30 @@ const next = (): Promise<Result> => Promise.resolve(results.shift() ?? { data: [
 function builder() {
   const b: Record<string, unknown> = {};
   const record = (op: string) => (...args: unknown[]) => { calls.push({ op, args }); return b; };
-  for (const op of ['select', 'insert', 'update', 'eq', 'in', 'is', 'order']) b[op] = record(op);
+  for (const op of ['select', 'insert', 'update', 'eq', 'in', 'is', 'order', 'ilike', 'gte', 'lte', 'lt', 'limit', 'range']) b[op] = record(op);
   b['single'] = () => next();
   b['maybeSingle'] = () => next();
   b['then'] = (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => next().then(res, rej);
   return b;
 }
 
-const client = { from: vi.fn((table: string) => { calls.push({ op: 'from', args: [table] }); return builder(); }) };
+const channel: { on: ReturnType<typeof vi.fn>; subscribe: ReturnType<typeof vi.fn> } = {
+  on: vi.fn(() => channel),
+  subscribe: vi.fn(() => channel),
+};
+const client = {
+  from: vi.fn((table: string) => { calls.push({ op: 'from', args: [table] }); return builder(); }),
+  channel: vi.fn(() => channel),
+  removeChannel: vi.fn(() => Promise.resolve()),
+};
 
 vi.mock('../../api/supabase/client', () => ({ getSupabase: () => client }));
 vi.mock('../../lib/firebaseErrorHandling', () => ({ logSanitizedFirebaseError: vi.fn() }));
 
 import {
+  escapeLike,
+  mapSupabaseErrorCode,
+  transactionGatewaySupabase as gateway,
   mapTransactionRow,
   toTransactionColumns,
   transactionRepoSupabase as repo,
@@ -176,5 +187,140 @@ describe('transactionRepoSupabase', () => {
     expect(inserted).toHaveLength(1);
     expect(String(inserted[0]!['import_hash'])).toMatch(/^[0-9a-f]{64}$/);
     expect(inserted[0]).not.toHaveProperty('descriptionLower');
+  });
+});
+
+describe('transactionGatewaySupabase', () => {
+  const flush = () => new Promise(r => setTimeout(r, 0));
+
+  it('janela padrão: mais recentes (id desempata), só ativas, primeira página', async () => {
+    results = [{ data: [baseRow], error: null }];
+    const pages: unknown[] = [];
+    const stop = gateway.subscribeWindow('u1', {}, p => pages.push(p), () => {});
+    await flush();
+    expect(pages).toEqual([{ docs: [mapTransactionRow(baseRow)], rawCount: 1, cursor: { q: {}, offset: 1, extent: { rows: 500 } }, coversLoaded: true, exhausted: true }]);
+    expect(calls).toContainEqual({ op: 'is', args: ['deleted_at', null] });
+    expect(calls).toContainEqual({ op: 'order', args: ['created_at', { ascending: false }] });
+    expect(calls).toContainEqual({ op: 'order', args: ['id', { ascending: false }] });
+    expect(calls.find(c => c.op === 'range')?.args[0]).toBe(0);
+    stop();
+    expect(client.removeChannel).toHaveBeenCalled();
+  });
+
+  it('busca por termo escapa curingas; categoria e intervalo filtram por data', async () => {
+    gateway.subscribeWindow('u1', { term: '50%_off' }, () => {}, () => {})();
+    await flush();
+    expect(calls).toContainEqual({ op: 'ilike', args: ['description', '%50\\%\\_off%'] });
+    calls.length = 0;
+    gateway.subscribeWindow('u1', { category: 'Lazer' }, () => {}, () => {})();
+    await flush();
+    expect(calls).toContainEqual({ op: 'eq', args: ['category', 'Lazer'] });
+    expect(calls).toContainEqual({ op: 'order', args: ['date', { ascending: false }] });
+    calls.length = 0;
+    gateway.subscribeWindow('u1', { dateFrom: '2026-11-01', dateTo: '2026-11-30' }, () => {}, () => {})();
+    await flush();
+    expect(calls).toContainEqual({ op: 'gte', args: ['date', '2026-11-01'] });
+    expect(calls).toContainEqual({ op: 'lte', args: ['date', '2026-11-30'] });
+  });
+
+  it('recarrega em mudança do banco e quando o canal entra; ignora resposta após parar', async () => {
+    const pages: unknown[] = [];
+    const stop = gateway.subscribeWindow('u1', {}, p => pages.push(p), () => {});
+    await flush();
+    const onChange = channel.on.mock.calls[channel.on.mock.calls.length - 1]?.[2] as () => void;
+    const subCalls = channel.subscribe.mock.calls;
+    const onStatus = subCalls[subCalls.length - 1]?.[0] as (s: string) => void;
+    onChange();
+    await flush();
+    onStatus('SUBSCRIBED');
+    await flush();
+    expect(pages).toHaveLength(3);
+    stop();
+    onChange();
+    await flush();
+    expect(pages).toHaveLength(3);
+  });
+
+  it('erro na janela vai para onError', async () => {
+    results = [{ data: null, error: { code: '42501' } }];
+    const onError = vi.fn();
+    gateway.subscribeWindow('u1', {}, () => {}, onError);
+    await flush();
+    expect(onError).toHaveBeenCalledWith({ code: '42501' });
+  });
+
+  it('loadOlder repete o filtro da janela a partir da posição; sem cursor não consulta', async () => {
+    results = [{ data: [baseRow], error: null }];
+    const page = await gateway.loadOlder('u1', { q: { category: 'Lazer' }, offset: 500 });
+    expect(page.rawCount).toBe(1);
+    expect(page.cursor).toEqual({ q: { category: 'Lazer' }, offset: 501 });
+    expect(calls).toContainEqual({ op: 'eq', args: ['category', 'Lazer'] });
+    expect(calls.find(c => c.op === 'range')?.args[0]).toBe(500);
+    calls.length = 0;
+    expect(await gateway.loadOlder('u1', null)).toEqual({ docs: [], rawCount: 0, cursor: null });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('após carregar página antiga, a recarga em tempo real cobre janela + páginas (sem buraco na fronteira)', async () => {
+    const fullPage = Array.from({ length: 500 }, (_, i) => ({ ...baseRow, id: `w${i}` }));
+    results = [{ data: fullPage, error: null }];
+    const pages: Array<{ rawCount: number; cursor: unknown }> = [];
+    const stop = gateway.subscribeWindow('u1', {}, p => pages.push(p), () => {});
+    await flush();
+    const cursor = pages[0]?.cursor;
+    results = [{ data: [{ ...baseRow, id: 'old1' }, { ...baseRow, id: 'old2' }], error: null }];
+    await gateway.loadOlder('u1', cursor);
+
+    calls.length = 0;
+    results = [
+      { data: fullPage, error: null },
+      { data: [{ ...baseRow, id: 'w499' }, { ...baseRow, id: 'old1' }, { ...baseRow, id: 'old2' }], error: null },
+    ];
+    const onChange = channel.on.mock.calls[channel.on.mock.calls.length - 1]?.[2] as () => void;
+    onChange();
+    await flush();
+    expect(calls.filter(c => c.op === 'range').map(c => c.args)).toEqual([[0, 499], [500, 999]]);
+    expect(pages[pages.length - 1]).toMatchObject({ rawCount: 503, coversLoaded: true, exhausted: true });
+    stop();
+  });
+
+  it('fetchOne, create idempotente e newId uuid', async () => {
+    results = [{ data: baseRow, error: null }];
+    expect((await gateway.fetchOne('u1', 't1'))?.id).toBe('t1');
+    results = [{ data: null, error: null }];
+    expect(await gateway.fetchOne('u1', 'nope')).toBeNull();
+
+    results = [{ data: { id: 'n1' }, error: null }];
+    const key = gateway.newId('u1');
+    expect(key).toMatch(/^[0-9a-f-]{36}$/);
+    expect(await gateway.create('u1', {
+      description: 'Café', value_cents: 850 as never, type: 'saida', category: 'Alimentação', date: '2026-11-12',
+    }, key)).toBe('n1');
+    const insert = calls.find(c => c.op === 'insert')!.args[0] as Record<string, unknown>;
+    expect(insert).toMatchObject({ id: key, idempotency_key: key });
+  });
+
+  it('escapeLike', () => {
+    expect(escapeLike('a%b_c\\d')).toBe('a\\%b\\_c\\\\d');
+  });
+});
+
+describe('mapSupabaseErrorCode', () => {
+  it('falhas permanentes viram categorias que a fila não repete; o resto fica sem código', () => {
+    expect(mapSupabaseErrorCode({ code: '42501' })).toBe('permission-denied');
+    expect(mapSupabaseErrorCode({ code: 'PGRST301' })).toBe('unauthenticated');
+    expect(mapSupabaseErrorCode({ code: '23514' })).toBe('invalid-argument');
+    expect(mapSupabaseErrorCode({ code: '22P02' })).toBe('invalid-argument');
+    expect(mapSupabaseErrorCode({ code: 'PGRST204' })).toBe('invalid-argument');
+    expect(mapSupabaseErrorCode({ code: '57014' })).toBeUndefined();
+    expect(mapSupabaseErrorCode({ code: '53400' })).toBeUndefined();
+    expect(mapSupabaseErrorCode(null)).toBeUndefined();
+  });
+
+  it('create com erro permanente mantém o código no erro lançado', async () => {
+    results = [{ data: null, error: { code: '23514', message: 'check' } }];
+    await expect(gateway.create('u1', {
+      description: 'Mercado', value_cents: 100, type: 'saida', category: 'Lazer', date: '2026-11-10',
+    } as never, 'idem-key-1234')).rejects.toMatchObject({ code: 'invalid-argument' });
   });
 });
