@@ -387,7 +387,7 @@ export function escapeLike(term: string): string {
 interface LoadedExtent { rows: number }
 
 /** Cursor da próxima página: a mesma consulta da janela, a partir de `offset`. */
-interface SupabaseCursor { q: WindowQuery; offset: number; extent?: LoadedExtent }
+interface SupabaseCursor { q: WindowQuery; offset: number; extent?: LoadedExtent | undefined }
 
 /** Monta a consulta da janela com filtro e ordenação estáveis (id desempata). */
 function windowQueryBuilder(q: WindowQuery) {
