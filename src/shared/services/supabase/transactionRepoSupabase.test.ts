@@ -9,19 +9,29 @@ const next = (): Promise<Result> => Promise.resolve(results.shift() ?? { data: [
 function builder() {
   const b: Record<string, unknown> = {};
   const record = (op: string) => (...args: unknown[]) => { calls.push({ op, args }); return b; };
-  for (const op of ['select', 'insert', 'update', 'eq', 'in', 'is', 'order']) b[op] = record(op);
+  for (const op of ['select', 'insert', 'update', 'eq', 'in', 'is', 'order', 'ilike', 'gte', 'lte', 'lt', 'limit']) b[op] = record(op);
   b['single'] = () => next();
   b['maybeSingle'] = () => next();
   b['then'] = (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => next().then(res, rej);
   return b;
 }
 
-const client = { from: vi.fn((table: string) => { calls.push({ op: 'from', args: [table] }); return builder(); }) };
+const channel: { on: ReturnType<typeof vi.fn>; subscribe: ReturnType<typeof vi.fn> } = {
+  on: vi.fn(() => channel),
+  subscribe: vi.fn(() => channel),
+};
+const client = {
+  from: vi.fn((table: string) => { calls.push({ op: 'from', args: [table] }); return builder(); }),
+  channel: vi.fn(() => channel),
+  removeChannel: vi.fn(() => Promise.resolve()),
+};
 
 vi.mock('../../api/supabase/client', () => ({ getSupabase: () => client }));
 vi.mock('../../lib/firebaseErrorHandling', () => ({ logSanitizedFirebaseError: vi.fn() }));
 
 import {
+  escapeLike,
+  transactionGatewaySupabase as gateway,
   mapTransactionRow,
   toTransactionColumns,
   transactionRepoSupabase as repo,
@@ -162,5 +172,94 @@ describe('transactionRepoSupabase', () => {
     const inserted = calls.find(c => c.op === 'insert')!.args[0] as Array<Record<string, unknown>>;
     expect(inserted.map(r => r['import_hash'])).toEqual(['h2']);
     expect(inserted[0]).toMatchObject({ source: 'csv' });
+  });
+});
+
+describe('transactionGatewaySupabase', () => {
+  const flush = () => new Promise(r => setTimeout(r, 0));
+
+  it('janela padrão: mais recentes, só ativas, limitada, com cursor em created_at', async () => {
+    results = [{ data: [baseRow], error: null }];
+    const pages: unknown[] = [];
+    const stop = gateway.subscribeWindow('u1', {}, p => pages.push(p), () => {});
+    await flush();
+    expect(pages).toEqual([{ docs: [mapTransactionRow(baseRow)], rawCount: 1, cursor: baseRow.created_at }]);
+    expect(calls).toContainEqual({ op: 'is', args: ['deleted_at', null] });
+    expect(calls).toContainEqual({ op: 'order', args: ['created_at', { ascending: false }] });
+    expect(calls.some(c => c.op === 'limit')).toBe(true);
+    stop();
+    expect(client.removeChannel).toHaveBeenCalled();
+  });
+
+  it('busca por termo escapa curingas; categoria e intervalo filtram por data', async () => {
+    gateway.subscribeWindow('u1', { term: '50%_off' }, () => {}, () => {})();
+    await flush();
+    expect(calls).toContainEqual({ op: 'ilike', args: ['description', '%50\\%\\_off%'] });
+    calls.length = 0;
+    gateway.subscribeWindow('u1', { category: 'Lazer' }, () => {}, () => {})();
+    await flush();
+    expect(calls).toContainEqual({ op: 'eq', args: ['category', 'Lazer'] });
+    expect(calls).toContainEqual({ op: 'order', args: ['date', { ascending: false }] });
+    calls.length = 0;
+    gateway.subscribeWindow('u1', { dateFrom: '2026-11-01', dateTo: '2026-11-30' }, () => {}, () => {})();
+    await flush();
+    expect(calls).toContainEqual({ op: 'gte', args: ['date', '2026-11-01'] });
+    expect(calls).toContainEqual({ op: 'lte', args: ['date', '2026-11-30'] });
+  });
+
+  it('recarrega em mudança do banco e quando o canal entra; ignora resposta após parar', async () => {
+    const pages: unknown[] = [];
+    const stop = gateway.subscribeWindow('u1', {}, p => pages.push(p), () => {});
+    await flush();
+    const onChange = channel.on.mock.calls[channel.on.mock.calls.length - 1]?.[2] as () => void;
+    const subCalls = channel.subscribe.mock.calls;
+    const onStatus = subCalls[subCalls.length - 1]?.[0] as (s: string) => void;
+    onChange();
+    await flush();
+    onStatus('SUBSCRIBED');
+    await flush();
+    expect(pages).toHaveLength(3);
+    stop();
+    onChange();
+    await flush();
+    expect(pages).toHaveLength(3);
+  });
+
+  it('erro na janela vai para onError', async () => {
+    results = [{ data: null, error: { code: '42501' } }];
+    const onError = vi.fn();
+    gateway.subscribeWindow('u1', {}, () => {}, onError);
+    await flush();
+    expect(onError).toHaveBeenCalledWith({ code: '42501' });
+  });
+
+  it('loadOlder pagina por created_at; sem cursor não consulta', async () => {
+    results = [{ data: [baseRow], error: null }];
+    const page = await gateway.loadOlder('u1', '2026-11-10T12:00:00Z');
+    expect(page.rawCount).toBe(1);
+    expect(calls).toContainEqual({ op: 'lt', args: ['created_at', '2026-11-10T12:00:00Z'] });
+    calls.length = 0;
+    expect(await gateway.loadOlder('u1', null)).toEqual({ docs: [], rawCount: 0, cursor: null });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('fetchOne, create idempotente e newId uuid', async () => {
+    results = [{ data: baseRow, error: null }];
+    expect((await gateway.fetchOne('u1', 't1'))?.id).toBe('t1');
+    results = [{ data: null, error: null }];
+    expect(await gateway.fetchOne('u1', 'nope')).toBeNull();
+
+    results = [{ data: { id: 'n1' }, error: null }];
+    const key = gateway.newId('u1');
+    expect(key).toMatch(/^[0-9a-f-]{36}$/);
+    expect(await gateway.create('u1', {
+      description: 'Café', value_cents: 850 as never, type: 'saida', category: 'Alimentação', date: '2026-11-12',
+    }, key)).toBe('n1');
+    const insert = calls.find(c => c.op === 'insert')!.args[0] as Record<string, unknown>;
+    expect(insert).toMatchObject({ id: key, idempotency_key: key });
+  });
+
+  it('escapeLike', () => {
+    expect(escapeLike('a%b_c\\d')).toBe('a\\%b\\_c\\\\d');
   });
 });

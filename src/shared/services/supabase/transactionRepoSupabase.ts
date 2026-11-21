@@ -20,6 +20,8 @@ import {
   type ManualTransactionCreateDTO,
   type TransactionUpdateDTO,
 } from '../firestoreCore';
+import { PAGE_SIZE } from '../../../utils/transactionPagination';
+import type { TransactionGateway, WindowPage } from '../../../hooks/transactionGateway';
 
 export interface TransactionRow {
   id: string;
@@ -365,3 +367,90 @@ export const transactionRepoSupabase = {
   },
 };
 
+
+// ─── Leitura em tempo real e criação (usadas pelo useTransactions) ─────────────
+
+/** Escapa curingas do LIKE para a busca por descrição. */
+export function escapeLike(term: string): string {
+  return term.replace(/[\\%_]/g, ch => `\\${ch}`);
+}
+
+function windowPage(rows: TransactionRow[]): WindowPage {
+  const last = rows[rows.length - 1];
+  return { docs: rows.map(mapTransactionRow), rawCount: rows.length, cursor: last ? last.created_at : null };
+}
+
+let channelSeq = 0;
+
+export const transactionGatewaySupabase: TransactionGateway = {
+  subscribeWindow(uid, q, onNext, onError) {
+    let active = true;
+    let latest = 0;
+
+    const run = async (): Promise<void> => {
+      const request = ++latest;
+      let builder = getSupabase().from('transactions').select(TRANSACTION_COLUMNS).is('deleted_at', null);
+      const term = q.term ?? '';
+      if (term.length >= 2) {
+        builder = builder.ilike('description', `%${escapeLike(term)}%`);
+      } else if (q.category) {
+        builder = builder.eq('category', q.category);
+      } else if (q.dateFrom && q.dateTo) {
+        builder = builder.gte('date', q.dateFrom).lte('date', q.dateTo);
+      }
+      const ordered = term.length >= 2
+        ? builder.order('description', { ascending: true })
+        : q.category || (q.dateFrom && q.dateTo)
+          ? builder.order('date', { ascending: false })
+          : builder.order('created_at', { ascending: false });
+      const { data, error } = await ordered.limit(PAGE_SIZE);
+      if (!active || request !== latest) return;
+      if (error) { onError(error); return; }
+      onNext(windowPage((data ?? []) as unknown as TransactionRow[]));
+    };
+
+    void run();
+    const channel = getSupabase()
+      .channel(`transactions:${uid}:${++channelSeq}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${uid}` },
+        () => { void run(); })
+      // Recarrega quando o canal entra: cobre mudanças entre a consulta inicial e a assinatura.
+      .subscribe((status: string) => { if (status === 'SUBSCRIBED') void run(); });
+
+    return () => {
+      active = false;
+      void getSupabase().removeChannel(channel);
+    };
+  },
+
+  async loadOlder(_uid, cursor) {
+    if (typeof cursor !== 'string') return { docs: [], rawCount: 0, cursor: null };
+    const { data, error } = await getSupabase()
+      .from('transactions')
+      .select(TRANSACTION_COLUMNS)
+      .is('deleted_at', null)
+      .lt('created_at', cursor)
+      .order('created_at', { ascending: false })
+      .limit(PAGE_SIZE);
+    if (error) throw error;
+    return windowPage((data ?? []) as unknown as TransactionRow[]);
+  },
+
+  async fetchOne(_uid, id) {
+    const { data, error } = await getSupabase()
+      .from('transactions')
+      .select(TRANSACTION_COLUMNS)
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? mapTransactionRow(data as unknown as TransactionRow) : null;
+  },
+
+  create(uid, data, idempotencyKey) {
+    return transactionRepoSupabase.createManualTransactionWithHistory(uid, data, idempotencyKey);
+  },
+
+  newId() {
+    return crypto.randomUUID();
+  },
+};
