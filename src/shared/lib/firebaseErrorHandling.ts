@@ -20,6 +20,8 @@ export const FIREBASE_ERROR_OPERATIONS = [
   'credit_card_update',
   'credit_card_delete',
   'recurring_create',
+  'recurring_update',
+  'recurring_delete',
   'accounts_load',
   'import_parse_worker',
   'simulation_run',
