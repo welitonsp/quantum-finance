@@ -4,18 +4,21 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 const calls: Array<{ op: string; args: unknown[] }> = [];
 let selectResult: { data: unknown; error: unknown } = { data: [], error: null };
 let writeResult: { data: unknown; error: unknown } = { data: { id: 'new-id' }, error: null };
+/** Respostas de escrita em ordem (quando vazio, usa writeResult). */
+let writeQueue: Array<{ data: unknown; error: unknown }> = [];
+const nextWrite = () => Promise.resolve(writeQueue.shift() ?? writeResult);
 
 function builder() {
   const b: Record<string, unknown> = {};
   const record = (op: string) => (...args: unknown[]) => { calls.push({ op, args }); return b; };
   b['select'] = record('select');
-  b['upsert'] = record('upsert');
+  b['insert'] = record('insert');
   b['update'] = record('update');
   b['eq'] = record('eq');
   b['order'] = (...args: unknown[]) => { calls.push({ op: 'order', args }); return Promise.resolve(selectResult); };
-  b['single'] = () => Promise.resolve(writeResult);
-  b['then'] = (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) =>
-    Promise.resolve({ error: writeResult.error }).then(res, rej);
+  b['single'] = () => nextWrite();
+  b['maybeSingle'] = () => nextWrite();
+  b['then'] = (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => nextWrite().then(res, rej);
   return b;
 }
 
@@ -40,6 +43,7 @@ beforeEach(() => {
   calls.length = 0;
   selectResult = { data: [], error: null };
   writeResult = { data: { id: 'new-id' }, error: null };
+  writeQueue = [];
   vi.clearAllMocks();
 });
 
@@ -71,24 +75,47 @@ describe('useCategoryStoreSupabase', () => {
     expect(client.channel).toHaveBeenCalledWith('categories:u1');
   });
 
-  it('insertCategory faz upsert por nome normalizado (reativa a desativada)', async () => {
+  const pets = { name: 'Pets', normalizedName: 'pets', type: 'saida' as const, color: '#64748b', icon: '•', isDefault: false, isActive: true };
+  const petsCols = { name: 'Pets', normalized_name: 'pets', type: 'saida', color: '#64748b', icon: '•', is_default: false, is_active: true };
+
+  it('insertCategory insere sem user_id e devolve o id', async () => {
     const { result } = renderHook(() => useCategoryStoreSupabase('u1'));
     await waitFor(() => expect(result.current.loading).toBe(false));
     let id = '';
-    await act(async () => {
-      id = await result.current.insertCategory({
-        name: 'Pets', normalizedName: 'pets', type: 'saida', color: '#64748b', icon: '•',
-        isDefault: false, isActive: true,
-      });
-    });
+    await act(async () => { id = await result.current.insertCategory(pets); });
     expect(id).toBe('new-id');
-    expect(calls).toContainEqual({
-      op: 'upsert',
-      args: [
-        { name: 'Pets', normalized_name: 'pets', type: 'saida', color: '#64748b', icon: '•', is_default: false, is_active: true },
-        { onConflict: 'user_id,normalized_name' },
-      ],
-    });
+    expect(calls).toContainEqual({ op: 'insert', args: [petsCols] });
+  });
+
+  it('nome já existente e desativado: reativa a mesma linha', async () => {
+    const { result } = renderHook(() => useCategoryStoreSupabase('u1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    writeQueue = [{ data: null, error: { code: '23505' } }, { data: [{ id: 'old' }], error: null }];
+    let id = '';
+    await act(async () => { id = await result.current.insertCategory(pets); });
+    expect(id).toBe('old');
+    expect(calls).toContainEqual({ op: 'update', args: [petsCols] });
+    expect(calls).toContainEqual({ op: 'eq', args: ['is_active', false] });
+  });
+
+  it('nome já existente e ativo (outra aba): reaproveita sem sobrescrever', async () => {
+    const { result } = renderHook(() => useCategoryStoreSupabase('u1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    writeQueue = [
+      { data: null, error: { code: '23505' } },
+      { data: [], error: null },
+      { data: { id: 'ativa' }, error: null },
+    ];
+    let id = '';
+    await act(async () => { id = await result.current.insertCategory(pets); });
+    expect(id).toBe('ativa');
+    expect(calls.filter(c => c.op === 'update')).toHaveLength(1); // só a tentativa restrita a is_active=false
+  });
+
+  it('falha ao carregar aparece em error', async () => {
+    selectResult = { data: null, error: { code: '500' } };
+    const { result } = renderHook(() => useCategoryStoreSupabase('u1'));
+    await waitFor(() => expect(result.current.error).not.toBeNull());
   });
 
   it('patchCategory atualiza pelo id e traduz duplicata', async () => {

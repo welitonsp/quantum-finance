@@ -47,6 +47,12 @@ describe('buildInstallmentPlan', () => {
     expect(() => buildInstallmentPlan({ ...base, installmentCount: 121 })).toThrow();
     expect(() => buildInstallmentPlan({ ...base, description: '  ', installmentCount: 2 })).toThrow();
   });
+
+  it('recusa total menor que o número de parcelas (parcela de R$ 0,00)', () => {
+    expect(() => buildInstallmentPlan({
+      description: 'TV', totalValueCents: 1 as never, installmentCount: 2, date: '2026-11-10', category: 'Lazer',
+    })).toThrow('Valor total pequeno demais');
+  });
 });
 
 describe('installmentRepoSupabase', () => {
@@ -101,6 +107,20 @@ describe('transferRepoSupabase', () => {
   it('erro ou resposta vazia vira mensagem amigável', async () => {
     results = [{ data: null, error: { code: '42501' } }];
     await expect(transferRepoSupabase.createTransferWithHistory('u1', dto)).rejects.toThrow('Não foi possível concluir a transferência.');
+  });
+
+  it('falha de rede repete uma vez com a MESMA chave de idempotência', async () => {
+    results = [{ data: null, error: { message: 'fetch failed' } }, { data: 't9', error: null }];
+    expect(await transferRepoSupabase.createTransferWithHistory('u1', dto)).toBe('t9');
+    const rpcs = calls.filter(c => c.op === 'rpc').map(c => (c.args[1] as Record<string, unknown>)['p_idempotency_key']);
+    expect(rpcs).toHaveLength(2);
+    expect(rpcs[0]).toBe(rpcs[1]);
+  });
+
+  it('erro do banco (com código) não repete', async () => {
+    results = [{ data: null, error: { code: '42501' } }];
+    await expect(transferRepoSupabase.createTransferWithHistory('u1', dto)).rejects.toThrow();
+    expect(client.rpc).toHaveBeenCalledTimes(1);
   });
 
   it('valida antes de chamar o banco', async () => {
