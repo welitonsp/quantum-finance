@@ -99,6 +99,18 @@ describe('useAccountsSupabase', () => {
     expect(calls.filter(c => c.op === 'order').length).toBe(loadsBefore + 1);
   });
 
+  it('não escuta DELETE sem filtro e recarrega quando a aba volta a ficar visível', async () => {
+    const { result } = renderHook(() => useAccountsSupabase('u1'));
+    await waitFor(() => expect(result.current.loadingAccounts).toBe(false));
+    for (const c of channel.on.mock.calls as unknown[][]) {
+      expect((c[1] as { filter?: string }).filter).toBe('user_id=eq.u1');
+    }
+    const loads = () => calls.filter(c => c.op === 'order').length;
+    const before = loads();
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+    expect(loads()).toBe(before + 1);
+  });
+
   it('addAccount grava saldo em centavos inteiros (reais → centavos)', async () => {
     const { result } = renderHook(() => useAccountsSupabase('u1'));
     await waitFor(() => expect(result.current.loadingAccounts).toBe(false));
