@@ -2,6 +2,7 @@
 // Só a camada de armazenamento: métricas de fatura e pagamento ficam em useCreditCards.
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSupabase } from '../../shared/api/supabase/client';
+import { subscribeSharedChannel } from '../../shared/api/supabase/sharedChannel';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 import { toCentavos } from '../../shared/schemas/financialSchemas';
 import type { CreditCard } from '../../shared/types/transaction';
@@ -83,12 +84,14 @@ export function useCreditCardStoreSupabase(uid: string): CreditCardStore {
     setLoading(true);
     void refresh().finally(() => { if (active) setLoading(false); });
 
-    const channel = getSupabase()
-      .channel(`credit_cards:${uid}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'credit_cards', filter: `user_id=eq.${uid}` },
-        () => { void refresh(); })
-      // Recarrega quando o canal entra: cobre mudanças entre a consulta inicial e a assinatura.
-      .subscribe((status: string) => { if (status === 'SUBSCRIBED') void refresh(); });
+    // Canal compartilhado: várias telas com este hook ao mesmo tempo não quebram o app.
+    // Recarrega quando o canal entra: cobre mudanças entre a consulta inicial e a assinatura.
+    const leaveChannel = subscribeSharedChannel(
+      `credit_cards:${uid}`,
+      [{ table: 'credit_cards', filter: `user_id=eq.${uid}` }],
+      () => { void refresh(); },
+      () => { void refresh(); },
+    );
 
     // Exclusões em outra aba/aparelho: o Realtime não filtra DELETE (ver reloadWhenVisible).
     const stopVisible = reloadWhenVisible(() => { void refresh(); });
@@ -96,7 +99,7 @@ export function useCreditCardStoreSupabase(uid: string): CreditCardStore {
     return () => {
       active = false;
       stopVisible();
-      void getSupabase().removeChannel(channel);
+      leaveChannel();
     };
   }, [uid, refresh]);
 
