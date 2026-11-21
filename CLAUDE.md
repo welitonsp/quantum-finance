@@ -5,6 +5,8 @@
 
 ## Estado Atual — 2026-07-15 (F-12 e F-13 fechados; pronto p/ re-auditoria)
 
+- **2026-11-21 — virada para Supabase + Vercel:** produção roda com `VITE_AUTH_PROVIDER=supabase` (`.env.production`); o Firebase não é inicializado nesse build. Banco/RLS/RPCs em `supabase/migrations/` (testes em `supabase/tests/`), IA na função de borda `supabase/functions/quantum-ai` (secret `GEMINI_API_KEY`), recorrentes pelo pg_cron (`run_due_recurring_tasks`, 04:00 UTC). Login: e-mail e senha ou Google + TOTP. Push FCM desligado no Supabase. Código Firebase (`functions/`, `firestore.rules`, hooks `*Firebase`) segue no repositório até a limpeza; as seções abaixo sobre Cloud Functions/Firestore descrevem o legado.
+
 - Branch principal: `main` — PRs #363–#448 mergeados. **CI verde** (incidente #440→#447 resolvido: E2E realinhado à navegação 7 destinos + code-split `vendor-react`).
 - Suíte: **1982 unit + 227 rules + 303 functions + 28 E2E**. Gates de cobertura: **stmts 77 / branches 68 / funcs 79 / lines 80** — regra permanente: só ratchetar com ≥0,5% de margem real medida no CI (incidente #382/#383).
 - **Pendências: fonte única em [docs/PENDENCIAS.md](docs/PENDENCIAS.md).** Resumo: código = zerado (itens 1–5 fechados; resta decisão de produto sobre `cardId` inerte no TransactionForm); owner/infra = required checks no branch protection, M-03 (verificações reais em dispositivo — [roteiro](docs/audit/M03_CHECKLIST_VERIFICACOES_REAIS.md)), F-09 restante (billing/quotas), F-15 (SLOs/alertas); produto = fases 2–5 da Tese (próxima: **Ação de 1 Toque**).
