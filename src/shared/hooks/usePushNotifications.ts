@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db, app } from '../api/firebase/index';
+import { DATA_BACKEND } from '../config/backend';
 
 export interface PushNotificationState {
   permission: NotificationPermission;
@@ -9,7 +10,7 @@ export interface PushNotificationState {
   error: string | null;
 }
 
-export function usePushNotifications(uid: string | null) {
+function usePushNotificationsFirebase(uid: string | null) {
   const [permission, setPermission] = useState<NotificationPermission>(
     () => (typeof Notification !== 'undefined' ? Notification.permission : 'default'),
   );
@@ -83,3 +84,23 @@ export function usePushNotifications(uid: string | null) {
     revokePermission,
   };
 }
+
+/**
+ * Supabase: o push atual depende do Firebase Cloud Messaging (tokens no Firestore
+ * e envio pela Cloud Function agendada). Até existir um envio próprio, o painel
+ * mostra "não suportado" em vez de oferecer uma inscrição que nunca dispara.
+ */
+function usePushNotificationsUnavailable(_uid: string | null): ReturnType<typeof usePushNotificationsFirebase> {
+  return {
+    permission: typeof Notification !== 'undefined' ? Notification.permission : 'default',
+    token: null,
+    loading: false,
+    error: null,
+    isSupported: false,
+    requestPermission: async () => {},
+    revokePermission: async () => {},
+  };
+}
+
+export const usePushNotifications =
+  DATA_BACKEND === 'supabase' ? usePushNotificationsUnavailable : usePushNotificationsFirebase;

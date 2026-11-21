@@ -3,6 +3,7 @@
 // na mesma transação do INSERT/UPDATE/DELETE — o cliente não escreve histórico.
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSupabase } from '../../shared/api/supabase/client';
+import { subscribeSharedChannel } from '../../shared/api/supabase/sharedChannel';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 import { toCentavos } from '../../shared/schemas/financialSchemas';
 import type { Account } from '../../shared/types/transaction';
@@ -84,12 +85,14 @@ export function useAccountsSupabase(uid: string): UseAccountsReturn {
     void refresh().finally(() => { if (active) setLoadingAccounts(false); });
 
     // Tempo real: qualquer mudança nas contas do usuário recarrega a lista.
-    const channel = getSupabase()
-      .channel(`accounts:${uid}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'accounts', filter: `user_id=eq.${uid}` },
-        () => { void refresh(); })
-      // Recarrega quando o canal entra: cobre mudanças entre a consulta inicial e a assinatura.
-      .subscribe((status: string) => { if (status === 'SUBSCRIBED') void refresh(); });
+    // Canal compartilhado: várias telas com este hook ao mesmo tempo não quebram o app.
+    // Recarrega quando o canal entra: cobre mudanças entre a consulta inicial e a assinatura.
+    const leaveChannel = subscribeSharedChannel(
+      `accounts:${uid}`,
+      [{ table: 'accounts', filter: `user_id=eq.${uid}` }],
+      () => { void refresh(); },
+      () => { void refresh(); },
+    );
 
     // Exclusões em outra aba/aparelho: o Realtime não filtra DELETE (ver reloadWhenVisible).
     const stopVisible = reloadWhenVisible(() => { void refresh(); });
@@ -97,7 +100,7 @@ export function useAccountsSupabase(uid: string): UseAccountsReturn {
     return () => {
       active = false;
       stopVisible();
-      void getSupabase().removeChannel(channel);
+      leaveChannel();
     };
   }, [uid, refresh]);
 

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   onAuthStageChange,
+  signInWithEmail,
   signInWithGoogle,
   signOut,
+  signUpWithEmail,
   verifyTotpSignIn,
   type AuthStage,
 } from '../api/supabase/auth';
@@ -22,6 +24,9 @@ export interface SupabaseAuthState {
   stage: AuthStage['kind'];
   appUser: AppUser | null;
   login: () => Promise<void>;
+  loginWithEmail: (email: string, password: string) => Promise<void>;
+  /** Devolve true quando a conta precisa ser confirmada pelo link do e-mail. */
+  signUpWithEmail: (email: string, password: string) => Promise<boolean>;
   submitMfaCode: (code: string) => Promise<void>;
   /** Cancelar o MFA encerra a sessão aal1 e volta para o login. */
   cancelMfa: () => Promise<void>;
@@ -36,6 +41,25 @@ export function useSupabaseAuth(subscribe: typeof onAuthStageChange = onAuthStag
   const login = useCallback(async () => {
     try {
       await signInWithGoogle(window.location.origin);
+    } catch (error) {
+      logSanitizedFirebaseError('auth_login', error);
+      throw error;
+    }
+  }, []);
+
+  const loginWithEmail = useCallback(async (email: string, password: string) => {
+    try {
+      await signInWithEmail(email, password);
+    } catch (error) {
+      logSanitizedFirebaseError('auth_login', error);
+      throw error;
+    }
+  }, []);
+
+  const signUp = useCallback(async (email: string, password: string) => {
+    try {
+      const { needsConfirmation } = await signUpWithEmail(email, password, window.location.origin);
+      return needsConfirmation;
     } catch (error) {
       logSanitizedFirebaseError('auth_login', error);
       throw error;
@@ -68,6 +92,8 @@ export function useSupabaseAuth(subscribe: typeof onAuthStageChange = onAuthStag
     stage: stage?.kind ?? 'signed_out',
     appUser,
     login,
+    loginWithEmail,
+    signUpWithEmail: signUp,
     submitMfaCode,
     cancelMfa: logout,
     logout,
