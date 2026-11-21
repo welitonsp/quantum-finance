@@ -42,6 +42,43 @@ function resolveMaxCandidates(maxCandidates: number | undefined): number {
   return Math.min(requested, MAX_CANDIDATES_CEILING);
 }
 
+type CandidateQuery = (uid: string, periodStart: string, periodEnd: string, max: number) => Promise<Transaction[]>;
+
+const queryCandidatesSupabase: CandidateQuery = async (_uid, periodStart, periodEnd, max) => {
+  const { data, error } = await getSupabase()
+    .from('transactions')
+    .select(TRANSACTION_COLUMNS)
+    .is('deleted_at', null)
+    .gte('date', periodStart)
+    .lte('date', periodEnd)
+    .order('date', { ascending: true })
+    .limit(max);
+  if (error) throw error;
+  return ((data ?? []) as unknown as TransactionRow[]).map(mapTransactionRow);
+};
+
+const queryCandidatesFirebase: CandidateQuery = async (uid, periodStart, periodEnd, max) => {
+  const candidatesQuery = query(
+    collection(db, 'users', uid, 'transactions'),
+    where('date', '>=', periodStart),
+    where('date', '<=', periodEnd),
+    orderBy('date', 'asc'),
+    limit(max),
+  );
+
+  const snapshot = await getDocs(candidatesQuery);
+  return snapshot.docs
+    .map(docSnap => ({
+      id: docSnap.id,
+      ...(docSnap.data() as Omit<Transaction, 'id'>),
+    }))
+    .filter(tx => tx.isDeleted !== true && !tx.deletedAt);
+};
+
+/** Firebase ou Supabase, escolhido no build (VITE_AUTH_PROVIDER) — fora do bundle o que não é usado. */
+const queryCandidates: CandidateQuery =
+  DATA_BACKEND === 'supabase' ? queryCandidatesSupabase : queryCandidatesFirebase;
+
 export async function findImportCandidateTransactions({
   uid,
   periodStart,
@@ -54,34 +91,7 @@ export async function findImportCandidateTransactions({
   }
 
   try {
-    if (DATA_BACKEND === 'supabase') {
-      const { data, error } = await getSupabase()
-        .from('transactions')
-        .select(TRANSACTION_COLUMNS)
-        .is('deleted_at', null)
-        .gte('date', periodStart)
-        .lte('date', periodEnd)
-        .order('date', { ascending: true })
-        .limit(resolveMaxCandidates(maxCandidates));
-      if (error) throw error;
-      return ((data ?? []) as unknown as TransactionRow[]).map(mapTransactionRow);
-    }
-
-    const candidatesQuery = query(
-      collection(db, 'users', safeUid, 'transactions'),
-      where('date', '>=', periodStart),
-      where('date', '<=', periodEnd),
-      orderBy('date', 'asc'),
-      limit(resolveMaxCandidates(maxCandidates)),
-    );
-
-    const snapshot = await getDocs(candidatesQuery);
-    return snapshot.docs
-      .map(docSnap => ({
-        id: docSnap.id,
-        ...(docSnap.data() as Omit<Transaction, 'id'>),
-      }))
-      .filter(tx => tx.isDeleted !== true && !tx.deletedAt);
+    return await queryCandidates(safeUid, periodStart, periodEnd, resolveMaxCandidates(maxCandidates));
   } catch (error) {
     logSanitizedFirebaseError('import_candidate_search', error);
     return [];
