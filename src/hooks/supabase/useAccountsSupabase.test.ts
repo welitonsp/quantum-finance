@@ -99,6 +99,21 @@ describe('useAccountsSupabase', () => {
     expect(calls.filter(c => c.op === 'order').length).toBe(loadsBefore + 1);
   });
 
+  it('exclusão em outra aba (DELETE sem filtro) recarrega só se a conta era nossa', async () => {
+    selectResult = { data: [{ id: 'a1', name: 'C', type: 'corrente', balance_cents: 1, created_at: null, updated_at: null }], error: null };
+    const { result } = renderHook(() => useAccountsSupabase('u1'));
+    await waitFor(() => expect(result.current.accounts).toHaveLength(1));
+    const del = channel.on.mock.calls.find(c => ((c as unknown[])[1] as { event?: string } | undefined)?.event === 'DELETE') as unknown[] | undefined;
+    expect(del?.[1]).toEqual({ event: 'DELETE', schema: 'public', table: 'accounts' });
+    const onDelete = del?.[2] as (p: { old: { id: string } }) => void;
+    const loads = () => calls.filter(c => c.op === 'order').length;
+    const before = loads();
+    await act(async () => { onDelete({ old: { id: 'x' } }); });
+    expect(loads()).toBe(before);
+    await act(async () => { onDelete({ old: { id: 'a1' } }); });
+    expect(loads()).toBe(before + 1);
+  });
+
   it('addAccount grava saldo em centavos inteiros (reais → centavos)', async () => {
     const { result } = renderHook(() => useAccountsSupabase('u1'));
     await waitFor(() => expect(result.current.loadingAccounts).toBe(false));

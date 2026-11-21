@@ -35,6 +35,8 @@ export function useSupabaseTable<TRow, T>(
   const [error, setError]     = useState<Error | null>(null);
   const uidRef = useRef(uid);
   uidRef.current = uid;
+  const itemsRef = useRef<T[]>([]);
+  itemsRef.current = loaded.uid === uid ? loaded.items : [];
 
   // Só a resposta da consulta mais recente vale (troca de usuário/ordem de chegada).
   const latestRequest = useRef(0);
@@ -68,6 +70,8 @@ export function useSupabaseTable<TRow, T>(
       .channel(`${table}:${uid}`)
       .on('postgres_changes', { event: '*', schema: 'public', table, filter: `user_id=eq.${uid}` },
         () => { void refresh(); })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table },
+        reloadOnOwnDelete(() => idsOf(itemsRef.current), () => { void refresh(); }))
       // Recarrega quando o canal entra: cobre mudanças entre a consulta inicial e a assinatura.
       .subscribe((status: string) => { if (status === 'SUBSCRIBED') void refresh(); });
 
@@ -88,6 +92,27 @@ export function useSupabaseTable<TRow, T>(
 }
 
 const EMPTY: never[] = [];
+
+/**
+ * O Realtime do Supabase não aplica filtro (nem RLS) a eventos DELETE: um canal
+ * filtrado por user_id nunca recebe a exclusão feita em outra aba/instância.
+ * Este handler vai num `.on` de DELETE sem filtro; o evento traz só a chave
+ * primária, e só recarregamos se a linha apagada estava na nossa lista.
+ */
+export function reloadOnOwnDelete(
+  currentIds: () => Iterable<unknown>,
+  reload: () => void,
+): (payload: { old?: { id?: unknown } | null }) => void {
+  return payload => {
+    const id = payload.old?.id;
+    if (typeof id !== 'string') return;
+    for (const known of currentIds()) if (known === id) { reload(); return; }
+  };
+}
+
+function idsOf(items: readonly unknown[]): unknown[] {
+  return items.map(item => (item && typeof item === 'object' ? (item as { id?: unknown }).id : undefined));
+}
 
 /** timestamptz ISO → epoch ms (o tipo legado aceita number). */
 export function millisOrNull(iso: string | null | undefined): number | null {

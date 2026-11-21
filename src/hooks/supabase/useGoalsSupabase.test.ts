@@ -78,6 +78,23 @@ describe('useGoalStoreSupabase', () => {
     expect(client.removeChannel).toHaveBeenCalled();
   });
 
+  it('exclusão em outra aba (DELETE sem filtro) recarrega só se a linha era nossa', async () => {
+    selectResult = { data: [{ id: 'g1', name: 'A', target_cents: 100, current_cents: 0, deadline: null, emoji: null, created_at: null, updated_at: null }], error: null };
+    const { result } = renderHook(() => useGoalStoreSupabase('u1'));
+    await waitFor(() => expect(result.current.rawGoals).toHaveLength(1));
+    const del = channel.on.mock.calls.find(c => (c as unknown[])[1] && ((c as unknown[])[1] as { event?: string }).event === 'DELETE') as unknown[] | undefined;
+    expect(del?.[1]).toEqual({ event: 'DELETE', schema: 'public', table: 'goals' });
+    const onDelete = del?.[2] as (p: { old: { id: string } }) => void;
+    const loads = () => calls.filter(c => c.op === 'order').length;
+    const before = loads();
+    await act(async () => { onDelete({ old: { id: 'de-outro-usuario' } }); });
+    expect(loads()).toBe(before);
+    selectResult = { data: [], error: null };
+    await act(async () => { onDelete({ old: { id: 'g1' } }); });
+    await waitFor(() => expect(result.current.rawGoals).toHaveLength(0));
+    expect(loads()).toBe(before + 1);
+  });
+
   it('addGoal e setProgress gravam centavos inteiros', async () => {
     const { result } = renderHook(() => useGoalStoreSupabase('u1'));
     await waitFor(() => expect(result.current.loading).toBe(false));

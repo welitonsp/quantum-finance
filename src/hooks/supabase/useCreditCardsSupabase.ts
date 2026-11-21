@@ -7,6 +7,7 @@ import { toCentavos } from '../../shared/schemas/financialSchemas';
 import type { CreditCard } from '../../shared/types/transaction';
 import type { CreditCardStore, CreditCardUpdateInput, CreditCardWriteInput } from '../useCreditCards';
 import { centsFromBigint } from './useAccountsSupabase';
+import { reloadOnOwnDelete } from './useSupabaseTable';
 
 const CARD_COLUMNS = 'id, name, limit_cents, closing_day, due_day, color, active, created_at, updated_at';
 
@@ -60,6 +61,8 @@ export function useCreditCardStoreSupabase(uid: string): CreditCardStore {
 
   // Só a resposta da consulta mais recente vale (troca de usuário/ordem de chegada).
   const latestRequest = useRef(0);
+  const idsRef = useRef<string[]>([]);
+  idsRef.current = cards.map(item => item.id);
 
   const refresh = useCallback(async (): Promise<void> => {
     const request = ++latestRequest.current;
@@ -86,6 +89,9 @@ export function useCreditCardStoreSupabase(uid: string): CreditCardStore {
       .channel(`credit_cards:${uid}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'credit_cards', filter: `user_id=eq.${uid}` },
         () => { void refresh(); })
+      // DELETE não respeita filtro no Realtime: escuta sem filtro e reage só às nossas linhas.
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'credit_cards' },
+        reloadOnOwnDelete(() => idsRef.current, () => { void refresh(); }))
       // Recarrega quando o canal entra: cobre mudanças entre a consulta inicial e a assinatura.
       .subscribe((status: string) => { if (status === 'SUBSCRIBED') void refresh(); });
 
