@@ -10,6 +10,8 @@ import { db } from '../shared/api/firebase/index';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import type { SavingsGoal } from '../shared/types/transaction';
 import type { Centavos } from '../shared/types/money';
+import { DATA_BACKEND } from '../shared/config/backend';
+import { useGoalStoreSupabase } from './supabase/useGoalsSupabase';
 
 export type GoalCreateInput = Omit<SavingsGoal, 'id' | 'createdAt' | 'updatedAt'>;
 export type GoalUpdateInput = Partial<GoalCreateInput>;
@@ -56,7 +58,17 @@ export function enrichGoal(goal: SavingsGoal, todayMs: number = Date.now()): Enr
   return { ...goal, daysRemaining, monthlyContributionNeeded };
 }
 
-export function useGoals(uid: string): UseGoalsReturn {
+/** Camada de armazenamento das metas (Firebase ou Supabase, escolhida no build). */
+export interface GoalStore {
+  rawGoals:    SavingsGoal[];
+  loading:     boolean;
+  addGoal:     (data: GoalCreateInput) => Promise<string>;
+  updateGoal:  (id: string, data: GoalUpdateInput) => Promise<void>;
+  removeGoal:  (id: string) => Promise<void>;
+  setProgress: (id: string, currentCents: Centavos) => Promise<void>;
+}
+
+function useGoalStoreFirebase(uid: string): GoalStore {
   const [rawGoals, setRawGoals] = useState<SavingsGoal[]>([]);
   const [loading,  setLoading]  = useState(true);
 
@@ -80,11 +92,6 @@ export function useGoals(uid: string): UseGoalsReturn {
     );
     return () => unsub();
   }, [uid]);
-
-  const goals = useMemo<EnrichedGoal[]>(
-    () => rawGoals.map(g => enrichGoal(g)),
-    [rawGoals],
-  );
 
   const addGoal = useCallback(async (data: GoalCreateInput): Promise<string> => {
     if (!uid) throw new Error('Utilizador não autenticado.');
@@ -118,6 +125,18 @@ export function useGoals(uid: string): UseGoalsReturn {
     });
   }, [uid]);
 
-  return { goals, loading, addGoal, updateGoal, removeGoal, setProgress };
+  return { rawGoals, loading, addGoal, updateGoal, removeGoal, setProgress };
+}
+
+const useGoalStore: (uid: string) => GoalStore =
+  DATA_BACKEND === 'supabase' ? useGoalStoreSupabase : useGoalStoreFirebase;
+
+export function useGoals(uid: string): UseGoalsReturn {
+  const { rawGoals, ...actions } = useGoalStore(uid);
+  const goals = useMemo<EnrichedGoal[]>(
+    () => rawGoals.map(g => enrichGoal(g)),
+    [rawGoals],
+  );
+  return { goals, ...actions };
 }
 

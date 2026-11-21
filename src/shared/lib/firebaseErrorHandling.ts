@@ -56,6 +56,7 @@ export const FIREBASE_ERROR_OPERATIONS = [
   'unknown_operation',
   'goals_load',
   'goal_create',
+  'goal_update',
   'goal_delete',
   'installment_group_load',
   'installment_group_cancel',
