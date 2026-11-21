@@ -20,7 +20,10 @@ function builder() {
   return b;
 }
 
-const channel = { on: vi.fn(() => channel), subscribe: vi.fn(() => channel) };
+const channel: { on: ReturnType<typeof vi.fn>; subscribe: ReturnType<typeof vi.fn> } = {
+  on: vi.fn(() => channel),
+  subscribe: vi.fn(() => channel),
+};
 const client = {
   from: vi.fn(() => builder()),
   channel: vi.fn(() => channel),
@@ -84,6 +87,16 @@ describe('useAccountsSupabase', () => {
     expect(client.channel).toHaveBeenCalledWith('accounts:u1');
     unmount();
     expect(client.removeChannel).toHaveBeenCalled();
+  });
+
+  it('recarrega quando o canal de tempo real termina de entrar', async () => {
+    const { result } = renderHook(() => useAccountsSupabase('u1'));
+    await waitFor(() => expect(result.current.loadingAccounts).toBe(false));
+    const loadsBefore = calls.filter(c => c.op === 'order').length;
+    const subCalls = channel.subscribe.mock.calls;
+    const onStatus = subCalls[subCalls.length - 1]?.[0] as (s: string) => void;
+    await act(async () => { onStatus('SUBSCRIBED'); });
+    expect(calls.filter(c => c.op === 'order').length).toBe(loadsBefore + 1);
   });
 
   it('addAccount grava saldo em centavos inteiros (reais → centavos)', async () => {

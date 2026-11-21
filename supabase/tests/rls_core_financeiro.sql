@@ -210,6 +210,19 @@ do $$ begin
     raise exception 'FALHA: parcela 4 de 3 aceita';
   exception when check_violation then null;
   end;
+  -- nome de conta/cartão: até 100 caracteres (igual ao Zod do app), 101 recusa
+  -- (bloco desfeito ao final para não deixar dados de outro usuário)
+  begin
+    insert into public.accounts (name, type) values (repeat('c', 100), 'corrente');
+    insert into public.credit_cards (name, closing_day, due_day) values (repeat('k', 100), 5, 12);
+    raise exception using errcode = 'QF100';
+  exception when sqlstate 'QF100' then null;
+  end;
+  begin
+    insert into public.accounts (name, type) values (repeat('c', 101), 'corrente');
+    raise exception 'FALHA: nome de conta com 101 caracteres aceito';
+  exception when check_violation then null;
+  end;
 end $$;
 
 -- A apaga a poupança usada numa transferência: permitido e auditado ----------
