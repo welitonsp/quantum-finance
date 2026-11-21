@@ -10,6 +10,8 @@ import {
 } from 'firebase/firestore';
 import { db } from '../api/firebase/index';
 import { logSanitizedFirebaseError } from '../lib/firebaseErrorHandling';
+import { DATA_BACKEND } from '../config/backend';
+import { getDataProcessingLogSupabase, logDataProcessingEventSupabase } from './supabase/dataPrivacySupabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,7 +25,8 @@ export interface DataProcessingLogEntry {
   id: string;
   eventType: DataProcessingEventType;
   details?: string;
-  createdAt: Timestamp | null;
+  /** Firestore Timestamp ou equivalente do Supabase: só `toDate()` é usado. */
+  createdAt: Pick<Timestamp, 'toDate'> | null;
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -33,7 +36,7 @@ export interface DataProcessingLogEntry {
  * Escreve em users/{uid}/dataProcessingLog/{id} com timestamp.
  * Sem dados sensíveis no log (sem uid em texto, sem valores financeiros).
  */
-export async function logDataProcessingEvent(
+async function logDataProcessingEventFirebase(
   uid: string,
   eventType: DataProcessingEventType,
   details?: string,
@@ -52,7 +55,7 @@ export async function logDataProcessingEvent(
 /**
  * Lê os últimos eventos de processamento de dados do usuário.
  */
-export async function getDataProcessingLog(
+async function getDataProcessingLogFirebase(
   uid: string,
   maxEntries = 20,
 ): Promise<DataProcessingLogEntry[]> {
@@ -78,3 +81,10 @@ export async function getDataProcessingLog(
     return [];
   }
 }
+
+/** Firebase ou Supabase, escolhido no build (VITE_AUTH_PROVIDER). */
+export const logDataProcessingEvent: (uid: string, eventType: DataProcessingEventType, details?: string) => Promise<void> =
+  DATA_BACKEND === 'supabase' ? logDataProcessingEventSupabase : logDataProcessingEventFirebase;
+
+export const getDataProcessingLog: (uid: string, maxEntries?: number) => Promise<DataProcessingLogEntry[]> =
+  DATA_BACKEND === 'supabase' ? getDataProcessingLogSupabase : getDataProcessingLogFirebase;
