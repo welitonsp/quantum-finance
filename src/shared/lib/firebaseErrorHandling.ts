@@ -14,6 +14,8 @@ export const FIREBASE_ERROR_OPERATIONS = [
   'category_settings_save',
   'category_settings_delete',
   'account_create',
+  'account_update',
+  'account_delete',
   'credit_card_create',
   'credit_card_update',
   'recurring_create',
