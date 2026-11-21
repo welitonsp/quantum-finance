@@ -74,27 +74,46 @@ export function useTransactionHistorySupabase(
       return undefined;
     }
     let active = true;
+    let seq = 0;
     setEvents([]);
     setLoading(true);
     setError(null);
-    void (async () => {
+    const load = async (): Promise<void> => {
+      const mine = ++seq;
       const { data, error: dbError } = await getSupabase()
         .from('transaction_history')
         .select('id, transaction_id, action, origin, changed_fields, before, after, created_at')
         .eq('transaction_id', transactionId)
         .order('created_at', { ascending: false })
         .limit(HISTORY_LIMIT);
-      if (!active) return;
+      if (!active || mine !== seq) return;
       if (dbError) {
         logSanitizedFirebaseError('audit_transaction_history', dbError);
         setEvents([]);
         setError('Falha ao carregar histórico da movimentação.');
       } else {
+        setError(null);
         setEvents(((data ?? []) as TransactionHistoryRow[]).map(mapTransactionHistoryRow));
       }
       setLoading(false);
-    })();
-    return () => { active = false; };
+    };
+    void load();
+    // O histórico é gravado por trigger a cada mudança da transação: quando a linha
+    // muda (tempo real), recarregamos. Também recarregamos quando o canal termina de
+    // entrar, para não perder uma mudança feita entre a 1ª leitura e a assinatura.
+    const supabase = getSupabase();
+    const channel = supabase
+      .channel(`transaction_history:${transactionId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions', filter: `id=eq.${transactionId}` },
+        () => { void load(); },
+      )
+      .subscribe((status: string) => { if (status === 'SUBSCRIBED') void load(); });
+    return () => {
+      active = false;
+      void supabase.removeChannel(channel);
+    };
   }, [uid, transactionId]);
 
   return { events, loading, error };

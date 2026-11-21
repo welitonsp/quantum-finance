@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 
 type Result = { data: unknown; error: unknown };
 const calls: Array<{ op: string; args: unknown[] }> = [];
@@ -13,7 +13,15 @@ function builder() {
   b['then'] = (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => next().then(res, rej);
   return b;
 }
-const client = { from: vi.fn((t: string) => { calls.push({ op: 'from', args: [t] }); return builder(); }) };
+const channel: { on: ReturnType<typeof vi.fn>; subscribe: ReturnType<typeof vi.fn> } = {
+  on: vi.fn(() => channel),
+  subscribe: vi.fn(() => channel),
+};
+const client = {
+  from: vi.fn((t: string) => { calls.push({ op: 'from', args: [t] }); return builder(); }),
+  channel: vi.fn(() => channel),
+  removeChannel: vi.fn(() => Promise.resolve()),
+};
 
 vi.mock('../../shared/api/supabase/client', () => ({ getSupabase: () => client }));
 vi.mock('../../shared/lib/firebaseErrorHandling', () => ({ logSanitizedFirebaseError: vi.fn() }));
@@ -64,6 +72,20 @@ describe('useTransactionHistorySupabase', () => {
     expect(calls).toContainEqual({ op: 'from', args: ['transaction_history'] });
     expect(calls).toContainEqual({ op: 'eq', args: ['transaction_id', 't1'] });
     expect(calls).toContainEqual({ op: 'order', args: ['created_at', { ascending: false }] });
+  });
+
+  it('recarrega quando a transação muda em tempo real e solta o canal ao sair', async () => {
+    results = [{ data: [row], error: null }];
+    const { result, unmount } = renderHook(() => useTransactionHistorySupabase('u1', 't1'));
+    await waitFor(() => expect(result.current.events).toHaveLength(1));
+    expect(client.channel).toHaveBeenCalledWith('transaction_history:t1');
+    const [, filter, onChange] = channel.on.mock.calls[0] as [string, Record<string, unknown>, () => void];
+    expect(filter).toMatchObject({ table: 'transactions', filter: 'id=eq.t1' });
+    results = [{ data: [{ ...row, id: 8 }, row], error: null }];
+    await act(async () => { onChange(); });
+    await waitFor(() => expect(result.current.events).toHaveLength(2));
+    unmount();
+    expect(client.removeChannel).toHaveBeenCalled();
   });
 
   it('erro mostra mensagem genérica; sem transação não consulta', async () => {
