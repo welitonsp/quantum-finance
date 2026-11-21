@@ -71,8 +71,11 @@ export function useSupabaseTable<TRow, T>(
       // Recarrega quando o canal entra: cobre mudanças entre a consulta inicial e a assinatura.
       .subscribe((status: string) => { if (status === 'SUBSCRIBED') void refresh(); });
 
+    const stopVisible = reloadWhenVisible(() => { void refresh(); });
+
     return () => {
       active = false;
+      stopVisible();
       void getSupabase().removeChannel(channel);
     };
   }, [uid, table, refresh]);
@@ -88,6 +91,20 @@ export function useSupabaseTable<TRow, T>(
 }
 
 const EMPTY: never[] = [];
+
+/**
+ * O Realtime do Supabase não filtra eventos DELETE (nem aplica RLS a eles), então
+ * um canal filtrado por user_id não recebe a exclusão feita em outra aba ou
+ * aparelho — e escutar DELETE sem filtro exporia ids de outros usuários.
+ * Em vez disso, recarregamos quando a aba volta a ficar visível. Exclusões
+ * feitas nesta aba já recarregam logo após gravar. Devolve a função de limpeza.
+ */
+export function reloadWhenVisible(reload: () => void): () => void {
+  if (typeof document === 'undefined') return () => {};
+  const onVisible = () => { if (document.visibilityState === 'visible') reload(); };
+  document.addEventListener('visibilitychange', onVisible);
+  return () => document.removeEventListener('visibilitychange', onVisible);
+}
 
 /** timestamptz ISO → epoch ms (o tipo legado aceita number). */
 export function millisOrNull(iso: string | null | undefined): number | null {
