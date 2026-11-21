@@ -11,10 +11,12 @@ import { generateSafeOperationId } from '../shared/lib/operationTrace';
 import { toCentavos } from '../shared/schemas/financialSchemas';
 import type { Account } from '../shared/types/transaction';
 import type { Centavos } from '../shared/types/money';
+import { DATA_BACKEND } from '../shared/config/backend';
+import { useAccountsSupabase } from './supabase/useAccountsSupabase';
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-interface UseAccountsReturn {
+export interface UseAccountsReturn {
   accounts:        Account[];
   loadingAccounts: boolean;
   /** balance VEM em REAIS (float). Hook converte para centavos antes do write. */
@@ -24,14 +26,14 @@ interface UseAccountsReturn {
   removeAccount:   (id: string) => Promise<void>;
 }
 
-interface AddAccountInput {
+export interface AddAccountInput {
   name:    string;
   type:    Account['type'];
   /** Em REAIS (float). Será convertido para centavos no write. */
   balance: number;
 }
 
-interface UpdateAccountInput {
+export interface UpdateAccountInput {
   name?:    string;
   type?:    Account['type'];
   /** Em REAIS (float). Será convertido para centavos se presente. */
@@ -60,7 +62,7 @@ const ACCOUNT_HISTORY_CHANGED_FIELDS: AccountHistoryField[] = [
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useAccounts(uid: string): UseAccountsReturn {
+function useAccountsFirebase(uid: string): UseAccountsReturn {
   const [accounts, setAccounts]               = useState<Account[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
 
@@ -181,6 +183,10 @@ export function useAccounts(uid: string): UseAccountsReturn {
 
   return { accounts, loadingAccounts, addAccount, updateAccount, removeAccount };
 }
+
+/** Escolhido no build: o mesmo hook em todas as renderizações (regras de hooks ok). */
+export const useAccounts: (uid: string) => UseAccountsReturn =
+  DATA_BACKEND === 'supabase' ? useAccountsSupabase : useAccountsFirebase;
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
