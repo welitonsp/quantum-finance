@@ -232,6 +232,45 @@ export function resolveCompetencia(
   return computeCompetencia(purchaseDateISO, closingDay, installmentIndex);
 }
 
+export interface InstallmentPlanItem {
+  index: number;
+  valueCents: Centavos;
+  date: string;
+  competencia: string;
+  description: string;
+}
+
+/**
+ * Plano puro das parcelas (fonte única para Firebase e Supabase).
+ * Divisão modulo-safe: a sobra dos centavos vai para a última parcela.
+ */
+export function buildInstallmentPlan(data: InstallmentGroupCreateDTO): InstallmentPlanItem[] {
+  if (data.installmentCount < 2 || data.installmentCount > 120) {
+    throw new Error('[Firestore][createInstallmentGroupWithHistory] installmentCount deve ser entre 2 e 120.');
+  }
+  if (!data.description.trim()) {
+    throw new Error('[Firestore][createInstallmentGroupWithHistory] Descrição obrigatória.');
+  }
+  const n = data.installmentCount;
+  const total = Math.abs(data.totalValueCents) as Centavos;
+  // Safe integer division: compute remainder first so (total - remainder) divides n exactly.
+  const remainder = (total % n) as Centavos;
+  const perInstallment = ((total - remainder) / n) as Centavos;
+  const lastInstallment = (perInstallment + remainder) as Centavos;
+  const plan: InstallmentPlanItem[] = [];
+  for (let i = 0; i < n; i++) {
+    const index = i + 1; // 1-based
+    plan.push({
+      index,
+      valueCents: index === n ? lastInstallment : perInstallment,
+      date: addMonthsToDate(data.date, i),
+      competencia: resolveCompetencia(data.date, data.closingDay, i),
+      description: `${data.description.trim()} (${index}/${n})`,
+    });
+  }
+  return plan;
+}
+
 export function resolveCentavos(data: Pick<TransactionUpdateDTO, 'value' | 'value_cents'>): Centavos {
   if (data.value_cents !== undefined && Number.isSafeInteger(data.value_cents)) {
     return Math.abs(Math.round(data.value_cents)) as Centavos;
