@@ -37,6 +37,9 @@ export const EXPORTABLE_SUBCOLLECTIONS = [
   'decisions',
 ] as const;
 
+import { DATA_BACKEND } from '../config/backend';
+import { deleteUserAccountSupabase, exportAllUserDataSupabase } from './supabase/dataPrivacySupabase';
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function shortUidHash(uid: string): Promise<string> {
@@ -64,11 +67,36 @@ async function readSubcollection(
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
+ * Monta o JSON exportado e dispara o download (Firebase e Supabase). O uid nunca
+ * vai em texto: só os 8 primeiros hex do SHA-256 dele.
+ */
+export async function downloadUserExport(uid: string, collections: Record<string, unknown[]>): Promise<void> {
+  const uidHash = await shortUidHash(uid);
+  const today = new Date().toISOString().slice(0, 10);
+
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    uid_hash: uidHash,
+    collections,
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `quantum-finance-dados-${today}.json`;
+  anchor.click();
+
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/**
  * Reads all user subcollections, assembles an anonymised JSON export, and
  * triggers a browser download. The uid is never written in plain text — only
  * the first 8 hex chars of its SHA-256 hash are included for reference.
  */
-export async function exportAllUserData(uid: string): Promise<void> {
+async function exportAllUserDataFirebase(uid: string): Promise<void> {
   const collections: Record<string, unknown[]> = {};
 
   for (const name of EXPORTABLE_SUBCOLLECTIONS) {
@@ -91,24 +119,7 @@ export async function exportAllUserData(uid: string): Promise<void> {
     collections['usage_ai_calls'] = [];
   }
 
-  const uidHash = await shortUidHash(uid);
-  const today = new Date().toISOString().slice(0, 10);
-
-  const payload = {
-    exportedAt: new Date().toISOString(),
-    uid_hash: uidHash,
-    collections,
-  };
-
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `quantum-finance-dados-${today}.json`;
-  anchor.click();
-
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  await downloadUserExport(uid, collections);
 }
 
 /**
@@ -119,11 +130,11 @@ export async function exportAllUserData(uid: string): Promise<void> {
  * Throws `'REQUIRES_RECENT_LOGIN'` when Firebase Auth rejects the deletion
  * because the session is too old — the caller must prompt a re-login.
  */
-export async function deleteUserAccount(uid: string): Promise<void> {
+async function deleteUserAccountFirebase(uid: string): Promise<void> {
   void uid; // uid verified server-side via request.auth.uid
 
   // Step 1 — Export so the user has their data before anything is removed.
-  await exportAllUserData(auth.currentUser?.uid ?? uid);
+  await exportAllUserDataFirebase(auth.currentUser?.uid ?? uid);
 
   // Step 2 — Hard delete via server-trusted callable (Admin SDK recursiveDelete).
   try {
@@ -145,3 +156,10 @@ export async function deleteUserAccount(uid: string): Promise<void> {
     throw err;
   }
 }
+
+/** Firebase ou Supabase, escolhido no build (VITE_AUTH_PROVIDER). */
+export const exportAllUserData: (uid: string) => Promise<void> =
+  DATA_BACKEND === 'supabase' ? exportAllUserDataSupabase : exportAllUserDataFirebase;
+
+export const deleteUserAccount: (uid: string) => Promise<void> =
+  DATA_BACKEND === 'supabase' ? deleteUserAccountSupabase : deleteUserAccountFirebase;
