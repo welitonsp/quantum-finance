@@ -13,6 +13,17 @@ set local role authenticated;
 select pg_temp.login('00000000-0000-0000-0000-00000000000a') \g /dev/null
 
 insert into public.categories (name, normalized_name, type, color) values ('Pets', 'pets', 'saida', '#f00');
+-- recriar categoria desativada (upsert do app) reativa a mesma linha
+update public.categories set is_active = false where normalized_name = 'pets';
+insert into public.categories (name, normalized_name, type, color, is_active)
+values ('Pets', 'pets', 'saida', '#64748b', true)
+on conflict (user_id, normalized_name) do update
+  set name = excluded.name, type = excluded.type, color = excluded.color, is_active = excluded.is_active;
+do $$ begin
+  if (select count(*) from public.categories where normalized_name = 'pets' and is_active) <> 1 then
+    raise exception 'FALHA: upsert de categoria não reativou a linha existente';
+  end if;
+end $$;
 insert into public.category_rules (keyword, category) values ('uber', 'Transporte');
 insert into public.budgets (category, target_cents, month) values ('Alimentação', 80000, '2026-11');
 insert into public.goals (name, target_cents) values ('Reserva', 1000000);
