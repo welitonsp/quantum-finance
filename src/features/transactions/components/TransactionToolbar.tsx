@@ -84,6 +84,8 @@ interface TransactionToolbarProps {
   // Export
   filtered: Transaction[];
   transactions: Transaction[];
+  /** Nome de cada conta por id, para a coluna Conta do CSV. */
+  accountNames?: ReadonlyMap<string, string>;
 
   // Report picker state (lifted to parent to keep simple)
   reportPickerOpen: boolean;
@@ -148,6 +150,7 @@ export function TransactionToolbar({
   shouldShowDateScopeNotice,
   onOpenAudit,
   filtered,
+  accountNames,
   transactions,
   reportPickerOpen,
   setReportPickerOpen,
@@ -261,7 +264,7 @@ export function TransactionToolbar({
 
           <button
             onClick={() => {
-              const csv = transactionsToCSV(filtered);
+              const csv = transactionsToCSV(filtered, accountNames);
               const date = new Date().toISOString().slice(0, 10);
               downloadCSV(`quantum-finance-transacoes-${date}.csv`, csv);
             }}
