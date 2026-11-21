@@ -7,8 +7,10 @@ import { toCentavos, fromCentavos } from '../shared/schemas/financialSchemas';
 import { FirestoreService } from '../shared/services/FirestoreService';
 import { AuditService, type AuditChange } from '../shared/services/AuditService';
 import type { RecurringTask } from '../shared/types/transaction';
+import { DATA_BACKEND } from '../shared/config/backend';
+import { useRecurringSupabase } from './supabase/useRecurringSupabase';
 
-interface UseRecurringReturn {
+export interface UseRecurringReturn {
   recurringTasks: RecurringTask[];
   loading: boolean;
   error: string | null;
@@ -45,7 +47,7 @@ const RECURRING_HISTORY_CHANGED_FIELDS: RecurringHistoryField[] = [
   'schemaVersion',
 ];
 
-export function useRecurring(uid: string): UseRecurringReturn {
+function useRecurringFirebase(uid: string): UseRecurringReturn {
   const [recurringTasks, setRecurringTasks] = useState<RecurringTask[]>([]);
   const [loading, setLoading]               = useState(true);
   const [error, setError]                   = useState<string | null>(null);
@@ -260,3 +262,7 @@ export async function updateRecurringWithHistory(
   });
   await batch.commit();
 }
+
+/** Firebase ou Supabase, escolhido no build (VITE_AUTH_PROVIDER). */
+export const useRecurring: (uid: string) => UseRecurringReturn =
+  DATA_BACKEND === 'supabase' ? useRecurringSupabase : useRecurringFirebase;

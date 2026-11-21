@@ -9,6 +9,8 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { db } from '../shared/api/firebase/index';
+import { DATA_BACKEND } from '../shared/config/backend';
+import { useCategoryStoreSupabase } from './supabase/useCategoriesSupabase';
 import { ALLOWED_CATEGORIES } from '../shared/schemas/financialSchemas';
 import {
   normalizeCategoryName,
@@ -24,6 +26,23 @@ interface UseCategoriesReturn {
   addCategory: (name: string, type?: CategoryType) => Promise<UserCategory>;
   updateCategory: (categoryId: string, data: Partial<Pick<UserCategory, 'name' | 'type' | 'color' | 'icon' | 'isActive'>>) => Promise<void>;
   deactivateCategory: (categoryId: string) => Promise<void>;
+}
+
+/** Campos gravados de uma categoria do usuário (sem id/uid/timestamps). */
+export type CategoryWritePayload = Omit<UserCategory, 'id' | 'uid' | 'createdAt' | 'updatedAt'>;
+export type CategoryPatch = Partial<Pick<UserCategory, 'name' | 'normalizedName' | 'type' | 'color' | 'icon' | 'isActive'>>;
+
+/** Camada de armazenamento das categorias do usuário (Firebase ou Supabase, escolhida no build). */
+export interface CategoryStore {
+  userCategories: UserCategory[];
+  loading: boolean;
+  error: Error | null;
+  /**
+   * Grava e devolve o id. Se a categoria já existia (criada em outra aba), devolve
+   * a categoria como está gravada, para o chamador usar o nome canônico.
+   */
+  insertCategory: (payload: CategoryWritePayload) => Promise<string | UserCategory>;
+  patchCategory: (categoryId: string, patch: CategoryPatch) => Promise<void>;
 }
 
 const DEFAULT_META: Record<string, { type: CategoryType; color: string; icon: string }> = {
@@ -80,16 +99,10 @@ function categoriesRef(uid: string) {
   return collection(db, 'users', uid, 'categories');
 }
 
-export function useCategories(uid: string): UseCategoriesReturn {
-  const systemCategories = useMemo(() => defaultCategories(uid), [uid]);
+function useCategoryStoreFirebase(uid: string): CategoryStore {
   const [userCategories, setUserCategories] = useState<UserCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-
-  const categories = useMemo(
-    () => mergeCategories(systemCategories, userCategories),
-    [systemCategories, userCategories],
-  );
 
   useEffect(() => {
     if (!uid) {
@@ -125,6 +138,34 @@ export function useCategories(uid: string): UseCategoriesReturn {
     return unsubscribe;
   }, [uid]);
 
+  const insertCategory = useCallback(async (payload: CategoryWritePayload): Promise<string> => {
+    const createdRef = await addDoc(categoriesRef(uid), {
+      ...payload,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return createdRef.id;
+  }, [uid]);
+
+  const patchCategory = useCallback(async (categoryId: string, patch: CategoryPatch): Promise<void> => {
+    await updateDoc(doc(categoriesRef(uid), categoryId), { ...patch, updatedAt: serverTimestamp() });
+  }, [uid]);
+
+  return { userCategories, loading, error, insertCategory, patchCategory };
+}
+
+const useCategoryStore: (uid: string) => CategoryStore =
+  DATA_BACKEND === 'supabase' ? useCategoryStoreSupabase : useCategoryStoreFirebase;
+
+export function useCategories(uid: string): UseCategoriesReturn {
+  const systemCategories = useMemo(() => defaultCategories(uid), [uid]);
+  const { userCategories, loading, error, insertCategory, patchCategory } = useCategoryStore(uid);
+
+  const categories = useMemo(
+    () => mergeCategories(systemCategories, userCategories),
+    [systemCategories, userCategories],
+  );
+
   const addCategory = useCallback(async (name: string, type: CategoryType = 'ambos'): Promise<UserCategory> => {
     if (!uid) throw new Error('Usuário não autenticado.');
 
@@ -135,7 +176,7 @@ export function useCategories(uid: string): UseCategoriesReturn {
     const existing = categories.find(category => category.normalizedName === normalizedName);
     if (existing) return existing;
 
-    const payload = {
+    const payload: CategoryWritePayload = {
       name: trimmedName,
       normalizedName,
       type,
@@ -143,25 +184,18 @@ export function useCategories(uid: string): UseCategoriesReturn {
       icon: '•',
       isDefault: false,
       isActive: true,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
     };
 
-    const categoryForUi = {
-      id: '',
-      uid,
-      ...payload,
-    };
-
-    const parsed = userCategorySchema.safeParse(categoryForUi);
+    const parsed = userCategorySchema.safeParse({ id: '', uid, ...payload });
     if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Categoria inválida.');
 
-    const createdRef = await addDoc(categoriesRef(uid), payload);
+    const created = await insertCategory(payload);
+    if (typeof created !== 'string') return created;
     return {
       ...parsed.data,
-      id: createdRef.id,
+      id: created,
     };
-  }, [categories, uid]);
+  }, [categories, insertCategory, uid]);
 
   const updateCategory = useCallback(async (
     categoryId: string,
@@ -172,7 +206,7 @@ export function useCategories(uid: string): UseCategoriesReturn {
     if (!existing) throw new Error('Categoria não encontrada.');
     if (existing.isDefault) throw new Error('Categorias padrão não podem ser editadas nesta tela.');
 
-    const payload: Record<string, unknown> = { updatedAt: serverTimestamp() };
+    const payload: CategoryPatch = {};
     if (data.name !== undefined) {
       const trimmedName = data.name.trim().replace(/\s+/g, ' ');
       if (!trimmedName) throw new Error('Informe um nome para a categoria.');
@@ -181,16 +215,16 @@ export function useCategories(uid: string): UseCategoriesReturn {
         category.id !== categoryId && category.normalizedName === normalizedName,
       );
       if (duplicate) throw new Error('Essa categoria já existe.');
-      payload['name'] = trimmedName;
-      payload['normalizedName'] = normalizedName;
+      payload.name = trimmedName;
+      payload.normalizedName = normalizedName;
     }
-    if (data.type !== undefined) payload['type'] = data.type;
-    if (data.color !== undefined) payload['color'] = data.color;
-    if (data.icon !== undefined) payload['icon'] = data.icon;
-    if (data.isActive !== undefined) payload['isActive'] = data.isActive;
+    if (data.type !== undefined) payload.type = data.type;
+    if (data.color !== undefined) payload.color = data.color;
+    if (data.icon !== undefined) payload.icon = data.icon;
+    if (data.isActive !== undefined) payload.isActive = data.isActive;
 
-    await updateDoc(doc(categoriesRef(uid), categoryId), payload);
-  }, [categories, uid]);
+    await patchCategory(categoryId, payload);
+  }, [categories, patchCategory, uid]);
 
   const deactivateCategory = useCallback(async (categoryId: string): Promise<void> => {
     if (!uid) throw new Error('Usuário não autenticado.');
@@ -198,11 +232,8 @@ export function useCategories(uid: string): UseCategoriesReturn {
     if (!existing) throw new Error('Categoria não encontrada.');
     if (existing.isDefault) throw new Error('Categorias padrão não podem ser desativadas.');
 
-    await updateDoc(doc(categoriesRef(uid), categoryId), {
-      isActive: false,
-      updatedAt: serverTimestamp(),
-    });
-  }, [categories, uid]);
+    await patchCategory(categoryId, { isActive: false });
+  }, [categories, patchCategory, uid]);
 
   return {
     categories,
