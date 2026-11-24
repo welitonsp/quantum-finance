@@ -7,7 +7,9 @@
 //    do banco usa o MESMO JWT do usuário, então auth.uid() é o dele e a RLS vale;
 //  * consume_ai_call() barra sem consentimento de IA (fail-closed) e acima de 50/dia
 //    ANTES de qualquer dado sair para o Gemini;
-//  * a chave GEMINI_API_KEY fica só nos secrets da função, nunca no app;
+//  * as chaves (GEMINI_API_KEY ou OPENROUTER_API_KEY) ficam só nos secrets da
+//    função, nunca no app. Gemini tem prioridade; sem ela, usa o OpenRouter
+//    (modelo em OPENROUTER_MODEL, padrão um modelo gratuito);
 //  * logs só com operação e código; nada do usuário (sem prompt, valor ou id).
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import {
@@ -84,6 +86,45 @@ async function callGemini(
   return text;
 }
 
+const OPENROUTER_DEFAULT_MODEL = 'deepseek/deepseek-chat-v3-0324:free';
+
+async function callOpenRouter(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  opts: { jsonMode?: boolean; systemInstruction?: string },
+): Promise<string> {
+  const messages = [
+    ...(opts.systemInstruction ? [{ role: 'system', content: opts.systemInstruction }] : []),
+    { role: 'user', content: prompt },
+  ];
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(50_000),
+    body: JSON.stringify({ model, messages, temperature: opts.jsonMode ? 0.1 : 0.7 }),
+  });
+  if (!res.ok) throw new Error(`openrouter_http_${res.status}`);
+  const data = await res.json() as { choices?: { message?: { content?: string } }[] };
+  const text = data.choices?.[0]?.message?.content ?? '';
+  if (!text.trim()) throw new Error('openrouter_empty');
+  return text;
+}
+
+type AiCaller = (prompt: string, opts: { jsonMode?: boolean; systemInstruction?: string }) => Promise<string>;
+
+/** Escolhe o provedor pelos secrets: Gemini primeiro, depois OpenRouter; null se nenhum. */
+function pickProvider(): AiCaller | null {
+  const gemini = Deno.env.get('GEMINI_API_KEY') ?? '';
+  if (gemini) return (prompt, opts) => callGemini(gemini, prompt, opts);
+  const openrouter = Deno.env.get('OPENROUTER_API_KEY') ?? '';
+  if (openrouter) {
+    const model = Deno.env.get('OPENROUTER_MODEL') || OPENROUTER_DEFAULT_MODEL;
+    return (prompt, opts) => callOpenRouter(openrouter, model, prompt, opts);
+  }
+  return null;
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
   if (req.method !== 'POST') return fail('invalid-argument', 'Método não suportado.');
@@ -108,7 +149,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  // Consentimento + limite diário (fail-closed): nada vai ao Gemini sem passar aqui.
+  // Consentimento + limite diário (fail-closed): nada vai ao provedor de IA sem passar aqui.
   const gate = await db.rpc('consume_ai_call');
   if (gate.error) {
     const code = gate.error.code;
@@ -121,8 +162,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return fail('internal', 'Não foi possível validar o limite de uso da IA. Tente novamente em instantes.');
   }
 
-  const apiKey = Deno.env.get('GEMINI_API_KEY') ?? '';
-  if (!apiKey) {
+  const callAi = pickProvider();
+  if (!callAi) {
     logError(request.op, 'missing_api_key');
     if (request.op === 'categorize') return json(request.rows.map(t => ({ id: t.id, category: 'Outros' })));
     return fail('unavailable', 'A IA ainda não foi configurada no servidor.');
@@ -132,15 +173,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
   try {
     switch (request.op) {
       case 'chat': {
-        const reply = await callGemini(apiKey, buildChatPrompt(request.prompt, request.context, today), { systemInstruction: SYSTEM_PERSONA });
+        const reply = await callAi(buildChatPrompt(request.prompt, request.context, today), { systemInstruction: SYSTEM_PERSONA });
         return json({ reply });
       }
       case 'audit': {
-        const reply = await callGemini(apiKey, buildAuditPrompt(request.context, today), { systemInstruction: SYSTEM_PERSONA });
+        const reply = await callAi(buildAuditPrompt(request.context, today), { systemInstruction: SYSTEM_PERSONA });
         return json({ reply });
       }
       case 'categorize': {
-        const text = await callGemini(apiKey, buildCategorizePrompt(request.rows), { jsonMode: true });
+        const text = await callAi(buildCategorizePrompt(request.rows), { jsonMode: true });
         return json(parseCategorizeResponse(text, request.rows));
       }
     }
