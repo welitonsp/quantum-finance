@@ -6,7 +6,10 @@
 //
 // Replica fielmente o comportamento do generateSW anterior:
 // - precache do app shell (skipWaiting + clientsClaim = registerType autoUpdate);
-// - navigateFallback /offline.html com allowlist /^(?!\/__).*/;
+// - navegação: rede primeiro; /offline.html só quando a rede falha
+//   (allowlist /^(?!\/__).*/). Antes o offline.html respondia a TODA navegação
+//   fora do precache — ex.: a volta do login Google em /?code=... — e o app
+//   mostrava "Sem conexão" mesmo online;
 // - runtime caching CacheFirst para Google Fonts (mesmos nomes/expirações).
 //
 // E adiciona o que o generateSW não permitia:
@@ -22,11 +25,11 @@ declare let self: ServiceWorkerGlobalScope & {
 import { clientsClaim, type WorkboxPlugin } from 'workbox-core';
 import {
   cleanupOutdatedCaches,
-  createHandlerBoundToURL,
+  matchPrecache,
   precacheAndRoute,
 } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
-import { CacheFirst } from 'workbox-strategies';
+import { CacheFirst, NetworkOnly } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { initializeApp } from 'firebase/app';
 import { getMessaging, onBackgroundMessage } from 'firebase/messaging/sw';
@@ -38,10 +41,20 @@ clientsClaim();
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
+// Navegação fora do precache (ex.: /?code=... na volta do OAuth): busca na
+// rede; só sem rede mostra o offline.html.
+const navigationNetwork = new NetworkOnly();
 registerRoute(
-  new NavigationRoute(createHandlerBoundToURL('offline.html'), {
-    allowlist: [/^(?!\/__).*/],
-  }),
+  new NavigationRoute(
+    async (options) => {
+      try {
+        return await navigationNetwork.handle(options);
+      } catch {
+        return (await matchPrecache('offline.html')) ?? Response.error();
+      }
+    },
+    { allowlist: [/^(?!\/__).*/] },
+  ),
 );
 
 // Cast: os tipos do workbox declaram callbacks opcionais sem `| undefined`,
