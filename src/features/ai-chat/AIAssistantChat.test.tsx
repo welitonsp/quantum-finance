@@ -51,7 +51,7 @@ vi.mock('../../hooks/useAgentAction', () => ({
   }),
 }));
 
-import { AIAssistantChat } from './AIAssistantChat';
+import { AIAssistantChat, preserveLineBreaks } from './AIAssistantChat';
 
 function renderChat() {
   return render(
@@ -282,5 +282,119 @@ describe('AIAssistantChat — confirmação determinística de mutação (flag O
     expect(proposalArg.payload.fromAccountId).toBe('acc-poup');
     expect(proposalArg.payload.toAccountId).toBe('acc-corr');
     expect(ctxArg.intent).toBe('register_transfer_proposal');
+  });
+});
+
+describe('AIAssistantChat — renderização Markdown das respostas da IA', () => {
+  it('renderiza **negrito** como <strong> e listas como <ul>/<li>', async () => {
+    vi.stubEnv('VITE_ENABLE_AGENT_ROUTER', 'false');
+    h.adviceMock.mockResolvedValue('Seu saldo está **positivo**.\n\n- item um\n- item dois');
+    const { container } = renderChat();
+    sendMessage(container, 'como estou?');
+
+    const strong = await screen.findByText('positivo');
+    expect(strong.tagName).toBe('STRONG');
+    expect(screen.queryByText(/\*\*positivo\*\*/)).toBeNull();
+    const item = screen.getByText('item um');
+    expect(item.tagName).toBe('LI');
+    expect(item.closest('ul')).not.toBeNull();
+  });
+
+  it('não injeta HTML cru (script/img) vindo da resposta', async () => {
+    vi.stubEnv('VITE_ENABLE_AGENT_ROUTER', 'false');
+    h.adviceMock.mockResolvedValue(
+      'antes <script>window.__pwned = true</script> <img src="x" onerror="alert(1)"> <b>html</b> depois',
+    );
+    const { container } = renderChat();
+    sendMessage(container, 'teste');
+
+    await screen.findByText(/antes/);
+    expect(container.querySelector('script')).toBeNull();
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('b')).toBeNull();
+    expect((window as unknown as Record<string, unknown>).__pwned).toBeUndefined();
+  });
+
+  it('links NÃO são clicáveis: mostram texto + URL como texto puro', async () => {
+    vi.stubEnv('VITE_ENABLE_AGENT_ROUTER', 'false');
+    h.adviceMock.mockResolvedValue(
+      '[clique aqui](https://evil.example/?d=saldo) e <https://example.com> e [mal](javascript:alert(1))',
+    );
+    const { container } = renderChat();
+    sendMessage(container, 'links');
+
+    await screen.findByText('clique aqui');
+    expect(container.querySelector('a')).toBeNull();
+    expect(screen.queryByRole('link')).toBeNull();
+    // URL exibida em texto, entre parênteses, ao lado do rótulo.
+    expect(screen.getByText('(https://evil.example/?d=saldo)', { exact: false })).toBeTruthy();
+    // Autolink: URL == texto → não duplica.
+    expect(container.textContent).not.toContain('(https://example.com)');
+    expect(screen.getByText('https://example.com')).toBeTruthy();
+    // javascript: neutralizado pelo urlTransform → só o rótulo.
+    expect(container.textContent).not.toMatch(/javascript:/i);
+    expect(screen.getByText('mal')).toBeTruthy();
+  });
+
+  it('quebras de linha simples viram <br> (linhas não se fundem)', async () => {
+    vi.stubEnv('VITE_ENABLE_AGENT_ROUTER', 'false');
+    h.adviceMock.mockResolvedValue('🔴 Alerta: gasto alto\n🟢 OK: saldo positivo');
+    const { container } = renderChat();
+    sendMessage(container, 'resumo');
+
+    const first = await screen.findByText(/Alerta: gasto alto/);
+    const p = first.closest('p') as HTMLElement;
+    expect(p.querySelector('br')).not.toBeNull();
+    expect(p.textContent).toContain('OK: saldo positivo');
+  });
+
+  it('lista com linhas consecutivas continua renderizando ul/li', async () => {
+    vi.stubEnv('VITE_ENABLE_AGENT_ROUTER', 'false');
+    h.adviceMock.mockResolvedValue('Resumo:\n- primeiro\n- segundo\n- terceiro');
+    const { container } = renderChat();
+    sendMessage(container, 'lista');
+
+    const li = await screen.findByText('primeiro');
+    expect(li.tagName).toBe('LI');
+    expect(container.querySelectorAll('ul > li')).toHaveLength(3);
+  });
+
+  it('bloco de código cercado é preservado sem hard breaks', async () => {
+    vi.stubEnv('VITE_ENABLE_AGENT_ROUTER', 'false');
+    h.adviceMock.mockResolvedValue('Veja:\n```\nlinha 1\nlinha 2\n```');
+    const { container } = renderChat();
+    sendMessage(container, 'code');
+
+    await waitFor(() => expect(container.querySelector('pre code')).not.toBeNull());
+    expect(container.querySelector('pre code')?.textContent).toBe('linha 1\nlinha 2\n');
+  });
+  it('mensagem do usuário permanece texto literal (sem Markdown)', async () => {
+    vi.stubEnv('VITE_ENABLE_AGENT_ROUTER', 'false');
+    const { container } = renderChat();
+    sendMessage(container, 'quanto gastei com **lazer**?');
+
+    expect(await screen.findByText('quanto gastei com **lazer**?')).toBeTruthy();
+    await waitFor(() => expect(h.adviceMock).toHaveBeenCalled());
+    expect(container.querySelector('strong')).toBeNull();
+  });
+});
+
+describe('preserveLineBreaks (pré-processador puro)', () => {
+  it('adiciona hard break entre linhas consecutivas não vazias', () => {
+    expect(preserveLineBreaks('a\nb\nc')).toBe('a  \nb  \nc');
+  });
+
+  it('não toca em linhas em branco (parágrafos)', () => {
+    expect(preserveLineBreaks('a\n\nb')).toBe('a\n\nb');
+  });
+
+  it('mantém blocos cercados (``` e ~~~) inalterados', () => {
+    const fenced = 'x\n```ts\nconst a = 1;\nconst b = 2;\n```\ny\n~~~\nk\nz\n~~~';
+    expect(preserveLineBreaks(fenced)).toBe('x  \n```ts\nconst a = 1;\nconst b = 2;\n```\ny  \n~~~\nk\nz\n~~~');
+  });
+
+  it('não duplica hard break já existente', () => {
+    expect(preserveLineBreaks('a  \nb')).toBe('a  \nb');
+    expect(preserveLineBreaks('a\\\nb')).toBe('a\\\nb');
   });
 });

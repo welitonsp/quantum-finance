@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { X, Send, BrainCircuit, User, ChevronDown, AlertTriangle, Mic, MicOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Markdown, { type Components } from 'react-markdown';
 import { GeminiService } from './GeminiService';
 import { ConversationMemory } from './ConversationMemory';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
@@ -179,6 +180,96 @@ function CitationDisclosure({ citations }: { citations: CitationTransaction[] })
         ))}
       </div>
     </details>
+  );
+}
+
+// ─── Markdown das respostas da IA ─────────────────────────────────────────────
+// Segurança: react-markdown ignora HTML cru por padrão (NÃO adicionar rehype-raw)
+// e o `urlTransform` padrão neutraliza esquemas perigosos (javascript:, data:…).
+// Links NÃO são clicáveis: descrições de transações podem carregar prompt
+// injection e induzir o modelo a emitir links de exfiltração/phishing — o texto
+// e a URL aparecem como texto puro. Imagens são descartadas pelo mesmo motivo
+// (`![](https://…?dados)` vazaria contexto via request automático).
+
+const FENCE_RE = /^ {0,3}(`{3,}|~{3,})/;
+
+/**
+ * Preserva quebras de linha simples (o Gemini usa "linha\nlinha" como layout):
+ * converte cada `\n` simples em hard break Markdown (dois espaços no fim da
+ * linha) quando a próxima linha não é vazia. Blocos cercados (``` / ~~~) e
+ * linhas em branco ficam intactos; itens de lista continuam sendo listas.
+ */
+export function preserveLineBreaks(text: string): string {
+  const lines = text.split('\n');
+  let fence: string | null = null;
+  return lines
+    .map((line, i) => {
+      const marker = FENCE_RE.exec(line)?.[1];
+      if (fence !== null) {
+        if (marker !== undefined && marker[0] === fence[0] && marker.length >= fence.length) fence = null;
+        return line;
+      }
+      if (marker !== undefined) {
+        fence = marker;
+        return line;
+      }
+      const next = lines[i + 1];
+      if (line.trim() === '' || next === undefined || next.trim() === '') return line;
+      if (/ {2}$/.test(line) || line.endsWith('\\')) return line;
+      return `${line}  `;
+    })
+    .join('\n');
+}
+
+function linkLabel(children: React.ReactNode): string | null {
+  if (typeof children === 'string') return children;
+  if (Array.isArray(children) && children.every(c => typeof c === 'string')) return children.join('');
+  return null;
+}
+
+const CHAT_MARKDOWN_COMPONENTS: Components = {
+  p:      ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
+  ul:     ({ children }) => <ul className="my-2 list-disc pl-5 space-y-1">{children}</ul>,
+  ol:     ({ children }) => <ol className="my-2 list-decimal pl-5 space-y-1">{children}</ol>,
+  li:     ({ children }) => <li className="pl-0.5">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold text-quantum-fg">{children}</strong>,
+  em:     ({ children }) => <em className="italic">{children}</em>,
+  h1:     ({ children }) => <p className="my-2 font-semibold text-base">{children}</p>,
+  h2:     ({ children }) => <p className="my-2 font-semibold text-base">{children}</p>,
+  h3:     ({ children }) => <p className="my-2 font-semibold">{children}</p>,
+  h4:     ({ children }) => <p className="my-2 font-semibold">{children}</p>,
+  h5:     ({ children }) => <p className="my-2 font-semibold">{children}</p>,
+  h6:     ({ children }) => <p className="my-2 font-semibold">{children}</p>,
+  blockquote: ({ children }) => (
+    <blockquote className="my-2 border-l-2 border-quantum-accent/40 pl-3 text-quantum-fgMuted">{children}</blockquote>
+  ),
+  code:   ({ children }) => (
+    <code className="px-1 py-0.5 rounded bg-quantum-card border border-quantum-border font-mono text-[0.85em]">{children}</code>
+  ),
+  pre:    ({ children }) => (
+    <pre className="my-2 p-2 rounded-lg bg-quantum-card border border-quantum-border overflow-x-auto whitespace-pre text-xs [&>code]:p-0 [&>code]:border-0 [&>code]:bg-transparent">{children}</pre>
+  ),
+  a:      ({ href, children }) => {
+    const label = linkLabel(children);
+    const url = href ?? '';
+    const showUrl = url !== '' && url !== label && url.replace(/^mailto:/i, '') !== label;
+    return (
+      <span className="text-quantum-accent">
+        {children}
+        {showUrl && <span className="text-quantum-fgMuted break-all"> ({url})</span>}
+      </span>
+    );
+  },
+  hr:     () => <hr className="my-3 border-quantum-border" />,
+};
+
+function ChatMarkdown({ text }: { text: string }) {
+  return (
+    <div className="break-words">
+      <Markdown components={CHAT_MARKDOWN_COMPONENTS} disallowedElements={['img']} skipHtml>
+        {preserveLineBreaks(text)}
+      </Markdown>
+    </div>
   );
 }
 
@@ -587,13 +678,13 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [
                     }
                   </div>
                   <div
-                    className={`p-3 rounded-2xl max-w-[78%] text-sm leading-relaxed whitespace-pre-wrap ${
+                    className={`p-3 rounded-2xl max-w-[78%] text-sm leading-relaxed ${
                       msg.role === 'user'
-                        ? 'bg-indigo-600 text-white rounded-tr-none'
+                        ? 'bg-indigo-600 text-white rounded-tr-none whitespace-pre-wrap'
                         : 'bg-quantum-bgSecondary text-quantum-fg rounded-tl-none border border-quantum-border'
                     }`}
                   >
-                    {msg.text}
+                    {msg.role === 'ai' ? <ChatMarkdown text={msg.text} /> : msg.text}
                     {msg.role === 'ai' && msg.citations && msg.citations.length > 0 && (
                       <CitationDisclosure citations={msg.citations} />
                     )}
