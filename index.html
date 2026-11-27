@@ -26,9 +26,15 @@
          variável — item P3 do hardening de 2026-07-02, concluído). -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Space+Grotesk:wght@100..900&display=swap" rel="stylesheet">
 
+    <!-- Aplica o tema antes da primeira pintura (evita flash do tema errado).
+         Espelha readStoredTheme/resolveTheme de src/contexts/ThemeContext.tsx.
+         Se o conteúdo deste script mudar, recalcule o hash sha256 caso uma CSP
+         sem 'unsafe-inline' passe a ser servida. -->
+    <script>(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark')t='system';var d=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){}})();</script>
+
     <title>Quantum Finance</title>
   </head>
-  <body class="bg-slate-950 text-white antialiased">
+  <body>
     <div id="root"></div>
     
     <script type="module" src="/src/main.jsx"></script>
