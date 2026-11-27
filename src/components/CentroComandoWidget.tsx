@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { useNavigation } from '../contexts/NavigationContext';
 import { formatBRL } from '../shared/types/money';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, formatPercent } from '../utils/formatters';
 import type { RecurringTask, CreditCard as CreditCardType } from '../shared/types/transaction';
 import type { DashboardBudgetAlert } from '../utils/dashboardUtils';
 
@@ -67,7 +67,7 @@ export default function CentroComandoWidget({ budgetAlerts, recurringTasks, card
           id:          `budget-${alert.id}`,
           tipo:        'orcamento',
           titulo:      `Orçamento estourado: ${alert.category}`,
-          descricao:   `${alert.percentUsed.toFixed(0)}% do limite atingido em ${alert.month}`,
+          descricao:   `${formatPercent(alert.percentUsed, 0)} do limite atingido em ${alert.month}`,
           urgencia:    'critica',
           navTarget:   'reports',
           percentUsed: alert.percentUsed,
@@ -79,7 +79,7 @@ export default function CentroComandoWidget({ budgetAlerts, recurringTasks, card
           id:          `budget-${alert.id}`,
           tipo:        'orcamento',
           titulo:      `Orçamento em atenção: ${alert.category}`,
-          descricao:   `${alert.percentUsed.toFixed(0)}% do limite usado em ${alert.month}`,
+          descricao:   `${formatPercent(alert.percentUsed, 0)} do limite usado em ${alert.month}`,
           urgencia:    'media',
           navTarget:   'reports',
           percentUsed: alert.percentUsed,

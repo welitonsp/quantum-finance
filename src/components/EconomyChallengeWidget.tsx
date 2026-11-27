@@ -6,7 +6,7 @@ import type { Transaction } from '../shared/types/transaction';
 import { useChallenges, computeChallengeProgress, XP_MILESTONES, type Challenge, type CreateChallengeInput } from '../hooks/useChallenges';
 import { isExpense as checkExpense } from '../utils/transactionUtils';
 import { getTransactionCentavos } from '../utils/transactionUtils';
-import { fromCentavos } from '../shared/types/money';
+import { formatCurrency } from '../utils/formatters';
 
 interface Props {
   uid:          string;
@@ -130,7 +130,7 @@ function CreateModal({ transactions, onClose, onCreate }: CreateModalProps) {
             </select>
             {baseline > 0 && (
               <p className="text-[10px] text-quantum-fgMuted mt-1">
-                Média mensal: R$ {fromCentavos(baseline).toFixed(0)}
+                Média mensal: {formatCurrency(baseline, { cents: true })}
               </p>
             )}
           </div>
@@ -151,7 +151,7 @@ function CreateModal({ transactions, onClose, onCreate }: CreateModalProps) {
             </div>
             {baseline > 0 && (
               <p className="text-[10px] text-emerald-400 mt-1">
-                Economia estimada: R$ {fromCentavos(Math.round(baseline * targetPct / 100)).toFixed(0)}/mês
+                Economia estimada: {formatCurrency(Math.round(baseline * targetPct / 100), { cents: true })}/mês
               </p>
             )}
           </div>
