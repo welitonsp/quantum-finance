@@ -102,7 +102,7 @@ export default function LoginScreen({ onLogin, emailAuth, mfaPending = false, on
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-quantum-fg flex flex-col items-center justify-center relative overflow-hidden font-sans">
+    <div className="dark min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-quantum-fg flex flex-col items-center justify-center relative overflow-hidden font-sans">
       <Toaster position="bottom-right" toastOptions={{ style: { background: '#1e293b', color: '#fff', borderRadius: '12px' } }} />
 
       <div className="fixed inset-0 opacity-40 pointer-events-none z-0">

@@ -126,7 +126,7 @@ export default function MfaPanelSupabase() {
             Sua conta exige um código do app autenticador a cada login.
           </p>
           {factors.map((f) => (
-            <div key={f.id} className="flex items-center justify-between bg-slate-900/60 border border-quantum-border/50 rounded-lg px-3 py-2">
+            <div key={f.id} className="flex items-center justify-between bg-quantum-bgSecondary border border-quantum-border rounded-lg px-3 py-2">
               <span className="text-xs text-quantum-fg flex items-center gap-2">
                 <KeyRound className="w-4 h-4 text-cyan-400" aria-hidden />
                 {f.friendlyName ?? 'App autenticador'}
@@ -166,13 +166,13 @@ export default function MfaPanelSupabase() {
             className="w-40 h-40 bg-white rounded-lg p-2"
           />
           <div className="flex items-center gap-2">
-            <code className="flex-1 text-xs font-mono bg-slate-900/80 border border-quantum-border/50 rounded-lg px-3 py-2 break-all select-all">
+            <code className="flex-1 text-xs font-mono bg-quantum-bgSecondary border border-quantum-border rounded-lg px-3 py-2 break-all select-all">
               {state.secretKey}
             </code>
             <button
               onClick={() => void copySecret(state.secretKey)}
               aria-label="Copiar chave"
-              className="p-2 rounded-lg border border-quantum-border/50 hover:bg-slate-800 transition-colors"
+              className="p-2 rounded-lg border border-quantum-border hover:bg-slate-800 transition-colors"
             >
               <Copy className="w-4 h-4 text-quantum-fgMuted" aria-hidden />
             </button>
@@ -189,7 +189,7 @@ export default function MfaPanelSupabase() {
               onKeyDown={(e) => { if (e.key === 'Enter') void handleConfirm(); }}
               placeholder="000000"
               aria-label="Código do app autenticador"
-              className="w-32 text-center font-mono tracking-[0.3em] bg-slate-900/80 border border-quantum-border/50 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500"
+              className="w-32 text-center font-mono tracking-[0.3em] bg-quantum-bgSecondary border border-quantum-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500"
             />
             <button
               onClick={() => void handleConfirm()}
