@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Target, AlertTriangle, CheckCircle2, TrendingUp, Sparkles, type LucideIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatPercent, roundForDisplay } from '../utils/formatters';
 
 interface Props {
   totalExpenses: number;
@@ -12,31 +13,33 @@ export default function BudgetProgress({ totalExpenses, monthlyGoal, onSetGoal }
   const prevLevelRef = useRef(0);
   const percentage = monthlyGoal > 0 ? (totalExpenses / monthlyGoal) * 100 : 0;
   const cappedPercentage = Math.min(percentage, 100);
+  // Cor/ícone/toast pelo mesmo valor arredondado que o texto exibe (99,96 → "100,0%" = teto atingido).
+  const shownPercentage = roundForDisplay(percentage, 1);
 
   useEffect(() => {
     if (monthlyGoal === 0) { prevLevelRef.current = 0; return; }
     let currentLevel = 0;
-    if (percentage >= 100) currentLevel = 2;
-    else if (percentage >= 80) currentLevel = 1;
+    if (shownPercentage >= 100) currentLevel = 2;
+    else if (shownPercentage >= 80) currentLevel = 1;
     if (currentLevel === 2 && prevLevelRef.current < 2) {
       toast.error('Alerta Vermelho: Teto de gastos ultrapassado! Consulte a IA para otimizar.', { duration: 6000, style: { background: '#ef4444', color: '#fff', fontWeight: 'bold' } });
     } else if (currentLevel === 1 && prevLevelRef.current < 1) {
       toast('Atenção: Atingiu 80% do seu orçamento mensal.', { icon: '⚠️', duration: 5000, style: { background: '#f59e0b', color: '#fff', fontWeight: 'bold' } });
     }
     prevLevelRef.current = currentLevel;
-  }, [percentage, monthlyGoal]);
+  }, [shownPercentage, monthlyGoal]);
 
   let progressColor = 'from-emerald-400 to-emerald-500';
   let bgGlow = 'shadow-emerald-500/50';
   let textColor = 'text-emerald-600 dark:text-emerald-400';
   let Icon: LucideIcon = CheckCircle2;
 
-  if (percentage >= 100)     { progressColor = 'from-red-500 to-red-600';       bgGlow = 'shadow-red-500/50';    textColor = 'text-red-600 dark:text-red-400';    Icon = AlertTriangle; }
-  else if (percentage >= 80) { progressColor = 'from-orange-400 to-orange-500'; bgGlow = 'shadow-orange-500/50'; textColor = 'text-orange-600 dark:text-orange-400'; Icon = TrendingUp;   }
+  if (shownPercentage >= 100)     { progressColor = 'from-red-500 to-red-600';       bgGlow = 'shadow-red-500/50';    textColor = 'text-red-600 dark:text-red-400';    Icon = AlertTriangle; }
+  else if (shownPercentage >= 80) { progressColor = 'from-orange-400 to-orange-500'; bgGlow = 'shadow-orange-500/50'; textColor = 'text-orange-600 dark:text-orange-400'; Icon = TrendingUp;   }
 
   return (
     <div className="glass-card-quantum p-6 relative overflow-hidden transition-all duration-300">
-      <div className={`absolute -right-10 -top-10 w-32 h-32 blur-3xl rounded-full opacity-10 dark:opacity-20 ${percentage >= 80 ? (percentage >= 100 ? 'bg-red-500' : 'bg-orange-500') : 'bg-emerald-500'}`} />
+      <div className={`absolute -right-10 -top-10 w-32 h-32 blur-3xl rounded-full opacity-10 dark:opacity-20 ${shownPercentage >= 80 ? (shownPercentage >= 100 ? 'bg-red-500' : 'bg-orange-500') : 'bg-emerald-500'}`} />
       <div className="relative z-10">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-4 gap-4">
           <div className="flex items-center gap-3">
@@ -55,7 +58,7 @@ export default function BudgetProgress({ totalExpenses, monthlyGoal, onSetGoal }
         {monthlyGoal > 0 ? (
           <div className="mt-6">
             <div className="flex justify-between items-end mb-2">
-              <span className={`text-2xl font-black tracking-tight ${textColor} transition-colors`}>{percentage.toFixed(1)}%</span>
+              <span className={`text-2xl font-black tracking-tight ${textColor} transition-colors`}>{formatPercent(shownPercentage, 1)}</span>
               <div className="text-right">
                 <span className="text-quantum-fg font-black block transition-colors">R$ {totalExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                 <span className="text-quantum-fgMuted text-xs font-bold">de R$ {monthlyGoal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
@@ -64,7 +67,7 @@ export default function BudgetProgress({ totalExpenses, monthlyGoal, onSetGoal }
             <div className="h-4 w-full bg-slate-200 dark:bg-quantum-card/80 rounded-full overflow-hidden border border-slate-300 dark:border-quantum-border shadow-inner transition-colors">
               <div className={`h-full rounded-full bg-gradient-to-r ${progressColor} shadow-[0_0_10px_rgba(0,0,0,0.2)] dark:shadow-[0_0_10px_rgba(0,0,0,0.5)] ${bgGlow} transition-all duration-1000 ease-out relative`} style={{ width: `${cappedPercentage}%` }} />
             </div>
-            {percentage >= 100 && <p className="text-xs text-red-600 dark:text-red-400 font-bold mt-3 flex items-center gap-1.5 bg-red-50 dark:bg-red-500/10 p-2 rounded-lg border border-red-200 dark:border-red-500/20 transition-colors"><AlertTriangle className="w-4 h-4" /> Atenção: Limite mensal excedido!</p>}
+            {shownPercentage >= 100 && <p className="text-xs text-red-600 dark:text-red-400 font-bold mt-3 flex items-center gap-1.5 bg-red-50 dark:bg-red-500/10 p-2 rounded-lg border border-red-200 dark:border-red-500/20 transition-colors"><AlertTriangle className="w-4 h-4" /> Atenção: Limite mensal excedido!</p>}
           </div>
         ) : (
           <div className="mt-4 p-4 border border-dashed border-slate-300 dark:border-quantum-border rounded-2xl text-center bg-slate-50 dark:bg-quantum-card/30 transition-colors">

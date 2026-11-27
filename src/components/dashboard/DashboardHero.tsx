@@ -6,6 +6,7 @@ import { ArrowRightLeft, TrendingDown, TrendingUp } from 'lucide-react';
 import { HealthGauge } from '../HealthGauge';
 import { SparkLine } from '../SparkLine';
 import type { Transaction } from '../../shared/types/transaction';
+import { formatPercent, roundForDisplay } from '../../utils/formatters';
 
 interface DashboardHeroProps {
   saldo: number;
@@ -48,6 +49,8 @@ export function DashboardHero({
   onNewTransaction,
 }: DashboardHeroProps) {
   const hasScore = score !== null;
+  // Cor/ícone pelo mesmo valor arredondado que o texto exibe (evita "0,0%" em vermelho).
+  const incomeDeltaShown = roundForDisplay(incomeDelta, 1);
   return (
     <motion.div variants={heroVariants} className="relative bg-quantum-card/40 backdrop-blur-xl border border-quantum-border rounded-3xl p-6 md:p-8 overflow-hidden transition-all hover:shadow-2xl">
       {hasScore && (
@@ -74,9 +77,9 @@ export function DashboardHero({
                 <CountUp end={saldo} duration={2} separator="." decimal="," decimals={2} prefix="R$ " />
               </h1>
               {hasScore && (
-                <div className={`flex items-center gap-1 text-sm font-bold px-3 py-1.5 rounded-xl ${incomeDelta >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
-                  {incomeDelta >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                  {Math.abs(incomeDelta).toFixed(1)}% retidos
+                <div className={`flex items-center gap-1 text-sm font-bold px-3 py-1.5 rounded-xl ${incomeDeltaShown >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                  {incomeDeltaShown >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                  {formatPercent(Math.abs(incomeDeltaShown), 1)} retidos
                 </div>
               )}
             </div>

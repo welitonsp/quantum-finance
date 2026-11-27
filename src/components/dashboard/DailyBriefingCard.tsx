@@ -12,6 +12,7 @@ import type { Transaction, Account } from '../../shared/types/transaction';
 import type { ActionProposal } from '../../shared/schemas/agentSchemas';
 import type { ActionSummaryRow } from '../../features/ai-agent/ActionConfirmationSheet';
 import type { Budget } from '../../hooks/useBudgets';
+import { formatPercent, roundForDisplay } from '../../utils/formatters';
 
 export interface BudgetProposalPresentation {
   title: string;
@@ -116,12 +117,14 @@ export function DailyBriefingCard({
 
     // B. Savings rate
     if (kpis.monthlyIncomeCents > 0) {
+      // Severidade pelo mesmo valor arredondado que o texto exibe (19,96 → "20,0%" = ok).
+      const savingsShown = roundForDisplay(kpis.savingsRatePct, 1);
       built.push({
         id: 'savings',
         Icon: PiggyBank,
         title: 'Taxa de poupança do mês',
-        value: `${kpis.savingsRatePct.toFixed(1)}%`,
-        severity: kpis.savingsRatePct >= 20 ? 'ok' : kpis.savingsRatePct >= 5 ? 'warn' : 'critical',
+        value: formatPercent(savingsShown, 1),
+        severity: savingsShown >= 20 ? 'ok' : savingsShown >= 5 ? 'warn' : 'critical',
         navTarget: 'planning',
       });
     }
