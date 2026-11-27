@@ -20,6 +20,7 @@ import {
   type DebtStrategyResult,
 } from '../../lib/debtStrategy';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
+import { formatPercent } from '../../utils/formatters';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface Props {
@@ -309,7 +310,7 @@ function DebtRow({ debt, onMarkPaid, onDelete, isProcessing }: DebtRowProps) {
           Parcela: <span className="text-quantum-fg font-bold">{formatBRL(monthlyPaymentCents)}</span>
         </span>
         <span>
-          Juros: <span className="text-quantum-fg font-bold">{(debt.interestRate * 100).toFixed(2)}% a.m.</span>
+          Juros: <span className="text-quantum-fg font-bold">{formatPercent(debt.interestRate * 100, 2)} a.m.</span>
         </span>
         <span className={color === 'red' ? 'text-red-400 font-bold' : ''}>
           {dueLabel} (dia {debt.dueDayOfMonth})

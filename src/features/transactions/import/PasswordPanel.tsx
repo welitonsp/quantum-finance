@@ -76,7 +76,7 @@ export function PasswordPanel({ file, wrongPassword, onSubmit, onCancel }: Passw
           className="btn-quantum-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {submitting
-            ? <><Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> A verificar...</>
+            ? <><Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> Verificando...</>
             : <><ArrowRight className="w-3.5 h-3.5" aria-hidden="true" /> Confirmar</>
           }
         </button>

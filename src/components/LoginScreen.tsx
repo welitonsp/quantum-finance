@@ -55,7 +55,7 @@ export default function LoginScreen({ onLogin, emailAuth, mfaPending = false, on
       await onLogin();
     } catch (error) {
       logSanitizedFirebaseError('auth_login_screen', error);
-      toast.error('Falha ao iniciar sessão. Verifique se tem os pop-ups bloqueados.');
+      toast.error('Falha ao iniciar sessão. Verifique se os pop-ups estão bloqueados.');
     } finally {
       setIsLoading(false);
     }
@@ -139,7 +139,7 @@ export default function LoginScreen({ onLogin, emailAuth, mfaPending = false, on
               disabled={isLoading}
               className="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 text-white font-bold px-6 py-4 rounded-xl hover:opacity-90 transition-opacity shadow-lg disabled:opacity-70 disabled:cursor-not-allowed mb-3"
             >
-              {isLoading ? 'A verificar...' : 'Verificar código'}
+              {isLoading ? 'Verificando...' : 'Verificar código'}
             </button>
             <button
               onClick={() => { setMfaCode(''); onCancelMfa?.(); }}
@@ -155,7 +155,7 @@ export default function LoginScreen({ onLogin, emailAuth, mfaPending = false, on
               <Wallet className="w-10 h-10 text-quantum-fg" />
             </div>
             <h1 className="text-3xl font-black gradient-text tracking-wide uppercase mb-2">Quantum Finance</h1>
-            <p className="text-sm text-quantum-fgMuted mb-8">Inteligência Artificial para as suas finanças. Entre para aceder ao seu cofre seguro.</p>
+            <p className="text-sm text-quantum-fgMuted mb-8">Inteligência Artificial para suas finanças. Entre para acessar seu cofre seguro.</p>
 
             <button
               onClick={() => void handleLogin()}
@@ -175,7 +175,7 @@ export default function LoginScreen({ onLogin, emailAuth, mfaPending = false, on
                   <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                 </svg>
               )}
-              {isLoading ? 'A autenticar...' : 'Entrar com Google'}
+              {isLoading ? 'Autenticando...' : 'Entrar com Google'}
             </button>
 
             {emailAuth && (
