@@ -21,6 +21,7 @@ import type { ModuleBalances } from '../../shared/types/transaction';
 import { getTransactionAbsCentavos, isIncome } from '../../utils/transactionUtils';
 import { toCentavos } from '../../shared/types/money';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
+import { localMonthKey, transactionMonthKey } from './GemeloFinanceiro';
 interface RechartsTooltipPayloadEntry {
   dataKey?: string | number | ((obj: unknown) => unknown);
   name?: string | number;
@@ -76,12 +77,6 @@ interface Props {
 // ─── Constants ────────────────────────────────────────────────────────────────
 const MONTH_NAMES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'] as const;
 const DEFAULTS    = { inflacao: 5, corteDespesas: 0, aumentoSalario: 0, meses: 24 };
-const DEFAULT_STATS: SimStats = {
-  receitaMensalCents:  500000,
-  despesaFixaCents:    300000,
-  mediaVariavelCents:  120000,
-  desvioVariavelCents:  40000,
-};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmtBRL = (cents: number) =>
@@ -168,7 +163,7 @@ function ChartTooltip({ active, payload, label, isPrivacyMode }: ChartTooltipPro
 // ─── Componente Principal ─────────────────────────────────────────────────────
 export default function SimulationCenter({ transactions, balances }: Props) {
   const { isPrivacyMode }             = usePrivacy();
-  const { currentMonth, currentYear } = useNavigation();
+  const { currentMonth, currentYear, setCurrentPage } = useNavigation();
 
   const [inflacao,       setInflacao]       = useState(DEFAULTS.inflacao);
   const [corteDespesas,  setCorteDespesas]  = useState(DEFAULTS.corteDespesas);
@@ -181,21 +176,27 @@ export default function SimulationCenter({ transactions, balances }: Props) {
   const workerRef   = useRef<Worker | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const stats = useMemo<SimStats>(() => {
-    if (!transactions || transactions.length === 0) return DEFAULT_STATS;
+  // null = sem dados para simular. Nunca usar números de exemplo: a simulação
+  // exibiria P10/P50/P90 fictícios como se fossem do usuário.
+  const stats = useMemo<SimStats | null>(() => {
+    if (!transactions || transactions.length === 0) return null;
 
+    // Mesma chave de mês do Gêmeo: datas inválidas (antes viravam bucket "NaN-NaN")
+    // e meses futuros (parcelas a vencer) não entram nas médias.
     const byMonth: Record<string, { r: number; d: number }> = {};
+    const currentMonthKey = localMonthKey();
     transactions.forEach(tx => {
-      const d   = new Date(tx.date ?? (tx as Transaction & { createdAt?: string }).createdAt ?? '');
-      const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
-      if (!byMonth[key]) byMonth[key] = { r: 0, d: 0 };
       if (tx.value_cents === undefined) return;
+      const key = transactionMonthKey(tx);
+      if (!key || key > currentMonthKey) return;
+      if (!byMonth[key]) byMonth[key] = { r: 0, d: 0 };
       const valCents = getTransactionAbsCentavos(tx);
       if (isIncome(tx.type)) byMonth[key]!.r += valCents;
       else byMonth[key]!.d += valCents;
     });
 
     const months = Object.values(byMonth);
+    if (!months.some(m => m.r > 0 || m.d > 0)) return null;
     const n = Math.max(months.length, 1);
     const avgReceita = Math.round(months.reduce((s, m) => s + m.r, 0) / n);
     const avgDespesa = Math.round(months.reduce((s, m) => s + m.d, 0) / n);
@@ -203,10 +204,10 @@ export default function SimulationCenter({ transactions, balances }: Props) {
     const stddev     = Math.round(Math.sqrt(variance));
 
     return {
-      receitaMensalCents:  Math.max(avgReceita, 100000),
-      despesaFixaCents:    Math.round(Math.max(avgDespesa, 50000) * 0.65),
-      mediaVariavelCents:  Math.round(Math.max(avgDespesa, 50000) * 0.35),
-      desvioVariavelCents: Math.max(stddev, Math.round(avgDespesa * 0.08), 5000),
+      receitaMensalCents:  avgReceita,
+      despesaFixaCents:    Math.round(avgDespesa * 0.65),
+      mediaVariavelCents:  Math.round(avgDespesa * 0.35),
+      desvioVariavelCents: Math.max(stddev, Math.round(avgDespesa * 0.08)),
     };
   }, [transactions]);
 
@@ -228,6 +229,16 @@ export default function SimulationCenter({ transactions, balances }: Props) {
   }, []);
 
   const runSimulation = useCallback(() => {
+    if (!stats) {
+      // Dados sumiram: cancela execução pendente e descarta resultado obsoleto.
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      setResult(null);
+      setIsCalculating(false);
+      return;
+    }
     if (!workerRef.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
@@ -277,6 +288,44 @@ export default function SimulationCenter({ transactions, balances }: Props) {
     :              { text: 'text-rose-400',   glow: 'rgba(255,71,87,0.5)',  label: 'Crítico'     };
 
   const ProbIcon = prob === null ? FlaskConical : prob >= 60 ? ShieldCheck : AlertTriangle;
+
+  if (!stats) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+        className="max-w-[1800px] mx-auto px-4 md:px-6 py-8 space-y-6"
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+            <FlaskConical className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-xl font-black text-quantum-fg tracking-tight">Centro de Simulação</h1>
+            <p className="text-xs text-quantum-fgMuted uppercase tracking-wider font-medium">Monte Carlo · 1.000 iterações · Box-Muller</p>
+          </div>
+        </div>
+        <div
+          role="status"
+          className="bg-quantum-bg/90 backdrop-blur-2xl border border-white/8 rounded-2xl p-10 flex flex-col items-center text-center gap-4"
+        >
+          <Info className="w-8 h-8 text-quantum-fgMuted" />
+          <p className="text-sm font-bold text-quantum-fg">Dados insuficientes para simular</p>
+          <p className="text-xs text-quantum-fgMuted max-w-md">
+            Registre ou importe suas transações para ver a simulação Monte Carlo.
+          </p>
+          <button
+            type="button"
+            onClick={() => setCurrentPage('history')}
+            className="px-4 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-cyan-400 rounded-xl text-sm font-bold transition-all"
+          >
+            Ir para Movimentações
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div

@@ -12,7 +12,10 @@ interface DashboardHeroProps {
   receitas: number;
   despesas: number;
   incomeDelta: number;
-  score: number;
+  /** null = conta sem dados financeiros: exibe estado neutro, sem score/diagnóstico. */
+  score: number | null;
+  /** Com score null: true = primeiro snapshot ainda carregando (placeholder neutro). */
+  scoreLoading?: boolean;
   color: string;
   status: string;
   rec: string;
@@ -34,6 +37,7 @@ export function DashboardHero({
   despesas,
   incomeDelta,
   score,
+  scoreLoading = false,
   color,
   status,
   rec,
@@ -43,36 +47,60 @@ export function DashboardHero({
   txSet,
   onNewTransaction,
 }: DashboardHeroProps) {
+  const hasScore = score !== null;
   return (
     <motion.div variants={heroVariants} className="relative bg-quantum-card/40 backdrop-blur-xl border border-quantum-border rounded-3xl p-6 md:p-8 overflow-hidden transition-all hover:shadow-2xl">
-      <div className={`absolute top-0 right-0 w-[500px] h-[500px] blur-[100px] opacity-20 rounded-full ${glowColor} -translate-y-1/2 translate-x-1/3 animate-slow-rotate`} />
+      {hasScore && (
+        <div className={`absolute top-0 right-0 w-[500px] h-[500px] blur-[100px] opacity-20 rounded-full ${glowColor} -translate-y-1/2 translate-x-1/3 animate-slow-rotate`} />
+      )}
 
       <div className="relative z-10 flex flex-col xl:flex-row gap-8">
         <div className="flex items-start gap-6 flex-1">
-          <HealthGauge score={score} color={color} />
+          {hasScore ? (
+            <HealthGauge score={score} color={color} />
+          ) : (
+            <div
+              className="relative w-32 h-32 flex-shrink-0 rounded-full border-[7px] border-quantum-border flex flex-col items-center justify-center gap-0.5"
+              aria-label={scoreLoading ? 'Score de saúde financeira: carregando' : 'Score de saúde financeira: sem dados ainda'}
+            >
+              <span className="font-mono text-3xl font-bold text-quantum-fgMuted leading-none">{scoreLoading ? '…' : '—'}</span>
+              <span className="text-[8px] font-bold tracking-[0.12em] uppercase text-quantum-fgMuted">{scoreLoading ? 'Carregando' : 'Sem dados'}</span>
+            </div>
+          )}
           <div className="flex-1">
             <p className="text-quantum-fgMuted font-bold uppercase text-xs tracking-wider mb-1">Saldo em Caixa</p>
             <div className="flex flex-wrap items-baseline gap-3 mb-3">
               <h1 className="text-4xl md:text-5xl font-black text-quantum-fg tracking-tighter font-mono">
                 <CountUp end={saldo} duration={2} separator="." decimal="," decimals={2} prefix="R$ " />
               </h1>
-              <div className={`flex items-center gap-1 text-sm font-bold px-3 py-1.5 rounded-xl ${incomeDelta >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
-                {incomeDelta >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                {Math.abs(incomeDelta).toFixed(1)}% retidos
-              </div>
+              {hasScore && (
+                <div className={`flex items-center gap-1 text-sm font-bold px-3 py-1.5 rounded-xl ${incomeDelta >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                  {incomeDelta >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                  {Math.abs(incomeDelta).toFixed(1)}% retidos
+                </div>
+              )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 mb-4">
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border ${badgeColor}`}>
-                <StatusIcon className="w-4 h-4" />
-                {status}
-              </div>
-            </div>
+            {hasScore ? (
+              <>
+                <div className="flex flex-wrap items-center gap-3 mb-4">
+                  <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border ${badgeColor}`}>
+                    <StatusIcon className="w-4 h-4" />
+                    {status}
+                  </div>
+                </div>
 
-            <div className={`p-3 bg-quantum-bg/80 border border-quantum-border rounded-xl border-l-4 ${color === 'emerald' ? 'border-l-emerald-500' : color === 'amber' ? 'border-l-amber-500' : 'border-l-red-500'}`}>
-              <span className="font-bold text-quantum-fg uppercase text-[10px] tracking-wider mr-2">Status Operacional:</span>
-              <span className="text-quantum-fg text-sm">{rec}</span>
-            </div>
+                <div className={`p-3 bg-quantum-bg/80 border border-quantum-border rounded-xl border-l-4 ${color === 'emerald' ? 'border-l-emerald-500' : color === 'amber' ? 'border-l-amber-500' : 'border-l-red-500'}`}>
+                  <span className="font-bold text-quantum-fg uppercase text-[10px] tracking-wider mr-2">Status Operacional:</span>
+                  <span className="text-quantum-fg text-sm">{rec}</span>
+                </div>
+              </>
+            ) : scoreLoading ? null : (
+              <div className="p-3 bg-quantum-bg/80 border border-quantum-border rounded-xl border-l-4 border-l-quantum-border">
+                <span className="font-bold text-quantum-fg uppercase text-[10px] tracking-wider mr-2">Sem dados ainda:</span>
+                <span className="text-quantum-fgMuted text-sm">Registre ou importe suas transações para ver seu diagnóstico.</span>
+              </div>
+            )}
           </div>
         </div>
 
