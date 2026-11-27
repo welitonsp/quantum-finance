@@ -138,7 +138,7 @@ function GoalCard({
               <div className="flex items-center gap-1 text-[10px] text-quantum-fgMuted">
                 <TrendingUp className="w-3 h-3 shrink-0 text-blue-400" />
                 <span>
-                  Guardar{' '}
+                  Economize{' '}
                   <span className="font-bold text-blue-400">
                     {formatBRL(fromCentavos(goal.monthlyContributionNeeded))}
                   </span>

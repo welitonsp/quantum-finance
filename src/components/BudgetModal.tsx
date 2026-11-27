@@ -34,7 +34,7 @@ export default function BudgetModal({ isOpen, onClose, currentGoal, onSave }: Pr
 
   const executeSave = (numericGoal: number) => {
     onSave(numericGoal);
-    toast.success(numericGoal === 0 ? 'Monitorização de orçamento desativada.' : 'Teto mensal atualizado com sucesso!');
+    toast.success(numericGoal === 0 ? 'Monitoramento de orçamento desativado.' : 'Teto mensal atualizado com sucesso!');
     onClose();
   };
 
@@ -59,7 +59,7 @@ export default function BudgetModal({ isOpen, onClose, currentGoal, onSave }: Pr
             <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-center">
               <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-2" />
               <h3 className="text-sm font-bold text-quantum-fg mb-1">Desativar Orçamento?</h3>
-              <p className="text-xs text-quantum-fgMuted">Ao definir a meta como R$ 0.00, a IA deixará de monitorizar e avisar sobre os seus gastos.</p>
+              <p className="text-xs text-quantum-fgMuted">Ao definir a meta como R$ 0,00, a IA deixará de monitorar e avisar sobre seus gastos.</p>
             </div>
             <div className="flex gap-3">
               <button type="button" onClick={() => setShowConfirmZero(false)} className="flex-1 py-3 font-bold rounded-xl text-quantum-fg bg-quantum-bgSecondary hover:bg-slate-700 transition-colors text-sm">Cancelar</button>
@@ -68,14 +68,14 @@ export default function BudgetModal({ isOpen, onClose, currentGoal, onSave }: Pr
           </div>
         ) : (
           <div className="relative z-10">
-            <p className="text-sm text-quantum-fgMuted mb-6">Defina o limite máximo que pretende gastar este mês.</p>
+            <p className="text-sm text-quantum-fgMuted mb-6">Defina o limite máximo que deseja gastar este mês.</p>
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label htmlFor={`${fieldId}-goal`} className="block text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-1.5 ml-1">Valor do Teto (R$)</label>
                 <input ref={goalInputRef} id={`${fieldId}-goal`} type="number" step="0.01" min="0" value={goal} onChange={e => setGoal(e.target.value)} placeholder="Ex: 3500.00"
                   className="w-full px-4 py-3 bg-quantum-bg border border-quantum-border rounded-xl text-quantum-fg font-mono focus:outline-none focus:border-quantum-accent focus:ring-1 focus:ring-quantum-accent transition-all" />
               </div>
-              <button type="submit" className="w-full py-3.5 font-bold rounded-xl transition-all shadow-lg bg-quantum-accent text-quantum-bg hover:bg-emerald-400 hover:shadow-quantum-accentGlow flex items-center justify-center gap-2">Guardar Objetivo</button>
+              <button type="submit" className="w-full py-3.5 font-bold rounded-xl transition-all shadow-lg bg-quantum-accent text-quantum-bg hover:bg-emerald-400 hover:shadow-quantum-accentGlow flex items-center justify-center gap-2">Salvar Objetivo</button>
             </form>
           </div>
         )}

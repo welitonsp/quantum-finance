@@ -642,7 +642,7 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [
                 <h3 className="font-bold text-quantum-fg leading-none tracking-wide">Quantum AI</h3>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-quantum-accent animate-pulse" />
-                  <span className="text-xs text-quantum-accent font-medium">Auditora Activa</span>
+                  <span className="text-xs text-quantum-accent font-medium">Auditora Ativa</span>
                 </div>
               </div>
             </div>
