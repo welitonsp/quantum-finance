@@ -21,11 +21,11 @@ export function useImportActions(
 
   const handleImport = useCallback(async (parsedData: Partial<Transaction>[]): Promise<ImportResult | undefined> => {
     if (!uid || !parsedData.length) {
-      toast.error('Ficheiro vazio ou dados corrompidos.');
+      toast.error('Arquivo vazio ou dados corrompidos.');
       return;
     }
 
-    const toastId = toast.loading('A sincronizar com o Cofre…');
+    const toastId = toast.loading('Sincronizando com o Cofre…');
 
     try {
       // Converte legado controlado para centavos antes de delegar ao LedgerService.

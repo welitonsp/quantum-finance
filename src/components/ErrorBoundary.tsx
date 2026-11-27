@@ -41,7 +41,7 @@ export class ErrorBoundary extends React.Component<
 
   render() {
     if (this.state.hasError) {
-      const heading = this.props.label ? `Anomalia em ${this.props.label}` : 'Anomalia Detetada';
+      const heading = this.props.label ? `Anomalia em ${this.props.label}` : 'Anomalia Detectada';
       return (
         <div className="p-8 m-4 bg-quantum-card/80 border border-red-500/30 rounded-3xl flex flex-col items-center justify-center text-center backdrop-blur-md">
           <AlertTriangle className="w-16 h-16 text-red-500 mb-4 animate-pulse" />

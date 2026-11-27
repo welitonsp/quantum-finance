@@ -62,7 +62,7 @@ export function ColumnMapper({ headers, previewRows, autoMap, onApply, onCancel 
       <div className="flex items-start gap-3 p-3.5 bg-quantum-goldDim border border-quantum-gold/20 rounded-xl">
         <AlertTriangle className="w-4 h-4 text-quantum-gold shrink-0 mt-0.5" />
         <p className="text-xs text-quantum-fg leading-relaxed">
-          Não foi possível detetar automaticamente as colunas. Mapeie manualmente abaixo.
+          Não foi possível detectar automaticamente as colunas. Mapeie manualmente abaixo.
         </p>
       </div>
 
