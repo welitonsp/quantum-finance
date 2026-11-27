@@ -53,4 +53,35 @@ describe('AccountsManager', () => {
       });
     });
   });
+  it('salva saldo com centavos sem multiplicar o valor', async () => {
+    mockUseAccounts.mockReturnValue({
+      accounts: [account({ id: 'acc-cc', name: 'Conta', type: 'corrente', balance: cents(0) })],
+      loadingAccounts: false, addAccount: vi.fn(), updateAccount: mockUpdateAccount, removeAccount: vi.fn(),
+    });
+    render(<AccountsManager uid="uid-test" />);
+
+    fireEvent.click(screen.getByTitle('Editar'));
+    fireEvent.change(screen.getByDisplayValue('0.00'), { target: { value: '1500.50' } });
+    fireEvent.click(screen.getByTitle('Salvar'));
+
+    await waitFor(() => {
+      expect(mockUpdateAccount).toHaveBeenCalledWith('acc-cc', { name: 'Conta', balance: 1500.5 });
+    });
+  });
+
+  it('salvar edição sem mudar o saldo preserva o valor', async () => {
+    mockUseAccounts.mockReturnValue({
+      accounts: [account({ id: 'acc-cc', name: 'Conta', type: 'corrente', balance: cents(123456) })],
+      loadingAccounts: false, addAccount: vi.fn(), updateAccount: mockUpdateAccount, removeAccount: vi.fn(),
+    });
+    render(<AccountsManager uid="uid-test" />);
+
+    fireEvent.click(screen.getByTitle('Editar'));
+    expect(screen.getByDisplayValue('1234.56')).toBeInTheDocument();
+    fireEvent.click(screen.getByTitle('Salvar'));
+
+    await waitFor(() => {
+      expect(mockUpdateAccount).toHaveBeenCalledWith('acc-cc', { name: 'Conta', balance: 1234.56 });
+    });
+  });
 });
