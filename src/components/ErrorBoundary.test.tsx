@@ -34,7 +34,7 @@ describe('ErrorBoundary', () => {
         <Bomb boom />
       </ErrorBoundary>,
     );
-    expect(screen.getByRole('heading', { name: 'Anomalia Detetada' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Anomalia Detectada' })).toBeInTheDocument();
     expect(screen.queryByTestId('safe-child')).not.toBeInTheDocument();
   });
 
@@ -73,11 +73,11 @@ describe('ErrorBoundary', () => {
     }
 
     render(<Harness />);
-    expect(screen.getByRole('heading', { name: 'Anomalia Detetada' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Anomalia Detectada' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Reiniciar Módulo' }));
     expect(screen.getByTestId('safe-child')).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Anomalia Detetada' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Anomalia Detectada' })).not.toBeInTheDocument();
   });
 
   it('reseta automaticamente quando resetKey muda após um crash', () => {
@@ -86,7 +86,7 @@ describe('ErrorBoundary', () => {
         <Bomb boom />
       </ErrorBoundary>,
     );
-    expect(screen.getByRole('heading', { name: 'Anomalia Detetada' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Anomalia Detectada' })).toBeInTheDocument();
 
     // Navegação para outra página (resetKey muda) + child saudável → recupera.
     rerender(
@@ -95,6 +95,6 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>,
     );
     expect(screen.getByTestId('safe-child')).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Anomalia Detetada' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Anomalia Detectada' })).not.toBeInTheDocument();
   });
 });

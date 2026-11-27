@@ -39,7 +39,7 @@ describe('useImportActions', () => {
     const { result } = renderHook(() => useImportActions(null));
     const out = await result.current.handleImport([{ value: 10 } as Partial<Transaction>]);
     expect(out).toBeUndefined();
-    expect(mockToast.error).toHaveBeenCalledWith('Ficheiro vazio ou dados corrompidos.');
+    expect(mockToast.error).toHaveBeenCalledWith('Arquivo vazio ou dados corrompidos.');
     expect(mockSaveAll).not.toHaveBeenCalled();
   });
 
@@ -47,7 +47,7 @@ describe('useImportActions', () => {
     const { result } = renderHook(() => useImportActions(user));
     const out = await result.current.handleImport([]);
     expect(out).toBeUndefined();
-    expect(mockToast.error).toHaveBeenCalledWith('Ficheiro vazio ou dados corrompidos.');
+    expect(mockToast.error).toHaveBeenCalledWith('Arquivo vazio ou dados corrompidos.');
     expect(mockSaveAll).not.toHaveBeenCalled();
   });
 
