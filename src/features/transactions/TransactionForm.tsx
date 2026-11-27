@@ -316,7 +316,7 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
       setSaved(true);
       setTimeout(() => setSaved(false), 1200);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao guardar transação.');
+      setError(err instanceof Error ? err.message : 'Erro ao salvar transação.');
     } finally {
       setIsSubmitting(false);
     }
@@ -555,9 +555,9 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
               {saved ? (
                 <><CheckCircle className="w-4 h-4" /> Guardado!</>
               ) : isSubmitting ? (
-                <><span className="w-4 h-4 border-2 border-slate-900/50 border-t-slate-900 rounded-full animate-spin" /> A guardar...</>
+                <><span className="w-4 h-4 border-2 border-slate-900/50 border-t-slate-900 rounded-full animate-spin" /> Salvando...</>
               ) : (
-                <><Save className="w-4 h-4" /> {isEditing ? 'Atualizar' : 'Guardar'}</>
+                <><Save className="w-4 h-4" /> {isEditing ? 'Atualizar' : 'Salvar'}</>
               )}
             </button>
           </div>
