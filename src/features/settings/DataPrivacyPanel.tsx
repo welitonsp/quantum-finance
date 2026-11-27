@@ -26,6 +26,48 @@ const EVENT_LABELS: Record<string, string> = {
   portability:       'Portabilidade de dados',
 };
 
+/** Finalidade de cada consentimento, como o banco grava em `details`. */
+const CONSENT_PURPOSE_LABELS: Record<string, string> = {
+  ai:        'processamento por IA',
+  analytics: 'análise de uso',
+};
+
+interface ProcessingLogRow {
+  id:    string;
+  label: string;
+  entry: DataProcessingLogEntry;
+}
+
+function sameInstant(a: DataProcessingLogEntry, b: DataProcessingLogEntry): boolean {
+  if (!a.createdAt || !b.createdAt) return false;
+  return a.createdAt.toDate().getTime() === b.createdAt.toDate().getTime();
+}
+
+/**
+ * Um único "Salvar preferências" pode gerar um registro por finalidade (IA e
+ * análise de uso) no mesmo instante. Exibe esses registros como uma linha só,
+ * nomeando as finalidades, em vez de repetir "Consentimento atualizado".
+ */
+function buildProcessingLogRows(log: DataProcessingLogEntry[]): ProcessingLogRow[] {
+  const rows: Array<ProcessingLogRow & { purposes: string[] }> = [];
+  for (const entry of log) {
+    const purpose = entry.eventType === 'consent_granted' && entry.details
+      ? CONSENT_PURPOSE_LABELS[entry.details]
+      : undefined;
+    const prev = rows[rows.length - 1];
+    if (entry.eventType === 'consent_granted' && prev?.entry.eventType === 'consent_granted' && sameInstant(prev.entry, entry)) {
+      if (purpose && !prev.purposes.includes(purpose)) prev.purposes.push(purpose);
+      continue;
+    }
+    rows.push({ id: entry.id, label: EVENT_LABELS[entry.eventType] ?? entry.eventType, entry, purposes: purpose ? [purpose] : [] });
+  }
+  return rows.map(({ purposes, ...row }) => (
+    purposes.length > 0
+      ? { ...row, label: `Consentimento concedido: ${purposes.join(' e ')}` }
+      : row
+  ));
+}
+
 export default function DataPrivacyPanel({ uid }: Props) {
   const fieldId = useId();
   // ── Export / Delete state ──────────────────────────────────────────────────
@@ -174,7 +216,7 @@ export default function DataPrivacyPanel({ uid }: Props) {
               <div>
                 <span className="text-sm font-medium text-quantum-fg">Análise de uso</span>
                 <p className="text-xs text-quantum-fgMuted mt-0.5">
-                  Permite o uso dos seus dados para melhorias do produto (anonymizados).
+                  Permite o uso dos seus dados para melhorias do produto (anonimizados).
                 </p>
               </div>
             </label>
@@ -233,16 +275,16 @@ export default function DataPrivacyPanel({ uid }: Props) {
           <p className="text-sm text-quantum-fgMuted italic">Nenhum evento registrado ainda.</p>
         ) : (
           <ul className="space-y-2">
-            {processingLog.map(entry => (
+            {buildProcessingLogRows(processingLog).map(row => (
               <li
-                key={entry.id}
+                key={row.id}
                 className="flex items-start justify-between gap-3 text-sm py-2 border-b border-quantum-border/40 last:border-0"
               >
                 <span className="text-quantum-fg font-medium">
-                  {EVENT_LABELS[entry.eventType] ?? entry.eventType}
+                  {row.label}
                 </span>
                 <span className="text-quantum-fgMuted shrink-0 text-xs mt-0.5">
-                  {formatTs(entry)}
+                  {formatTs(row.entry)}
                 </span>
               </li>
             ))}
