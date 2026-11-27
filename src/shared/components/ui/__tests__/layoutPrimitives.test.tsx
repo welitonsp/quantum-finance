@@ -36,7 +36,7 @@ describe('PR 2 — primitivos de layout', () => {
   it('MetricCard exibe valor e variação', () => {
     render(<MetricCard label="Taxa" value="42" deltaPct={-3.2} />);
     expect(screen.getByText('42')).toBeTruthy();
-    expect(screen.getByText('3.2%')).toBeTruthy();
+    expect(screen.getByText('3,2%')).toBeTruthy();
   });
 
   it('FinancialCard formata centavos como BRL', () => {
