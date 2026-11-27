@@ -304,6 +304,22 @@ describe('SimulationCenter — buckets de mês', () => {
     expect(workerPostMessage.mock.calls[0]![0]).toMatchObject({ receitaMensalCents: 400000 });
     expect(screen.getByText(/R\$\s?4\.000/)).toBeInTheDocument();
   });
+
+  it('usa a média real, sem pisos artificiais de receita/despesa', async () => {
+    const small: Transaction[] = [
+      tx({ id: 's-in', type: 'entrada', category: 'Salário', value_cents: cents(30000), date: '2026-05-05' }),
+      tx({ id: 's-out', type: 'saida', value_cents: cents(5000), date: '2026-05-10' }),
+    ];
+
+    render(<SimulationCenter transactions={small} balances={emptyBalances} />);
+
+    await waitFor(() => expect(workerPostMessage).toHaveBeenCalledTimes(1));
+    // Antes: receita forçada a R$ 1.000 e despesa a R$ 500.
+    expect(workerPostMessage.mock.calls[0]![0]).toMatchObject({
+      receitaMensalCents: 30000,
+      despesaFixaCents:   Math.round(5000 * 0.65),
+    });
+  });
 });
 
 // ─── Dashboard "Hoje" ────────────────────────────────────────────────────────

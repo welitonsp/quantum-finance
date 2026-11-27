@@ -252,11 +252,11 @@ export default function GemeloFinanceiro({
 
     return {
       receitaMensalCents:  avgReceita,
-      despesaFixaCents:    Math.round(Math.max(avgDespesa, 50000) * 0.65),
-      mediaVariavelCents:  Math.round(Math.max(avgDespesa, 50000) * 0.35),
-      desvioVariavelCents: Math.max(stddev, Math.round(avgDespesa * 0.08), 5000),
+      despesaFixaCents:    Math.round(avgDespesa * 0.65),
+      mediaVariavelCents:  Math.round(avgDespesa * 0.35),
+      desvioVariavelCents: Math.max(stddev, Math.round(avgDespesa * 0.08)),
       receitaTotalCents:   avgReceita,
-      despesaTotalCents:   Math.max(avgDespesa, 50000),
+      despesaTotalCents:   avgDespesa,
     };
   }, [transactions]);
 

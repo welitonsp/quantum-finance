@@ -204,10 +204,10 @@ export default function SimulationCenter({ transactions, balances }: Props) {
     const stddev     = Math.round(Math.sqrt(variance));
 
     return {
-      receitaMensalCents:  Math.max(avgReceita, 100000),
-      despesaFixaCents:    Math.round(Math.max(avgDespesa, 50000) * 0.65),
-      mediaVariavelCents:  Math.round(Math.max(avgDespesa, 50000) * 0.35),
-      desvioVariavelCents: Math.max(stddev, Math.round(avgDespesa * 0.08), 5000),
+      receitaMensalCents:  avgReceita,
+      despesaFixaCents:    Math.round(avgDespesa * 0.65),
+      mediaVariavelCents:  Math.round(avgDespesa * 0.35),
+      desvioVariavelCents: Math.max(stddev, Math.round(avgDespesa * 0.08)),
     };
   }, [transactions]);
 
