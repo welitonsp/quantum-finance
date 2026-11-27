@@ -123,6 +123,23 @@ export default function DataPrivacyPanel({ uid }: Props) {
     }
   };
 
+  // Escape durante a confirmação de exclusão: cancela o passo de confirmação
+  // (ou é ignorado enquanto a exclusão está em andamento). Capture-phase em
+  // `window` + preventDefault para que o modal pai (CategorySettings) não feche.
+  useEffect(() => {
+    if (!showDeleteConfirm && !isDeleting) return undefined;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.isComposing) return;
+      e.preventDefault();
+      if (isDeleting) return;
+      setShowDeleteConfirm(false);
+      setConfirmText('');
+      setDeleteError(null);
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [showDeleteConfirm, isDeleting]);
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (

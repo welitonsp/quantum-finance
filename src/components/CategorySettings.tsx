@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { X, Plus, Trash2, Settings, Tag, Search, Loader2, ArrowRight } from 'lucide-react';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import toast from 'react-hot-toast';
@@ -30,6 +30,30 @@ export default function CategorySettings({ uid, onClose }: Props) {
   const [keyword,  setKeyword]  = useState('');
   const [category, setCategory] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const titleId = useId();
+
+  // Refs: o listener de Escape lê sempre o valor atual sem re-inscrever a cada
+  // render do pai (onClose costuma ser uma arrow inline).
+  const onCloseRef  = useRef(onClose);
+  const isSavingRef = useRef(isSaving);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  useEffect(() => { isSavingRef.current = isSaving; }, [isSaving]);
+  // Clique no backdrop só fecha se o mousedown também começou nele (evita fechar
+  // ao arrastar uma seleção de texto de dentro de um input para fora do painel).
+  const pointerDownOnBackdrop = useRef(false);
+
+  // Escape fecha o modal enquanto estiver montado. Ignorado durante salvamento,
+  // composição IME ou quando um filho já tratou a tecla (preventDefault).
+  useEffect(() => {
+    if (!uid) return undefined;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.isComposing || e.defaultPrevented) return;
+      if (isSavingRef.current) return;
+      onCloseRef.current();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [uid]);
 
   if (!uid) return null;
 
@@ -63,8 +87,23 @@ export default function CategorySettings({ uid, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-quantum-bg/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-quantum-card w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl border border-quantum-border zoom-in-95 flex flex-col max-h-[90vh]">
+    <div
+      role="presentation"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-quantum-bg/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+      onMouseDown={(e) => { pointerDownOnBackdrop.current = e.target === e.currentTarget; }}
+      onClick={(e) => {
+        const startedOnBackdrop = pointerDownOnBackdrop.current;
+        pointerDownOnBackdrop.current = false;
+        if (e.target !== e.currentTarget || !startedOnBackdrop || isSaving) return;
+        onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-quantum-card w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl border border-quantum-border zoom-in-95 flex flex-col max-h-[90vh]"
+      >
 
         <div className="flex items-center justify-between p-6 border-b border-quantum-border/50 bg-quantum-card/50">
           <div className="flex items-center gap-4">
@@ -72,7 +111,7 @@ export default function CategorySettings({ uid, onClose }: Props) {
               <Settings className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-quantum-fg">Motor de Categorização</h2>
+              <h2 id={titleId} className="text-xl font-black text-quantum-fg">Motor de Categorização</h2>
               <p className="text-sm text-quantum-fgMuted font-medium mt-1">Regras automáticas para novas movimentações</p>
             </div>
           </div>
