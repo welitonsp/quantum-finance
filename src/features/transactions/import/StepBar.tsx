@@ -1,7 +1,7 @@
 import React from 'react';
 import type { ImportStatus } from './importTypes';
 
-const STEPS = ['Ficheiro', 'Categorizar', 'Pré-visualizar', 'Importar'];
+const STEPS = ['Arquivo', 'Categorizar', 'Pré-visualizar', 'Importar'];
 const STEP_MAP: Partial<Record<ImportStatus, number>> = {
   parsing: 0, col_mapping: 0, ai_processing: 1, preview: 2, importing: 3,
 };

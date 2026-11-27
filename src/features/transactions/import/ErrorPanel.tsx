@@ -11,7 +11,7 @@ export function ErrorPanel({ message, onRetry }: { message: string; onRetry: () 
     >
       <AlertTriangle className="w-14 h-14 text-quantum-red" />
       <div>
-        <h4 className="text-base font-bold text-quantum-fg mb-2">Interferência Detetada</h4>
+        <h4 className="text-base font-bold text-quantum-fg mb-2">Interferência Detectada</h4>
         <p className="text-xs text-quantum-fgMuted bg-quantum-redDim border border-quantum-red/20 p-3 rounded-xl max-w-sm mx-auto leading-relaxed">
           {message}
         </p>

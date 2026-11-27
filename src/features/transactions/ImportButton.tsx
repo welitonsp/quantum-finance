@@ -212,7 +212,7 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
       const { fresh, duplicates } = deduplicate(parsed);
       const parsedStats = buildImportStats(parsed, file, duplicates, fresh.length);
       if (fresh.length === 0) {
-        toast('Todos os registos já existem no Cofre.', { icon: '🛡️' });
+        toast('Todos os registros já existem no Cofre.', { icon: '🛡️' });
         setStats(parsedStats);
         setStatus('success');
         setTimeout(() => closeModal(), 3000);
@@ -315,7 +315,7 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
     <>
       <button ref={triggerRef} onClick={() => setIsOpen(true)} aria-label="Importar arquivo de extrato" className="btn-quantum-secondary flex items-center gap-2">
         <FileUp className="w-4 h-4" aria-hidden="true" />
-        <span className="hidden sm:inline">Importar Ficheiro</span>
+        <span className="hidden sm:inline">Importar Arquivo</span>
       </button>
 
       {typeof document !== 'undefined' && createPortal(

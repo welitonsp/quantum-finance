@@ -2,13 +2,13 @@ import { Loader2, BrainCircuit } from 'lucide-react';
 import type { LoadingStatus } from './importTypes';
 
 const LOADING_MSGS: Record<LoadingStatus, { title: string; sub: string }> = {
-  parsing:       { title: 'A Extrair Dados...',      sub: 'A ler e filtrar duplicados do extrato.' },
-  ai_processing: { title: 'Deep Scan Gemini Ativo',  sub: 'A categorizar despesas desconhecidas com IA.' },
-  importing:     { title: 'A Sincronizar com o Cofre', sub: 'A gravar as transações no Firestore.' },
+  parsing:       { title: 'Extraindo Dados...',      sub: 'Lendo e filtrando duplicados do extrato.' },
+  ai_processing: { title: 'Deep Scan Gemini Ativo',  sub: 'Categorizando despesas desconhecidas com IA.' },
+  importing:     { title: 'Sincronizando com o Cofre', sub: 'Gravando as transações no Cofre.' },
 };
 
 export function LoadingPanel({ status }: { status: LoadingStatus }) {
-  const msg = LOADING_MSGS[status] ?? { title: 'A processar...', sub: '' };
+  const msg = LOADING_MSGS[status] ?? { title: 'Processando...', sub: '' };
   return (
     <div role="status" aria-live="polite" className="py-14 flex flex-col items-center text-center gap-4">
       <div className="relative">
