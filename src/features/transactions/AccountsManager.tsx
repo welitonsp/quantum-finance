@@ -9,6 +9,16 @@ import { fromCentavos } from '../../shared/schemas/financialSchemas';
 import { toCentavos } from '../../shared/types/money';
 import type { Account } from '../../shared/types/transaction';
 
+/**
+ * Lê o valor de um <input type="number">. O navegador sempre entrega esse
+ * valor com ponto decimal e sem separador de milhar (ex.: "1500.5"), então ele
+ * vai direto para Decimal. Remover os pontos (heurística BRL) transformava
+ * R$ 1.500,50 em R$ 150.050,00.
+ */
+function parseNumberInputCents(raw: string) {
+  return toCentavos(new Decimal(raw.trim()));
+}
+
 type AccountType = 'corrente' | 'poupanca' | 'investimento' | 'cartao' | 'divida';
 
 interface Props {
@@ -54,9 +64,10 @@ export default function AccountsManager({ uid }: Props) {
     if (!editName.trim()) { setEditingId(null); return; }
     let parsedBalance: number;
     try {
-      parsedBalance = fromCentavos(toCentavos(editBalance.replace(/\./g, '').replace(',', '.')));
+      parsedBalance = fromCentavos(parseNumberInputCents(editBalance));
     } catch {
-      setEditingId(null);
+      // Saldo inválido (ex.: campo vazio): mantém a edição aberta para correção
+      // em vez de descartar silenciosamente o nome digitado.
       return;
     }
     try {
@@ -65,7 +76,7 @@ export default function AccountsManager({ uid }: Props) {
         : parsedBalance;
       await updateAccount(acc.id, { name: editName.trim(), balance: finalBalance });
     } catch (err) {
-      logSanitizedFirebaseError('credit_card_update', err);
+      logSanitizedFirebaseError('account_update', err);
     } finally {
       setEditingId(null);
     }
@@ -98,7 +109,7 @@ export default function AccountsManager({ uid }: Props) {
 
     let parsedBalance: number;
     try {
-      parsedBalance = fromCentavos(toCentavos(balance.replace(/\./g, '').replace(',', '.')));
+      parsedBalance = fromCentavos(parseNumberInputCents(balance));
     } catch {
       return;
     }
@@ -154,8 +165,8 @@ export default function AccountsManager({ uid }: Props) {
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-xl font-black text-quantum-fg tracking-tight">As Suas Contas</h2>
-          <p className="text-xs text-quantum-fgMuted dark:text-quantum-fgMuted mt-1">Gira o seu património e veja a sua evolução real.</p>
+          <h2 className="text-xl font-black text-quantum-fg tracking-tight">Suas Contas</h2>
+          <p className="text-xs text-quantum-fgMuted dark:text-quantum-fgMuted mt-1">Gerencie seu patrimônio e acompanhe sua evolução real.</p>
         </div>
         <button
           onClick={() => setIsModalOpen(true)}
@@ -167,7 +178,7 @@ export default function AccountsManager({ uid }: Props) {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white dark:bg-quantum-card/50 p-5 rounded-2xl border border-slate-200 dark:border-quantum-border shadow-sm">
-          <p className="text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-1">Património Líquido</p>
+          <p className="text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-1">Patrimônio Líquido</p>
           <p className={`text-2xl font-black ${patrimonioLiquido >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
             {formatCurrency(patrimonioLiquido)}
           </p>
@@ -188,7 +199,7 @@ export default function AccountsManager({ uid }: Props) {
         <div className="bg-white dark:bg-quantum-card/30 border-2 border-dashed border-slate-200 dark:border-quantum-border rounded-3xl p-10 text-center">
           <Wallet className="w-12 h-12 mx-auto text-quantum-fg dark:text-slate-700 mb-4" />
           <h3 className="text-lg font-bold text-quantum-fg">Nenhuma conta encontrada</h3>
-          <p className="text-sm text-quantum-fgMuted mt-2">Comece por adicionar a sua conta à ordem ou os seus investimentos.</p>
+          <p className="text-sm text-quantum-fgMuted mt-2">Comece adicionando sua conta corrente ou seus investimentos.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -260,7 +271,7 @@ export default function AccountsManager({ uid }: Props) {
                   ref={modalFirstInputRef}
                   id={`${fieldId}-name`}
                   type="text" required value={name} onChange={e => setName(e.target.value)}
-                  placeholder="Ex: Nubank, Binance, BPI..."
+                  placeholder="Ex: Nubank, Itaú, Binance..."
                   className="w-full bg-slate-50 dark:bg-quantum-bgSecondary border border-slate-200 dark:border-quantum-border rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-quantum-fg"
                 />
               </div>

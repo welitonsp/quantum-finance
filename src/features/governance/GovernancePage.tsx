@@ -84,7 +84,7 @@ export default function GovernancePage({ uid }: Props) {
         </div>
         <div>
           <h1 className="text-xl font-black text-quantum-fg">Cofre & Governança</h1>
-          <p className="text-xs text-quantum-fgMuted">LGPD, auditoria, histórico append-only e permissões de IA</p>
+          <p className="text-xs text-quantum-fgMuted">Privacidade (LGPD), auditoria, histórico de alterações e permissões da IA</p>
         </div>
       </div>
 
@@ -114,7 +114,7 @@ export default function GovernancePage({ uid }: Props) {
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span className="text-xs font-bold text-quantum-fg">Rastreabilidade</span>
               </div>
-              <p className="text-[10px] text-quantum-fgMuted leading-relaxed">100% das transações com histórico append-only imutável (Modelo A)</p>
+              <p className="text-[10px] text-quantum-fgMuted leading-relaxed">Toda alteração nas suas transações fica registrada em um histórico que não pode ser editado (ele só é apagado se você excluir sua conta)</p>
             </div>
             {/* Pilar 2: IA Verificável */}
             <div className="bg-quantum-bg/60 border border-quantum-border rounded-xl p-3.5">
@@ -139,15 +139,15 @@ export default function GovernancePage({ uid }: Props) {
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span className="text-xs font-bold text-quantum-fg">LGPD Ativo</span>
               </div>
-              <p className="text-[10px] text-quantum-fgMuted leading-relaxed">Hard-delete LGPD disponível — exclusão completa via Admin SDK</p>
+              <p className="text-[10px] text-quantum-fgMuted leading-relaxed">Você pode baixar seus dados ou excluir sua conta a qualquer momento, conforme a LGPD</p>
             </div>
             {/* Pilar 4: Idempotência */}
             <div className="bg-quantum-bg/60 border border-quantum-border rounded-xl p-3.5">
               <div className="flex items-center gap-2 mb-1.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span className="text-xs font-bold text-quantum-fg">Idempotência</span>
+                <span className="text-xs font-bold text-quantum-fg">Sem Duplicidade</span>
               </div>
-              <p className="text-[10px] text-quantum-fgMuted leading-relaxed">Zero operações duplicadas — chave de idempotência por callable</p>
+              <p className="text-[10px] text-quantum-fgMuted leading-relaxed">Transações e transferências são gravadas uma única vez, mesmo se você tocar duas vezes ou a conexão cair</p>
             </div>
           </div>
         </div>
@@ -164,7 +164,7 @@ export default function GovernancePage({ uid }: Props) {
             <div>
               <p className="text-sm font-black text-quantum-fg">Histórico de Auditoria</p>
               <p className="text-xs text-quantum-fgMuted mt-0.5">
-                {recentCount} registro{recentCount !== 1 ? 's' : ''} recentes · Histórico append-only, imutável
+                {recentCount} registro{recentCount !== 1 ? 's' : ''} recentes · Histórico protegido contra alterações
               </p>
             </div>
             <button
@@ -230,7 +230,7 @@ export default function GovernancePage({ uid }: Props) {
             ))}
           </div>
           <p className="text-[10px] text-quantum-fgMuted mt-4 leading-relaxed border-t border-quantum-border/30 pt-3">
-            Conforme <span className="font-bold">Política Copilot IA — 2026-06-12</span>: toda feature com IA declara dados usados, auditoria, idempotência e requer confirmação humana para ações.
+            A IA nunca altera seus dados sozinha: toda ação sugerida precisa da sua confirmação e fica registrada na auditoria.
           </p>
         </div>
       </section>
@@ -363,7 +363,7 @@ export default function GovernancePage({ uid }: Props) {
           )}
           {!pushSupported && (
             <p className="text-[10px] text-quantum-fgMuted mt-3 border-t border-quantum-border/30 pt-3">
-              Requer navegador compatível, HTTPS e chave VAPID configurada (<code className="font-mono">VITE_FCM_VAPID_KEY</code>).
+              As notificações dependem de um navegador compatível e ainda não estão disponíveis em todos os aparelhos.
             </p>
           )}
         </div>
