@@ -1,6 +1,7 @@
 import { useMemo, memo } from 'react';
 import { TrendingDown, TrendingUp, Minus, AlertTriangle, ShieldCheck, Target, ChevronsUp } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { formatPercent, roundForDisplay } from '../utils/formatters';
 
 interface Props {
   savingsRate: number;
@@ -17,21 +18,29 @@ interface IntelItem {
 }
 
 export const IntelStrip = memo(({ savingsRate, debtRatio, goalProgress, savingsGoalPercent }: Props) => {
-  const items = useMemo((): IntelItem[] => [
-    savingsRate < 10
-      ? { c: 'red',     Icon: TrendingDown, title: 'Poupança Crítica',     body: `Apenas ${savingsRate.toFixed(1)}% retidos — meta mínima: ${savingsGoalPercent.toFixed(0)}%` }
-      : savingsRate >= savingsGoalPercent
-        ? { c: 'emerald', Icon: TrendingUp,   title: 'Poupança Sólida',      body: `${savingsRate.toFixed(1)}% da renda preservada mensalmente` }
-        : { c: 'amber',   Icon: Minus,        title: 'Poupança Moderada',    body: `${savingsRate.toFixed(1)}% retidos — amplie para ${savingsGoalPercent.toFixed(0)}%` },
-    debtRatio > 70
-      ? { c: 'red',     Icon: AlertTriangle, title: 'Renda Comprometida',   body: `${debtRatio.toFixed(0)}% em despesas — reduza fixos` }
-      : { c: 'emerald', Icon: ShieldCheck,   title: 'Despesas Controladas', body: `${debtRatio.toFixed(0)}% de comprometimento de renda` },
-    goalProgress < 50
-      ? { c: 'amber',   Icon: Target,        title: 'Meta Atrasada',        body: `${goalProgress.toFixed(0)}% concluído — revise cortes` }
-      : goalProgress >= 90
-        ? { c: 'emerald', Icon: ChevronsUp,  title: 'Meta Quase Batida',    body: `${goalProgress.toFixed(0)}% — no trilho certo` }
-        : { c: 'amber',   Icon: Target,      title: 'Progresso Parcial',    body: `${goalProgress.toFixed(0)}% da meta atingido este mês` },
-  ], [savingsRate, debtRatio, goalProgress, savingsGoalPercent]);
+  const items = useMemo((): IntelItem[] => {
+    // Classifica pelo mesmo valor arredondado que é exibido, para que o texto
+    // nunca contradiga o card perto dos limiares (ex.: 9,96 → "10,0%" não é "abaixo de 10%").
+    const savings = roundForDisplay(savingsRate, 1);
+    const goal    = roundForDisplay(savingsGoalPercent, 0);
+    const debt    = roundForDisplay(debtRatio, 0);
+    const prog    = roundForDisplay(goalProgress, 0);
+    return [
+      savings < 10
+        ? { c: 'red',     Icon: TrendingDown, title: 'Poupança Crítica',     body: `Apenas ${formatPercent(savings, 1)} retidos — meta mínima: ${formatPercent(goal, 0)}` }
+        : savings >= goal
+          ? { c: 'emerald', Icon: TrendingUp,   title: 'Poupança Sólida',      body: `${formatPercent(savings, 1)} da renda preservada mensalmente` }
+          : { c: 'amber',   Icon: Minus,        title: 'Poupança Moderada',    body: `${formatPercent(savings, 1)} retidos — amplie para ${formatPercent(goal, 0)}` },
+      debt > 70
+        ? { c: 'red',     Icon: AlertTriangle, title: 'Renda Comprometida',   body: `${formatPercent(debt, 0)} em despesas — reduza fixos` }
+        : { c: 'emerald', Icon: ShieldCheck,   title: 'Despesas Controladas', body: `${formatPercent(debt, 0)} de comprometimento de renda` },
+      prog < 50
+        ? { c: 'amber',   Icon: Target,        title: 'Meta Atrasada',        body: `${formatPercent(prog, 0)} concluído — revise cortes` }
+        : prog >= 90
+          ? { c: 'emerald', Icon: ChevronsUp,  title: 'Meta Quase Batida',    body: `${formatPercent(prog, 0)} — no trilho certo` }
+          : { c: 'amber',   Icon: Target,      title: 'Progresso Parcial',    body: `${formatPercent(prog, 0)} da meta atingido este mês` },
+    ];
+  }, [savingsRate, debtRatio, goalProgress, savingsGoalPercent]);
 
   const colorClasses: Record<string, string> = {
     red:     'border-l-red-500 bg-red-500/5 border-red-500/20 text-red-400',

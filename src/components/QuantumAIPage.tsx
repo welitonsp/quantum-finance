@@ -9,6 +9,7 @@ import { GeminiService } from '../features/ai-chat/GeminiService';
 import type { Transaction, ModuleBalances } from '../shared/types/transaction';
 import { getTransactionAbsCentavos, isExpense, isIncome, isInvoicePayment } from '../utils/transactionUtils';
 import { fromCentavos } from '../shared/types/money';
+import { formatCurrency, formatPercent } from '../utils/formatters';
 
 interface Props {
   transactions?: Transaction[];
@@ -171,11 +172,11 @@ function AnomaliesPanel({ transactions, currentMonth, currentYear }: AnomaliesPa
             <AlertTriangle className="w-4 h-4 text-quantum-red shrink-0" />
             <div>
               <p className="text-sm font-bold text-quantum-fg">{a.cat}</p>
-              <p className="text-xs text-quantum-fgMuted">Média 3 meses: R$ {a.mediaHist.toFixed(2)}</p>
+              <p className="text-xs text-quantum-fgMuted">Média 3 meses: {formatCurrency(a.mediaHist)}</p>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-sm font-bold text-quantum-red">R$ {a.totalAtual.toFixed(2)}</p>
+            <p className="text-sm font-bold text-quantum-red">{formatCurrency(a.totalAtual)}</p>
             <p className="text-xs text-quantum-red font-mono">+{a.desvio}%</p>
           </div>
         </motion.div>
@@ -205,7 +206,7 @@ function FixedExpensesRisk({ balances, recurringTotal }: FixedExpensesRiskProps)
       <div className="mb-3">
         <div className="flex justify-between text-xs text-quantum-fgMuted mb-1.5">
           <span>Despesas Fixas vs Receitas</span>
-          <span className={`font-bold text-${color}`}>{riskPct.toFixed(1)}%</span>
+          <span className={`font-bold text-${color}`}>{formatPercent(riskPct)}</span>
         </div>
         <div className="progress-quantum">
           <motion.div
@@ -218,11 +219,11 @@ function FixedExpensesRisk({ balances, recurringTotal }: FixedExpensesRiskProps)
       <div className="grid grid-cols-2 gap-3 text-sm">
         <div className="bg-quantum-bgSecondary rounded-xl p-3">
           <p className="text-xs text-quantum-fgMuted mb-1">Fixas/Mês</p>
-          <p className="font-bold font-mono text-quantum-fg">R$ {recurringTotal.toFixed(2)}</p>
+          <p className="font-bold font-mono text-quantum-fg">{formatCurrency(recurringTotal)}</p>
         </div>
         <div className="bg-quantum-bgSecondary rounded-xl p-3">
           <p className="text-xs text-quantum-fgMuted mb-1">Receitas/Mês</p>
-          <p className="font-bold font-mono text-quantum-fg">R$ {receitas.toFixed(2)}</p>
+          <p className="font-bold font-mono text-quantum-fg">{formatCurrency(receitas)}</p>
         </div>
       </div>
     </div>
@@ -321,8 +322,6 @@ export default function QuantumAIPage({
   const burn    = useMemo(() => calcBurnMetrics(allTransactions, month, year), [allTransactions, month, year]);
   const topCats = useMemo(() => groupByCategory(transactions).slice(0, 5), [transactions]);
 
-  const fmt = (v: number) => `R$ ${Number(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
   const burnColor  = burn.ritmoDiario === 0 ? 'green' : burn.saldoProjectado >= 0 ? 'gold' : 'red';
   const riscoColor = burn.projecaoFinal <= burn.receitasMes ? 'green' : 'red';
 
@@ -345,11 +344,11 @@ export default function QuantumAIPage({
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon={Flame}       label="Ritmo Diário"         value={fmt(burn.ritmoDiario)}    sub={`${burn.diasRestantes} dias restantes`}        color={burnColor  as KpiColor} glow />
-        <KpiCard icon={TrendingDown} label="Projeção Fim do Mês" value={fmt(burn.projecaoFinal)}  sub={`Gasto atual: ${fmt(burn.despesasMes)}`}        color={riscoColor as KpiColor} glow />
-        <KpiCard icon={Target}      label="Receitas do Mês"      value={fmt(burn.receitasMes)}    sub="Total entradas"                                 color="green" />
+        <KpiCard icon={Flame}       label="Ritmo Diário"         value={formatCurrency(burn.ritmoDiario)}    sub={`${burn.diasRestantes} dias restantes`}        color={burnColor  as KpiColor} glow />
+        <KpiCard icon={TrendingDown} label="Projeção Fim do Mês" value={formatCurrency(burn.projecaoFinal)}  sub={`Gasto atual: ${formatCurrency(burn.despesasMes)}`}        color={riscoColor as KpiColor} glow />
+        <KpiCard icon={Target}      label="Receitas do Mês"      value={formatCurrency(burn.receitasMes)}    sub="Total entradas"                                 color="green" />
         <KpiCard icon={burn.saldoProjectado >= 0 ? TrendingUp : TrendingDown}
-          label="Saldo Projetado" value={fmt(burn.saldoProjectado)}
+          label="Saldo Projetado" value={formatCurrency(burn.saldoProjectado)}
           sub={burn.saldoProjectado >= 0 ? 'Zona Segura' : '⚠️ Zona de Perigo'}
           color={burn.saldoProjectado >= 0 ? 'green' : 'red'} glow />
       </div>
@@ -379,7 +378,7 @@ export default function QuantumAIPage({
                 <motion.div key={c.cat} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}>
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-quantum-fg font-medium">{c.cat}</span>
-                    <span className="text-quantum-accent font-mono font-bold">{fmt(c.total)}</span>
+                    <span className="text-quantum-accent font-mono font-bold">{formatCurrency(c.total)}</span>
                   </div>
                   <div className="progress-quantum">
                     <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8, delay: i * 0.05 }} className="progress-quantum-fill" />
