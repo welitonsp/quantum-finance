@@ -69,7 +69,7 @@ export function TransactionSummaryBar({
 
       <div className="w-px h-4 bg-quantum-border shrink-0" />
       <span className="text-quantum-fgMuted shrink-0">
-        Resultado filtrado/carregado: <span className="font-black text-quantum-fg">{stats.count}</span> registos
+        Resultado filtrado/carregado: <span className="font-black text-quantum-fg">{stats.count}</span> registros
       </span>
       {loadedCount !== undefined && (
         <>

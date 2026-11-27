@@ -79,7 +79,7 @@ export default function RecurringManager({ uid }: Props) {
       setNewDueDay(1); setNewDueMonth(1);
     } catch (err) {
       logSanitizedFirebaseError('recurring_create', err);
-      toast.error('Erro na encriptação da despesa.');
+      toast.error('Erro na criptografia da despesa.');
     } finally {
       setIsProcessing(false);
     }
@@ -108,7 +108,7 @@ export default function RecurringManager({ uid }: Props) {
     if (!itemToDelete) return;
     try {
       await removeRecurring(itemToDelete.id);
-      toast.success('Contrato eliminado.');
+      toast.success('Contrato excluído.');
       setItemToDelete(null);
     } catch {
       toast.error('Erro ao remover o contrato.');
@@ -311,7 +311,7 @@ export default function RecurringManager({ uid }: Props) {
 
               <div className="pt-4">
                 <button type="submit" disabled={isProcessing} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-[0_0_15px_rgba(8,145,178,0.3)] disabled:opacity-50 active:scale-[0.98]">
-                  {isProcessing ? 'A Processar...' : 'Guardar Compromisso'}
+                  {isProcessing ? 'Processando...' : 'Salvar Compromisso'}
                 </button>
               </div>
             </form>
@@ -319,7 +319,7 @@ export default function RecurringManager({ uid }: Props) {
         </div>
       )}
 
-      {/* Modal: Confirmar Eliminação */}
+      {/* Modal: Confirmar Exclusão */}
       {itemToDelete && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-quantum-bg/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-quantum-card border border-quantum-border rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95">
@@ -328,7 +328,7 @@ export default function RecurringManager({ uid }: Props) {
                 <AlertTriangle className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-quantum-fg">Anular Contrato?</h3>
+                <h3 className="text-lg font-bold text-quantum-fg">Excluir Contrato?</h3>
                 <p className="text-xs text-quantum-fgMuted mt-1">Ação irreversível.</p>
               </div>
             </div>
@@ -340,7 +340,7 @@ export default function RecurringManager({ uid }: Props) {
 
             <div className="flex gap-3">
               <button onClick={() => setItemToDelete(null)} className="flex-1 bg-quantum-bgSecondary hover:bg-slate-700 text-quantum-fg font-bold py-3 rounded-xl transition-colors">Cancelar</button>
-              <button onClick={() => void handleDelete()} className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl transition-colors shadow-[0_0_15px_rgba(239,68,68,0.3)]">Eliminar</button>
+              <button onClick={() => void handleDelete()} className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl transition-colors shadow-[0_0_15px_rgba(239,68,68,0.3)]">Excluir</button>
             </div>
           </div>
         </div>
