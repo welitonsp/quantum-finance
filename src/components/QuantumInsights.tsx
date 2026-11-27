@@ -1,5 +1,6 @@
 import { TriangleAlert, ShieldAlert, Target, TrendingUp, Info, BrainCircuit, type LucideIcon } from 'lucide-react';
 import type { FinancialMetrics } from '../hooks/useFinancialMetrics';
+import { formatNumber, formatPercent } from '../utils/formatters';
 
 interface Props {
   metrics: FinancialMetrics | null;
@@ -25,7 +26,7 @@ export default function QuantumInsights({ metrics, loading }: Props) {
       color: 'text-quantum-red',
       bg:    'bg-red-500/10',
       title: 'Taxa de Poupança Crítica',
-      desc:  `A sua taxa de poupança (${metrics.taxaPoupanca.toFixed(1)}%) está abaixo do limite seguro de 20%. Reveja os seus gastos supérfluos.`,
+      desc:  `Sua taxa de poupança (${formatPercent(metrics.taxaPoupanca)}) está abaixo do limite mínimo de 10%. Revise seus gastos supérfluos.`,
     });
   }
 
@@ -35,7 +36,7 @@ export default function QuantumInsights({ metrics, loading }: Props) {
       color: 'text-quantum-red',
       bg:    'bg-red-500/10',
       title: 'Endividamento Alto',
-      desc:  `${metrics.endividamento.toFixed(1)}% do seu património está corroído por dívidas. Pare de usar crédito e priorize abater o passivo.`,
+      desc:  `${formatPercent(metrics.endividamento)} do seu patrimônio está comprometido com dívidas. Pare de usar crédito e priorize abater o passivo.`,
     });
   }
 
@@ -45,7 +46,7 @@ export default function QuantumInsights({ metrics, loading }: Props) {
       color: 'text-orange-400',
       bg:    'bg-orange-500/10',
       title: 'Reserva de Sobrevivência Baixa',
-      desc:  `Os seus ativos líquidos cobrem apenas ${metrics.reservaMeses.toFixed(1)} meses do seu custo de vida. Tente acumular até chegar aos 6 meses.`,
+      desc:  `Seus ativos líquidos cobrem apenas ${formatNumber(metrics.reservaMeses)} meses do seu custo de vida. Tente acumular até chegar a 6 meses.`,
     });
   }
 
@@ -55,7 +56,7 @@ export default function QuantumInsights({ metrics, loading }: Props) {
       color: 'text-orange-400',
       bg:    'bg-orange-500/10',
       title: 'Comprometimento de Renda',
-      desc:  `${metrics.comprometimento.toFixed(1)}% do seu salário já está gasto em assinaturas e contas fixas. Evite assumir novas mensalidades.`,
+      desc:  `${formatPercent(metrics.comprometimento)} do seu salário já está comprometido com assinaturas e contas fixas. Evite assumir novas mensalidades.`,
     });
   }
 
@@ -65,7 +66,7 @@ export default function QuantumInsights({ metrics, loading }: Props) {
       color: 'text-quantum-accent',
       bg:    'bg-emerald-500/10',
       title: 'Saúde Financeira de Elite',
-      desc:  'Excelente disciplina! Tem superávit, guarda uma ótima fatia do salário e tem a dívida controlada. Continue a investir.',
+      desc:  'Excelente disciplina! Você tem superávit, guarda uma ótima fatia do salário e mantém a dívida sob controle. Continue investindo.',
     });
   }
 
@@ -74,8 +75,8 @@ export default function QuantumInsights({ metrics, loading }: Props) {
       icon:  Info,
       color: 'text-cyan-400',
       bg:    'bg-cyan-500/10',
-      title: 'A Alimentar o Motor Quântico',
-      desc:  'Continue a registar as suas contas, transações e despesas fixas para a Inteligência Artificial gerar diagnósticos precisos.',
+      title: 'Alimentando o Motor Quântico',
+      desc:  'Continue registrando suas contas, transações e despesas fixas para a Inteligência Artificial gerar diagnósticos precisos.',
     });
   }
 
