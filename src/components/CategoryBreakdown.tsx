@@ -1,6 +1,6 @@
 import { useMemo, memo } from 'react';
 import { BarChart2, Info } from 'lucide-react';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, formatPercent } from '../utils/formatters';
 import type { Transaction } from '../shared/types/transaction';
 import { getTransactionAbsCentavos, isIncome as checkIncome } from '../utils/transactionUtils';
 import { fromCentavos } from '../shared/types/money';
@@ -75,7 +75,7 @@ export const CategoryBreakdown = memo(({ transactions, categories = [] }: Props)
                 </div>
                 <div className="flex gap-3 items-baseline">
                   <span className="text-xs text-quantum-fgMuted font-mono">{formatCurrency(cat.value)}</span>
-                  <span className="text-sm font-bold text-quantum-fg font-mono">{cat.pct.toFixed(0)}%</span>
+                  <span className="text-sm font-bold text-quantum-fg font-mono">{formatPercent(cat.pct, 0)}</span>
                 </div>
               </div>
               <div className="h-2 bg-quantum-bgSecondary rounded-full overflow-hidden">

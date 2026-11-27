@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import { Landmark } from 'lucide-react';
 import { formatBRL, toCentavos } from '../../shared/types/money';
 import type { FinancialMetrics } from '../../hooks/useFinancialMetrics';
+import { formatNumber } from '../../utils/formatters';
 
 interface Props {
   metrics: FinancialMetrics | null;
@@ -36,7 +37,7 @@ export function PatrimonioHeroCard({ metrics, loading }: Props): JSX.Element | n
         )}
         {metrics.reservaMeses > 0 && (
           <span className="text-[10px] text-quantum-fgMuted">
-            Reserva <span className="font-bold text-quantum-fg">{metrics.reservaMeses.toFixed(1)}m</span>
+            Reserva <span className="font-bold text-quantum-fg">{formatNumber(metrics.reservaMeses, 1)}m</span>
           </span>
         )}
       </div>
