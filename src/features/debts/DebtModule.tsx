@@ -525,7 +525,7 @@ export default function DebtModule({ uid }: Props) {
             <TrendingDown className="w-6 h-6 text-red-400" />
           </div>
           <div>
-            <h1 className="text-xl font-black text-quantum-fg">Controlo de Dívidas</h1>
+            <h1 className="text-xl font-black text-quantum-fg">Controle de Dívidas</h1>
             <p className="text-xs text-quantum-fgMuted">Gerencie e acompanhe todas as suas dívidas</p>
           </div>
         </div>
@@ -569,7 +569,7 @@ export default function DebtModule({ uid }: Props) {
             <CreditCard className="w-10 h-10 text-quantum-fgMuted" />
           </div>
           <p className="font-bold text-quantum-fg">Nenhuma dívida ativa</p>
-          <p className="text-sm text-quantum-fgMuted">Adicione uma dívida para começar o controlo.</p>
+          <p className="text-sm text-quantum-fgMuted">Adicione uma dívida para começar o controle.</p>
         </div>
       ) : (
         <div className="space-y-3">
