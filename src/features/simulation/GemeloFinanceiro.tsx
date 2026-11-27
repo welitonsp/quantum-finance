@@ -46,7 +46,7 @@ interface SimStats {
   despesaTotalCents:   number;
 }
 
-function transactionMonthKey(tx: Transaction): string | null {
+export function transactionMonthKey(tx: Transaction): string | null {
   const rawDate = tx.date ?? (tx as Transaction & { createdAt?: string }).createdAt ?? '';
   if (typeof rawDate === 'string') {
     const match = rawDate.match(/^(\d{4})-(\d{2})/);
@@ -57,7 +57,7 @@ function transactionMonthKey(tx: Transaction): string | null {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function localMonthKey(date = new Date()): string {
+export function localMonthKey(date = new Date()): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
@@ -98,14 +98,6 @@ interface Props {
 
 const MONTH_NAMES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'] as const;
 const DEFAULTS = { inflacao: 5, corteDespesas: 0, aumentoSalario: 0, meses: 24 };
-const DEFAULT_STATS: SimStats = {
-  receitaMensalCents:  500000,
-  despesaFixaCents:    300000,
-  mediaVariavelCents:  120000,
-  desvioVariavelCents:  40000,
-  receitaTotalCents:   500000,
-  despesaTotalCents:   420000,
-};
 
 const PRESETS = [
   { label: 'Trocar de Emprego',   icon: TrendingUp, aumentoSalario: 25, corteDespesas: 0  },
@@ -219,7 +211,7 @@ export default function GemeloFinanceiro({
   recurringTasks, debts, creditCards, transactions, balances,
 }: Props) {
   const { isPrivacyMode }             = usePrivacy();
-  const { currentMonth, currentYear } = useNavigation();
+  const { currentMonth, currentYear, setCurrentPage } = useNavigation();
 
   const [inflacao,       setInflacao]       = useState(DEFAULTS.inflacao);
   const [corteDespesas,  setCorteDespesas]  = useState(DEFAULTS.corteDespesas);
@@ -232,8 +224,11 @@ export default function GemeloFinanceiro({
   const workerRef   = useRef<Worker | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const histStats = useMemo<SimStats>(() => {
-    if (!transactions || transactions.length === 0) return DEFAULT_STATS;
+  // null = sem histórico suficiente para simular (sem transações, ou nenhum mês
+  // com receita/despesa de consumo). Nunca cair em números de exemplo: o Gêmeo
+  // mostraria projeções fictícias como se fossem do usuário.
+  const histStats = useMemo<SimStats | null>(() => {
+    if (!transactions || transactions.length === 0) return null;
 
     const byMonth: Record<string, { r: number; d: number }> = {};
     const currentMonthKey = localMonthKey();
@@ -248,6 +243,7 @@ export default function GemeloFinanceiro({
     });
 
     const months = Object.values(byMonth);
+    if (!months.some(m => m.r > 0 || m.d > 0)) return null;
     const n = Math.max(months.length, 1);
     const avgReceita = Math.round(months.reduce((s, m) => s + m.r, 0) / n);
     const avgDespesa = Math.round(months.reduce((s, m) => s + m.d, 0) / n);
@@ -269,28 +265,37 @@ export default function GemeloFinanceiro({
     debts,
     creditCards,
     transactions,
-    historicalIncomeCents:  histStats.receitaTotalCents as Centavos,
-    historicalExpenseCents: histStats.despesaTotalCents as Centavos,
+    historicalIncomeCents:  (histStats?.receitaTotalCents ?? 0) as Centavos,
+    historicalExpenseCents: (histStats?.despesaTotalCents ?? 0) as Centavos,
   });
 
   const saldoCents = toCentavos(balances?.geral?.saldo ?? 0);
 
+  // Compromissos reais (recorrentes, dívidas, parcelas de cartão) bastam para
+  // simular, mesmo sem transações; o histórico entra só como fallback.
+  const hasCommitments = dna.fixedIncomeCents > 0
+    || dna.fixedExpensesCents > 0
+    || dna.debtPaymentsCents > 0
+    || dna.cardCommittedCents > 0;
+  const canSimulate = histStats !== null || hasCommitments;
+
   const workerInputs = useMemo(() => {
+    if (!canSimulate) return null;
     const receitaMensalCents = dna.fixedIncomeCents > 0
       ? dna.fixedIncomeCents
-      : histStats.receitaMensalCents;
+      : (histStats?.receitaMensalCents ?? 0);
     const despesaFixaCents   = dna.fixedExpensesCents + dna.debtPaymentsCents + dna.cardCommittedCents;
     const mediaVariavelCents = Math.max(
       dna.discretionaryCents,
-      histStats.mediaVariavelCents - despesaFixaCents,
+      (histStats?.mediaVariavelCents ?? 0) - despesaFixaCents,
     );
     return {
       receitaMensalCents,
       despesaFixaCents,
       mediaVariavelCents: Math.max(0, mediaVariavelCents),
-      desvioVariavelCents: histStats.desvioVariavelCents,
+      desvioVariavelCents: histStats?.desvioVariavelCents ?? 0,
     };
-  }, [dna, histStats]);
+  }, [canSimulate, dna, histStats]);
 
   useEffect(() => {
     const worker = new MonteCarloWorker() as Worker;
@@ -315,6 +320,17 @@ export default function GemeloFinanceiro({
   }, []);
 
   const runSimulation = useCallback(() => {
+    if (!workerInputs) {
+      // Entradas sumiram (ex.: dados apagados): cancela execução pendente e
+      // descarta o resultado anterior para não exibir uma simulação obsoleta.
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      setResult(null);
+      setIsCalculating(false);
+      return;
+    }
     if (!workerRef.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
@@ -372,6 +388,44 @@ export default function GemeloFinanceiro({
   const ProbIcon = prob === null ? Dna : prob >= 60 ? ShieldCheck : AlertTriangle;
 
   const netPositive = dna.netMonthlyCents >= 0;
+
+  if (!canSimulate) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+        className="max-w-[1800px] mx-auto px-4 md:px-6 py-8 space-y-6"
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+            <Dna className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-xl font-black text-quantum-fg tracking-tight">Gêmeo Financeiro</h1>
+            <p className="text-xs text-quantum-fgMuted uppercase tracking-wider font-medium">Digital Twin · Compromissos reais · Monte Carlo</p>
+          </div>
+        </div>
+        <div
+          role="status"
+          className="bg-quantum-bg/90 backdrop-blur-2xl border border-white/8 rounded-2xl p-10 flex flex-col items-center text-center gap-4"
+        >
+          <Info className="w-8 h-8 text-quantum-fgMuted" />
+          <p className="text-sm font-bold text-quantum-fg">Dados insuficientes para simular</p>
+          <p className="text-xs text-quantum-fgMuted max-w-md">
+            Registre ou importe suas transações para ver seu Gêmeo Financeiro.
+          </p>
+          <button
+            type="button"
+            onClick={() => setCurrentPage('history')}
+            className="px-4 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-cyan-400 rounded-xl text-sm font-bold transition-all"
+          >
+            Ir para Movimentações
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div

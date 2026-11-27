@@ -129,6 +129,17 @@ export default function DashboardContent({
   // Shared transaction set used by both forecast and budgets
   const txSet = allTransactions.length > 0 ? allTransactions : transactions;
 
+  // Estado dos dados financeiros (mesma condição do OnboardingWizard: 0 contas e
+  // 0 transações). 'empty' só depois do primeiro snapshot — enquanto carrega não
+  // exibimos nem o estado neutro nem os alertas, para não piscar "Sem dados" para
+  // quem tem dados. Sem dados, nada de score, modo crise, risco de ruína ou
+  // "meta atrasada": esses números seriam fictícios.
+  // Limitação: só `loading` (transações) chega a este componente; o loading de
+  // contas fica em App.tsx (`loadingAccounts`).
+  const financialDataStatus: 'loading' | 'empty' | 'ready' =
+    accounts.length > 0 || txSet.length > 0 ? 'ready' : loading ? 'loading' : 'empty';
+  const hasFinancialData = financialDataStatus === 'ready';
+
   // Forecast driven by the full transaction set and live balance
   const forecast = useForecast(txSet, saldo);
 
@@ -284,7 +295,8 @@ export default function DashboardContent({
         receitas={receitas}
         despesas={despesas}
         incomeDelta={incomeDelta}
-        score={canonicalScore}
+        score={hasFinancialData ? canonicalScore : null}
+        scoreLoading={financialDataStatus === 'loading'}
         color={color}
         status={status}
         rec={rec}
@@ -296,7 +308,7 @@ export default function DashboardContent({
       />
 
       {/* Modo crise — condicional, substitui/complementa SpendingPower em danger */}
-      {spendingPower.zone === 'danger' && (
+      {hasFinancialData && spendingPower.zone === 'danger' && (
         <motion.div variants={itemVariants}>
           <CrisisModeCard
             availableCents={spendingPower.availableCents}
@@ -306,9 +318,11 @@ export default function DashboardContent({
       )}
 
       {/* 3. Posso gastar hoje? */}
-      <motion.div variants={itemVariants}>
-        <SpendingPowerBadge power={spendingPower} remainingDays={remainingDays} />
-      </motion.div>
+      {hasFinancialData && (
+        <motion.div variants={itemVariants}>
+          <SpendingPowerBadge power={spendingPower} remainingDays={remainingDays} />
+        </motion.div>
+      )}
 
       {/* 4. Próximos 7 dias — eventos financeiros iminentes */}
       <motion.div variants={itemVariants}>
@@ -368,25 +382,40 @@ export default function DashboardContent({
         <div className="space-y-6 pt-2">
         <Suspense fallback={<div className="py-10 flex justify-center"><Spinner /></div>}>
 
+      {financialDataStatus === 'empty' && (
+        <motion.div variants={itemVariants}>
+          <div role="status" className="rounded-2xl border border-quantum-border bg-quantum-card/40 p-5 text-center">
+            <p className="text-sm font-bold text-quantum-fg">Sem dados ainda</p>
+            <p className="text-xs text-quantum-fgMuted mt-1">
+              Registre ou importe suas transações para ver sua saúde financeira.
+            </p>
+          </div>
+        </motion.div>
+      )}
+
       {/* KPIs de saúde — taxa poupança, endividamento, metas */}
-      <motion.div variants={itemVariants}>
-        <IntelStrip
-          savingsRate={savingsRate}
-          debtRatio={debtRatio}
-          goalProgress={goalProgress}
-          savingsGoalPercent={metaEcon}
-        />
-      </motion.div>
+      {hasFinancialData && (
+        <motion.div variants={itemVariants}>
+          <IntelStrip
+            savingsRate={savingsRate}
+            debtRatio={debtRatio}
+            goalProgress={goalProgress}
+            savingsGoalPercent={metaEcon}
+          />
+        </motion.div>
+      )}
 
       {/* Score de saúde — ring compacto + trend */}
-      <motion.div variants={itemVariants}>
-        <ScoreHeroCard
-          metrics={metrics}
-          loading={loadingMetrics}
-          history={scoreHistory}
-          selectedMonth={currentYYYYMM}
-        />
-      </motion.div>
+      {hasFinancialData && (
+        <motion.div variants={itemVariants}>
+          <ScoreHeroCard
+            metrics={metrics}
+            loading={loadingMetrics}
+            history={scoreHistory}
+            selectedMonth={currentYYYYMM}
+          />
+        </motion.div>
+      )}
 
       {/* Patrimônio líquido — ativos vs passivos */}
       <motion.div variants={itemVariants}>
@@ -395,9 +424,11 @@ export default function DashboardContent({
 
       <QuantumInsights metrics={metrics} loading={loadingMetrics} />
 
-      <motion.div variants={itemVariants}>
-        <FinancialHealthScore metrics={metrics} loading={loadingMetrics} history={scoreHistory} />
-      </motion.div>
+      {hasFinancialData && (
+        <motion.div variants={itemVariants}>
+          <FinancialHealthScore metrics={metrics} loading={loadingMetrics} history={scoreHistory} />
+        </motion.div>
+      )}
 
       <motion.div variants={itemVariants}>
         <WeeklyCashflowWidget
@@ -425,6 +456,7 @@ export default function DashboardContent({
         <AnomalyAlerts transactions={allTransactions} />
       </motion.div>
 
+      {hasFinancialData && (
       <motion.div variants={itemVariants}>
         <ProactiveBriefing
           uid={user?.uid ?? ''}
@@ -443,6 +475,7 @@ export default function DashboardContent({
           }}
         />
       </motion.div>
+      )}
 
         </Suspense>
         </div>
