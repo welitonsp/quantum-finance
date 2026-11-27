@@ -219,14 +219,14 @@ describe('ReconciliationEngine — ações sobre a fila', () => {
     expect(screen.getByText('Conciliadas').closest('div')).toHaveTextContent('0');
   });
 
-  it('DoneScreen botão Guardar chama onComplete com lista de resolved', async () => {
+  it('DoneScreen botão Salvar chama onComplete com lista de resolved', async () => {
     const onComplete = vi.fn();
     renderEngine([tx({ id: 'single', description: 'Salário' })], [], onComplete);
 
     fireEvent.click(screen.getByTitle(/Aprovar/));
     await act(async () => { vi.advanceTimersByTime(400); });
 
-    fireEvent.click(screen.getByRole('button', { name: /Guardar/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Salvar/ }));
 
     expect(onComplete).toHaveBeenCalledTimes(1);
     const [resolved] = onComplete.mock.calls[0] as [Transaction[]];

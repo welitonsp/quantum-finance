@@ -153,7 +153,7 @@ function DoneScreen({ stats, onConfirm, onCancel }: DoneScreenProps) {
           className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 rounded-2xl font-black text-white text-sm shadow-lg shadow-cyan-500/25 transition-all"
         >
           <Zap className="w-4 h-4" />
-          Guardar {stats.approved + stats.merged} transações no Cofre
+          Salvar {stats.approved + stats.merged} transações no Cofre
           <ChevronRight className="w-4 h-4" />
         </motion.button>
         <button

@@ -342,7 +342,7 @@ function CardForm({ initial, onSave, onCancel }: CardFormProps) {
           Cancelar
         </button>
         <button type="submit" className="flex-1 btn-quantum-primary">
-          {initial ? 'Guardar Alterações' : 'Adicionar Cartão'}
+          {initial ? 'Salvar Alterações' : 'Adicionar Cartão'}
         </button>
       </div>
     </motion.form>
@@ -370,7 +370,7 @@ export default function CreditCardManager({ uid, transactions = [], accounts = [
       setEditingCard(null);
     } catch (err) {
       logSanitizedFirebaseError(editingCard ? 'credit_card_update' : 'credit_card_create', err);
-      toast.error('Erro ao guardar cartão.');
+      toast.error('Erro ao salvar cartão.');
     }
   };
 
@@ -401,7 +401,7 @@ export default function CreditCardManager({ uid, transactions = [], accounts = [
             </div>
             Cartões de Crédito
           </h2>
-          <p className="text-sm text-quantum-fgMuted ml-12 mt-0.5">Monitorização de limites e faturas em tempo real</p>
+          <p className="text-sm text-quantum-fgMuted ml-12 mt-0.5">Monitoramento de limites e faturas em tempo real</p>
         </div>
         <button
           onClick={() => { setEditingCard(null); setShowForm(true); }}
@@ -442,7 +442,7 @@ export default function CreditCardManager({ uid, transactions = [], accounts = [
           <div className="p-5 bg-quantum-card rounded-3xl border border-quantum-border">
             <CreditCard className="w-10 h-10 text-quantum-fgMuted" />
           </div>
-          <p className="text-sm text-quantum-fgMuted">Sem cartões registados. Adicione o primeiro cartão.</p>
+          <p className="text-sm text-quantum-fgMuted">Sem cartões registrados. Adicione o primeiro cartão.</p>
         </motion.div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">

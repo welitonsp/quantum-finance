@@ -89,7 +89,7 @@ describe('TransactionForm', () => {
 
   it('exige descrição antes de salvar', async () => {
     const { onSave } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
     await waitFor(() => expect(screen.getByText('A descrição é obrigatória.')).toBeTruthy());
     expect(onSave).not.toHaveBeenCalled();
   });
@@ -98,7 +98,7 @@ describe('TransactionForm', () => {
     const { onSave } = setup();
     fireEvent.change(screen.getByPlaceholderText('Ex: Supermercado Extra'), { target: { value: 'Mercado' } });
     fireEvent.change(screen.getByLabelText(/Valor \(R\$\)/), { target: { value: 'abc' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
     await waitFor(() => expect(screen.getByText('Insira um valor monetario valido.')).toBeTruthy());
     expect(onSave).not.toHaveBeenCalled();
   });
@@ -107,7 +107,7 @@ describe('TransactionForm', () => {
     const { onSave } = setup();
     fireEvent.change(screen.getByPlaceholderText('Ex: Supermercado Extra'), { target: { value: 'Mercado' } });
     fireEvent.change(screen.getByLabelText(/Valor \(R\$\)/), { target: { value: '0,00' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
     await waitFor(() => expect(screen.getByText('Insira um valor válido maior que zero.')).toBeTruthy());
     expect(onSave).not.toHaveBeenCalled();
   });
@@ -116,7 +116,7 @@ describe('TransactionForm', () => {
     const { onSave } = setup();
     fireEvent.change(screen.getByPlaceholderText('Ex: Supermercado Extra'), { target: { value: 'Mercado' } });
     fireEvent.change(screen.getByLabelText(/Valor \(R\$\)/), { target: { value: '123,45' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave).toHaveBeenCalledWith(
@@ -135,7 +135,7 @@ describe('TransactionForm', () => {
     // Valor acima do máximo → clampa para 120
     fireEvent.change(screen.getByLabelText(/parcelas/i), { target: { value: '999' } });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
 
     await waitFor(() => expect(mockCreateInstallment).toHaveBeenCalledTimes(1));
     const [uidArg, payload] = mockCreateInstallment.mock.calls[0] as [string, Record<string, unknown>];
