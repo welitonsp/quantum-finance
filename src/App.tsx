@@ -506,7 +506,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     />
                     {currentPage === 'cofre'          && <GovernancePage uid={safeUID} />}
                     {currentPage === 'shared-finance' && (
-                      <SharedFinancePage uid={safeUID} displayName={user?.displayName ?? 'Você'} />
+                      <SharedFinancePage uid={safeUID} displayName={user?.displayName ?? 'Você'} {...(user?.email ? { email: user.email } : {})} />
                     )}
                   </>
                 )}

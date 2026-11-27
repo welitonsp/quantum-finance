@@ -5,7 +5,10 @@
 // Testada no Vitest (src/__tests__/quantumAiPrompt.test.ts).
 // Dinheiro só em centavos inteiros (value_cents); o campo legado `value` não é lido.
 
-export const GEMINI_MODEL   = 'gemini-2.5-flash';
+// Modelo padrão do Gemini: o alias "latest" acompanha o Flash vigente, para a
+// função não quebrar quando o Google aposentar uma versão fixa (o gemini-2.5-flash
+// passou a responder 404). Pode ser trocado pelo secret GEMINI_MODEL, sem novo deploy.
+export const GEMINI_MODEL   = 'gemini-flash-latest';
 export const MAX_BATCH_SIZE = 100;
 export const MAX_PROMPT_LEN = 4_000;
 const MAX_CONTEXT_ROWS = 50;
