@@ -9,7 +9,8 @@
 //    ANTES de qualquer dado sair para o Gemini;
 //  * as chaves (GEMINI_API_KEY ou OPENROUTER_API_KEY) ficam só nos secrets da
 //    função, nunca no app. Gemini tem prioridade; sem ela, usa o OpenRouter
-//    (modelo em OPENROUTER_MODEL, padrão um modelo gratuito);
+//    (modelo em OPENROUTER_MODEL, padrão um modelo gratuito); o modelo do Gemini
+//    pode ser trocado pelo secret GEMINI_MODEL;
 //  * logs só com operação e código; nada do usuário (sem prompt, valor ou id).
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import {
@@ -59,11 +60,12 @@ function logError(op: string, code: string): void {
 
 async function callGemini(
   apiKey: string,
+  model: string,
   prompt: string,
   opts: { jsonMode?: boolean; systemInstruction?: string },
 ): Promise<string> {
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
@@ -116,7 +118,10 @@ type AiCaller = (prompt: string, opts: { jsonMode?: boolean; systemInstruction?:
 /** Escolhe o provedor pelos secrets: Gemini primeiro, depois OpenRouter; null se nenhum. */
 function pickProvider(): AiCaller | null {
   const gemini = Deno.env.get('GEMINI_API_KEY') ?? '';
-  if (gemini) return (prompt, opts) => callGemini(gemini, prompt, opts);
+  if (gemini) {
+    const model = Deno.env.get('GEMINI_MODEL')?.trim() || GEMINI_MODEL;
+    return (prompt, opts) => callGemini(gemini, model, prompt, opts);
+  }
   const openrouter = Deno.env.get('OPENROUTER_API_KEY') ?? '';
   if (openrouter) {
     const model = Deno.env.get('OPENROUTER_MODEL') || OPENROUTER_DEFAULT_MODEL;
