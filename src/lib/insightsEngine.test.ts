@@ -102,6 +102,32 @@ describe('computeAnomalies', () => {
     const result = computeAnomalies(ctx({ transactions: [...historical, current] }));
     expect(result[0]!.severity).toBe('high');
   });
+
+  it('mês ativo sem gasto na categoria conta como zero na média', () => {
+    // Mercado todo mês (atividade); farmácia só em março (R$ 300). Média de farmácia
+    // em 5 meses ativos = R$ 60; R$ 300 em junho é +400%, não "igual à média".
+    const mercado = ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05'].map(
+      (month, i) => tx({ id: `m${i}`, value_cents: 10000 as Centavos, date: `${month}-10`, type: 'saida', category: 'alimentação' }),
+    );
+    const farmaciaMarco = tx({ value_cents: 30000 as Centavos, date: '2026-03-12', type: 'saida', category: 'saúde' });
+    const farmaciaJunho = tx({ value_cents: 30000 as Centavos, date: '2026-06-03', type: 'saida', category: 'saúde' });
+    const result = computeAnomalies(ctx({ transactions: [...mercado, farmaciaMarco, farmaciaJunho] }));
+    const saude = result.find(r => r.category === 'saúde');
+    expect(saude?.avgCents).toBe(6000);
+    expect(saude?.deltaPct).toBe(400);
+  });
+
+  it('só usa os 6 meses anteriores ao atual', () => {
+    // gasto alto há 1 ano não infla a média de hoje
+    const antigo = tx({ value_cents: 900000 as Centavos, date: '2025-05-10', type: 'saida', category: 'alimentação' });
+    const recentes = ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05'].map(
+      (month, i) => tx({ id: `r${i}`, value_cents: 10000 as Centavos, date: `${month}-15`, type: 'saida', category: 'alimentação' }),
+    );
+    const current = tx({ value_cents: 15000 as Centavos, date: '2026-06-01', type: 'saida', category: 'alimentação' });
+    const result = computeAnomalies(ctx({ transactions: [antigo, ...recentes, current] }));
+    expect(result[0]!.avgCents).toBe(10000);
+    expect(result[0]!.deltaPct).toBe(50);
+  });
 });
 
 // ─── computeHealthScore ───────────────────────────────────────────────────────
