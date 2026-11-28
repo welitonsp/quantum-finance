@@ -23,7 +23,7 @@ const VARIANT_CLASSES: Record<Variant, string> = {
   primary:   'btn-quantum-primary',
   secondary: 'bg-quantum-card hover:bg-quantum-cardHover text-quantum-fg border border-quantum-border hover:border-quantum-accent/30 transition-all',
   danger:    'bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition-all',
-  ghost:     'hover:bg-white/5 text-quantum-fgMuted hover:text-quantum-fg border border-transparent transition-colors',
+  ghost:     'hover:bg-quantum-bgSecondary text-quantum-fgMuted hover:text-quantum-fg border border-transparent transition-colors',
 };
 
 const SIZE_CLASSES: Record<Size, string> = {

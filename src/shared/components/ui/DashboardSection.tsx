@@ -44,7 +44,7 @@ export function DashboardSection({
               aria-expanded={!collapsed}
               aria-controls={`${id}-content`}
               aria-label={collapsed ? `Expandir ${title}` : `Recolher ${title}`}
-              className="p-1 rounded-lg text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-accent/50"
+              className="p-1 rounded-lg text-quantum-fgMuted hover:text-quantum-fg hover:bg-quantum-bgSecondary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-accent/50"
             >
               <ChevronDown className={`w-4 h-4 transition-transform ${collapsed ? '-rotate-90' : ''}`} />
             </button>
