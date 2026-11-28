@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 import { useCreditCards } from '../../hooks/useCreditCards';
 import { logSanitizedFirebaseError } from '../../shared/lib/firebaseErrorHandling';
 import { fromCentavos } from '../../shared/schemas/financialSchemas';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency, formatPercent } from '../../utils/formatters';
 import { formatBRL } from '../../shared/types/money';
 import type { CreditCard as CreditCardType, CreditCardWithMetrics, Transaction, Account } from '../../shared/types/transaction';
 import type { Centavos, MoneyInput } from '../../shared/types/money';
@@ -96,7 +96,7 @@ function CardVisual({ card }: { card: CreditCardWithMetrics }) {
         <div>
           <div className="flex justify-between text-xs mb-1.5">
             <span className="text-white/40">Usado</span>
-            <span className={`font-bold font-mono ${ac.text}`}>{metrics.compromisso.toFixed(1)}%</span>
+            <span className={`font-bold font-mono ${ac.text}`}>{formatPercent(metrics.compromisso, 1)}</span>
           </div>
           <div className="w-full h-1.5 rounded-full overflow-hidden mb-3" style={{ background: 'rgba(255,255,255,0.08)' }}>
             <motion.div

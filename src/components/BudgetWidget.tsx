@@ -10,7 +10,7 @@ import {
 import toast from 'react-hot-toast';
 import { useBudgets, currentMonthStr, BudgetUserError } from '../hooks/useBudgets';
 import { ALLOWED_CATEGORIES } from '../shared/schemas/financialSchemas';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, formatPercent, roundForDisplay } from '../utils/formatters';
 import type { Transaction } from '../shared/types/transaction';
 import type { BudgetInsight, BudgetWriteData } from '../hooks/useBudgets';
 import { fromCentavos, toCentavos } from '../shared/types/money';
@@ -80,7 +80,7 @@ interface BudgetCardProps {
 function BudgetCard({ insight, onRemove }: BudgetCardProps) {
   const cfg          = STATUS_CFG[insight.status];
   const Icon         = cfg.icon;
-  const pctDisplay   = (insight.progress * 100).toFixed(0);
+  const pctDisplay   = formatPercent(insight.progress * 100, 0);
   const isCurrentMon = insight.month === currentMonthStr();
   const showProj     = isCurrentMon && insight.projectedSpend > insight.spent + 0.01;
 
@@ -127,7 +127,7 @@ function BudgetCard({ insight, onRemove }: BudgetCardProps) {
         <span>
           <span className="font-black text-quantum-fg">{formatCurrency(insight.spent)}</span>
           <span className="text-quantum-fgMuted"> / {formatCurrency(insight.targetAmount)}</span>
-          <span className="text-quantum-fgMuted ml-1">({pctDisplay}%)</span>
+          <span className="text-quantum-fgMuted ml-1">({pctDisplay})</span>
         </span>
         <span className={`font-bold ${insight.remaining >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
           {insight.remaining >= 0
@@ -152,11 +152,11 @@ function BudgetCard({ insight, onRemove }: BudgetCardProps) {
       {/* vs Mês Anterior — only when we have previous month data */}
       {insight.vsLastMonthPct !== null && (
         <div className="flex items-center gap-1 text-[10px] text-quantum-fgMuted mt-1">
-          <TrendingUp className={`w-3 h-3 shrink-0 ${insight.vsLastMonthPct > 0 ? 'text-red-400 rotate-0' : 'text-emerald-400 rotate-180'}`} />
+          <TrendingUp className={`w-3 h-3 shrink-0 ${roundForDisplay(insight.vsLastMonthPct, 0) > 0 ? 'text-red-400 rotate-0' : 'text-emerald-400 rotate-180'}`} />
           <span>
             vs mês anterior:{' '}
-            <span className={`font-bold ${insight.vsLastMonthPct > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-              {insight.vsLastMonthPct > 0 ? '+' : ''}{insight.vsLastMonthPct.toFixed(0)}%
+            <span className={`font-bold ${roundForDisplay(insight.vsLastMonthPct, 0) > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+              {roundForDisplay(insight.vsLastMonthPct, 0) > 0 ? '+' : ''}{formatPercent(insight.vsLastMonthPct, 0)}
             </span>
             <span className="ml-1">({formatCurrency(fromCentavos(insight.prevMonthSpentCents))})</span>
           </span>
@@ -407,7 +407,7 @@ function SuggestModal({ suggestions, onApprove, onClose }: SuggestModalProps) {
                     <div className="flex items-center justify-between gap-3 flex-wrap">
                       <p className="text-sm font-black text-quantum-fg">{s.category}</p>
                       <p className="text-[10px] text-quantum-fgMuted font-mono">
-                        Média: R$ {fromCentavos(s.avgCents).toFixed(0)}/mês
+                        Média: {formatCurrency(s.avgCents, { cents: true })}/mês
                       </p>
                     </div>
                     <p className="text-xs text-quantum-fgMuted mt-0.5">{s.reason}</p>
@@ -480,7 +480,7 @@ export default function BudgetWidget({ uid, transactions }: Props) {
       const key100 = `${insight.id}-100`;
       if (insight.progress >= 1.0 && !alertedRef.current.has(key100)) {
         alertedRef.current.add(key100);
-        toast.error(`🚨 ${insight.category}: limite de orçamento atingido! (${(insight.progress * 100).toFixed(0)}%)`, { duration: 7000 });
+        toast.error(`🚨 ${insight.category}: limite de orçamento atingido! (${formatPercent(insight.progress * 100, 0)})`, { duration: 7000 });
       } else if (insight.progress >= 0.8 && !alertedRef.current.has(key80)) {
         alertedRef.current.add(key80);
         toast(`⚠️ ${insight.category}: 80% do orçamento utilizado.`, { duration: 5000, icon: '⚠️' });
