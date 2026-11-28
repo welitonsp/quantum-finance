@@ -85,6 +85,8 @@ interface Props {
   /** Levantado em App.tsx (única fonte do listener onSnapshot de creditCards). */
   creditCards: CreditCardWithMetrics[];
   totalFaturaCents: Centavos;
+  /** Saldo restante das dívidas ativas (módulo Dívidas), em centavos. */
+  debtsRemainingCents?: Centavos;
 }
 
 const containerVariants = {
@@ -119,6 +121,7 @@ export default function DashboardContent({
   categories = [],
   creditCards,
   totalFaturaCents,
+  debtsRemainingCents,
 }: Props) {
   const { currentMonth, currentYear, setCurrentPage } = useNavigation();
   // ── Hero metrics from existing moduleBalances prop ────────────────────────
@@ -187,6 +190,7 @@ export default function DashboardContent({
     currentMonth,
     currentYear,
     totalFaturaCents,
+    debtsRemainingCents,
   );
 
   const canonicalScore = metrics ? computeHealthScore(metrics) : score;

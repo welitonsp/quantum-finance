@@ -193,10 +193,16 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   // totalFaturaCents: faturas abertas de cartões — passivo corrente para o net worth
   const { totalFaturaCents, cards: creditCards } = useCreditCards(safeUID, transactions);
   const { debts } = useDebts(safeUID);
+  // Saldo restante das dívidas ativas: passivo do patrimônio e do endividamento.
+  const debtsRemainingCents = useMemo(
+    () => debts.reduce((sum, d) => (d.active ? sum + Math.max(0, d.remainingCents) : sum), 0) as Centavos,
+    [debts],
+  );
   // Receitas/despesas/saldo somados no banco (todas as transações, não só as 500 carregadas).
   const serverTotals = useDashboardTotals(safeUID, currentMonth, currentYear, transactions);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
-    useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts, categories, totalFaturaCents, serverTotals, unassignedCashCents);
+    useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts, categories,
+      (totalFaturaCents + debtsRemainingCents) as Centavos, serverTotals, unassignedCashCents);
 
   // Onboarding — condição sempre derivada do estado real (nunca um "passo" artificial):
   // some sozinho assim que o usuário tiver 1+ conta ou 1+ transação. "Pular" só evita
@@ -339,6 +345,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     categories={categories}
                     creditCards={creditCards}
                     totalFaturaCents={totalFaturaCents}
+                    debtsRemainingCents={debtsRemainingCents}
                   />
                 )}
                 {(['history', 'accounts', 'cards', 'recurring'] as const).some(t => t === currentPage) && (

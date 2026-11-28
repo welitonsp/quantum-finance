@@ -150,3 +150,54 @@ describe('useFinancialMetrics — branches do hook', () => {
     expect(result.current.metrics!.ativos).toBe(500);
   });
 });
+
+describe('computeFinancialMetrics — reserva de emergência e dívidas', () => {
+  const accounts: Account[] = [mkAcc({ id: 'a1', type: 'corrente', balance: c(990000) })]; // R$ 9.900
+
+  it('reserva = ativos ÷ média dos 3 meses anteriores de despesas essenciais (inclui alimentação e transporte)', () => {
+    const txs: Transaction[] = [
+      // janeiro: aluguel 1.500 + mercado 1.200 + transporte 300 = 3.000
+      mkTx({ id: 'j1', value_cents: c(150000), category: 'Moradia', date: '2026-01-10' }),
+      mkTx({ id: 'j2', value_cents: c(120000), category: 'Alimentação', date: '2026-01-12' }),
+      mkTx({ id: 'j3', value_cents: c(30000), category: 'Transporte', date: '2026-01-15' }),
+      // fevereiro: aluguel 1.500 + mercado 1.800 = 3.300; lazer não é essencial
+      mkTx({ id: 'f1', value_cents: c(150000), category: 'Moradia', date: '2026-02-10' }),
+      mkTx({ id: 'f2', value_cents: c(180000), category: 'Alimentação', date: '2026-02-12' }),
+      mkTx({ id: 'f3', value_cents: c(90000), category: 'Lazer', date: '2026-02-20' }),
+      // março: só uma receita (mês ativo sem gasto essencial conta como zero)
+      mkTx({ id: 'm1', value_cents: c(500000), type: 'entrada', category: 'Salário', date: '2026-03-05' }),
+      // abril (mês de referência, ainda sem aluguel): não entra na média
+      mkTx({ id: 'a1', value_cents: c(5000), category: 'Alimentação', date: '2026-04-02' }),
+    ];
+    const m = computeFinancialMetrics(txs, accounts, 4, 2026);
+    // (3.000 + 3.300 + 0) / 3 = 2.100 → 9.900 / 2.100 = 4,7 meses
+    expect(m.custoEssencialMensal).toBe(2100);
+    expect(m.reservaMeses).toBe(4.7);
+  });
+
+  it('sem histórico usa o próprio mês de referência', () => {
+    const txs: Transaction[] = [
+      mkTx({ id: '1', value_cents: c(150000), category: 'Moradia', date: '2026-04-10' }),
+      mkTx({ id: '2', value_cents: c(180000), category: 'Alimentação', date: '2026-04-12' }),
+    ];
+    const m = computeFinancialMetrics(txs, accounts, 4, 2026);
+    expect(m.custoEssencialMensal).toBe(3300);
+    expect(m.reservaMeses).toBe(3);
+  });
+
+  it('pagamento de fatura não entra no custo essencial', () => {
+    const txs: Transaction[] = [
+      mkTx({ id: '1', value_cents: c(100000), category: 'Moradia', date: '2026-04-10' }),
+      mkTx({ id: '2', value_cents: c(500000), category: 'Moradia', date: '2026-04-11', paidInvoiceMonth: '2026-03' }),
+    ];
+    expect(computeFinancialMetrics(txs, accounts, 4, 2026).custoEssencialMensal).toBe(1000);
+  });
+
+  it('dívidas do módulo Dívidas entram nos passivos e no endividamento', () => {
+    const m = computeFinancialMetrics([], accounts, undefined, undefined, 10000, 4000000);
+    // passivos = fatura 100 + dívida 40.000
+    expect(m.passivos).toBe(40100);
+    expect(m.patrimonioLiquido).toBe(-30200);
+    expect(m.endividamento).toBeCloseTo(80.2, 1);
+  });
+});
