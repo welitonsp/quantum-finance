@@ -21,6 +21,21 @@ function parseNumberInputCents(raw: string) {
 
 type AccountType = 'corrente' | 'poupanca' | 'investimento' | 'cartao' | 'divida';
 
+/** Hoje em YYYY-MM-DD no fuso do aparelho. */
+function todayISO(): string {
+  return new Date().toLocaleDateString('sv-SE');
+}
+
+function isIsoDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+/** YYYY-MM-DD → DD/MM/AAAA, sem passar por Date (sem erro de fuso). */
+function formatIsoDateBR(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
 interface Props {
   uid: string;
 }
@@ -33,10 +48,12 @@ export default function AccountsManager({ uid }: Props) {
   const [editingId,       setEditingId]       = useState<string | null>(null);
   const [editName,        setEditName]        = useState('');
   const [editBalance,     setEditBalance]     = useState('');
+  const [editDate,        setEditDate]        = useState('');
 
   const [name,    setName]    = useState('');
   const [type,    setType]    = useState<AccountType>('corrente');
   const [balance, setBalance] = useState('');
+  const [openingDate, setOpeningDate] = useState(todayISO);
 
   const editNameRef = useCallback((node: HTMLInputElement | null) => {
     if (node) node.focus();
@@ -57,7 +74,9 @@ export default function AccountsManager({ uid }: Props) {
   const openEdit = (acc: Account) => {
     setEditingId(acc.id);
     setEditName(acc.name);
-    setEditBalance(fromCentavos(acc.balance).toFixed(2));
+    // Edita o saldo de ABERTURA (o de hoje é calculado com os lançamentos).
+    setEditBalance(fromCentavos(acc.openingBalance ?? acc.balance).toFixed(2));
+    setEditDate(acc.openingDate ?? '');
   };
 
   const saveEdit = async (acc: Account) => {
@@ -74,7 +93,11 @@ export default function AccountsManager({ uid }: Props) {
       const finalBalance = ['cartao', 'divida'].includes(acc.type) && parsedBalance > 0
         ? -parsedBalance
         : parsedBalance;
-      await updateAccount(acc.id, { name: editName.trim(), balance: finalBalance });
+      await updateAccount(acc.id, {
+        name: editName.trim(),
+        balance: finalBalance,
+        ...(isIsoDate(editDate) ? { openingDate: editDate } : {}),
+      });
     } catch (err) {
       logSanitizedFirebaseError('account_update', err);
     } finally {
@@ -118,10 +141,16 @@ export default function AccountsManager({ uid }: Props) {
       const finalBalance = ['cartao', 'divida'].includes(type) && parsedBalance > 0
         ? -parsedBalance
         : parsedBalance;
-      await addAccount({ name: name.trim(), type, balance: finalBalance });
+      await addAccount({
+        name: name.trim(),
+        type,
+        balance: finalBalance,
+        ...(isIsoDate(openingDate) ? { openingDate } : {}),
+      });
       setIsModalOpen(false);
       setName('');
       setBalance('');
+      setOpeningDate(todayISO());
       setType('corrente');
     } catch (error) {
       logSanitizedFirebaseError('account_create', error);
@@ -241,17 +270,35 @@ export default function AccountsManager({ uid }: Props) {
                 </div>
               </div>
               <div className="relative z-10 mt-2">
-                <p className="text-xs text-quantum-fgMuted mb-1">Saldo Atual</p>
                 {editingId === acc.id ? (
-                  <input
-                    type="number" step="0.01" value={editBalance} onChange={e => setEditBalance(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') void saveEdit(acc); if (e.key === 'Escape') setEditingId(null); }}
-                    className="text-xl font-black bg-transparent border-b border-quantum-accent text-quantum-fg outline-none w-36"
-                  />
+                  <>
+                    <p className="text-xs text-quantum-fgMuted mb-1">Saldo de abertura</p>
+                    <input
+                      aria-label="Saldo de abertura"
+                      type="number" step="0.01" value={editBalance} onChange={e => setEditBalance(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') void saveEdit(acc); if (e.key === 'Escape') setEditingId(null); }}
+                      className="text-xl font-black bg-transparent border-b border-quantum-accent text-quantum-fg outline-none w-36"
+                    />
+                    {acc.openingDate && (
+                      <input
+                        aria-label="Data do saldo de abertura"
+                        type="date" value={editDate} max={todayISO()} onChange={e => setEditDate(e.target.value)}
+                        className="block mt-2 text-xs bg-transparent border-b border-quantum-accent text-quantum-fg outline-none"
+                      />
+                    )}
+                  </>
                 ) : (
-                  <p className={`text-xl font-black tracking-tight ${acc.balance < 0 ? 'text-red-500 dark:text-red-400' : 'text-quantum-fg'}`}>
-                    {formatCurrency(fromCentavos(acc.balance))}
-                  </p>
+                  <>
+                    <p className="text-xs text-quantum-fgMuted mb-1">{acc.openingDate ? 'Saldo hoje' : 'Saldo Atual'}</p>
+                    <p className={`text-xl font-black tracking-tight ${acc.balance < 0 ? 'text-red-500 dark:text-red-400' : 'text-quantum-fg'}`}>
+                      {formatCurrency(fromCentavos(acc.balance))}
+                    </p>
+                    {acc.openingDate && acc.openingBalance !== undefined && (
+                      <p className="text-[11px] text-quantum-fgMuted mt-1">
+                        Abertura: {formatCurrency(fromCentavos(acc.openingBalance))} em {formatIsoDateBR(acc.openingDate)}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -291,7 +338,7 @@ export default function AccountsManager({ uid }: Props) {
                   </select>
                 </div>
                 <div>
-                  <label htmlFor={`${fieldId}-balance`} className="block text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-2">Saldo Atual</label>
+                  <label htmlFor={`${fieldId}-balance`} className="block text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-2">Saldo na data</label>
                   <input
                     id={`${fieldId}-balance`}
                     type="number" step="0.01" required value={balance} onChange={e => setBalance(e.target.value)}
@@ -299,6 +346,17 @@ export default function AccountsManager({ uid }: Props) {
                     className="w-full bg-slate-50 dark:bg-quantum-bgSecondary border border-slate-200 dark:border-quantum-border rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-quantum-fg"
                   />
                 </div>
+              </div>
+              <div>
+                <label htmlFor={`${fieldId}-opening-date`} className="block text-xs font-bold text-quantum-fgMuted uppercase tracking-wider mb-2">Data do saldo</label>
+                <input
+                  id={`${fieldId}-opening-date`}
+                  type="date" required value={openingDate} max={todayISO()} onChange={e => setOpeningDate(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-quantum-bgSecondary border border-slate-200 dark:border-quantum-border rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-quantum-fg"
+                />
+                <p className="text-xs text-quantum-fgMuted mt-2">
+                  Use o saldo do extrato nesse dia. Lançamentos com data depois dele entram no saldo da conta; os anteriores não contam de novo.
+                </p>
               </div>
               <div className="flex justify-end gap-3 mt-8">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 rounded-xl font-bold text-quantum-fgMuted hover:bg-slate-100 dark:hover:bg-quantum-bgSecondary transition-colors text-sm">Cancelar</button>
