@@ -10,6 +10,7 @@ import Decimal from 'decimal.js';
 import type { Transaction } from '../../shared/types/transaction';
 import { getTransactionAbsCentavos, isExpense } from '../../utils/transactionUtils';
 import { fromCentavos } from '../../shared/types/money';
+import { formatCurrency, formatPercent } from '../../utils/formatters';
 import { normalizeCategoryName, type UserCategory } from '../../shared/schemas/categorySchemas';
 import { EmptyState } from '../../shared/components/ui';
 
@@ -101,7 +102,7 @@ export default function ReportsDashboard({ transactions, balances, categories = 
             <h3 className="text-xs font-bold text-quantum-fgMuted uppercase tracking-widest">Taxa de Poupança</h3>
           </div>
           <p className={`text-3xl font-black font-mono ${savingsRate >= 20 ? 'text-emerald-400' : savingsRate > 0 ? 'text-amber-400' : 'text-red-400'}`}>
-            {savingsRate.toFixed(1)}%
+            {formatPercent(savingsRate, 1)}
           </p>
           <p className="text-[10px] text-quantum-fgMuted uppercase mt-2">
             {savingsRate >= 20 ? 'Excelente capacidade de retenção' : 'Atenção aos gastos excessivos'}
@@ -114,7 +115,7 @@ export default function ReportsDashboard({ transactions, balances, categories = 
             <h3 className="text-xs font-bold text-quantum-fgMuted uppercase tracking-widest">Custo de Vida</h3>
           </div>
           <p className="text-3xl font-black font-mono text-quantum-fg">
-            R$ {despesas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            {formatCurrency(despesas)}
           </p>
           <p className="text-[10px] text-quantum-fgMuted uppercase mt-2">Total queimado neste mês</p>
         </div>
@@ -128,13 +129,13 @@ export default function ReportsDashboard({ transactions, balances, categories = 
             {savingsRate < 10 && (
               <p className="text-sm text-quantum-fg flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
-                A sua taxa de poupança está abaixo de 10%. Recomendamos reduzir despesas na categoria: <strong className="text-quantum-fg">{categoryData[0]?.name ?? 'Diversos'}</strong>.
+                Sua taxa de poupança está abaixo de 10%. Recomendamos reduzir despesas na categoria: <strong className="text-quantum-fg">{categoryData[0]?.name ?? 'Diversos'}</strong>.
               </p>
             )}
             {savingsRate >= 10 && (
               <p className="text-sm text-quantum-fg flex items-start gap-2">
                 <TrendingUp className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                Ótima performance! Com uma retenção de {savingsRate.toFixed(1)}%, tem margem para focar em Investimentos.
+                Ótima performance! Com uma retenção de {formatPercent(savingsRate, 1)}, você tem margem para focar em Investimentos.
               </p>
             )}
           </div>
@@ -174,7 +175,7 @@ export default function ReportsDashboard({ transactions, balances, categories = 
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-10">
                 <span className="text-[10px] text-quantum-fgMuted uppercase tracking-widest">Total Gasto</span>
-                <span className="text-xl font-bold font-mono text-quantum-fg">R$ {despesas.toLocaleString('pt-BR')}</span>
+                <span className="text-xl font-bold font-mono text-quantum-fg">{formatCurrency(despesas)}</span>
               </div>
             </div>
           ) : (

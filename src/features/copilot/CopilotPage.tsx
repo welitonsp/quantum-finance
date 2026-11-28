@@ -6,6 +6,7 @@ import { useInsightsEngine } from '../../hooks/useInsightsEngine';
 import { CopilotInsightCard, LoadingPage, EmptyState } from '../../shared/components/ui';
 import type { CopilotInsightData } from '../../shared/components/ui';
 import { formatBRL } from '../../shared/types/money';
+import { formatNumber, formatPercent } from '../../utils/formatters';
 import toast from 'react-hot-toast';
 
 interface Props {
@@ -36,8 +37,8 @@ export default function CopilotPage({ uid }: Props) {
           dataSources: ['Transações do mês atual', 'Transações do mês anterior'],
           title:       isUp ? 'Aumento nos gastos detectado' : 'Redução nos gastos detectada',
           description: isUp
-            ? `Seus gastos este mês (${formatBRL(trend.currentCents)}) estão ${(trend.ratio * 100).toFixed(0)}% acima do mês anterior (${formatBRL(trend.previousCents)}). Revise as categorias mais impactadas.`
-            : `Seus gastos este mês (${formatBRL(trend.currentCents)}) estão ${(Math.abs(trend.ratio) * 100).toFixed(0)}% abaixo do mês anterior. Bom trabalho!`,
+            ? `Seus gastos este mês (${formatBRL(trend.currentCents)}) estão ${formatPercent(trend.ratio * 100, 0)} acima do mês anterior (${formatBRL(trend.previousCents)}). Revise as categorias mais impactadas.`
+            : `Seus gastos este mês (${formatBRL(trend.currentCents)}) estão ${formatPercent(Math.abs(trend.ratio) * 100, 0)} abaixo do mês anterior. Bom trabalho!`,
         });
       }
     }
@@ -49,7 +50,7 @@ export default function CopilotPage({ uid }: Props) {
         confidence:  anomaly.multiplier >= 3 ? 'alta' : 'media',
         dataSources: [`Categoria: ${anomaly.category}`, 'Histórico dos últimos 3 meses'],
         title:       `Gasto atípico em ${anomaly.category}`,
-        description: `Transação "${anomaly.description}" (${formatBRL(anomaly.valueCents)}) é ${anomaly.multiplier.toFixed(1)}× acima da média desta categoria. Verifique se é esperado.`,
+        description: `Transação "${anomaly.description}" (${formatBRL(anomaly.valueCents)}) é ${formatNumber(anomaly.multiplier, 1)}× acima da média desta categoria. Verifique se é esperado.`,
       });
     }
 
