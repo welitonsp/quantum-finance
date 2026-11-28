@@ -1,5 +1,7 @@
 import type { Session, SupabaseClient, User } from '@supabase/supabase-js';
 import { getSupabase } from './client';
+import { checkPwnedPassword, type PwnedCheckResult } from '../../lib/pwnedPassword';
+import { logSanitizedFirebaseError } from '../../lib/firebaseErrorHandling';
 
 /**
  * Login no Supabase (migração Firebase → Supabase, etapa 3).
@@ -89,15 +91,34 @@ export async function signInWithEmail(
 }
 
 /**
+ * Recusa senha que já apareceu em vazamentos (HIBP, k-anonymity). O Supabase
+ * só faz isso no plano Pro. Fail-open: se a checagem falhar, registra o motivo
+ * (código fixo, sem senha nem e-mail) e deixa seguir.
+ */
+export async function assertPasswordNotPwned(
+  password: string,
+  check: (password: string) => Promise<PwnedCheckResult> = checkPwnedPassword,
+): Promise<void> {
+  const result = await check(password);
+  if (result.status === 'pwned') fail('pwned_password');
+  if (result.status === 'unknown') {
+    logSanitizedFirebaseError('auth_login', new SupabaseAuthError(`pwned_check_${result.reason}`));
+  }
+}
+
+/**
  * Cria conta com e-mail e senha. Com confirmação de e-mail ligada (padrão do
  * Supabase) não há sessão até o usuário clicar no link: devolve needsConfirmation.
+ * Antes, recusa senha vazada (assertPasswordNotPwned).
  */
 export async function signUpWithEmail(
   email: string,
   password: string,
   redirectTo: string = window.location.origin,
   client: SupabaseClient = getSupabase(),
+  check: (password: string) => Promise<PwnedCheckResult> = checkPwnedPassword,
 ): Promise<{ needsConfirmation: boolean }> {
+  await assertPasswordNotPwned(password, check);
   const { data, error } = await client.auth.signUp({
     email: email.trim(),
     password,
