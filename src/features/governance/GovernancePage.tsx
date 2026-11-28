@@ -16,6 +16,8 @@ import { usePushNotifications } from '../../shared/hooks/usePushNotifications';
 
 interface Props {
   uid: string;
+  /** Abre o painel de Configurações (categorias e regras). Sem ele, o card só informa onde fica. */
+  onOpenCategories?: () => void;
 }
 
 function DecisionRow({ decision }: { decision: AIDecision }) {
@@ -57,7 +59,7 @@ const AI_PERMISSIONS = [
   { label: 'Envio de dados financeiros para terceiros',       allowed: false },
 ];
 
-export default function GovernancePage({ uid }: Props) {
+export default function GovernancePage({ uid, onOpenCategories }: Props) {
   const { logs, loading: loadingLogs } = useAuditLogs(uid);
   const { decisions, loading: loadingDecisions, stats } = useDecisions(uid);
   const [showAuditTimeline, setShowAuditTimeline] = useState(false);
@@ -306,9 +308,20 @@ export default function GovernancePage({ uid }: Props) {
               <p className="text-sm font-black text-quantum-fg">Gerenciar Categorias</p>
               <p className="text-xs text-quantum-fgMuted mt-0.5">Categorias personalizadas e regras de categorização automática</p>
             </div>
-            <span className="text-[10px] text-quantum-fgMuted px-3 py-1.5 border border-quantum-border rounded-xl">
-              Via Configurações (⚙️)
-            </span>
+            {onOpenCategories ? (
+              <button
+                type="button"
+                onClick={onOpenCategories}
+                className="flex items-center gap-2 px-4 py-2 bg-quantum-bgSecondary border border-quantum-border rounded-xl text-xs font-bold text-quantum-fg hover:border-quantum-accent/40 transition-all shrink-0"
+              >
+                Abrir Configurações
+                <ChevronRight className="w-3.5 h-3.5 text-quantum-fgMuted" />
+              </button>
+            ) : (
+              <span className="text-[10px] text-quantum-fgMuted px-3 py-1.5 border border-quantum-border rounded-xl">
+                Em Configurações (⚙️)
+              </span>
+            )}
           </div>
         </div>
       </section>

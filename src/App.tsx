@@ -504,7 +504,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                       activeTab={currentPage}
                       onTabChange={setCurrentPage}
                     />
-                    {currentPage === 'cofre'          && <GovernancePage uid={safeUID} />}
+                    {currentPage === 'cofre'          && <GovernancePage uid={safeUID} onOpenCategories={() => setIsSettingsOpen(true)} />}
                     {currentPage === 'shared-finance' && (
                       <SharedFinancePage uid={safeUID} displayName={user?.displayName ?? 'Você'} {...(user?.email ? { email: user.email } : {})} />
                     )}
