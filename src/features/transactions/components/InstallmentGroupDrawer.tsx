@@ -72,14 +72,14 @@ export default function InstallmentGroupDrawer({ uid, groupId, onClose, onCancel
           initial={{ opacity: 0, y: 40, scale: 0.97 }}
           animate={{ opacity: 1, y: 0,  scale: 1, transition: { type: 'spring', stiffness: 340, damping: 28 } }}
           exit={{ opacity: 0, y: 24, scale: 0.96, transition: { duration: 0.18 } }}
-          className="relative w-full sm:max-w-lg bg-[#0d1424] border border-quantum-border rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+          className="relative w-full sm:max-w-lg bg-quantum-card border border-quantum-border rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
           onClick={e => e.stopPropagation()}
         >
           {/* Top bar */}
           <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: 'linear-gradient(90deg,transparent,#a855f7,transparent)' }} />
 
           <div className="flex justify-center pt-3 pb-1 sm:hidden">
-            <div className="w-10 h-1 rounded-full bg-white/20" />
+            <div className="w-10 h-1 rounded-full bg-quantum-border" />
           </div>
 
           <div className="flex items-center justify-between px-6 pt-5 pb-4 shrink-0">
@@ -94,7 +94,7 @@ export default function InstallmentGroupDrawer({ uid, groupId, onClose, onCancel
                 </p>
               </div>
             </div>
-            <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/10 transition-all">
+            <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-quantum-fgMuted hover:text-quantum-fg hover:bg-quantum-bgSecondary transition-all">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -162,7 +162,7 @@ export default function InstallmentGroupDrawer({ uid, groupId, onClose, onCancel
                             <button
                               onClick={() => setConfirmFrom(null)}
                               disabled={canceling}
-                              className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white/5 border border-quantum-border text-quantum-fgMuted hover:text-quantum-fg transition-colors"
+                              className="text-[10px] font-bold px-2 py-1 rounded-lg bg-quantum-bgSecondary border border-quantum-border text-quantum-fgMuted hover:text-quantum-fg transition-colors"
                             >
                               Não
                             </button>

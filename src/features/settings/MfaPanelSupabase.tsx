@@ -172,7 +172,7 @@ export default function MfaPanelSupabase() {
             <button
               onClick={() => void copySecret(state.secretKey)}
               aria-label="Copiar chave"
-              className="p-2 rounded-lg border border-quantum-border hover:bg-slate-800 transition-colors"
+              className="p-2 rounded-lg border border-quantum-border hover:bg-quantum-bgSecondary transition-colors"
             >
               <Copy className="w-4 h-4 text-quantum-fgMuted" aria-hidden />
             </button>

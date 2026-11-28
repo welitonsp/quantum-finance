@@ -346,7 +346,7 @@ export default function DataPrivacyPanel({ uid }: Props) {
               onChange={e => setConfirmText(e.target.value)}
               disabled={isDeleting}
               placeholder="EXCLUIR"
-              className="w-full sm:w-64 px-3 py-2 rounded-xl bg-slate-900 border border-quantum-border text-quantum-fg text-sm placeholder-quantum-fgMuted focus:outline-none focus:ring-1 focus:ring-red-600 disabled:opacity-60"
+              className="w-full sm:w-64 px-3 py-2 rounded-xl bg-quantum-bgSecondary border border-quantum-border text-quantum-fg text-sm placeholder-quantum-fgMuted focus:outline-none focus:ring-1 focus:ring-red-600 disabled:opacity-60"
             />
             {deleteError && (
               <p className="text-sm text-red-400">{deleteError}</p>
@@ -365,7 +365,7 @@ export default function DataPrivacyPanel({ uid }: Props) {
               <button
                 onClick={handleDeleteCancel}
                 disabled={isDeleting}
-                className="px-4 py-2 rounded-xl border border-quantum-border hover:bg-slate-800 text-quantum-fgMuted text-sm font-medium transition-colors disabled:opacity-60"
+                className="px-4 py-2 rounded-xl border border-quantum-border hover:bg-quantum-bgSecondary text-quantum-fgMuted text-sm font-medium transition-colors disabled:opacity-60"
               >
                 Cancelar
               </button>
