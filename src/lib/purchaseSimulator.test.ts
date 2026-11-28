@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { simulatePurchase, computeCompetencia } from './purchaseSimulator';
+import { irRegressivo } from './purchaseSimulator';
 import type { Centavos } from '../shared/types/money';
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -398,5 +399,41 @@ describe('simulatePurchase — impacto por competência', () => {
     });
     expect(result.invoiceImpact[0]!.competencia).toBe('2025-06');
     expect(result.invoiceImpact[1]!.competencia).toBe('2025-07');
+  });
+});
+
+describe('simulatePurchase — parcelar x pagar à vista', () => {
+  const base = {
+    priceCents: 100000 as Centavos, installments: 10, closingDay: 10,
+    purchaseDateISO: '2026-06-05', currentBalanceCents: 500000 as Centavos, cdiMonthlyRate: 0.01,
+  };
+
+  it('rendimento cai com o saldo e desconta IR (10x de R$ 100 a 1% a.m. rende R$ 46,72 líquidos (IR 20%), não R$ 104,62)', () => {
+    const r = simulatePurchase(base);
+    expect(r.investmentGainCents).toBe(4672);
+    expect(r.investmentNetAdvantage).toBe(4672);
+    expect(r.verdictReasons.some(x => x.includes('Parcelar'))).toBe(true);
+  });
+
+  it('desconto de 5% à vista vence o rendimento do parcelado', () => {
+    const r = simulatePurchase({ ...base, cashDiscountPct: 0.05 });
+    expect(r.cashPriceWithDiscountCents).toBe(95000);
+    // à vista 950 x parcelado 1000 − 46,72 = 953,28 → parcelar perde R$ 3,28
+    expect(r.investmentNetAdvantage).toBe(-328);
+    expect(r.verdictReasons.some(x => x.includes('à vista'))).toBe(true);
+  });
+
+  it('desconto absurdo é limitado e à vista sem parcelas não compara', () => {
+    expect(simulatePurchase({ ...base, cashDiscountPct: 5 }).cashPriceWithDiscountCents).toBe(10000);
+    expect(simulatePurchase({ ...base, installments: 1 }).investmentNetAdvantage).toBeUndefined();
+  });
+});
+
+describe('irRegressivo', () => {
+  it('segue a tabela da renda fixa', () => {
+    expect(irRegressivo(6)).toBe(0.225);
+    expect(irRegressivo(12)).toBe(0.20);
+    expect(irRegressivo(24)).toBe(0.175);
+    expect(irRegressivo(25)).toBe(0.15);
   });
 });
