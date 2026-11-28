@@ -4,7 +4,7 @@ import {
   AlertCircle, ChevronDown, ChevronUp, Info,
 } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
-import { gerarInformeIR, anosDisponiveis, exportarInformeCSV } from '../../lib/irEngine';
+import { gerarInformeIR, anosDisponiveis, exportarInformeCSV, classeLabel } from '../../lib/irEngine';
 import { formatBRL } from '../../shared/types/money';
 import { formatPercent } from '../../utils/formatters';
 import type { IRGanhoCapital, IRRendimento } from '../../lib/irEngine';
@@ -77,11 +77,11 @@ export default function IRPage({ uid }: Props) {
       <div className="flex gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
         <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
         <div>
-          <p className="font-medium">Informação auxiliar — não substitui declaração oficial</p>
+          <p className="font-medium">Estimativa — confira com um contador antes de pagar qualquer DARF</p>
           <p className="mt-1 text-amber-700">
-            Os valores são calculados com base nas suas movimentações registradas.
-            Marque compras de ativos com a tag <strong>compra-ativo</strong> e vendas com <strong>venda-ativo</strong> para apurar ganhos de capital.
-            Consulte um contador para a declaração definitiva.
+            Os valores saem das suas movimentações. O ganho de capital é apurado por mês, com preço médio
+            (inclusive compras de anos anteriores), isenção de R$ 20 mil/mês em vendas de ações e R$ 35 mil/mês
+            em outros bens, e compensação de prejuízo na bolsa. Feriados não entram no vencimento.
           </p>
         </div>
       </div>
@@ -98,16 +98,17 @@ export default function IRPage({ uid }: Props) {
               color="blue"
             />
             <SummaryCard
-              label="Total Isento"
-              value={formatBRL(informe.totalIsentoCents)}
+              label="Isento e exclusivo"
+              value={formatBRL(informe.totalIsentoCents + informe.totalExclusivaCents)}
               color="green"
+              hint={`Isento ${formatBRL(informe.totalIsentoCents)} · exclusivo ${formatBRL(informe.totalExclusivaCents)}`}
             />
             <SummaryCard
-              label="IR Est. Ganho Capital"
+              label="DARFs estimadas no ano"
               value={formatBRL(informe.totalIRDevidoCents)}
               color={informe.totalIRDevidoCents > 0 ? 'red' : 'gray'}
               {...(informe.totalIRDevidoCents > 0
-                ? { hint: `Alíquota efetiva ${formatPercent(informe.aliquotaEfetiva * 100, 1)}` }
+                ? { hint: `Alíquota média sobre ganhos ${formatPercent(informe.aliquotaEfetiva * 100, 1)}` }
                 : {})}
             />
           </div>
@@ -135,7 +136,7 @@ export default function IRPage({ uid }: Props) {
                 onClick={() => setShowGanhos((v) => !v)}
                 aria-expanded={showGanhos}
               >
-                <span>Ganhos de Capital ({informe.ganhoCapital.length} ativo{informe.ganhoCapital.length > 1 ? 's' : ''})</span>
+                <span>Ganhos de Capital ({informe.ganhoCapital.length} apuraç{informe.ganhoCapital.length > 1 ? 'ões' : 'ão'} mensa{informe.ganhoCapital.length > 1 ? 'is' : 'l'})</span>
                 {showGanhos ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
 
@@ -144,16 +145,17 @@ export default function IRPage({ uid }: Props) {
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
                       <tr>
+                        <th className="text-left px-4 py-3">Mês</th>
                         <th className="text-left px-4 py-3">Ativo</th>
                         <th className="text-right px-4 py-3">Custo</th>
-                        <th className="text-right px-4 py-3">Receita</th>
+                        <th className="text-right px-4 py-3">Venda</th>
                         <th className="text-right px-4 py-3">Ganho Líq.</th>
                         <th className="text-right px-4 py-3">IR Est.</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {informe.ganhoCapital.map((g) => (
-                        <GanhoCapitalRow key={g.assetDescription} ganho={g} />
+                        <GanhoCapitalRow key={`${g.competencia}|${g.assetClass}|${g.assetDescription}`} ganho={g} />
                       ))}
                     </tbody>
                   </table>
@@ -162,12 +164,43 @@ export default function IRPage({ uid }: Props) {
             </section>
           )}
 
+          {/* DARFs */}
+          {informe.darfs.length > 0 && (
+            <section aria-labelledby="darfs-titulo">
+              <h2 id="darfs-titulo" className="text-base font-semibold text-gray-800 mb-3">DARFs estimadas</h2>
+              <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+                    <tr>
+                      <th className="text-left px-4 py-3">Mês</th>
+                      <th className="text-left px-4 py-3">Código</th>
+                      <th className="text-right px-4 py-3">Valor</th>
+                      <th className="text-right px-4 py-3">Vencimento</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {informe.darfs.map((d) => (
+                      <tr key={`${d.competencia}|${d.codigo}`}>
+                        <td className="px-4 py-3 text-gray-800">{mesBR(d.competencia)}</td>
+                        <td className="px-4 py-3 text-gray-600">{d.codigo} {d.codigo === '6015' ? '(bolsa)' : '(ganho de capital)'}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatBRL(d.valorCents)}</td>
+                        <td className="px-4 py-3 text-right text-gray-600">{dataBR(d.vencimento)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
           {/* Dica de tags */}
           <div className="flex gap-2 p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700">
             <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <p>
-              Para apurar ganhos de capital, adicione a tag <strong>compra-ativo</strong> nas transações de compra de investimentos
-              e <strong>venda-ativo</strong> nas transações de resgate/venda.
+              Para apurar ganhos de capital, use as tags <strong>compra-ativo</strong> e <strong>venda-ativo</strong>.
+              Opcionais: <strong>ativo:PETR4</strong> (nome do ativo), <strong>qtd:100</strong> (quantidade, para venda parcial),
+              e a classe <strong>acao</strong>, <strong>day-trade</strong>, <strong>fii</strong> ou <strong>cripto</strong>
+              (sem classe = outros bens). Rendimentos isentos: categoria Reembolso, Estorno, Presente… ou tag <strong>isento</strong>.
             </p>
           </div>
         </>
@@ -225,7 +258,11 @@ function GanhoCapitalRow({ ganho }: { ganho: IRGanhoCapital }) {
 
   return (
     <tr className="hover:bg-gray-50 transition-colors">
-      <td className="px-4 py-3 font-medium text-gray-800 capitalize">{ganho.assetDescription}</td>
+      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{mesBR(ganho.competencia)}</td>
+      <td className="px-4 py-3 font-medium text-gray-800">
+        <span className="uppercase">{ganho.assetDescription}</span>
+        <span className="block text-xs text-gray-400">{classeLabel(ganho.assetClass)}</span>
+      </td>
       <td className="px-4 py-3 text-right text-gray-600">{formatBRL(ganho.costCents)}</td>
       <td className="px-4 py-3 text-right text-gray-600">{formatBRL(ganho.revenueCents)}</td>
       <td className={`px-4 py-3 text-right font-medium flex items-center justify-end gap-1 ${gainColor}`}>
@@ -233,10 +270,22 @@ function GanhoCapitalRow({ ganho }: { ganho: IRGanhoCapital }) {
         {formatBRL(Math.abs(ganho.gainCents))}
       </td>
       <td className="px-4 py-3 text-right font-semibold text-gray-800">
-        {ganho.irDevidoCents > 0 ? formatBRL(ganho.irDevidoCents) : '—'}
+        {ganho.isento ? <span className="text-green-700">Isento</span> : ganho.irDevidoCents > 0 ? formatBRL(ganho.irDevidoCents) : '—'}
       </td>
     </tr>
   );
+}
+
+/** YYYY-MM → MM/AAAA. */
+function mesBR(competencia: string): string {
+  const [y, m] = competencia.split('-');
+  return `${m}/${y}`;
+}
+
+/** YYYY-MM-DD → DD/MM/AAAA. */
+function dataBR(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
 }
 
 function EmptyState({ ano }: { ano: number }) {
