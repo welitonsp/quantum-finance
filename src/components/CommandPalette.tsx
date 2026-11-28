@@ -230,7 +230,7 @@ export default function CommandPalette({ isOpen, onClose }: Props) {
                   autoComplete="off" spellCheck={false}
                 />
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-mono bg-white/5 border-quantum-border text-quantum-fgMuted">
+                  <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-mono bg-quantum-bgSecondary border-quantum-border text-quantum-fgMuted">
                     <Command className="w-2.5 h-2.5" />K
                   </kbd>
                 </div>
@@ -260,9 +260,9 @@ export default function CommandPalette({ isOpen, onClose }: Props) {
                             role="option" aria-selected={isActive}
                             onClick={() => { cmd.action(); onClose(); }}
                             onMouseEnter={() => setFocusIdx(globalIdx)}
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${isActive ? 'bg-cyan-500/15 text-quantum-fg' : 'text-quantum-fg hover:bg-white/5'}`}
+                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${isActive ? 'bg-cyan-500/15 text-quantum-fg' : 'text-quantum-fg hover:bg-quantum-bgSecondary'}`}
                           >
-                            <div className={`p-1.5 rounded-lg shrink-0 ${isActive ? 'bg-cyan-500/20 text-cyan-400' : 'bg-white/5 text-quantum-fgMuted'}`}>
+                            <div className={`p-1.5 rounded-lg shrink-0 ${isActive ? 'bg-cyan-500/20 text-cyan-400' : 'bg-quantum-bgSecondary text-quantum-fgMuted'}`}>
                               <Icon className="w-3.5 h-3.5" />
                             </div>
                             <div className="flex-1 min-w-0">
@@ -270,7 +270,7 @@ export default function CommandPalette({ isOpen, onClose }: Props) {
                               <div className="text-[11px] text-quantum-fgMuted truncate">{cmd.description}</div>
                             </div>
                             {cmd.shortcut && (
-                              <kbd className="shrink-0 hidden sm:inline-flex px-1.5 py-0.5 rounded bg-white/5 border border-quantum-border text-[10px] text-quantum-fgMuted font-mono">
+                              <kbd className="shrink-0 hidden sm:inline-flex px-1.5 py-0.5 rounded bg-quantum-bgSecondary border border-quantum-border text-[10px] text-quantum-fgMuted font-mono">
                                 {cmd.shortcut}
                               </kbd>
                             )}
@@ -282,13 +282,13 @@ export default function CommandPalette({ isOpen, onClose }: Props) {
                 )}
               </div>
 
-              <div className="flex items-center justify-between px-4 py-2.5 border-t border-quantum-border text-[10px] text-slate-600">
+              <div className="flex items-center justify-between px-4 py-2.5 border-t border-quantum-border text-[10px] text-quantum-fgMuted">
                 <div className="flex items-center gap-3">
                   <span><kbd className="font-mono">↑↓</kbd> navegar</span>
                   <span><kbd className="font-mono">Enter</kbd> executar</span>
                   <span><kbd className="font-mono">Esc</kbd> {query ? 'limpar' : 'fechar'}</span>
                 </div>
-                <span className="text-slate-700">{filtered.length} {filtered.length === 1 ? 'comando' : 'comandos'}</span>
+                <span className="text-quantum-fgMuted">{filtered.length} {filtered.length === 1 ? 'comando' : 'comandos'}</span>
               </div>
             </div>
           </motion.div>

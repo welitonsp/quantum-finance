@@ -115,7 +115,7 @@ export default function CategorySettings({ uid, onClose }: Props) {
               <p className="text-sm text-quantum-fgMuted font-medium mt-1">Regras automáticas para novas movimentações</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/5 rounded-xl transition-all">
+          <button onClick={onClose} className="p-2 text-quantum-fgMuted hover:text-quantum-fg hover:bg-quantum-bgSecondary rounded-xl transition-all">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -135,7 +135,7 @@ export default function CategorySettings({ uid, onClose }: Props) {
                 <input
                   type="text" value={keyword} onChange={e => setKeyword(e.target.value)}
                   placeholder="Ex: uber, ifood, netflix..."
-                  className="w-full pl-10 pr-4 py-3 bg-quantum-bg/50 border border-quantum-border rounded-xl text-quantum-fg text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-600"
+                  className="w-full pl-10 pr-4 py-3 bg-quantum-bg/50 border border-quantum-border rounded-xl text-quantum-fg text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-quantum-fgMuted"
                 />
               </div>
 
@@ -172,8 +172,8 @@ export default function CategorySettings({ uid, onClose }: Props) {
                 <p className="text-sm font-bold animate-pulse">A ler Cérebro Quântico...</p>
               </div>
             ) : rules.length === 0 ? (
-              <div className="text-center py-12 border border-dashed border-quantum-border rounded-2xl bg-white/[0.02]">
-                <Tag className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+              <div className="text-center py-12 border border-dashed border-quantum-border rounded-2xl bg-quantum-bgSecondary">
+                <Tag className="w-10 h-10 text-quantum-fgMuted mx-auto mb-3" />
                 <p className="text-sm font-bold text-quantum-fgMuted">Nenhuma regra definida.</p>
                 <p className="text-xs text-quantum-fgMuted mt-1">Crie a sua primeira regra acima.</p>
               </div>
@@ -185,12 +185,12 @@ export default function CategorySettings({ uid, onClose }: Props) {
                       <span className="px-2 py-1 bg-indigo-500/10 text-indigo-400 text-[10px] font-bold font-mono rounded-lg border border-indigo-500/20 truncate max-w-[100px]">
                         {rule.keyword}
                       </span>
-                      <ArrowRight className="w-3 h-3 text-slate-600 flex-shrink-0" />
+                      <ArrowRight className="w-3 h-3 text-quantum-fgMuted flex-shrink-0" />
                       <span className="text-sm font-bold text-quantum-fg truncate">{rule.category}</span>
                     </div>
                     <button
                       onClick={() => void handleDeleteRule(rule.id)}
-                      className="p-2 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                      className="p-2 text-quantum-fgMuted hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
                       title="Apagar Regra"
                     >
                       <Trash2 className="w-4 h-4" />

@@ -32,7 +32,7 @@ export function OnboardingWizard({ onCreateAccount, onCreateTransaction, onDismi
           type="button"
           onClick={onDismiss}
           aria-label="Fechar"
-          className="absolute top-4 right-4 p-1.5 rounded-lg text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-accent/50"
+          className="absolute top-4 right-4 p-1.5 rounded-lg text-quantum-fgMuted hover:text-quantum-fg hover:bg-quantum-bgSecondary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-accent/50"
         >
           <X className="w-4 h-4" />
         </button>
@@ -48,7 +48,7 @@ export function OnboardingWizard({ onCreateAccount, onCreateTransaction, onDismi
           <button
             type="button"
             onClick={onCreateAccount}
-            className="w-full flex items-center gap-3 p-4 rounded-2xl border border-quantum-border bg-quantum-bg/50 hover:border-quantum-accent/40 hover:bg-white/[0.02] transition-all text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-accent"
+            className="w-full flex items-center gap-3 p-4 rounded-2xl border border-quantum-border bg-quantum-bg/50 hover:border-quantum-accent/40 hover:bg-quantum-bgSecondary transition-all text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-accent"
           >
             <div className="p-2.5 rounded-xl bg-quantum-accent/10">
               <Landmark className="w-5 h-5 text-quantum-accent" />
@@ -62,7 +62,7 @@ export function OnboardingWizard({ onCreateAccount, onCreateTransaction, onDismi
           <button
             type="button"
             onClick={onCreateTransaction}
-            className="w-full flex items-center gap-3 p-4 rounded-2xl border border-quantum-border bg-quantum-bg/50 hover:border-quantum-accent/40 hover:bg-white/[0.02] transition-all text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-accent"
+            className="w-full flex items-center gap-3 p-4 rounded-2xl border border-quantum-border bg-quantum-bg/50 hover:border-quantum-accent/40 hover:bg-quantum-bgSecondary transition-all text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-accent"
           >
             <div className="p-2.5 rounded-xl bg-quantum-accent/10">
               <Receipt className="w-5 h-5 text-quantum-accent" />
