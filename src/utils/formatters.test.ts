@@ -1,6 +1,6 @@
 // src/utils/formatters.test.ts
 import { describe, it, expect } from 'vitest';
-import { formatCurrency, formatNumber, formatPercent, roundForDisplay } from './formatters';
+import { formatCompactCurrency, formatCurrency, formatNumber, formatPercent, roundForDisplay } from './formatters';
 import { toCentavos } from '../shared/types/money';
 
 describe('Fábrica de Formatação (UI)', () => {
@@ -61,5 +61,22 @@ describe('Fábrica de Formatação (UI)', () => {
   it('deve formatar centavos canonicos sem alterar a UI', () => {
     const formatted = formatCurrency(toCentavos(1500.5), { cents: true }).replace(/\s/g, ' ');
     expect(formatted).toMatch(/R\$\s?1\.500,50/);
+  });
+});
+
+describe('formatCompactCurrency (eixos de gráfico)', () => {
+  const norm = (s: string) => s.replace(/\s/g, ' ');
+  it('usa vírgula decimal e sufixos pt-BR', () => {
+    expect(norm(formatCompactCurrency(950))).toBe('R$ 950');
+    expect(norm(formatCompactCurrency(1500))).toBe('R$ 1,5 mil');
+    expect(norm(formatCompactCurrency(12000))).toBe('R$ 12 mil');
+    expect(norm(formatCompactCurrency(1500000))).toBe('R$ 1,5 mi');
+  });
+  it('mantém o sinal de valores negativos', () => {
+    expect(norm(formatCompactCurrency(-2300))).toBe('-R$ 2,3 mil');
+  });
+  it('trata não-finitos e nulos como zero', () => {
+    expect(norm(formatCompactCurrency(Number.NaN))).toBe('R$ 0');
+    expect(norm(formatCompactCurrency(null))).toBe('R$ 0');
   });
 });

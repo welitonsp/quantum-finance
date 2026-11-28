@@ -13,7 +13,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { computeCashflowTimeline, firstNegativeDate } from '../lib/cashflowTimeline';
 import type { IncomeScenario } from '../lib/cashflowTimeline';
 import { fromCentavos } from '../shared/types/money';
-import { formatCurrency } from '../utils/formatters';
+import { formatCompactCurrency, formatCurrency } from '../utils/formatters';
 import type { Transaction, RecurringTask } from '../shared/types/transaction';
 import type { Centavos } from '../shared/types/money';
 
@@ -243,7 +243,7 @@ export default function TimelineWidget({
               tick={{ fontSize: 9, fill: '#6B7A94' }}
               tickLine={false}
               axisLine={false}
-              tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`}
+              tickFormatter={(v: number) => formatCompactCurrency(v)}
               width={52}
             />
             <Tooltip content={<CustomTooltip />} />
