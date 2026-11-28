@@ -210,7 +210,7 @@ export default function CentroComandoWidget({ budgetAlerts, recurringTasks, card
               aria-label={item.titulo}
             >
               <div className="flex items-start gap-3 w-full">
-                <div className={`p-1.5 rounded-lg bg-white/5 ${cfg.icon} shrink-0`}>
+                <div className={`p-1.5 rounded-lg bg-quantum-bgSecondary ${cfg.icon} shrink-0`}>
                   <Icon className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
