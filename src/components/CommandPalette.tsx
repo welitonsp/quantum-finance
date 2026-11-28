@@ -136,11 +136,21 @@ export default function CommandPalette({ isOpen, onClose }: Props) {
 
   useEffect(() => { setFocusIdx(0); }, [filtered.length]);
 
+  // Foco robusto ao abrir: imediato (input já montado no commit), reforçado no
+  // próximo frame e após um pequeno atraso — cobre a montagem animada do
+  // AnimatePresence e o carregamento lazy. Timers limpos ao fechar/desmontar.
+  // (`autoFocus` não é usado: `jsx-a11y/no-autofocus` é gate de regressão F-12.)
   useEffect(() => {
-    if (isOpen) {
-      setQuery(''); setFocusIdx(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
+    if (!isOpen) return undefined;
+    setQuery(''); setFocusIdx(0);
+    const focusInput = () => inputRef.current?.focus();
+    focusInput();
+    const rafId     = window.requestAnimationFrame(focusInput);
+    const timeoutId = window.setTimeout(focusInput, 50);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(timeoutId);
+    };
   }, [isOpen]);
 
   useEffect(() => {

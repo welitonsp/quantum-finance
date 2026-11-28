@@ -84,4 +84,33 @@ describe('IntelStrip', () => {
     expect(screen.getByText(/amplie para 35%/i)).toBeDefined();
     expect(screen.queryByText(/amplie para 20%/i)).toBeNull();
   });
+
+  it('classifica pelo valor exibido: 9,96 aparece como 10,0% e nao e critico', () => {
+    render(
+      <IntelStrip
+        savingsRate={9.96}
+        debtRatio={30}
+        goalProgress={60}
+        savingsGoalPercent={20}
+      />,
+    );
+
+    expect(screen.queryByText('Poupança Crítica')).toBeNull();
+    expect(screen.getByText('Poupança Moderada')).toBeDefined();
+    expect(screen.getByText(/10,0% retidos/)).toBeDefined();
+  });
+
+  it('mantem 9,94 como critico exibindo 9,9%', () => {
+    render(
+      <IntelStrip
+        savingsRate={9.94}
+        debtRatio={30}
+        goalProgress={60}
+        savingsGoalPercent={20}
+      />,
+    );
+
+    expect(screen.getByText('Poupança Crítica')).toBeDefined();
+    expect(screen.getByText(/Apenas 9,9% retidos/)).toBeDefined();
+  });
 });
