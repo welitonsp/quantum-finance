@@ -260,13 +260,13 @@ export default function RecurringManager({ uid }: Props) {
               <div>
                 <label htmlFor={`${fieldId}-desc`} className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Descrição</label>
                 <input id={`${fieldId}-desc`} type="text" value={newDescription} onChange={e => setNewDescription(e.target.value)} required placeholder="Ex: Aluguel, Internet..."
-                  className="w-full bg-quantum-bg border border-quantum-border rounded-xl px-4 py-3 text-sm text-quantum-fg focus:outline-none focus:border-cyan-500 transition-colors placeholder:text-slate-600" />
+                  className="w-full bg-quantum-bg border border-quantum-border rounded-xl px-4 py-3 text-sm text-quantum-fg focus:outline-none focus:border-cyan-500 transition-colors placeholder:text-quantum-fgMuted" />
               </div>
 
               <div>
                 <label htmlFor={`${fieldId}-value`} className="block text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">Valor Fixo (R$)</label>
                 <input id={`${fieldId}-value`} type="text" inputMode="decimal" value={newValue} onChange={e => setNewValue(e.target.value)} required placeholder="0,00"
-                  className="w-full bg-quantum-bg border border-quantum-border rounded-xl px-4 py-3 text-sm text-quantum-fg focus:outline-none focus:border-cyan-500 font-mono transition-colors placeholder:text-slate-600" />
+                  className="w-full bg-quantum-bg border border-quantum-border rounded-xl px-4 py-3 text-sm text-quantum-fg focus:outline-none focus:border-cyan-500 font-mono transition-colors placeholder:text-quantum-fgMuted" />
               </div>
 
               <div className="grid grid-cols-2 gap-4">

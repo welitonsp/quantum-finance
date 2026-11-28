@@ -117,7 +117,7 @@ function GoalCard({
               <button onClick={() => void saveEdit()} disabled={saving} className="p-1.5 rounded-lg bg-purple-500/20 border border-purple-500/40 text-purple-300 hover:bg-purple-500/30 transition-colors disabled:opacity-50">
                 {saving ? <span className="w-3.5 h-3.5 border-2 border-purple-400/40 border-t-purple-400 rounded-full animate-spin block" /> : <Check className="w-3.5 h-3.5" />}
               </button>
-              <button onClick={() => setEditing(false)} className="p-1.5 rounded-lg text-quantum-fgMuted hover:text-quantum-fg bg-white/5 border border-quantum-border transition-colors">
+              <button onClick={() => setEditing(false)} className="p-1.5 rounded-lg text-quantum-fgMuted hover:text-quantum-fg bg-quantum-bgSecondary border border-quantum-border transition-colors">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -199,7 +199,7 @@ function NewGoalForm({ onSave, onCancel }: NewGoalFormProps) {
         {GOAL_EMOJIS.map(e => (
           <button
             key={e} type="button" onClick={() => setEmoji(e)}
-            className={`text-xl p-1.5 rounded-lg transition-colors ${emoji === e ? 'bg-purple-500/20 ring-1 ring-purple-500/50' : 'hover:bg-white/5'}`}
+            className={`text-xl p-1.5 rounded-lg transition-colors ${emoji === e ? 'bg-purple-500/20 ring-1 ring-purple-500/50' : 'hover:bg-quantum-bgSecondary'}`}
           >
             {e}
           </button>
@@ -236,7 +236,7 @@ function NewGoalForm({ onSave, onCancel }: NewGoalFormProps) {
           {saving ? <span className="w-4 h-4 border-2 border-purple-400/40 border-t-purple-400 rounded-full animate-spin" /> : <Check className="w-4 h-4" />}
           Criar Meta
         </button>
-        <button type="button" onClick={onCancel} className="px-3 py-2 rounded-xl text-sm text-quantum-fgMuted hover:text-quantum-fg bg-white/5 border border-quantum-border transition-colors">
+        <button type="button" onClick={onCancel} className="px-3 py-2 rounded-xl text-sm text-quantum-fgMuted hover:text-quantum-fg bg-quantum-bgSecondary border border-quantum-border transition-colors">
           <X className="w-4 h-4" />
         </button>
       </div>
