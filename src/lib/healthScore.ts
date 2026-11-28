@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import { CreditCard, PiggyBank, ShieldCheck, TrendingUp } from 'lucide-react';
 import type { FinancialMetrics } from '../hooks/useFinancialMetrics';
+import { formatNumber, formatPercent } from '../utils/formatters';
 
 export type PillarStatus = 'great' | 'ok' | 'warn' | 'critical';
 
@@ -30,7 +31,7 @@ export function computePillars(m: FinancialMetrics): Pillar[] {
 
   return [
     {
-      label: 'Taxa de Poupança', icon: PiggyBank, value: m.receita > 0 ? `${m.taxaPoupanca.toFixed(1)}%` : '—',
+      label: 'Taxa de Poupança', icon: PiggyBank, value: m.receita > 0 ? formatPercent(m.taxaPoupanca, 1) : '—',
       score: savingsScore, maxScore: 25, status: savingsStatus,
       tip: m.taxaPoupanca >= 20 ? 'Excelente! Manter acima de 20% é o padrão das finanças saudáveis.'
         : m.taxaPoupanca >= 10 ? 'Razoável, mas tente chegar a 20% para construir patrimônio mais rápido.'
@@ -38,7 +39,7 @@ export function computePillars(m: FinancialMetrics): Pillar[] {
       hint: 'Aumente a poupança para 20% da renda',
     },
     {
-      label: 'Endividamento', icon: CreditCard, value: `${m.endividamento.toFixed(1)}%`,
+      label: 'Endividamento', icon: CreditCard, value: formatPercent(m.endividamento, 1),
       score: debtScore, maxScore: 25, status: debtStatus,
       tip: m.endividamento <= 20 ? 'Dívida controlada. Seu patrimônio está saudável.'
         : m.endividamento <= 40 ? 'Dívida moderada. Evite assumir novos compromissos.'
@@ -46,7 +47,7 @@ export function computePillars(m: FinancialMetrics): Pillar[] {
       hint: 'Reduza dívidas abaixo de 30% do patrimônio',
     },
     {
-      label: 'Reserva de Emergência', icon: ShieldCheck, value: m.despesa > 0 ? `${m.reservaMeses.toFixed(1)} meses` : '—',
+      label: 'Reserva de Emergência', icon: ShieldCheck, value: m.despesa > 0 ? `${formatNumber(m.reservaMeses, 1)} meses` : '—',
       score: reserveScore, maxScore: 25, status: reserveStatus,
       tip: m.reservaMeses >= 6 ? 'Reserva sólida! Você tem 6+ meses de sobrevivência acumulados.'
         : m.reservaMeses >= 3 ? 'Reserva parcial. Meta: chegar a 6 meses de custo de vida.'
@@ -54,7 +55,7 @@ export function computePillars(m: FinancialMetrics): Pillar[] {
       hint: 'Construa 3 meses de reserva de emergência',
     },
     {
-      label: 'Comprometimento de Renda', icon: TrendingUp, value: m.receita > 0 ? `${m.comprometimento.toFixed(1)}%` : '—',
+      label: 'Comprometimento de Renda', icon: TrendingUp, value: m.receita > 0 ? formatPercent(m.comprometimento, 1) : '—',
       score: commitScore, maxScore: 25, status: commitStatus,
       tip: m.comprometimento <= 25 ? 'Ótimo! Menos de 1/4 da renda está presa em despesas fixas.'
         : m.comprometimento <= 40 ? 'Moderado. Considere revisar assinaturas e contratos fixos.'

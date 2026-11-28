@@ -6,6 +6,7 @@ import Decimal from 'decimal.js';
 import type { Transaction } from '../../shared/types/transaction';
 import { getTransactionAbsCentavos, isIncome } from '../../utils/transactionUtils';
 import { fromCentavos } from '../../shared/types/money';
+import { formatCurrency } from '../../utils/formatters';
 import { EmptyState } from '../../shared/components/ui';
 
 interface Props {
@@ -92,7 +93,7 @@ export default function TrendsChart({ transactions }: Props) {
             <Tooltip
               contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#30363d', borderRadius: '12px', color: '#fff' }}
               itemStyle={{ fontWeight: 'bold' }}
-              formatter={(value) => [`R$ ${Number(value ?? 0).toFixed(2)}`, '']}
+              formatter={(value) => [formatCurrency(typeof value === 'number' ? value : 0), '']}
             />
             <Area type="monotone" dataKey="receitas" name="Receitas" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorReceitas)" />
             <Area type="monotone" dataKey="despesas" name="Despesas" stroke="#ef4444" strokeWidth={3} fillOpacity={1} fill="url(#colorDespesas)" />

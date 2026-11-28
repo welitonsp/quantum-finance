@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { toCentavos, formatBRL } from '../../shared/types/money';
 import type { Centavos } from '../../shared/types/money';
+import { formatPercent } from '../../utils/formatters';
 import { simulatePurchase } from '../../lib/purchaseSimulator';
 import type { PurchaseSimulatorResult, VerdictColor } from '../../lib/purchaseSimulator';
 import { usePrivacy } from '../../contexts/PrivacyContext';
@@ -506,7 +507,7 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
                     }] : [{
                       label: '% comprometido (após)',
                       value: result.limitUsagePct > 0
-                        ? `${(result.limitUsagePct * 100).toFixed(1)}%`
+                        ? formatPercent(result.limitUsagePct * 100, 1)
                         : '—',
                     }]),
                     ...(result.investmentGainCents !== undefined ? [{
