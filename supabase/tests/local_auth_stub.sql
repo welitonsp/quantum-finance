@@ -19,3 +19,9 @@ grant usage on schema public to anon, authenticated;
 alter default privileges in schema public grant all on tables to anon, authenticated;
 alter default privileges in schema public grant all on sequences to anon, authenticated;
 alter default privileges in schema public grant execute on functions to anon, authenticated;
+-- fatores MFA (como auth.mfa_factors do Supabase, só as colunas usadas)
+create table auth.mfa_factors (
+  id      uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  status  text not null default 'unverified'
+);
