@@ -200,7 +200,7 @@ function AddDebtModal({ onClose, onSave }: AddDebtModalProps) {
             <button
               type="submit"
               disabled={saving}
-              className="px-5 py-2.5 rounded-xl font-bold bg-cyan-600 hover:bg-cyan-500 text-quantum-fg transition-colors shadow-lg shadow-cyan-500/20 disabled:opacity-50 flex items-center gap-2"
+              className="px-5 py-2.5 rounded-xl font-bold bg-cyan-600 hover:bg-cyan-500 text-white transition-colors shadow-lg shadow-cyan-500/20 disabled:opacity-50 flex items-center gap-2"
             >
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               Salvar
@@ -532,7 +532,7 @@ export default function DebtModule({ uid }: Props) {
         </div>
         <button
           onClick={() => setIsAddOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-quantum-fg rounded-xl font-bold text-sm transition-colors shadow-lg shadow-cyan-500/20"
+          className="flex items-center gap-2 px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold text-sm transition-colors shadow-lg shadow-cyan-500/20"
         >
           <PlusCircle className="w-4 h-4" />
           Adicionar Dívida
