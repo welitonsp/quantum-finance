@@ -11,11 +11,17 @@ import {
   todayInSaoPaulo,
   MAX_BATCH_SIZE,
   MAX_PROMPT_LEN,
+  AI_CATEGORIES,
 } from '../../supabase/functions/quantum-ai/prompt';
+import { ALLOWED_CATEGORIES } from '../shared/schemas/financialSchemas';
 
 const today = { year: 2026, month: 11, day: 10 };
 
 describe('quantum-ai/prompt', () => {
+  it('oferece à IA as mesmas categorias do app, menos Importado', () => {
+    expect([...AI_CATEGORIES]).toEqual(ALLOWED_CATEGORIES.filter((c) => c !== 'Importado'));
+  });
+
   it('mascara CPF, e-mail, telefone e chave PIX', () => {
     const out = maskPII('PIX para Maria Silva 123.456.789-00 maria@x.com 11 91234-5678 a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d');
     expect(out).not.toMatch(/123\.456|maria@x\.com|91234|a1b2c3d4/);

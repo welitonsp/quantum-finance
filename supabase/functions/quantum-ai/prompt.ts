@@ -47,10 +47,16 @@ export function maskPII(text: unknown): string {
 }
 
 // ─── Dinheiro e categorias ───────────────────────────────────────────────────
+// Espelho de ALLOWED_CATEGORIES (src/shared/schemas/financialSchemas.ts) sem
+// 'Importado'. A função de borda não importa src/; um teste garante que as duas
+// listas não se separem.
 export const AI_CATEGORIES = [
-  'Alimentação', 'Transporte', 'Assinaturas', 'Educação', 'Saúde',
-  'Moradia', 'Impostos/Taxas', 'Lazer', 'Vestuário', 'Salário',
-  'Freelance', 'Investimento', 'Diversos', 'Outros',
+  'Alimentação', 'Restaurantes', 'Transporte', 'Moradia', 'Contas da Casa',
+  'Saúde', 'Educação', 'Assinaturas', 'Impostos/Taxas', 'Tarifas Bancárias',
+  'Seguros', 'Cuidados Pessoais', 'Filhos', 'Pets', 'Lazer', 'Viagem',
+  'Vestuário', 'Presentes/Doações',
+  'Salário', '13º Salário', 'Freelance', 'Investimento', 'Aluguel Recebido', 'Reembolso',
+  'Diversos', 'Outros',
 ] as const;
 const ALLOWED_CATEGORIES = new Set<string>([...AI_CATEGORIES, 'Importado']);
 
