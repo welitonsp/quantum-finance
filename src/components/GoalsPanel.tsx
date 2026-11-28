@@ -9,6 +9,7 @@ import { formatBRL, fromCentavos, toCentavos } from '../shared/types/money';
 import type { Centavos } from '../shared/types/money';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import EmergencyFundCalculator from '../features/goals/EmergencyFundCalculator';
+import { formatPercent } from '../utils/formatters';
 
 interface Props {
   uid: string;
@@ -132,7 +133,7 @@ function GoalCard({
               <span className={`font-bold ${done ? 'text-emerald-400' : ''}`}>
                 {done ? '✓ Concluída' : `Faltam ${formatBRL(fromCentavos(remaining))}`}
               </span>
-              <span className="font-mono font-bold">{pct.toFixed(0)}%</span>
+              <span className="font-mono font-bold">{formatPercent(pct, 0)}</span>
             </div>
             {!done && goal.monthlyContributionNeeded > 0 && (
               <div className="flex items-center gap-1 text-[10px] text-quantum-fgMuted">

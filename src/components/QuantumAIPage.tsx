@@ -357,7 +357,7 @@ export default function QuantumAIPage({
         <div className="glass-card-quantum p-5">
           <div className="flex items-center gap-2 mb-4">
             <Zap className="w-5 h-5 text-quantum-red" />
-            <h3 className="text-sm font-bold text-quantum-fg">Anomalias Detetadas</h3>
+            <h3 className="text-sm font-bold text-quantum-fg">Anomalias Detectadas</h3>
             <span className="text-xs text-quantum-fgMuted ml-auto">vs. média 3 meses</span>
           </div>
           <AnomaliesPanel transactions={allTransactions} currentMonth={month} currentYear={year} />
