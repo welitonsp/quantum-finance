@@ -32,14 +32,32 @@ function formatCompetencia(ym: string): string {
   return `${MONTH_NAMES_PT[idx] ?? m}/${y}`;
 }
 
+/** "1.234,56", "1234,56" ou "1234.56" → texto com ponto decimal. */
+function normalizeDecimal(raw: string): string {
+  const s = raw.replace(/\s/g, '');
+  return s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s;
+}
+
+/** Percentual digitado (vírgula ou ponto) → fração, ex.: "1,15" → 0.0115. Inválido → null. */
+export function parsePercentInput(raw: string): number | null {
+  const clean = normalizeDecimal(raw);
+  if (!/^\d+(\.\d+)?$/.test(clean)) return null;
+  return Number(clean) / 100;
+}
+
 function parseBrlInput(raw: string): Centavos | null {
-  const clean = raw.replace(/\s/g, '').replace(',', '.');
+  const clean = normalizeDecimal(raw);
   if (!clean || isNaN(Number(clean))) return null;
   try {
     return toCentavos(clean);
   } catch {
     return null;
   }
+}
+
+/** Maior fatura futura do cartão: o quanto da renda mensal já está preso em parcelas. */
+function largestFutureInvoiceCents(invoices: ReadonlyArray<{ netCents: Centavos }>): Centavos {
+  return invoices.reduce((max, inv) => (inv.netCents > max ? inv.netCents : max), 0 as Centavos);
 }
 
 // ─── Veredito ─────────────────────────────────────────────────────────────────
@@ -94,7 +112,8 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
   const [purchaseDate, setPurchaseDate]   = useState(() => new Date().toISOString().slice(0, 10));
   const [incomeRaw, setIncomeRaw]         = useState('');
   const [committedRaw, setCommittedRaw]   = useState('');
-  const [cdiRateStr, setCdiRateStr]       = useState('0.83');
+  const [cdiRateStr, setCdiRateStr]       = useState('0,83');
+  const [discountStr, setDiscountStr]     = useState('');
   const [commitLimitPct, setCommitLimitPct] = useState(30);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [description, setDescription]       = useState('');
@@ -122,12 +141,14 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
     if (!price || price <= 0) return null;
 
     const monthlyIncome = parseBrlInput(incomeRaw) ?? undefined;
-    const cdi = parseFloat(cdiRateStr) / 100;
+    const cdi = parsePercentInput(cdiRateStr);
+    const discount = parsePercentInput(discountStr) ?? 0;
 
     // Quando um cartão é selecionado: usa dados reais; caso contrário, fallback manual.
     const effectiveClosingDay = selectedCard?.closingDay ?? closingDay;
+    // Comprometimento é mensal: a maior fatura futura, não a soma de todas.
     const committed = selectedCard
-      ? selectedCard.metrics.committedFutureCents
+      ? largestFutureInvoiceCents(selectedCard.metrics.futureInvoices)
       : (parseBrlInput(committedRaw) ?? 0 as Centavos);
     const cardEffectiveLimitCents = selectedCard?.metrics.effectiveAvailableCents;
 
@@ -140,10 +161,11 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
       ...(monthlyIncome !== undefined ? { monthlyIncomeCents: monthlyIncome } : {}),
       commitmentLimitPct:    commitLimitPct / 100,
       currentCommittedCents: committed,
-      cdiMonthlyRate:        isFinite(cdi) && cdi > 0 ? cdi : 0.0083,
+      cdiMonthlyRate:        cdi !== null && cdi > 0 ? cdi : 0.0083,
+      cashDiscountPct:       discount,
       ...(cardEffectiveLimitCents !== undefined ? { cardEffectiveLimitCents } : {}),
     });
-  }, [priceRaw, installments, closingDay, purchaseDate, balanceCents, incomeRaw, committedRaw, cdiRateStr, commitLimitPct, selectedCard]);
+  }, [priceRaw, installments, closingDay, purchaseDate, balanceCents, incomeRaw, committedRaw, cdiRateStr, discountStr, commitLimitPct, selectedCard]);
 
   // Caminho FORMULÁRIO: pré-preenche e abre o TransactionForm (parcelado e fallback).
   const handleRegisterViaForm = useCallback(() => {
@@ -372,12 +394,12 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
               />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor={`${fieldId}-committed`} className="text-xs font-bold text-quantum-fg">Já comprometido (R$)</label>
+              <label htmlFor={`${fieldId}-committed`} className="text-xs font-bold text-quantum-fg">Parcelas por mês já assumidas (R$)</label>
               {selectedCard ? (
                 <div className="flex items-center justify-between bg-quantum-card/40 border border-quantum-border rounded-xl px-3 py-2.5">
-                  <span className="text-[10px] text-quantum-fgMuted">Parcelas futuras reais</span>
+                  <span className="text-[10px] text-quantum-fgMuted">Maior fatura futura</span>
                   <span className="text-sm font-mono font-bold text-violet-300">
-                    {isPrivacyMode ? mask : formatBRL(selectedCard.metrics.committedFutureCents)}
+                    {isPrivacyMode ? mask : formatBRL(largestFutureInvoiceCents(selectedCard.metrics.futureInvoices))}
                   </span>
                 </div>
               ) : (
@@ -414,12 +436,24 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
                 id={`${fieldId}-cdi`}
                 type="text"
                 inputMode="decimal"
-                placeholder="0.83"
+                placeholder="0,83"
                 value={cdiRateStr}
                 onChange={e => setCdiRateStr(e.target.value)}
                 className="w-full bg-quantum-card/60 border border-quantum-border rounded-xl px-3 py-2.5 text-sm text-quantum-fg placeholder-quantum-fgMuted focus:outline-none focus:border-violet-500/60 transition-colors"
               />
             </div>
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor={`${fieldId}-discount`} className="text-xs font-bold text-quantum-fg">Desconto à vista (%)</label>
+            <input
+              id={`${fieldId}-discount`}
+              type="text"
+              inputMode="decimal"
+              placeholder="ex: 5"
+              value={discountStr}
+              onChange={e => setDiscountStr(e.target.value)}
+              className="w-full bg-quantum-card/60 border border-quantum-border rounded-xl px-3 py-2.5 text-sm text-quantum-fg placeholder-quantum-fgMuted focus:outline-none focus:border-violet-500/60 transition-colors"
+            />
           </div>
 
           {/* Saldo / Limite efetivo (informativo) */}
@@ -511,8 +545,16 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
                         : '—',
                     }]),
                     ...(result.investmentGainCents !== undefined ? [{
-                      label: 'Ganho CDI potencial',
+                      label: 'Rendimento no CDI (líquido de IR)',
                       value: showValue(result.investmentGainCents),
+                    }] : []),
+                    ...(result.cashPriceWithDiscountCents < result.cashPriceCents ? [{
+                      label: 'À vista com desconto',
+                      value: showValue(result.cashPriceWithDiscountCents),
+                    }] : []),
+                    ...(result.investmentNetAdvantage !== undefined && result.investmentNetAdvantage !== 0 ? [{
+                      label: result.investmentNetAdvantage > 0 ? 'Parcelar economiza' : 'À vista economiza',
+                      value: showValue(Math.abs(result.investmentNetAdvantage)),
                       highlight: true,
                     }] : []),
                   ].map(({ label, value, sub, highlight }) => (
@@ -587,7 +629,7 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
 
       <p className="text-[10px] text-quantum-fgMuted text-center px-4 leading-relaxed">
         Simulação baseada nos dados inseridos · Não constitui aconselhamento financeiro.
-        CDI estimado em {cdiRateStr}% a.m. · Saldo via dados do sistema.
+        CDI estimado em {cdiRateStr}% a.m. (confira a taxa atual) · rendimento com IR regressivo · Saldo via dados do sistema.
       </p>
 
       {/* Confirmação humana da ação do assistente (FASE H) */}

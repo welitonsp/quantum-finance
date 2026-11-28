@@ -2,6 +2,7 @@
  * purchaseSimulator.ts — Motor puro de decisão de compra.
  * Zero React, zero Firebase, zero I/O. 100% testável.
  */
+import Decimal from 'decimal.js';
 import type { Centavos } from '../shared/types/money';
 import { computeCompetencia } from '../shared/lib/competencia';
 
@@ -25,8 +26,10 @@ export interface PurchaseSimulatorInput {
   monthlyIncomeCents?: Centavos;
   /** % máximo do limite que pode ser comprometido (default 0.30 = 30%) */
   commitmentLimitPct?: number;
-  /** Total já comprometido com parcelas existentes em centavos */
+  /** Parcela MENSAL já comprometida (maior fatura futura do cartão), em centavos */
   currentCommittedCents?: Centavos;
+  /** Desconto para pagamento à vista, ex: 0.05 = 5% (default 0) */
+  cashDiscountPct?: number;
 
   /** Taxa CDI mensal, ex: 0.0083 = 0,83% a.m. (default 0.0083) */
   cdiMonthlyRate?: number;
@@ -62,10 +65,12 @@ export interface PurchaseSimulatorResult {
   /** Diferença de custo entre parcelado e à vista (0 quando sem juros) */
   installmentExtraCents: Centavos;
 
-  /** Ganho potencial investindo o valor à vista em CDI pelo período das parcelas */
+  /** Rendimento líquido de IR ao deixar o dinheiro no CDI e pagar as parcelas mês a mês */
   investmentGainCents?: Centavos;
-  /** Vantagem líquida de parcelar e investir (> 0 = melhor parcelar) */
+  /** Vantagem de parcelar sobre pagar à vista com desconto (> 0 = parcelar é melhor) */
   investmentNetAdvantage?: Centavos;
+  /** Valor à vista com desconto, em centavos (= preço quando sem desconto) */
+  cashPriceWithDiscountCents: Centavos;
 
   /** Limite de comprometimento disponível após esta compra (centavos) */
   effectiveLimitAfterCents: Centavos;
@@ -87,7 +92,11 @@ export function simulatePurchase(input: PurchaseSimulatorInput): PurchaseSimulat
     currentCommittedCents = 0 as Centavos,
     cdiMonthlyRate = 0.0083,
     cardEffectiveLimitCents,
+    cashDiscountPct = 0,
   } = input;
+  const discount = Number.isFinite(cashDiscountPct) ? Math.min(Math.max(cashDiscountPct, 0), 0.9) : 0;
+  const cashPriceWithDiscountCents = new Decimal(priceCents).times(1 - discount)
+    .toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber() as Centavos;
 
   // ── 1. Parcelas (divisão inteira; restante na última) ──────────────────────
   const n = Math.max(1, Math.floor(installments));
@@ -116,7 +125,8 @@ export function simulatePurchase(input: PurchaseSimulatorInput): PurchaseSimulat
   const effectiveLimitAfterCents = cardEffectiveLimitCents !== undefined
     ? (Math.max(0, cardEffectiveLimitCents - priceCents) as Centavos)
     : monthlyIncomeCents
-      ? (Math.max(0, Math.floor(monthlyIncomeCents * commitmentLimitPct) - newCommittedCents) as Centavos)
+      ? (Math.max(0, new Decimal(monthlyIncomeCents).times(commitmentLimitPct)
+          .toDecimalPlaces(0, Decimal.ROUND_FLOOR).toNumber() - newCommittedCents) as Centavos)
       : (Math.max(0, currentBalanceCents - priceCents) as Centavos);
 
   // ── 4. Comparação CDI (parcelar vs pagar à vista e investir) ───────────────
@@ -124,11 +134,11 @@ export function simulatePurchase(input: PurchaseSimulatorInput): PurchaseSimulat
   let investmentNetAdvantage: Centavos | undefined;
 
   if (n > 1 && cdiMonthlyRate > 0) {
-    // Ganho de investir o valor à vista pelo período das parcelas
-    const gain = Math.floor(priceCents * (Math.pow(1 + cdiMonthlyRate, n) - 1));
-    investmentGainCents = gain as Centavos;
-    // Sem juros no cartão → ganho líquido = ganho CDI inteiro
-    investmentNetAdvantage = gain as Centavos;
+    investmentGainCents = netInvestmentGainCents(priceCents, n, cdiMonthlyRate, installmentCents, lastInstallmentCents);
+    // Parcelado custa o preço menos o rendimento; à vista custa o preço com desconto.
+    investmentNetAdvantage = (cashPriceWithDiscountCents - (priceCents - investmentGainCents)) as Centavos;
+  } else if (n > 1) {
+    investmentNetAdvantage = (cashPriceWithDiscountCents - priceCents) as Centavos;
   }
 
   // ── 5. Veredito ────────────────────────────────────────────────────────────
@@ -157,15 +167,15 @@ export function simulatePurchase(input: PurchaseSimulatorInput): PurchaseSimulat
     }
   }
 
-  if (n > 1 && investmentGainCents !== undefined && investmentGainCents > 0) {
-    const gainDisplay = (investmentGainCents / 100).toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-      maximumFractionDigits: 0,
-    });
-    reasons.push(
-      `Parcelar libera capital para investir — ganho CDI potencial de ${gainDisplay}`,
-    );
+  const brl = (c: number) => (c / 100).toLocaleString('pt-BR', {
+    style: 'currency', currency: 'BRL', maximumFractionDigits: 0,
+  });
+  if (n > 1 && investmentNetAdvantage !== undefined) {
+    if (investmentNetAdvantage > 0) {
+      reasons.push(`Parcelar e deixar o dinheiro no CDI economiza cerca de ${brl(investmentNetAdvantage)}, já descontado o IR`);
+    } else if (investmentNetAdvantage < 0) {
+      reasons.push(`Pagar à vista sai cerca de ${brl(-investmentNetAdvantage)} mais barato`);
+    }
   }
 
   if (reasons.length === 0 || (reasons.length === 1 && verdict === 'green')) {
@@ -181,10 +191,42 @@ export function simulatePurchase(input: PurchaseSimulatorInput): PurchaseSimulat
     totalCostCents,
     invoiceImpact,
     cashPriceCents: priceCents,
+    cashPriceWithDiscountCents,
     installmentExtraCents: 0 as Centavos,
     ...(investmentGainCents !== undefined ? { investmentGainCents } : {}),
     ...(investmentNetAdvantage !== undefined ? { investmentNetAdvantage } : {}),
     effectiveLimitAfterCents,
     limitUsagePct,
   };
+}
+
+/** IR regressivo da renda fixa pelo prazo em meses (≈30 dias cada). */
+export function irRegressivo(months: number): number {
+  const days = months * 30;
+  if (days <= 180) return 0.225;
+  if (days <= 360) return 0.20;
+  if (days <= 720) return 0.175;
+  return 0.15;
+}
+
+/**
+ * Rendimento líquido de deixar o valor da compra no CDI e pagar uma parcela no
+ * fim de cada mês: o saldo aplicado CAI a cada parcela (não rende o preço cheio
+ * pelo prazo todo). IR regressivo sobre o rendimento.
+ */
+export function netInvestmentGainCents(
+  priceCents: number,
+  n: number,
+  monthlyRate: number,
+  installmentCents: number,
+  lastInstallmentCents: number,
+): Centavos {
+  let balance = new Decimal(priceCents);
+  for (let i = 1; i <= n; i++) {
+    balance = balance.times(new Decimal(1).plus(monthlyRate));
+    balance = balance.minus(i === n ? lastInstallmentCents : installmentCents);
+  }
+  // O que sobra depois de pagar todas as parcelas é o rendimento bruto.
+  const gross = Decimal.max(balance, 0);
+  return gross.times(1 - irRegressivo(n)).toDecimalPlaces(0, Decimal.ROUND_FLOOR).toNumber() as Centavos;
 }
