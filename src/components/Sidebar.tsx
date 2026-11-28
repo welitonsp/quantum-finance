@@ -196,7 +196,7 @@ export default function Sidebar({
                       } py-2.5 rounded-xl transition-all duration-200 group ${
                         isActive
                           ? 'bg-gradient-to-r from-cyan-500/10 to-cyan-400/5 text-cyan-400 border border-cyan-500/20 shadow-sm'
-                          : 'text-quantum-fgMuted hover:bg-white/5 hover:text-quantum-fg border border-transparent'
+                          : 'text-quantum-fgMuted hover:bg-quantum-bgSecondary hover:text-quantum-fg border border-transparent'
                       }`}
                     >
                       <Icon
@@ -223,7 +223,7 @@ export default function Sidebar({
             aria-label="Configurações"
             className={`w-full flex items-center ${
               isSidebarCollapsed ? 'justify-center px-0' : 'px-4'
-            } py-2.5 text-quantum-fgMuted hover:bg-white/5 hover:text-quantum-fg rounded-xl transition-colors border border-transparent`}
+            } py-2.5 text-quantum-fgMuted hover:bg-quantum-bgSecondary hover:text-quantum-fg rounded-xl transition-colors border border-transparent`}
           >
             <Settings className={`w-4 h-4 flex-shrink-0 ${isSidebarCollapsed ? '' : 'mr-3'}`} />
             {!isSidebarCollapsed && <span className="font-semibold text-sm">Configurações</span>}

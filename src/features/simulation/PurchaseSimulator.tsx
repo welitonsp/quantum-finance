@@ -567,7 +567,7 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
                     <button
                       type="button"
                       onClick={handleRegisterViaForm}
-                      className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-transparent hover:bg-white/5 border border-quantum-border text-quantum-fgMuted hover:text-quantum-fg font-medium text-xs transition-all"
+                      className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-transparent hover:bg-quantum-bgSecondary border border-quantum-border text-quantum-fgMuted hover:text-quantum-fg font-medium text-xs transition-all"
                     >
                       <ShoppingCart className="w-3.5 h-3.5" />
                       Registrar pelo formulário
@@ -585,7 +585,7 @@ export default function PurchaseSimulator({ balances, onRegisterPurchase, credit
         </div>
       </div>
 
-      <p className="text-[10px] text-slate-600 text-center px-4 leading-relaxed">
+      <p className="text-[10px] text-quantum-fgMuted text-center px-4 leading-relaxed">
         Simulação baseada nos dados inseridos · Não constitui aconselhamento financeiro.
         CDI estimado em {cdiRateStr}% a.m. · Saldo via dados do sistema.
       </p>
