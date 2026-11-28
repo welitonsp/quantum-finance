@@ -24,6 +24,11 @@ export interface UseAccountsReturn {
   /** balance opcional em REAIS. Outros campos passam direto. */
   updateAccount:   (id: string, data: UpdateAccountInput) => Promise<void>;
   removeAccount:   (id: string) => Promise<void>;
+  /**
+   * Líquido de hoje dos lançamentos sem conta (entradas − saídas, sem compras no
+   * cartão), em centavos. Só no Supabase; ausente no Firebase.
+   */
+  unassignedCashCents?: Centavos;
 }
 
 export interface AddAccountInput {
@@ -31,6 +36,8 @@ export interface AddAccountInput {
   type:    Account['type'];
   /** Em REAIS (float). Será convertido para centavos no write. */
   balance: number;
+  /** Data do saldo informado (YYYY-MM-DD). Supabase; padrão: hoje. */
+  openingDate?: string;
 }
 
 export interface UpdateAccountInput {
@@ -38,6 +45,8 @@ export interface UpdateAccountInput {
   type?:    Account['type'];
   /** Em REAIS (float). Será convertido para centavos se presente. */
   balance?: number;
+  /** Data do saldo informado (YYYY-MM-DD). Supabase. */
+  openingDate?: string;
 }
 
 type AccountHistoryAction = 'CREATE' | 'UPDATE' | 'DELETE';

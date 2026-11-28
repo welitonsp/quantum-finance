@@ -99,6 +99,14 @@ export interface Account {
    * e são normalizados em memória pelo useAccounts.
    */
   schemaVersion?: 2;
+  /**
+   * Saldo de abertura em centavos, na data `openingDate` (Supabase). `balance`
+   * é o saldo de hoje: abertura + lançamentos da conta até hoje (cash_position).
+   * Ausente no build Firebase, onde `balance` é o próprio valor gravado.
+   */
+  openingBalance?: Centavos;
+  /** Data do saldo de abertura (YYYY-MM-DD). */
+  openingDate?: string;
   createdAt?: Timestamp | number | null;
   updatedAt?: Timestamp | number | null;
 }
