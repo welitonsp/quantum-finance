@@ -151,7 +151,7 @@ export default function CategorySettings({ uid, onClose }: Props) {
 
               <div className="md:col-span-3">
                 <button type="submit" disabled={isSaving}
-                  className="w-full h-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-quantum-fg text-sm font-bold rounded-xl transition-colors py-3 md:py-0">
+                  className="w-full h-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-colors py-3 md:py-0">
                   {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Adicionar'}
                 </button>
               </div>
