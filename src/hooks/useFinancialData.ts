@@ -62,6 +62,13 @@ export function useFinancialData(
    * Quando presentes, valem para o módulo 'geral' no lugar da soma local.
    */
   serverTotals?: DashboardTotals | null,
+  /**
+   * Líquido de hoje dos lançamentos sem conta (Supabase, cash_position). Quando
+   * presente, o saldo do módulo 'geral' é o saldo de CAIXA de hoje: saldo de hoje
+   * das contas de ativo (que já inclui os lançamentos delas) + este valor. Sem
+   * somar de novo o histórico e sem parcelas futuras.
+   */
+  unassignedCashCents?: Centavos,
 ): FinancialDataReturn {
 
   const displayedTransactions = useMemo(() => {
@@ -135,16 +142,22 @@ export function useFinancialData(
       despesasMes    = new Decimal(serverTotals.expenseCents);
     }
 
+    // Saldo de caixa (Supabase): contas de ativo já trazem os próprios lançamentos.
+    const cashMode = unassignedCashCents !== undefined && activeModule === 'geral';
+    const saldoCents = cashMode
+      ? new Decimal(ativos).plus(new Decimal(unassignedCashCents))
+      : saldoAcumulado.plus(new Decimal(openingBalance));
+
     return {
       geral: {
-        saldo:      fromCentavos(saldoAcumulado.plus(new Decimal(openingBalance)).toNumber()),
+        saldo:      fromCentavos(saldoCents.toNumber()),
         receitas:   fromCentavos(receitasMes.toNumber()),
         despesas:   fromCentavos(despesasMes.toNumber()),
         patrimonio: fromCentavos(ativos - totalPassivos),
         dividas:    fromCentavos(totalPassivos),
       }
     };
-  }, [transactions, activeModule, currentMonth, currentYear, accounts, cardOpenInvoicesCents, serverTotals]);
+  }, [transactions, activeModule, currentMonth, currentYear, accounts, cardOpenInvoicesCents, serverTotals, unassignedCashCents]);
 
   const categoryData = useMemo((): CategoryDataPoint[] => {
     const map: Record<string, number> = {};

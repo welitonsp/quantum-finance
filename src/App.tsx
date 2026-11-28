@@ -186,7 +186,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
     undoLastBulkUpdate, isUndoing, hasUndoSnapshot, clearBulkSnapshot,
     hasMoreTransactions, isLoadingMore, loadedCount, loadMoreTransactions,
   } = useTransactions(safeUID, userCategoryRules, undefined, serverSearch);
-  const { accounts, loadingAccounts } = useAccounts(safeUID);
+  const { accounts, loadingAccounts, unassignedCashCents } = useAccounts(safeUID);
   const { recurringTasks } = useRecurring(safeUID);
   // Espelho realtime do consentimento de IA (gate real é server-trusted, fail-closed).
   const { aiGranted: aiConsentGranted, loading: aiConsentLoading } = useAiConsent(safeUID);
@@ -196,7 +196,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   // Receitas/despesas/saldo somados no banco (todas as transações, não só as 500 carregadas).
   const serverTotals = useDashboardTotals(safeUID, currentMonth, currentYear, transactions);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
-    useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts, categories, totalFaturaCents, serverTotals);
+    useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts, categories, totalFaturaCents, serverTotals, unassignedCashCents);
 
   // Onboarding — condição sempre derivada do estado real (nunca um "passo" artificial):
   // some sozinho assim que o usuário tiver 1+ conta ou 1+ transação. "Pular" só evita
