@@ -145,7 +145,7 @@ function MacroSlider({ label, value, min, max, step = 1, unit, hint, onChange }:
                    [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(0,230,138,0.6)]
                    [&::-webkit-slider-thumb]:cursor-pointer"
       />
-      <div className="flex justify-between text-[9px] text-slate-600">
+      <div className="flex justify-between text-[9px] text-quantum-fgMuted">
         <span>{min}{unit}</span><span>{max}{unit}</span>
       </div>
     </div>
@@ -638,7 +638,7 @@ export default function GemeloFinanceiro({
             </AnimatePresence>
           </div>
 
-          <p className="text-[10px] text-slate-600 text-center px-4 leading-relaxed">
+          <p className="text-[10px] text-quantum-fgMuted text-center px-4 leading-relaxed">
             Projeção estocástica via transformação Box-Muller · 1.000 iterações independentes ·
             base construída dos seus compromissos reais (recorrentes, dívidas e parcelas de cartão).
             Não constitui aconselhamento financeiro.

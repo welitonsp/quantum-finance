@@ -421,7 +421,7 @@ export default function ReconciliationEngine({
                       {mergeCandidate.reasons.map(r => (
                         <span
                           key={r}
-                          className="text-[9px] px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 text-quantum-fgMuted"
+                          className="text-[9px] px-1.5 py-0.5 rounded-md bg-quantum-bgSecondary border border-quantum-border text-quantum-fgMuted"
                         >
                           {r}
                         </span>
@@ -543,7 +543,7 @@ export default function ReconciliationEngine({
           <button
             ref={cancelBtnRef}
             onClick={onCancel}
-            className="text-[11px] text-slate-600 hover:text-quantum-fgMuted transition-colors"
+            className="text-[11px] text-quantum-fgMuted hover:text-quantum-fgMuted transition-colors"
           >
             Cancelar importação
           </button>
