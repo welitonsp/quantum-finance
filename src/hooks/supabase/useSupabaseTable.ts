@@ -45,11 +45,14 @@ export function useSupabaseTable<TRow, T>(
   const refresh = useCallback(async (): Promise<void> => {
     const request = ++latestRequest.current;
     const requestUid = uidRef.current;
-    const ordered = getSupabase()
-      .from(table)
-      .select(columns)
-      .order(orderBy, { ascending });
-    const { data, error } = await (limit === undefined ? ordered : ordered.limit(limit));
+    const key = [requestUid, table, columns, orderBy, ascending ? 'asc' : 'desc', limit ?? ''].join('|');
+    const { data, error } = await sharedRead(key, () => {
+      const ordered = getSupabase()
+        .from(table)
+        .select(columns)
+        .order(orderBy, { ascending });
+      return limit === undefined ? ordered : ordered.limit(limit);
+    });
     if (request !== latestRequest.current) return;
     if (error) {
       logSanitizedFirebaseError(loadOp, error);
@@ -97,6 +100,34 @@ export function useSupabaseTable<TRow, T>(
 }
 
 const EMPTY: never[] = [];
+
+interface ReadResult { data: unknown; error: unknown }
+
+const pendingReads = new Map<string, Promise<ReadResult>>();
+
+/**
+ * Junta leituras idênticas (mesmo usuário, tabela, colunas, ordem e teto) pedidas
+ * na MESMA tarefa do navegador. Várias telas com o mesmo hook montam juntas e o
+ * canal compartilhado avisa todas de uma vez; sem isto, cada uma fazia sua própria
+ * consulta (categorias saíam 4 vezes por abertura).
+ *
+ * Só é compartilhada a leitura criada na tarefa atual: a requisição HTTP sai depois
+ * dela, então reflete tudo o que motivou cada pedido (montagem, canal, gravação).
+ * Pedidos em tarefas seguintes fazem nova consulta, mesmo com a anterior pendente.
+ */
+export function sharedRead(key: string, run: () => PromiseLike<ReadResult>): Promise<ReadResult> {
+  const pending = pendingReads.get(key);
+  if (pending) return pending;
+  const release = () => { if (pendingReads.get(key) === promise) pendingReads.delete(key); };
+  const promise: Promise<ReadResult> = (async () => {
+    const { data, error } = await run();
+    return { data, error };
+  })();
+  pendingReads.set(key, promise);
+  setTimeout(release, 0);
+  void promise.then(release, release);
+  return promise;
+}
 
 /**
  * O Realtime do Supabase não filtra eventos DELETE (nem aplica RLS a eles), então
