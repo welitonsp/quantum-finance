@@ -4,6 +4,7 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 const calls: Array<{ op: string; args: unknown[] }> = [];
 let selectResult: { data: unknown; error: unknown } = { data: [], error: null };
 let writeResult: { data: unknown; error: unknown } = { data: { id: 'new-id' }, error: null };
+let rpcResult: { data: unknown; error: unknown } = { data: [], error: null };
 
 function builder() {
   const b: Record<string, unknown> = {};
@@ -26,6 +27,7 @@ const channel: { on: ReturnType<typeof vi.fn>; subscribe: ReturnType<typeof vi.f
 };
 const client = {
   from: vi.fn(() => builder()),
+  rpc: vi.fn(() => Promise.resolve(rpcResult)),
   channel: vi.fn(() => channel),
   removeChannel: vi.fn(() => Promise.resolve()),
 };
@@ -33,12 +35,13 @@ const client = {
 vi.mock('../../shared/api/supabase/client', () => ({ getSupabase: () => client }));
 vi.mock('../../shared/lib/firebaseErrorHandling', () => ({ logSanitizedFirebaseError: vi.fn() }));
 
-import { useAccountsSupabase, mapAccountRow, centsFromBigint } from './useAccountsSupabase';
+import { useAccountsSupabase, mapAccountRow, centsFromBigint, parseCashPosition } from './useAccountsSupabase';
 
 beforeEach(() => {
   calls.length = 0;
   selectResult = { data: [], error: null };
   writeResult = { data: { id: 'new-id' }, error: null };
+  rpcResult = { data: [], error: null };
   vi.clearAllMocks();
 });
 
@@ -59,9 +62,34 @@ describe('mapAccountRow', () => {
       created_at: '2026-11-20T10:00:00Z', updated_at: null,
     });
     expect(acc).toEqual({
-      id: 'a1', name: 'Nubank', type: 'corrente', balance: 150000, schemaVersion: 2,
+      id: 'a1', name: 'Nubank', type: 'corrente', balance: 150000, openingBalance: 150000, schemaVersion: 2,
       createdAt: Date.parse('2026-11-20T10:00:00Z'), updatedAt: null,
     });
+  });
+
+  it('guarda a data de abertura válida e ignora formato estranho', () => {
+    const base = { id: 'a1', name: 'N', type: 'corrente', balance_cents: 0, created_at: null, updated_at: null };
+    expect(mapAccountRow({ ...base, opening_date: '2026-11-01' }).openingDate).toBe('2026-11-01');
+    expect(mapAccountRow({ ...base, opening_date: '01/11/2026' }).openingDate).toBeUndefined();
+  });
+});
+
+describe('parseCashPosition', () => {
+  it('separa saldo por conta e líquido sem conta', () => {
+    const r = parseCashPosition([
+      { account_id: 'a1', balance_cents: '625000' },
+      { account_id: 'a2', balance_cents: -3000 },
+      { account_id: null, balance_cents: '18500' },
+    ]);
+    expect(r.byAccount.get('a1')).toBe(625000);
+    expect(r.byAccount.get('a2')).toBe(-3000);
+    expect(r.unassignedCents).toBe(18500);
+  });
+
+  it('resposta inválida vira vazio', () => {
+    const r = parseCashPosition(null);
+    expect(r.byAccount.size).toBe(0);
+    expect(r.unassignedCents).toBe(0);
   });
 
   it('tipo desconhecido vira corrente', () => {
@@ -87,6 +115,32 @@ describe('useAccountsSupabase', () => {
     expect(client.channel).toHaveBeenCalledWith('accounts:u1');
     unmount();
     expect(client.removeChannel).toHaveBeenCalled();
+  });
+
+  it('mostra o saldo de hoje do servidor e mantém a abertura', async () => {
+    selectResult = { data: [{ id: 'a1', name: 'C', type: 'corrente', balance_cents: 300000, opening_date: '2026-11-01', created_at: null, updated_at: null }], error: null };
+    rpcResult = { data: [{ account_id: 'a1', balance_cents: 625000 }, { account_id: null, balance_cents: 18500 }], error: null };
+    const { result } = renderHook(() => useAccountsSupabase('u1'));
+    await waitFor(() => expect(result.current.accounts[0]?.balance).toBe(625000));
+    expect(result.current.accounts[0]?.openingBalance).toBe(300000);
+    expect(result.current.unassignedCashCents).toBe(18500);
+    expect(client.rpc).toHaveBeenCalledWith('cash_position', { p_today: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
+  });
+
+  it('se o saldo do servidor falhar, mostra a abertura', async () => {
+    selectResult = { data: [{ id: 'a1', name: 'C', type: 'corrente', balance_cents: 300000, created_at: null, updated_at: null }], error: null };
+    rpcResult = { data: null, error: { code: '42883', message: 'x' } };
+    const { result } = renderHook(() => useAccountsSupabase('u1'));
+    await waitFor(() => expect(result.current.accounts).toHaveLength(1));
+    expect(result.current.accounts[0]?.balance).toBe(300000);
+    expect(result.current.unassignedCashCents).toBe(0);
+  });
+
+  it('assina contas e lançamentos do usuário', async () => {
+    const { result } = renderHook(() => useAccountsSupabase('u1'));
+    await waitFor(() => expect(result.current.loadingAccounts).toBe(false));
+    const tables = (channel.on.mock.calls as unknown[][]).map(c => (c[1] as { table?: string }).table);
+    expect(tables).toEqual(expect.arrayContaining(['accounts', 'transactions']));
   });
 
   it('recarrega quando o canal de tempo real termina de entrar', async () => {
@@ -118,6 +172,15 @@ describe('useAccountsSupabase', () => {
     await act(async () => { id = await result.current.addAccount({ name: 'Inter', type: 'corrente', balance: 10.1 }); });
     expect(id).toBe('new-id');
     expect(calls).toContainEqual({ op: 'insert', args: [{ name: 'Inter', type: 'corrente', balance_cents: 1010 }] });
+  });
+
+  it('addAccount e updateAccount gravam a data do saldo quando informada', async () => {
+    const { result } = renderHook(() => useAccountsSupabase('u1'));
+    await waitFor(() => expect(result.current.loadingAccounts).toBe(false));
+    await act(async () => { await result.current.addAccount({ name: 'Inter', type: 'corrente', balance: 1, openingDate: '2026-11-01' }); });
+    expect(calls).toContainEqual({ op: 'insert', args: [{ name: 'Inter', type: 'corrente', balance_cents: 100, opening_date: '2026-11-01' }] });
+    await act(async () => { await result.current.updateAccount('a1', { openingDate: '2026-10-31' }); });
+    expect(calls).toContainEqual({ op: 'update', args: [{ opening_date: '2026-10-31' }] });
   });
 
   it('updateAccount envia só os campos informados', async () => {
