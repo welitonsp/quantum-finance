@@ -42,3 +42,20 @@ export const formatNumber = (value: DisplayNumberInput, decimals = 1): string =>
 /** Percentual no formato pt-BR (vírgula decimal, sem espaço antes do %): 15,6% */
 export const formatPercent = (value: DisplayNumberInput, decimals = 1): string =>
   `${formatNumber(value, decimals)}%`;
+
+const compactCurrencyFormatter = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  notation: 'compact',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 1,
+});
+
+/**
+ * Moeda compacta pt-BR para eixos de gráfico (recebe reais, não centavos):
+ * 950 → "R$ 950", 1500 → "R$ 1,5 mil", 1500000 → "R$ 1,5 mi". Não-finitos viram "R$ 0".
+ */
+export const formatCompactCurrency = (reais: number | null | undefined): string => {
+  const n = typeof reais === 'number' && Number.isFinite(reais) ? reais : 0;
+  return compactCurrencyFormatter.format(n);
+};

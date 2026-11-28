@@ -3,7 +3,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 import { TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, AlertCircle, LineChart as LineChartIcon } from 'lucide-react';
 import CountUp from 'react-countup';
 import { useTheme } from '../contexts/ThemeContext';
-import { formatCurrency } from '../utils/formatters';
+import { formatCompactCurrency, formatCurrency } from '../utils/formatters';
 import { useForecast } from '../hooks/useForecast';
 import { EmptyState, Skeleton } from '../shared/components/ui';
 import type { Transaction } from '../shared/types/transaction';
@@ -112,7 +112,7 @@ export default function ForecastWidget({ transactions, currentBalance }: Props) 
                 fontSize={9}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
+                tickFormatter={(v: number) => formatCompactCurrency(v)}
               />
               <Tooltip
                 contentStyle={{

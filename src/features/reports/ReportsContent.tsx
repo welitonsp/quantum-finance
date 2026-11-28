@@ -2,7 +2,7 @@
 import { useState, useMemo } from 'react';
 import { ComposedChart, BarChart, Bar, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Filter, AlertCircle, Calendar, Scissors, AlertTriangle, TrendingUp, BarChart3 } from 'lucide-react';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCompactCurrency, formatCurrency } from '../../utils/formatters';
 import type { Transaction, Account } from '../../shared/types/transaction';
 import { getTransactionAbsCentavos, isExpense, isInvoicePayment } from '../../utils/transactionUtils';
 import { fromCentavos } from '../../shared/types/money';
@@ -197,7 +197,7 @@ export default function ReportsContent({ transactions, accounts, categories = []
                     <ComposedChart data={paretoData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1E2A3F" vertical={false} />
                       <XAxis dataKey="name" stroke="#64748B" fontSize={10} tickLine={false} axisLine={false} dy={10} />
-                      <YAxis yAxisId="left"  stroke="#64748B" fontSize={10} tickFormatter={(val: number) => `R$ ${val >= 1000 ? (val/1000).toFixed(1)+'k' : val}`} tickLine={false} axisLine={false} />
+                      <YAxis yAxisId="left"  stroke="#64748B" fontSize={10} tickFormatter={(val: number) => formatCompactCurrency(val)} tickLine={false} axisLine={false} />
                       <YAxis yAxisId="right" orientation="right" stroke="#F59E0B" fontSize={10} tickFormatter={(val: number) => `${val}%`} tickLine={false} axisLine={false} />
                       <Tooltip
                         contentStyle={{ backgroundColor: '#131A2A', borderColor: '#1E2A3F', borderRadius: '12px', color: '#fff' }}
@@ -260,7 +260,7 @@ export default function ReportsContent({ transactions, accounts, categories = []
               <ResponsiveContainer width="100%" height={300}>
                 <AreaChart data={patrimonyData}>
                   <XAxis dataKey="monthLabel" stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v: number) => `R$${v >= 1000 ? (v/1000).toFixed(1)+'k' : v}`} />
+                  <YAxis stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v: number) => formatCompactCurrency(v)} />
                   <Tooltip contentStyle={{ backgroundColor: '#131A2A', borderColor: '#1E2A3F', borderRadius: '12px', color: '#fff' }} />
                   <Area type="monotone" dataKey="patrimonio" stroke="#6366F1" fill="#6366F1" fillOpacity={0.15} strokeWidth={2} />
                 </AreaChart>
