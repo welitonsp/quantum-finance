@@ -3,7 +3,8 @@
 // - ativos/passivos vêm das contas (não da soma histórica de transações)
 // - endividamento = passivos / (ativos + passivos)
 // - comprometimento = custoFixoMensal / receita
-// - reservaMeses = ativos / custoFixoMensal (em meses de sobrevivência)
+// - reservaMeses = ativos / custo essencial médio (média dos 3 meses anteriores)
+// - passivos incluem faturas abertas e o saldo restante das dívidas cadastradas
 import { useMemo } from 'react';
 import { logSanitizedFirebaseError } from '../shared/lib/firebaseErrorHandling';
 import Decimal from 'decimal.js';
@@ -24,12 +25,14 @@ export interface FinancialMetrics {
   passivos:          number;
   patrimonioLiquido: number;
   custoFixoMensal:   number;
+  /** Custo de vida essencial médio por mês (moradia, alimentação, transporte…) em reais. */
+  custoEssencialMensal?: number;
   taxaPoupanca:      number;
   /** % do patrimônio total comprometido com dívidas (passivos / total) */
   endividamento:     number;
   /** % da renda comprometida em custos fixos (fixos / receita) */
   comprometimento:   number;
-  /** Meses de sobrevivência: ativos / custoFixoMensal */
+  /** Meses de sobrevivência: ativos / custoEssencialMensal */
   reservaMeses:      number;
 }
 
@@ -45,6 +48,91 @@ const FIXED_CATEGORIES = new Set([
   'moradia', 'assinaturas', 'educação', 'impostos',
   'impostos/taxas', 'saúde',
 ]);
+
+/**
+ * Custo de vida essencial para a reserva de emergência: o que continua sendo
+ * pago se a renda parar. Inclui o dia a dia (alimentação, transporte), não só
+ * os contratos fixos.
+ */
+const ESSENTIAL_CATEGORIES = new Set([
+  'moradia', 'alimentação', 'mercado', 'transporte', 'saúde', 'educação',
+  'impostos', 'impostos/taxas', 'contas da casa', 'contas',
+]);
+
+/** Meses completos antes do mês de referência usados na média do custo essencial. */
+const ESSENTIAL_WINDOW_MONTHS = 3;
+
+function isEssentialCategory(category: string | undefined): boolean {
+  if (!category) return false;
+  return ESSENTIAL_CATEGORIES.has(category.toLowerCase());
+}
+
+/** Chave YYYY-MM de uma transação (null se a data for inválida). */
+function txMonthKey(tx: Transaction): string | null {
+  const rawDate = tx.date || tx.createdAt;
+  if (!rawDate) return null;
+  if (typeof rawDate === 'string' && /^\d{4}-\d{2}/.test(rawDate)) return rawDate.slice(0, 7);
+  const d = rawDate instanceof Date ? rawDate : new Date(String(rawDate));
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthKey(month: number, year: number): string {
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+/** Os `n` meses (YYYY-MM) imediatamente anteriores ao mês de referência. */
+function previousMonthKeys(month: number, year: number, n: number): string[] {
+  const keys: string[] = [];
+  let m = month;
+  let y = year;
+  for (let i = 0; i < n; i++) {
+    m -= 1;
+    if (m < 1) { m = 12; y -= 1; }
+    keys.push(monthKey(m, y));
+  }
+  return keys;
+}
+
+/**
+ * Custo essencial médio mensal, em centavos. Média dos 3 meses anteriores ao
+ * mês de referência em que houve algum lançamento (mês sem gasto essencial conta
+ * como zero). Sem histórico, usa o próprio mês de referência.
+ */
+export function computeEssentialMonthlyCents(
+  transactions: Transaction[],
+  currentMonth?: number,
+  currentYear?: number,
+): Decimal {
+  const essentialByMonth = new Map<string, Decimal>();
+  const activeMonths = new Set<string>();
+  for (const tx of transactions) {
+    const key = txMonthKey(tx);
+    if (!key) continue;
+    activeMonths.add(key);
+    if (!isExpense(tx.type) || isInvoicePayment(tx) || !isEssentialCategory(tx.category)) continue;
+    const cents = Number(getTxCentavos(tx));
+    if (!Number.isFinite(cents)) continue;
+    essentialByMonth.set(key, (essentialByMonth.get(key) ?? new Decimal(0)).plus(Math.abs(cents)));
+  }
+
+  if (!currentMonth || !currentYear) {
+    // Sem mês de referência: média de todos os meses com lançamento.
+    if (activeMonths.size === 0) return new Decimal(0);
+    let total = new Decimal(0);
+    for (const k of activeMonths) total = total.plus(essentialByMonth.get(k) ?? 0);
+    return total.dividedBy(activeMonths.size);
+  }
+
+  const window = previousMonthKeys(currentMonth, currentYear, ESSENTIAL_WINDOW_MONTHS)
+    .filter(k => activeMonths.has(k));
+  if (window.length === 0) {
+    return essentialByMonth.get(monthKey(currentMonth, currentYear)) ?? new Decimal(0);
+  }
+  let total = new Decimal(0);
+  for (const k of window) total = total.plus(essentialByMonth.get(k) ?? 0);
+  return total.dividedBy(window.length);
+}
 
 function isFixedCategory(category: string | undefined): boolean {
   if (!category) return false;
@@ -97,6 +185,8 @@ export function computeFinancialMetrics(
   currentMonth?: number,
   currentYear?: number,
   cardOpenInvoicesCents?: number,
+  /** Saldo restante das dívidas ativas do módulo Dívidas, em centavos. */
+  debtsRemainingCents?: number,
 ): FinancialMetrics {
   // ── 1. Receitas, despesas e custos fixos das transações ────────────────
   let receita = new Decimal(0);
@@ -145,6 +235,11 @@ export function computeFinancialMetrics(
     passivos = passivos.plus(new Decimal(Math.abs(Math.trunc(cardOpenInvoicesCents))));
   }
 
+  // ── 2c. Dívidas do módulo Dívidas (financiamentos, empréstimos) ────────
+  if (debtsRemainingCents && Number.isFinite(debtsRemainingCents) && debtsRemainingCents > 0) {
+    passivos = passivos.plus(new Decimal(Math.abs(Math.trunc(debtsRemainingCents))));
+  }
+
   // ── 3. KPIs derivados ─────────────────────────────────────────────────
   const patrimonioLiquido = ativos.minus(passivos);
 
@@ -165,9 +260,10 @@ export function computeFinancialMetrics(
     ? custoFixoMensal.dividedBy(receita).times(100)
     : new Decimal(0);
 
-  // Reserva = ativos / custoFixoMensal (em meses)
-  const reservaMeses = custoFixoMensal.greaterThan(0)
-    ? ativos.dividedBy(custoFixoMensal)
+  // Reserva = ativos / custo essencial médio (em meses)
+  const custoEssencial = computeEssentialMonthlyCents(transactions, currentMonth, currentYear);
+  const reservaMeses = custoEssencial.greaterThan(0)
+    ? Decimal.max(ativos, 0).dividedBy(custoEssencial)
     : new Decimal(0);
 
   return {
@@ -178,6 +274,7 @@ export function computeFinancialMetrics(
     passivos:          fromCentavos(passivos.toNumber()),
     patrimonioLiquido: fromCentavos(patrimonioLiquido.toNumber()),
     custoFixoMensal:   fromCentavos(custoFixoMensal.toNumber()),
+    custoEssencialMensal: fromCentavos(custoEssencial.toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber()),
     taxaPoupanca:      taxaPoupanca.toDecimalPlaces(2).toNumber(),
     endividamento:     endividamento.toDecimalPlaces(2).toNumber(),
     comprometimento:   comprometimento.toDecimalPlaces(2).toNumber(),
@@ -203,6 +300,7 @@ export function useFinancialMetrics(
   currentMonth?: number,
   currentYear?: number,
   cardOpenInvoicesCents?: number,
+  debtsRemainingCents?: number,
 ): UseFinancialMetricsReturn {
   const metrics = useMemo<FinancialMetrics | null>(() => {
     if (!uid) return null;
@@ -212,12 +310,12 @@ export function useFinancialMetrics(
     }
 
     try {
-      return computeFinancialMetrics(transactions ?? [], accounts, currentMonth, currentYear, cardOpenInvoicesCents);
+      return computeFinancialMetrics(transactions ?? [], accounts, currentMonth, currentYear, cardOpenInvoicesCents, debtsRemainingCents);
     } catch (err) {
       logSanitizedFirebaseError('financial_metrics_compute', err);
       return null;
     }
-  }, [uid, transactions, accounts, currentMonth, currentYear, cardOpenInvoicesCents]);
+  }, [uid, transactions, accounts, currentMonth, currentYear, cardOpenInvoicesCents, debtsRemainingCents]);
 
   return {
     metrics,
