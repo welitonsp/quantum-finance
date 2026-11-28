@@ -8,9 +8,15 @@ import {
 } from '../types/money';
 
 export const ALLOWED_CATEGORIES = [
-  'Alimentação', 'Transporte', 'Assinaturas', 'Educação', 'Saúde',
-  'Moradia', 'Impostos/Taxas', 'Lazer', 'Vestuário', 'Salário',
-  'Freelance', 'Investimento', 'Diversos', 'Outros', 'Importado',
+  // despesas
+  'Alimentação', 'Restaurantes', 'Transporte', 'Moradia', 'Contas da Casa',
+  'Saúde', 'Educação', 'Assinaturas', 'Impostos/Taxas', 'Tarifas Bancárias',
+  'Seguros', 'Cuidados Pessoais', 'Filhos', 'Pets', 'Lazer', 'Viagem',
+  'Vestuário', 'Presentes/Doações',
+  // receitas
+  'Salário', '13º Salário', 'Freelance', 'Investimento', 'Aluguel Recebido', 'Reembolso',
+  // genéricas
+  'Diversos', 'Outros', 'Importado',
 ] as const;
 
 export type AllowedCategory = typeof ALLOWED_CATEGORIES[number];
