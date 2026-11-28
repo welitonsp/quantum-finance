@@ -599,15 +599,18 @@ describe('computeHealthScore — pilares adicionais', () => {
 
 describe('computeAnomalies — branches adicionais', () => {
   it('tx histórico do ano anterior (y < curYear) é incluído no histórico', () => {
-    // histórico com datas em 2025 → y < curY (2026) → entra como histórico
-    const histTxs = Array.from({ length: 5 }, (_, i) =>
-      tx({ value_cents: 10000, category: 'Mercado', date: `2025-0${i + 1}-10` }),
+    // histórico cruzando a virada do ano (out/2025–fev/2026), dentro da janela
+    // de 6 meses antes de mar/2026 → y < curY entra como histórico
+    const histDates = ['2025-10-10', '2025-11-10', '2025-12-10', '2026-01-10', '2026-02-10'];
+    const histTxs = histDates.map((date) =>
+      tx({ value_cents: 10000, category: 'Mercado', date }),
     );
     const ctx: InsightContext = {
       ...BASE_CTX,
+      currentMonth: '2026-03',
       transactions: [
         ...histTxs,
-        tx({ value_cents: 20000, category: 'Mercado', date: '2026-07-01' }),
+        tx({ value_cents: 20000, category: 'Mercado', date: '2026-03-01' }),
       ],
     };
     const result = computeAnomalies(ctx);

@@ -106,6 +106,8 @@ function daysInMonth(year: number, month: number): number {
 // Mantém centavos canônicos internamente; converte para display só no retorno.
 
 const ANOMALY_THRESHOLD_PCT = 25;
+/** Meses anteriores ao atual usados na média de anomalias. */
+const ANOMALY_WINDOW_MONTHS = 6;
 
 /**
  * Detecta categorias com gasto no mês corrente acima do limiar em relação
@@ -136,33 +138,41 @@ export function computeAnomalies(ctx: InsightContext): AnomalyResult[] {
 
   if (historicalTxs.length < 5) return [];
 
-  // Agrupar histórico por mês→categoria (centavos inteiros)
+  // Janela: os últimos 6 meses antes do atual em que houve algum lançamento.
+  // Mês ativo sem gasto numa categoria conta como ZERO na média dela (antes a
+  // média só olhava os meses com gasto e ficava inflada).
+  const windowKeys = new Set<string>();
+  for (let i = 1; i <= ANOMALY_WINDOW_MONTHS; i++) {
+    const d = new Date(curY, curM - 1 - i, 1);
+    windowKeys.add(`${d.getFullYear()}-${d.getMonth() + 1}`);
+  }
+  const activeMonths = new Set<string>();
   const byMonth: Record<string, Record<string, number>> = {};
   for (const tx of historicalTxs) {
-    if (!isConsumptionExpenseTx(tx)) continue;
     const parts = parseDateParts(tx.date!);
     if (!parts) continue;
     const key = `${parts.y}-${parts.m}`;
+    if (!windowKeys.has(key)) continue;
+    activeMonths.add(key);
+    if (!isConsumptionExpenseTx(tx)) continue;
     if (!byMonth[key]) byMonth[key] = {};
     const cat = tx.category ?? 'Outros';
     byMonth[key]![cat] = (byMonth[key]![cat] ?? 0) + getTransactionAbsCentavos(tx);
   }
 
-  const months = Object.values(byMonth);
-  if (!months.length) return [];
+  const monthCount = activeMonths.size;
+  if (monthCount === 0) return [];
 
-  // Média por categoria (em centavos) — usando Decimal para somar sem float error
-  const avgByCat: Record<string, Centavos> = {};
-  const accumByCat: Record<string, number[]> = {};
-  for (const m of months) {
+  // Média por categoria (centavos inteiros), dividindo por TODOS os meses ativos
+  const sumByCat: Record<string, number> = {};
+  for (const m of Object.values(byMonth)) {
     for (const [cat, val] of Object.entries(m)) {
-      if (!accumByCat[cat]) accumByCat[cat] = [];
-      accumByCat[cat]!.push(val);
+      sumByCat[cat] = (sumByCat[cat] ?? 0) + val;
     }
   }
-  for (const [cat, vals] of Object.entries(accumByCat)) {
-    const sum = vals.reduce((acc, v) => acc + v, 0);
-    avgByCat[cat] = Math.round(sum / vals.length) as Centavos;
+  const avgByCat: Record<string, Centavos> = {};
+  for (const [cat, sum] of Object.entries(sumByCat)) {
+    avgByCat[cat] = Math.round(sum / monthCount) as Centavos;
   }
 
   // Totais do mês corrente por categoria (centavos)
