@@ -6,6 +6,7 @@ import {
 import { useTransactions } from '../../hooks/useTransactions';
 import { gerarInformeIR, anosDisponiveis, exportarInformeCSV } from '../../lib/irEngine';
 import { formatBRL } from '../../shared/types/money';
+import { formatPercent } from '../../utils/formatters';
 import type { IRGanhoCapital, IRRendimento } from '../../lib/irEngine';
 
 interface Props {
@@ -106,7 +107,7 @@ export default function IRPage({ uid }: Props) {
               value={formatBRL(informe.totalIRDevidoCents)}
               color={informe.totalIRDevidoCents > 0 ? 'red' : 'gray'}
               {...(informe.totalIRDevidoCents > 0
-                ? { hint: `Alíquota efetiva ${(informe.aliquotaEfetiva * 100).toFixed(1)}%` }
+                ? { hint: `Alíquota efetiva ${formatPercent(informe.aliquotaEfetiva * 100, 1)}` }
                 : {})}
             />
           </div>

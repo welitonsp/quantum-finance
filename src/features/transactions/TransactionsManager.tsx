@@ -2,6 +2,7 @@
 // Motor de Gestão de Movimentações — Quantum Finance v2
 // Thin orchestrator: holds state, delegates rendering to sub-components.
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { formatPercent } from '../../utils/formatters';
 import toast from 'react-hot-toast';
 import { Check, AlertTriangle } from 'lucide-react';
 import type { Transaction } from '../../shared/types/transaction';
@@ -466,7 +467,7 @@ export default function TransactionsManager({
             <div key={alert.taskId} className="flex items-center gap-2 text-xs text-amber-400">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
               {alert.type === 'price_increase'
-                ? `${alert.description}: aumento de ${alert.increasePercent?.toFixed(1)}% detectado`
+                ? `${alert.description}: aumento de ${formatPercent(alert.increasePercent, 1)} detectado`
                 : `${alert.description}: sem cobrança há 2+ meses`}
             </div>
           ))}

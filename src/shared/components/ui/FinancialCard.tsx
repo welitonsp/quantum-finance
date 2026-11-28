@@ -2,6 +2,7 @@ import { TrendingUp, TrendingDown } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { MoneyDisplay } from './MoneyDisplay';
 import type { Centavos } from '../../types/money';
+import { formatPercent, roundForDisplay } from '../../../utils/formatters';
 
 interface Props {
   label: string;
@@ -29,7 +30,9 @@ export function FinancialCard({
   deltaPct, invertDelta = false, icon: Icon, hint, className = '',
 }: Props) {
   const hasDelta = typeof deltaPct === 'number' && Number.isFinite(deltaPct);
-  const positive = hasDelta ? (invertDelta ? (deltaPct as number) < 0 : (deltaPct as number) >= 0) : true;
+  // Classifica pelo valor exibido (1 casa) para cor/ícone baterem com o texto.
+  const deltaShown = hasDelta ? roundForDisplay(deltaPct as number, 1) : 0;
+  const positive = hasDelta ? (invertDelta ? deltaShown < 0 : deltaShown >= 0) : true;
 
   return (
     <div className={`bg-quantum-card/50 backdrop-blur-sm border border-quantum-border rounded-2xl p-4 flex flex-col gap-1 ${className}`}>
@@ -42,7 +45,7 @@ export function FinancialCard({
         {hasDelta && (
           <span className={`inline-flex items-center gap-0.5 text-xs font-bold ${positive ? 'text-quantum-accent' : 'text-red-400'}`}>
             {positive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-            {Math.abs(deltaPct as number).toFixed(1)}%
+            {formatPercent(Math.abs(deltaShown), 1)}
           </span>
         )}
       </div>
