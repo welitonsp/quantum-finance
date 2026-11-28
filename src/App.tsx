@@ -120,7 +120,7 @@ const ConfirmDeleteModal = ({ transaction, onCancel, onConfirm }: ConfirmDeleteM
           <p className="text-sm font-bold truncate text-quantum-fg">"{transaction.description}"</p>
         </div>
         <div className="flex justify-end gap-3">
-          <button ref={cancelRef} onClick={onCancel} className="px-5 py-2.5 rounded-xl font-bold text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/5 transition-colors">Cancelar</button>
+          <button ref={cancelRef} onClick={onCancel} className="px-5 py-2.5 rounded-xl font-bold text-quantum-fgMuted hover:text-quantum-fg hover:bg-quantum-bgSecondary transition-colors">Cancelar</button>
           <button onClick={onConfirm} className="px-5 py-2.5 rounded-xl font-bold bg-red-600 text-quantum-fg hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20">Apagar</button>
         </div>
       </div>
@@ -534,7 +534,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
             type="button"
             onClick={() => setIsAIChatOpen(false)}
             aria-label="Fechar aviso de consentimento"
-            className="absolute top-3 right-3 z-10 p-1.5 rounded-full text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/5 transition-colors"
+            className="absolute top-3 right-3 z-10 p-1.5 rounded-full text-quantum-fgMuted hover:text-quantum-fg hover:bg-quantum-bgSecondary transition-colors"
           >
             <X className="w-4 h-4" />
           </button>

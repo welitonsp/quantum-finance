@@ -57,7 +57,7 @@ export function BottomSheet({ open, onClose, title, children, className = '' }: 
                 type="button"
                 onClick={onClose}
                 aria-label="Fechar"
-                className="p-1.5 rounded-lg text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-accent/50"
+                className="p-1.5 rounded-lg text-quantum-fgMuted hover:text-quantum-fg hover:bg-quantum-bgSecondary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-accent/50"
               >
                 <X className="w-5 h-5" />
               </button>
