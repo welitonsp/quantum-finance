@@ -12,6 +12,7 @@ import { usePrivacy } from './contexts/PrivacyContext';
 import { NavigationProvider, useNavigation } from './contexts/NavigationContext';
 import { useTransactions } from './hooks/useTransactions';
 import { useFinancialData } from './hooks/useFinancialData';
+import { useDashboardTotals } from './hooks/supabase/useDashboardTotalsSupabase';
 import { useAccounts } from './hooks/useAccounts';
 import { useRecurring } from './hooks/useRecurring';
 import { useCategoryRules } from './hooks/useCategoryRules';
@@ -192,8 +193,10 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
   // totalFaturaCents: faturas abertas de cartões — passivo corrente para o net worth
   const { totalFaturaCents, cards: creditCards } = useCreditCards(safeUID, transactions);
   const { debts } = useDebts(safeUID);
+  // Receitas/despesas/saldo somados no banco (todas as transações, não só as 500 carregadas).
+  const serverTotals = useDashboardTotals(safeUID, currentMonth, currentYear, transactions);
   const { displayedTransactions, moduleBalances, categoryData, topExpensesData, allTransactions } =
-    useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts, categories, totalFaturaCents);
+    useFinancialData(transactions, activeModule, currentMonth, currentYear, accounts, categories, totalFaturaCents, serverTotals);
 
   // Onboarding — condição sempre derivada do estado real (nunca um "passo" artificial):
   // some sozinho assim que o usuário tiver 1+ conta ou 1+ transação. "Pular" só evita

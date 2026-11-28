@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import Decimal from 'decimal.js';
 import type { Transaction, Account, ModuleBalances, CategoryDataPoint } from '../shared/types/transaction';
-import { isIncome as checkIncome, isExpense as checkExpense, isInvoicePayment } from '../utils/transactionUtils';
+import { isIncome as checkIncome, isExpense as checkExpense, isInvoicePayment, isTransfer } from '../utils/transactionUtils';
+import type { DashboardTotals } from './supabase/useDashboardTotalsSupabase';
 import { getTransactionCentavos } from '../utils/transactionUtils';
 import { fromCentavos, type Centavos } from '../shared/types/money';
 import { normalizeCategoryName, type UserCategory } from '../shared/schemas/categorySchemas';
@@ -56,6 +57,11 @@ export function useFinancialData(
   categories: UserCategory[] = [],
   /** Soma das faturas abertas de cartões em centavos inteiros (fonte: useCreditCards.totalFaturaCents). */
   cardOpenInvoicesCents?: Centavos,
+  /**
+   * Totais somados no servidor (todas as transações, não só as carregadas).
+   * Quando presentes, valem para o módulo 'geral' no lugar da soma local.
+   */
+  serverTotals?: DashboardTotals | null,
 ): FinancialDataReturn {
 
   const displayedTransactions = useMemo(() => {
@@ -82,6 +88,10 @@ export function useFinancialData(
     transactions.forEach(tx => {
       const txAccount = tx.account || 'conta_corrente';
       if (activeModule !== 'geral' && txAccount !== activeModule) return;
+
+      // Transferência entre contas próprias não é receita nem despesa: o saldo
+      // das contas já reflete o movimento (create_transfer).
+      if (isTransfer(tx.type)) return;
 
       const val = new Decimal(Math.abs(txValueCents(tx)));
       const isIncome  = checkIncome(tx.type);
@@ -119,6 +129,12 @@ export function useFinancialData(
         : 0;
     const totalPassivos = passivos + invoicesCents;
 
+    if (serverTotals && activeModule === 'geral') {
+      saldoAcumulado = new Decimal(serverTotals.netAllCents);
+      receitasMes    = new Decimal(serverTotals.incomeCents);
+      despesasMes    = new Decimal(serverTotals.expenseCents);
+    }
+
     return {
       geral: {
         saldo:      fromCentavos(saldoAcumulado.plus(new Decimal(openingBalance)).toNumber()),
@@ -128,7 +144,7 @@ export function useFinancialData(
         dividas:    fromCentavos(totalPassivos),
       }
     };
-  }, [transactions, activeModule, currentMonth, currentYear, accounts, cardOpenInvoicesCents]);
+  }, [transactions, activeModule, currentMonth, currentYear, accounts, cardOpenInvoicesCents, serverTotals]);
 
   const categoryData = useMemo((): CategoryDataPoint[] => {
     const map: Record<string, number> = {};
