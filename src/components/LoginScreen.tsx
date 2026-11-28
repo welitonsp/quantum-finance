@@ -18,6 +18,7 @@ const EMAIL_ERROR_MESSAGES: Record<string, string> = {
   weak_password: 'Senha fraca. Use pelo menos 8 caracteres, misturando letras e números.',
   over_email_send_rate_limit: 'Muitos e-mails enviados. Aguarde alguns minutos e tente de novo.',
   email_address_invalid: 'E-mail inválido.',
+  pwned_password: 'Esta senha já apareceu em vazamentos de dados na internet e não é segura. Escolha outra senha.',
 };
 
 function emailErrorMessage(error: unknown): string {
