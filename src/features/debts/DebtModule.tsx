@@ -193,7 +193,7 @@ function AddDebtModal({ onClose, onSave }: AddDebtModalProps) {
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2.5 rounded-xl font-bold text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/5 transition-colors"
+              className="px-5 py-2.5 rounded-xl font-bold text-quantum-fgMuted hover:text-quantum-fg hover:bg-quantum-bgSecondary transition-colors"
             >
               Cancelar
             </button>

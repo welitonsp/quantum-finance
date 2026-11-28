@@ -648,7 +648,7 @@ export const AIAssistantChat = ({ uid = '', transactions, balances, accounts = [
             </div>
             <button
               onClick={onClose}
-              className="p-2 text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/10 rounded-xl transition-colors"
+              className="p-2 text-quantum-fgMuted hover:text-quantum-fg hover:bg-quantum-bgSecondary rounded-xl transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
