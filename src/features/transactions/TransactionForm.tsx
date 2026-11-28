@@ -420,7 +420,7 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
               <button
                 type="button"
                 onClick={() => { setInstallmentMode(prev => !prev); setError(''); }}
-                className={`flex items-center gap-2 text-[11px] font-semibold rounded-lg px-3 py-2 border transition-colors w-full ${installmentMode ? 'bg-blue-500/15 border-blue-500/40 text-blue-300' : 'border-quantum-border text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/5'}`}
+                className={`flex items-center gap-2 text-[11px] font-semibold rounded-lg px-3 py-2 border transition-colors w-full ${installmentMode ? 'bg-blue-500/15 border-blue-500/40 text-blue-300' : 'border-quantum-border text-quantum-fgMuted hover:text-quantum-fg hover:bg-quantum-bgSecondary'}`}
               >
                 <CreditCard className="w-3.5 h-3.5 shrink-0" />
                 Parcelado?
