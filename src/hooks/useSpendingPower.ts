@@ -22,20 +22,28 @@ interface Props {
   cardInvoiceCents: Centavos;
   /** Competência corrente no formato YYYY-MM (ex.: '2026-07'). */
   currentYYYYMM: string;
+  /**
+   * true quando `saldo` é o saldo de CAIXA (Supabase, cash_position): compra no
+   * cartão só sai da conta quando a fatura é paga, então a fatura aberta ainda
+   * vai sair e precisa ser descontada para chegar ao saldo livre. false no modo
+   * legado, em que as compras no cartão já foram subtraídas do saldo.
+   */
+  subtractCardInvoice?: boolean;
 }
 
 /**
- * Motor puro (só useMemo) do "Posso gastar hoje?": saldo disponível real =
- * saldo − compromissos fixos mensais ainda não registrados neste mês.
+ * Motor puro (só useMemo) do "Posso gastar hoje?" — o saldo livre:
+ * saldo − compromissos fixos mensais ainda não registrados neste mês
+ * − fatura aberta dos cartões (só quando o saldo é de caixa; ver subtractCardInvoice).
  *
- * A fatura aberta é exposta separadamente para UI, mas não é subtraída aqui: as compras
- * no cartão já entram como transações de despesa no saldo consolidado recebido.
+ * `cardInvoiceCents` devolvido é o valor efetivamente descontado (0 quando não é).
  */
 export function useSpendingPower({
   saldo,
   recurringTasks,
   cardInvoiceCents,
   currentYYYYMM,
+  subtractCardInvoice = false,
 }: Props): SpendingPower {
   return useMemo(() => {
     const saldoCents = toCentavos(saldo);
@@ -50,8 +58,14 @@ export function useSpendingPower({
       )
       .reduce((sum, t) => sum + (t.value_cents ?? toCentavos(t.value)), 0) as Centavos;
 
+    const invoiceCents = (
+      subtractCardInvoice && Number.isSafeInteger(cardInvoiceCents) && cardInvoiceCents > 0
+        ? cardInvoiceCents
+        : 0
+    ) as Centavos;
+
     // Disponível pode ser positivo ou negativo (sem clamp).
-    const available = (saldoCents - pendingCommitmentsCents) as Centavos;
+    const available = (saldoCents - pendingCommitmentsCents - invoiceCents) as Centavos;
 
     // Zona: safe = disponível ≥ 20% do saldo; caution = 0–20%; danger = ≤ 0.
     let zone: SpendingZone = 'safe';
@@ -65,8 +79,8 @@ export function useSpendingPower({
       availableCents: available,
       saldoCents,
       pendingCommitmentsCents,
-      cardInvoiceCents,
+      cardInvoiceCents: invoiceCents,
       zone,
     };
-  }, [saldo, recurringTasks, cardInvoiceCents, currentYYYYMM]);
+  }, [saldo, recurringTasks, cardInvoiceCents, currentYYYYMM, subtractCardInvoice]);
 }

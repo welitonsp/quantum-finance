@@ -87,6 +87,8 @@ interface Props {
   totalFaturaCents: Centavos;
   /** Saldo restante das dívidas ativas (módulo Dívidas), em centavos. */
   debtsRemainingCents?: Centavos;
+  /** true quando o saldo é o de caixa de hoje (cash_position); a fatura aberta ainda vai sair dele. */
+  saldoIsCash?: boolean;
 }
 
 const containerVariants = {
@@ -122,6 +124,7 @@ export default function DashboardContent({
   creditCards,
   totalFaturaCents,
   debtsRemainingCents,
+  saldoIsCash = false,
 }: Props) {
   const { currentMonth, currentYear, setCurrentPage } = useNavigation();
   // ── Hero metrics from existing moduleBalances prop ────────────────────────
@@ -181,6 +184,7 @@ export default function DashboardContent({
     recurringTasks,
     cardInvoiceCents: totalFaturaCents,
     currentYYYYMM: todayYYYYMM,
+    subtractCardInvoice: saldoIsCash,
   });
 
   const { metrics, loadingMetrics } = useFinancialMetrics(

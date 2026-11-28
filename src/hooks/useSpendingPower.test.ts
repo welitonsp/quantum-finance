@@ -84,7 +84,7 @@ describe('useSpendingPower', () => {
     expect(result.current.availableCents).toBe(100000);
   });
 
-  it('expõe a fatura corrente sem descontar novamente do saldo consolidado', () => {
+  it('modo legado: não desconta a fatura (compras no cartão já saíram do saldo)', () => {
     const { result } = renderHook(() =>
       useSpendingPower({
         saldo: 1000,
@@ -93,8 +93,23 @@ describe('useSpendingPower', () => {
         currentYYYYMM: '2026-07',
       }),
     );
-    expect(result.current.cardInvoiceCents).toBe(40000);
+    expect(result.current.cardInvoiceCents).toBe(0);
     expect(result.current.availableCents).toBe(100000);
+  });
+
+  it('saldo de caixa: saldo livre = saldo − fixos pendentes − fatura aberta', () => {
+    const { result } = renderHook(() =>
+      useSpendingPower({
+        saldo: 1000,
+        recurringTasks: [task({ value_cents: 30000 as Centavos })],
+        cardInvoiceCents: 40000 as Centavos,
+        currentYYYYMM: '2026-07',
+        subtractCardInvoice: true,
+      }),
+    );
+    expect(result.current.cardInvoiceCents).toBe(40000);
+    expect(result.current.availableCents).toBe(30000);
+    expect(result.current.zone).toBe('safe');
   });
 
   it('zona caution quando disponível entre 0 e 20% do saldo', () => {

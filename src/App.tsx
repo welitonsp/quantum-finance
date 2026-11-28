@@ -346,6 +346,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
                     creditCards={creditCards}
                     totalFaturaCents={totalFaturaCents}
                     debtsRemainingCents={debtsRemainingCents}
+                    saldoIsCash={unassignedCashCents !== undefined}
                   />
                 )}
                 {(['history', 'accounts', 'cards', 'recurring'] as const).some(t => t === currentPage) && (
