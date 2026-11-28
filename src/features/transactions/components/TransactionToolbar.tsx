@@ -294,7 +294,7 @@ export function TransactionToolbar({
                   initial={{ opacity: 0, y: 6, scale: 0.97 }}
                   animate={{ opacity: 1, y: 0,  scale: 1 }}
                   exit={{ opacity: 0, y: 4, scale: 0.97 }}
-                  className="absolute right-0 top-full mt-2 z-50 bg-[#0d1424] border border-quantum-border rounded-2xl p-4 shadow-2xl min-w-[220px]"
+                  className="absolute right-0 top-full mt-2 z-50 bg-quantum-card border border-quantum-border rounded-2xl p-4 shadow-2xl min-w-[220px]"
                   onClick={e => e.stopPropagation()}
                 >
                   <p className="text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-3">Período do Relatório</p>

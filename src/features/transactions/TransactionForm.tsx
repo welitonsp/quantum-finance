@@ -90,7 +90,7 @@ function CategoryPicker({ value, onChange, categories, search, onSearchChange }:
             type="button"
             onClick={() => onSearchChange('')}
             title="Limpar busca de categoria"
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/10 transition-colors"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-quantum-fgMuted hover:text-quantum-fg hover:bg-quantum-bgSecondary transition-colors"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -116,7 +116,7 @@ function CategoryPicker({ value, onChange, categories, search, onSearchChange }:
           })}
         </div>
       ) : (
-        <div className="rounded-lg border border-quantum-border bg-white/[0.03] px-3 py-4 text-center text-xs text-quantum-fgMuted">
+        <div className="rounded-lg border border-quantum-border bg-quantum-bgSecondary px-3 py-4 text-center text-xs text-quantum-fgMuted">
           Nenhuma categoria encontrada.
         </div>
       )}
@@ -335,7 +335,7 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
     >
       <motion.div
         variants={panelVariants} initial="hidden" animate="visible" exit="exit"
-        className="relative w-full sm:max-w-lg bg-[#0d1424] border border-quantum-border rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden"
+        className="relative w-full sm:max-w-lg bg-quantum-card border border-quantum-border rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden"
         style={{ boxShadow: '0 0 60px rgba(0,230,138,0.08), 0 25px 50px rgba(0,0,0,0.6)' }}
         onClick={e => e.stopPropagation()}
       >
@@ -345,7 +345,7 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
         />
 
         <div className="flex justify-center pt-3 pb-1 sm:hidden">
-          <div className="w-10 h-1 rounded-full bg-white/20" />
+          <div className="w-10 h-1 rounded-full bg-quantum-border" />
         </div>
 
         <div className="flex items-center justify-between px-6 pt-5 pb-4">
@@ -362,7 +362,7 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
               )}
             </div>
           </div>
-          <button type="button" onClick={onCancelEdit} className="w-8 h-8 rounded-lg flex items-center justify-center text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/10 transition-all">
+          <button type="button" onClick={onCancelEdit} className="w-8 h-8 rounded-lg flex items-center justify-center text-quantum-fgMuted hover:text-quantum-fg hover:bg-quantum-bgSecondary transition-all">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -389,7 +389,7 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
           <div>
             <label className="flex items-center justify-between text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">
               <span className="flex items-center gap-1.5"><FileText className="w-3 h-3" /> Descrição</span>
-              <span className={descLen > 80 ? 'text-amber-400' : 'text-slate-600'}>{descLen}/100</span>
+              <span className={descLen > 80 ? 'text-amber-400' : 'text-quantum-fgMuted'}>{descLen}/100</span>
             </label>
             <input ref={descRef} type="text" name="description" value={formData.description} onChange={handleChange}
               maxLength={100} placeholder="Ex: Supermercado Extra" className="input-quantum w-full" />
@@ -424,7 +424,7 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
               >
                 <CreditCard className="w-3.5 h-3.5 shrink-0" />
                 Parcelado?
-                <span className={`ml-auto text-[10px] font-bold uppercase tracking-wide ${installmentMode ? 'text-blue-300' : 'text-slate-600'}`}>
+                <span className={`ml-auto text-[10px] font-bold uppercase tracking-wide ${installmentMode ? 'text-blue-300' : 'text-quantum-fgMuted'}`}>
                   {installmentMode ? 'Ativo' : 'Não'}
                 </span>
               </button>
@@ -473,7 +473,7 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
           <div>
             <label className="flex items-center gap-1.5 text-[10px] font-bold text-quantum-fgMuted uppercase tracking-widest mb-2">
               <Tag className="w-3 h-3" /> Categoria
-              <span className="ml-auto text-slate-600 normal-case text-[10px]">
+              <span className="ml-auto text-quantum-fgMuted normal-case text-[10px]">
                 {loadingCategories ? 'Carregando…' : `${getCategoryMeta(formData.category).emoji} ${formData.category}`}
               </span>
             </label>
@@ -526,7 +526,7 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
                     <button
                       type="button"
                       onClick={() => { setNewCatMode(false); setNewCatName(''); }}
-                      className="px-2.5 py-1.5 rounded-lg bg-white/5 border border-quantum-border text-quantum-fgMuted hover:text-quantum-fg transition-colors"
+                      className="px-2.5 py-1.5 rounded-lg bg-quantum-bgSecondary border border-quantum-border text-quantum-fgMuted hover:text-quantum-fg transition-colors"
                       title="Cancelar"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -562,7 +562,7 @@ export default function TransactionForm({ uid, onSave, editingTransaction, onCan
             </button>
           </div>
 
-          <p className="text-center text-[10px] text-slate-700 -mt-2">
+          <p className="text-center text-[10px] text-quantum-fgMuted -mt-2">
             Pressione <kbd className="px-1 py-0.5 bg-quantum-bgSecondary rounded text-quantum-fgMuted">Esc</kbd> para fechar
           </p>
         </form>
