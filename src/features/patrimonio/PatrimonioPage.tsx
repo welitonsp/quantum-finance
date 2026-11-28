@@ -151,7 +151,7 @@ export default function PatrimonioPage({ uid }: Props) {
               className={`text-left flex items-start gap-4 p-5 rounded-2xl border ${border} ${bg} hover:brightness-110 transition-all group`}
               aria-label={`Ir para ${label}`}
             >
-              <div className={`p-3 rounded-xl bg-white/5 ${color} shrink-0`}>
+              <div className={`p-3 rounded-xl bg-quantum-bgSecondary ${color} shrink-0`}>
                 <Icon className="w-5 h-5" />
               </div>
               <div className="flex-1 min-w-0">

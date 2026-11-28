@@ -157,7 +157,7 @@ export default function SurvivalHeatmap({ transactions, currentMonth, currentYea
 
       <div className="grid grid-cols-7 gap-1 mb-1 px-0.5">
         {weekLabels.map((l, i) => (
-          <div key={i} className="text-center text-[9px] font-bold text-slate-600 uppercase">{l}</div>
+          <div key={i} className="text-center text-[9px] font-bold text-quantum-fgMuted uppercase">{l}</div>
         ))}
       </div>
 

@@ -369,7 +369,7 @@ export default function ImportButton({ onImportTransactions, uid, existingTransa
                     </div>
                   </div>
                   {!(['parsing','ai_processing','importing'] as ImportStatus[]).includes(status) && (
-                    <button ref={closeButtonRef} onClick={closeModal} aria-label="Fechar diálogo de importação" className="p-2 text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/5 rounded-xl transition-colors">
+                    <button ref={closeButtonRef} onClick={closeModal} aria-label="Fechar diálogo de importação" className="p-2 text-quantum-fgMuted hover:text-quantum-fg hover:bg-quantum-bgSecondary rounded-xl transition-colors">
                       <X className="w-5 h-5" />
                     </button>
                   )}

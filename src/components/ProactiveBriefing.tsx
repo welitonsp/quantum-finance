@@ -247,7 +247,7 @@ export default function ProactiveBriefing({
           <button
             onClick={e => { e.stopPropagation(); setDismissed(true); }}
             title="Dispensar"
-            className="p-1.5 rounded-lg text-quantum-fgMuted hover:text-quantum-fg hover:bg-white/10 transition-all"
+            className="p-1.5 rounded-lg text-quantum-fgMuted hover:text-quantum-fg hover:bg-quantum-bgSecondary transition-all"
           >
             <X className="w-3.5 h-3.5" />
           </button>
