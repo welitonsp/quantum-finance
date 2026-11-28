@@ -121,7 +121,7 @@ const ConfirmDeleteModal = ({ transaction, onCancel, onConfirm }: ConfirmDeleteM
         </div>
         <div className="flex justify-end gap-3">
           <button ref={cancelRef} onClick={onCancel} className="px-5 py-2.5 rounded-xl font-bold text-quantum-fgMuted hover:text-quantum-fg hover:bg-quantum-bgSecondary transition-colors">Cancelar</button>
-          <button onClick={onConfirm} className="px-5 py-2.5 rounded-xl font-bold bg-red-600 text-quantum-fg hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20">Apagar</button>
+          <button onClick={onConfirm} className="px-5 py-2.5 rounded-xl font-bold bg-red-600 text-white hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20">Apagar</button>
         </div>
       </div>
     </div>
@@ -520,7 +520,7 @@ const AuthenticatedApp = ({ user, handleLogout }: AuthenticatedAppProps) => {
         data-testid="ai-chat-fab"
         className="fixed bottom-20 right-6 lg:bottom-8 lg:right-8 w-14 h-14 bg-cyan-600 hover:bg-cyan-500 rounded-2xl flex items-center justify-center shadow-lg z-50 group border border-white/20"
       >
-        <BrainCircuit className="w-7 h-7 text-quantum-fg group-hover:animate-pulse" />
+        <BrainCircuit className="w-7 h-7 text-white group-hover:animate-pulse" />
       </button>
 
       {isSettingsOpen && (

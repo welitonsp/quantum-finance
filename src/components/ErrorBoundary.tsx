@@ -48,7 +48,7 @@ export class ErrorBoundary extends React.Component<
           <h2 className="text-xl font-bold text-quantum-fg mb-2">{heading}</h2>
           <button
             onClick={() => this.setState({ hasError: false })}
-            className="px-6 py-3 bg-red-600 hover:bg-red-700 text-quantum-fg rounded-xl text-sm font-bold transition-all shadow-lg shadow-red-500/20"
+            className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-red-500/20"
           >
             Reiniciar Módulo
           </button>

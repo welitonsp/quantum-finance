@@ -63,7 +63,7 @@ export default function BudgetModal({ isOpen, onClose, currentGoal, onSave }: Pr
             </div>
             <div className="flex gap-3">
               <button type="button" onClick={() => setShowConfirmZero(false)} className="flex-1 py-3 font-bold rounded-xl text-quantum-fg bg-quantum-bgSecondary hover:bg-slate-700 transition-colors text-sm">Cancelar</button>
-              <button type="button" onClick={() => executeSave(0)} className="flex-1 py-3 font-bold rounded-xl text-quantum-fg bg-red-600 hover:bg-red-700 transition-colors shadow-lg shadow-red-600/20 text-sm">Confirmar</button>
+              <button type="button" onClick={() => executeSave(0)} className="flex-1 py-3 font-bold rounded-xl text-white bg-red-600 hover:bg-red-700 transition-colors shadow-lg shadow-red-600/20 text-sm">Confirmar</button>
             </div>
           </div>
         ) : (

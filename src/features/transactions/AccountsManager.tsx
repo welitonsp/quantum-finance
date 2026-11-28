@@ -170,7 +170,7 @@ export default function AccountsManager({ uid }: Props) {
         </div>
         <button
           onClick={() => setIsModalOpen(true)}
-          className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-quantum-fg text-sm font-bold rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-indigo-500/30 hover:scale-105 active:scale-95"
+          className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-indigo-500/30 hover:scale-105 active:scale-95"
         >
           <Plus className="w-4 h-4" /> Nova Conta
         </button>
@@ -302,7 +302,7 @@ export default function AccountsManager({ uid }: Props) {
               </div>
               <div className="flex justify-end gap-3 mt-8">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 rounded-xl font-bold text-quantum-fgMuted hover:bg-slate-100 dark:hover:bg-quantum-bgSecondary transition-colors text-sm">Cancelar</button>
-                <button type="submit" className="px-5 py-2.5 rounded-xl font-bold bg-indigo-600 text-quantum-fg hover:bg-indigo-700 transition-colors text-sm">Salvar Conta</button>
+                <button type="submit" className="px-5 py-2.5 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors text-sm">Salvar Conta</button>
               </div>
             </form>
           </div>
