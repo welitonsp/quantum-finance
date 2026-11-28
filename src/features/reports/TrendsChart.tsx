@@ -6,7 +6,7 @@ import Decimal from 'decimal.js';
 import type { Transaction } from '../../shared/types/transaction';
 import { getTransactionAbsCentavos, isIncome } from '../../utils/transactionUtils';
 import { fromCentavos } from '../../shared/types/money';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCompactCurrency, formatCurrency } from '../../utils/formatters';
 import { EmptyState } from '../../shared/components/ui';
 
 interface Props {
@@ -57,7 +57,10 @@ export default function TrendsChart({ transactions }: Props) {
     return Object.values(monthlyData);
   }, [transactions]);
 
-  if (chartData.length === 0) {
+  // Sem movimento na janela de 6 meses → estado vazio (antes: eixo R$ 0–4 sem dados).
+  const hasData = chartData.some(m => m.receitas > 0 || m.despesas > 0);
+
+  if (!hasData) {
     return (
       <div className="flex items-center justify-center h-64 bg-quantum-bgSecondary/30 rounded-2xl border border-quantum-border border-dashed">
         <EmptyState
@@ -88,7 +91,7 @@ export default function TrendsChart({ transactions }: Props) {
             <XAxis dataKey="name" stroke="#8b949e" fontSize={12} tickLine={false} axisLine={false} />
             <YAxis
               stroke="#8b949e" fontSize={12} tickLine={false} axisLine={false}
-              tickFormatter={(value: number) => `R$${value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value}`}
+              tickFormatter={(value: number) => formatCompactCurrency(value)}
             />
             <Tooltip
               contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#30363d', borderRadius: '12px', color: '#fff' }}

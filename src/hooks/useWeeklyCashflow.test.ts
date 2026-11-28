@@ -49,6 +49,16 @@ describe('useWeeklyCashflow — buckets históricos', () => {
     expect(r.weeks.slice(4).every(w => w.isForecast)).toBe(true);
   });
 
+  it('não repete a semana corrente na previsão (rótulos e períodos únicos)', () => {
+    const r = render([], []);
+    const labels = r.weeks.map(w => w.label);
+    expect(new Set(labels).size).toBe(labels.length);
+    // 15/06 (segunda) é a semana corrente, real; a previsão começa em 22/06
+    expect(r.weeks[3]).toMatchObject({ startDate: '2026-06-15', isForecast: false });
+    expect(r.weeks[4]).toMatchObject({ startDate: '2026-06-22', endDate: '2026-06-28', isForecast: true });
+    expect(r.weeks[5]).toMatchObject({ startDate: '2026-06-29', endDate: '2026-07-05', isForecast: true });
+  });
+
   it('acumula receita e despesa na semana correta, ignorando pagamento de fatura e tx sem data', () => {
     const txs = [
       tx({ date: '2026-06-10', type: 'entrada', value_cents: 30000 }),
@@ -70,9 +80,9 @@ describe('useWeeklyCashflow — buckets históricos', () => {
 
 describe('useWeeklyCashflow — recorrentes e previsão', () => {
   it('projeta recorrente mensal como evento futuro e no bucket de previsão', () => {
-    // dueDay 20 → 20/06/2026 cai no 1º bucket de previsão (15–21/06)
-    const r = render([], [task({ type: 'saida', dueDay: 20, value_cents: 10000, description: 'Aluguel' })]);
-    const ev = r.futureEvents.find(e => e.date === '2026-06-20');
+    // dueDay 25 → 25/06/2026 cai no 1º bucket de previsão (22–28/06)
+    const r = render([], [task({ type: 'saida', dueDay: 25, value_cents: 10000, description: 'Aluguel' })]);
+    const ev = r.futureEvents.find(e => e.date === '2026-06-25');
     expect(ev).toBeDefined();
     expect(ev!.amountCents).toBe(-10000); // despesa = negativo
     // bucket de previsão 1 recebeu a despesa

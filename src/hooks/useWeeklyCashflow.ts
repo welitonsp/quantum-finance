@@ -67,7 +67,7 @@ export function useWeeklyCashflow(
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // ── Build 4 historical week buckets (Mon–Sun, ending last complete week) ──
+    // ── Build 4 historical week buckets (Mon–Sun); a última é a semana corrente ──
     const thisWeekStart = startOfWeek(today);
 
     const weeks: WeekBucket[] = [];
@@ -97,11 +97,13 @@ export function useWeeklyCashflow(
       }
     }
 
-    // ── Build 2 forecast week buckets ──
-    const fw1Start = thisWeekStart;
+    // ── Build 2 forecast week buckets: as próximas 2 semanas ──
+    // A semana corrente já é o último bucket histórico (dados reais, parcial). Antes a 1ª
+    // previsão repetia a semana corrente e o gráfico mostrava o mesmo rótulo duas vezes.
+    const fw1Start = addDays(thisWeekStart, 7);
     const fw1End   = addDays(fw1Start, 6);
     const fw2Start = addDays(fw1Start, 7);
-    const fw2End   = addDays(fw1Start, 13);
+    const fw2End   = addDays(fw2Start, 6);
 
     // Average historical income/expense per week (last 3 complete weeks as base)
     const historicalComplete = weeks.filter(w => w.endDate < isoDate(today));
