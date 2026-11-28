@@ -46,7 +46,19 @@ export interface CategoryStore {
 }
 
 const DEFAULT_META: Record<string, { type: CategoryType; color: string; icon: string }> = {
-  'Alimentação':    { type: 'saida',   color: '#f59e0b', icon: '🍽️' },
+  'Alimentação':    { type: 'saida',   color: '#f59e0b', icon: '🛒' },
+  'Restaurantes':   { type: 'saida',   color: '#fb923c', icon: '🍽️' },
+  'Contas da Casa': { type: 'saida',   color: '#0ea5e9', icon: '💡' },
+  'Tarifas Bancárias': { type: 'saida', color: '#dc2626', icon: '🏦' },
+  'Seguros':        { type: 'saida',   color: '#6366f1', icon: '🛡️' },
+  'Cuidados Pessoais': { type: 'saida', color: '#d946ef', icon: '💇' },
+  'Filhos':         { type: 'saida',   color: '#f472b6', icon: '🧸' },
+  'Pets':           { type: 'saida',   color: '#a16207', icon: '🐾' },
+  'Viagem':         { type: 'saida',   color: '#0891b2', icon: '✈️' },
+  'Presentes/Doações': { type: 'saida', color: '#e11d48', icon: '🎁' },
+  '13º Salário':    { type: 'entrada', color: '#059669', icon: '💰' },
+  'Aluguel Recebido': { type: 'entrada', color: '#65a30d', icon: '🏘️' },
+  'Reembolso':      { type: 'entrada', color: '#0d9488', icon: '↩️' },
   'Transporte':     { type: 'saida',   color: '#3b82f6', icon: '🚗' },
   'Assinaturas':    { type: 'saida',   color: '#8b5cf6', icon: '📱' },
   'Educação':       { type: 'saida',   color: '#06b6d4', icon: '📚' },

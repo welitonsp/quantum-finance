@@ -100,10 +100,10 @@ describe('useCategories — addCategory', () => {
   it('cria nova categoria e retorna com id gerado', async () => {
     const { result } = renderHook(() => useCategories('u1'));
     let created!: Awaited<ReturnType<typeof result.current.addCategory>>;
-    await act(async () => { created = await result.current.addCategory('Pets', 'saida'); });
+    await act(async () => { created = await result.current.addCategory('Academia', 'saida'); });
     expect(mockAddDoc).toHaveBeenCalledTimes(1);
     expect(created.id).toBe('new-cat');
-    expect(created.name).toBe('Pets');
+    expect(created.name).toBe('Academia');
   });
 });
 

@@ -3,12 +3,19 @@
  * Consumida por ImportButton, autoCategorize e aiCategorize.
  */
 export const CATEGORY_KEYWORDS: Record<string, string[]> = {
-  'Alimentação':    ['ifood', 'mcdonalds', 'mc donalds', 'burger', 'supermercado', 'carrefour', 'extra', 'mercado', 'atacadao', 'padaria', 'pizza', 'lanches', 'sol'],
-  'Transporte':     ['uber', '99app', 'posto', 'shell', 'gasolina', 'combustivel', 'estacionamento'],
-  'Assinaturas':    ['netflix', 'spotify', 'amazon br', 'amazon', 'google one', 'apple.com'],
-  'Saúde':          ['farmacia', 'drogasil', 'hospital'],
-  'Educação':       ['escola', 'colegio', 'faculdade', 'curso', 'udemy'],
-  'Impostos/Taxas': ['iof', 'juros', 'tarifa', 'anuidade', 'multa'],
-  'Salário':        ['salario', 'pagto salario'],
-  'Investimento':   ['rendimento', 'dividendo'],
+  'Alimentação':    ['supermercado', 'carrefour', 'extra', 'mercado', 'atacadao', 'assai', 'padaria', 'hortifruti', 'acougue'],
+  'Restaurantes':   ['ifood', 'rappi', 'mcdonalds', 'mc donalds', 'burger', 'pizza', 'lanches', 'restaurante', 'churrascaria'],
+  'Transporte':     ['uber', '99app', 'posto', 'shell', 'ipiranga', 'gasolina', 'combustivel', 'estacionamento', 'sem parar', 'pedagio'],
+  'Contas da Casa': ['energia', 'enel', 'cemig', 'copel', 'sabesp', 'saneamento', 'agua', 'comgas', 'internet', 'vivo fibra', 'claro net', 'oi fibra'],
+  'Assinaturas':    ['netflix', 'spotify', 'amazon prime', 'disney', 'hbo max', 'globoplay', 'google one', 'apple.com', 'youtube premium'],
+  'Saúde':          ['farmacia', 'drogasil', 'drogaria', 'droga raia', 'pague menos', 'hospital', 'laboratorio', 'clinica', 'unimed'],
+  'Educação':       ['escola', 'colegio', 'faculdade', 'curso', 'udemy', 'alura', 'livraria'],
+  'Impostos/Taxas': ['ipva', 'iptu', 'darf', 'multa', 'detran'],
+  'Tarifas Bancárias': ['iof', 'juros', 'tarifa', 'anuidade', 'cesta de servicos', 'encargos'],
+  'Seguros':        ['seguro', 'porto seguro', 'mapfre', 'sulamerica'],
+  'Pets':           ['petz', 'cobasi', 'pet shop', 'petshop', 'veterinario'],
+  'Viagem':         ['latam', 'gol linhas', 'azul linhas', 'booking', 'airbnb', 'hotel', 'decolar'],
+  'Salário':        ['salario', 'pagto salario', 'folha de pagamento'],
+  'Investimento':   ['rendimento', 'dividendo', 'jcp', 'resgate'],
+  'Reembolso':      ['reembolso', 'estorno', 'cashback'],
 };

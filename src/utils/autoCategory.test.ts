@@ -10,12 +10,14 @@ describe('autoCategorize — motor de regras', () => {
 
   it('categoriza por palavras-chave base (case-insensitive)', () => {
     expect(autoCategorize('SUPERMERCADO PÃO DE AÇÚCAR')).toBe('Alimentação');
-    expect(autoCategorize('iFood * pedido')).toBe('Alimentação');
+    expect(autoCategorize('iFood * pedido')).toBe('Restaurantes');
     expect(autoCategorize('Uber Trip 34a')).toBe('Transporte');
     expect(autoCategorize('Posto Shell')).toBe('Transporte');
     expect(autoCategorize('Netflix.com')).toBe('Assinaturas');
     expect(autoCategorize('SPOTIFY BR')).toBe('Assinaturas');
-    expect(autoCategorize('IOF sobre operação')).toBe('Impostos/Taxas');
+    expect(autoCategorize('IOF sobre operação')).toBe('Tarifas Bancárias');
+    expect(autoCategorize('IPVA 2026')).toBe('Impostos/Taxas');
+    expect(autoCategorize('ENEL CONTA DE ENERGIA')).toBe('Contas da Casa');
   });
 
   it('retorna "Diversos" quando nenhuma regra casa', () => {
@@ -46,7 +48,7 @@ describe('autoCategorize — motor de regras', () => {
   it('não casa substrings espúrias (as regras base usam includes — documenta o comportamento real)', () => {
     // Comportamento atual: includes('posto') casa em "postoxy" também.
     // Este teste documenta o comportamento para não regredir sem querer.
-    expect(autoCategorize('postoxy lanches')).toBe('Alimentação'); // 'lanches' vence primeiro? não — ordem das regras importa
-    // 'Alimentação' tem 'padaria', 'pizza', 'lanches' → casa em 'lanches'
+    expect(autoCategorize('postoxy lanches')).toBe('Restaurantes'); // ordem das regras importa
+    // 'Restaurantes' vem antes de 'Transporte' e tem 'lanches'
   });
 });
