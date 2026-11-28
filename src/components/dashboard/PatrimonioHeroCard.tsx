@@ -9,6 +9,12 @@ interface Props {
   loading: boolean;
 }
 
+/** "1 mês", "2,5 meses" — "m" sozinho era lido como "milhões" ao lado de valores em R$. */
+export function formatReservaMeses(meses: number): string {
+  const shown = formatNumber(meses, 1);
+  return `${shown} ${shown === '1' || shown === '1,0' ? 'mês' : 'meses'}`;
+}
+
 export function PatrimonioHeroCard({ metrics, loading }: Props): JSX.Element | null {
   if (loading && !metrics) return <div className="rounded-2xl border border-quantum-border bg-quantum-card p-4 h-20 animate-pulse" />;
   if (!metrics) return null;
@@ -37,7 +43,7 @@ export function PatrimonioHeroCard({ metrics, loading }: Props): JSX.Element | n
         )}
         {metrics.reservaMeses > 0 && (
           <span className="text-[10px] text-quantum-fgMuted">
-            Reserva <span className="font-bold text-quantum-fg">{formatNumber(metrics.reservaMeses, 1)}m</span>
+            Reserva <span className="font-bold text-quantum-fg">{formatReservaMeses(metrics.reservaMeses)}</span>
           </span>
         )}
       </div>
